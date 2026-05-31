@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "mode": "yolo",
+  "granularity": "standard",
+  "parallelization": true,
+  "commit_docs": true,
+  "model_profile": "quality",
+  "workflow": {
+    "research": true,
+    "plan_check": true,
+    "verifier": true,
+    "nyquist_validation": true,
+    "auto_advance": true,
+    "_auto_chain_active": true
+  },
+  "planning": {
+    "commit_docs": true,
+    "sub_repos": []
+  },
+  "models": {
+    "researcher_model": "opus",
+    "synthesizer_model": "opus",
+    "roadmapper_model": "opus",
+    "planner_model": "opus",
+    "executor_model": "sonnet",
+    "verifier_model": "sonnet"
+  },
+  "stack": {
+    "framework": "next.js",
+    "ui": "shadcn/ui",
+    "backend": "firebase",
+    "constraints": [
+      "No Google Cloud Functions",
+      "No GCP services beyond Firebase SDK surface",
+      "Firebase Auth, Firestore, Storage, Hosting only"
+    ]
+  }
+}
