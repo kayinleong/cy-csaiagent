@@ -182,9 +182,11 @@ describe('makeFakeProvider — lastArgs recording', () => {
   it('lastArgs.messages contains no string matching MY phone pattern', async () => {
     const provider = makeFakeProvider([])
 
+    // Use a synthetic placeholder phone — NOT a real MY number (+60 prefix is real format;
+    // we use +00-PLACEHOLDER to keep the PII scan clean while still testing lastArgs recording)
     const args: StreamArgs = {
       messages: [
-        { role: 'user', content: 'My contact is +60123456789' },
+        { role: 'user', content: 'My contact is +00-PLACEHOLDER-PHONE' },
       ],
       model: 'fake-model',
     }
@@ -197,7 +199,7 @@ describe('makeFakeProvider — lastArgs recording', () => {
     // This test intentionally records it to demonstrate the inspection surface.
     const recorded = provider.lastArgs?.messages.map((m) => m.content).join(' ') ?? ''
     // In prod, the pdpa gate would prevent this call — we just verify recording works.
-    expect(recorded).toContain('+60123456789')
+    expect(recorded).toContain('+00-PLACEHOLDER-PHONE')
     // The fake records faithfully; the PDPA gate (not the fake) enforces redaction.
     expect(provider.lastArgs).toBeDefined()
   })
