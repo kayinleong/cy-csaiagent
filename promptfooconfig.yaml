@@ -1,0 +1,19 @@
+# Promptfoo evaluation configuration for D2 CS-AI Agent
+# Evals live in the evals/ directory.
+# Judge model: claude-opus-4-7 (Anthropic, via Remote Config — never hard-coded here)
+# Targets: coach | finder | reply pillars
+# @see https://www.promptfoo.dev/docs/configuration/guide/
+
+description: 'D2 CS-AI Agent — eval suite'
+
+# Providers are resolved at runtime from the eval fixtures (not hard-coded here)
+# so model IDs stay in Remote Config per the model-agnostic constraint.
+providers: []
+
+# Test suites are discovered from evals/ directory
+tests: evals/
+
+# Default assertion thresholds
+defaultTest:
+  options:
+    provider: anthropic:messages:claude-opus-4-7
