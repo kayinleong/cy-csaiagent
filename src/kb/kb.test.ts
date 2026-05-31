@@ -93,7 +93,12 @@ const {
 vi.mock('@/src/firebase/collections', () => ({
   kbIngestionJobsRef: vi.fn(() => ({
     doc: mockIngestionJobsDoc,
-    where: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnValue({
+      limit: vi.fn().mockReturnValue({
+        get: vi.fn().mockResolvedValue({ empty: true, docs: [] }),
+      }),
+      get: vi.fn().mockResolvedValue({ empty: true, docs: [] }),
+    }),
     get: vi.fn().mockResolvedValue({ empty: true, docs: [] }),
   })),
   kbChunksRef: vi.fn(() => ({
