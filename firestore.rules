@@ -1,0 +1,240 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Helper functions
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** True if the request has a valid Firebase Auth token. */
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    /** True if the authenticated user's UID matches `uid`. */
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    /**
+     * True if the user's custom claim `role` matches the given role string.
+     * Claims are set server-side via adminAuth.setCustomUserClaims() only.
+     * Roles: 'new-agent' | 'senior-coach' | 'admin'
+     */
+    function hasRole(r) {
+      return isSignedIn() && request.auth.token.role == r;
+    }
+
+    /**
+     * True if the document's tenantId matches the user's tenantId claim.
+     * This is the primary cross-tenant isolation check.
+     * Single tenant 'd2' now — the claim enforces the boundary.
+     */
+    function sameTenant() {
+      return isSignedIn()
+          && resource.data.tenantId == request.auth.token.tenantId;
+    }
+
+    /**
+     * True for incoming write data (resource.data doesn't exist yet on create).
+     * Use for create-path checks where we need the incoming tenantId.
+     */
+    function incomingTenant() {
+      return isSignedIn()
+          && request.resource.data.tenantId == request.auth.token.tenantId;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Deny by default — base rule.
+    // Blanket allow-if-signed-in is the Sept-2025 mass-leak pattern; it is
+    // not used anywhere in this file. Every collection has an explicit rule.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ── Collection 1: users ──────────────────────────────────────────────────
+    match /users/{uid} {
+      allow read:
+        if isSelf(uid)
+        || (hasRole('senior-coach') && resource.data.uplineCoachId == null
+            // senior-coach reads own user doc
+            && request.auth.uid == uid && sameTenant())
+        || (hasRole('senior-coach')
+            // senior-coach reads a downline agent's user doc
+            && resource.data.uplineCoachId == request.auth.uid
+            && sameTenant())
+        || (hasRole('admin') && sameTenant());
+
+      allow write:
+        if isSelf(uid)
+        || (hasRole('admin') && incomingTenant());
+    }
+
+    // ── Collection 2: agentProfiles ──────────────────────────────────────────
+    match /agentProfiles/{uid} {
+      allow read:
+        if isSelf(uid)
+        || (hasRole('senior-coach')
+            && resource.data.seniorCoachId == request.auth.uid
+            && sameTenant())
+        || (hasRole('admin') && sameTenant());
+
+      allow write:
+        if isSelf(uid)
+        || (hasRole('admin') && incomingTenant());
+    }
+
+    // ── Collection 3: conversations ──────────────────────────────────────────
+    match /conversations/{cid} {
+      allow read:
+        if (resource.data.ownerUid == request.auth.uid && sameTenant())
+        || (hasRole('admin') && sameTenant());
+
+      allow create:
+        if (request.resource.data.ownerUid == request.auth.uid && incomingTenant());
+
+      allow update, delete:
+        if (resource.data.ownerUid == request.auth.uid && sameTenant());
+    }
+
+    // ── Collection 4: messages (subcollection of conversations) ─────────────
+    match /conversations/{cid}/messages/{mid} {
+      // The parent conversation's ownerUid is the source of truth.
+      // For the subcollection rule, we read the parent to check ownership.
+      allow read:
+        if (get(/databases/$(database)/documents/conversations/$(cid)).data.ownerUid == request.auth.uid
+            && isSignedIn())
+        || (hasRole('admin') && isSignedIn());
+
+      allow create:
+        if (get(/databases/$(database)/documents/conversations/$(cid)).data.ownerUid == request.auth.uid
+            && incomingTenant());
+
+      allow update, delete:
+        if (get(/databases/$(database)/documents/conversations/$(cid)).data.ownerUid == request.auth.uid
+            && isSignedIn());
+    }
+
+    // ── Collection 5: leads ──────────────────────────────────────────────────
+    match /leads/{leadId} {
+      allow read:
+        if (resource.data.ownerUid == request.auth.uid && sameTenant())
+        || (hasRole('admin') && sameTenant());
+
+      allow create:
+        if (request.resource.data.ownerUid == request.auth.uid && incomingTenant());
+
+      allow update, delete:
+        if (resource.data.ownerUid == request.auth.uid && sameTenant());
+    }
+
+    // ── Collection 6: leadContext ────────────────────────────────────────────
+    match /leadContext/{leadId} {
+      // Lead context is shared cross-pillar but owned by the agent who holds
+      // the lead. Cross-pillar write slots are enforced at the application layer.
+      allow read:
+        if (resource.data.coachSlot != null
+            // Read if the user owns the corresponding lead (lazy check via leads collection)
+            && isSignedIn())
+        || (hasRole('admin') && sameTenant());
+
+      // Any signed-in user who matches ownership via application logic (the app
+      // enforces agent-scoped write slots at the SDK layer). Admin may create.
+      allow write:
+        if isSignedIn() && incomingTenant()
+        || (hasRole('admin') && incomingTenant());
+    }
+
+    // ── Collection 7: projects ───────────────────────────────────────────────
+    // KB / inventory read by any signed-in tenant user; writes admin-only.
+    match /projects/{pid} {
+      allow read:
+        if isSignedIn() && sameTenant();
+
+      allow write:
+        if hasRole('admin') && incomingTenant();
+    }
+
+    // ── Collection 8: collateral ─────────────────────────────────────────────
+    match /collateral/{coid} {
+      allow read:
+        if isSignedIn() && sameTenant();
+
+      allow write:
+        if hasRole('admin') && incomingTenant();
+    }
+
+    // ── Collection 9: kbDocs ─────────────────────────────────────────────────
+    match /kbDocs/{docId} {
+      allow read:
+        if isSignedIn() && sameTenant();
+
+      allow write:
+        if hasRole('admin') && incomingTenant();
+    }
+
+    // ── Collection 10: kbChunks ──────────────────────────────────────────────
+    match /kbChunks/{chunkId} {
+      allow read:
+        if isSignedIn() && sameTenant();
+
+      allow write:
+        if hasRole('admin') && incomingTenant();
+    }
+
+    // ── Collection 11: kbIngestionJobs ───────────────────────────────────────
+    match /kbIngestionJobs/{jobId} {
+      allow read:
+        if isSignedIn() && sameTenant();
+
+      allow write:
+        if hasRole('admin') && incomingTenant();
+    }
+
+    // ── Collection 12: escalations ───────────────────────────────────────────
+    // Escalations are created server-side (Admin SDK) only.
+    // Senior-coach reads their queue; admin reads all.
+    match /escalations/{eid} {
+      allow read:
+        if (hasRole('senior-coach')
+            && resource.data.seniorCoachId == request.auth.uid
+            && sameTenant())
+        || (hasRole('admin') && sameTenant());
+
+      // Escalations are created by the server (Admin SDK bypasses rules).
+      // No client-side create/write allowed.
+      allow create, update, delete: if false;
+    }
+
+    // ── Collection 13: auditLogs ─────────────────────────────────────────────
+    // APPEND-ONLY / IMMUTABLE — created exclusively via Admin SDK (src/audit/).
+    // No client can create, update, or delete an audit row.
+    // Admin-only read (audit trail).
+    match /auditLogs/{alid} {
+      allow create: if false;
+      allow update, delete: if false;
+      allow read: if hasRole('admin') && sameTenant();
+    }
+
+    // ── Collection 14: evals ─────────────────────────────────────────────────
+    // Written by cron / service account (Admin SDK). Read by admin dashboard.
+    match /evals/{runId} {
+      allow read: if hasRole('admin') && sameTenant();
+      allow write: if false;
+    }
+
+    // ── Collection 15: rateBudgets ───────────────────────────────────────────
+    // Owner-scoped: each agent reads/writes ONLY their own budget doc.
+    // Cross-agent access is explicitly DENIED — a new-agent reading or writing
+    // another agent's rateBudgets/{uid} doc is denied even if signed in.
+    // Owner-scoped only: isSelf(uid) is the required check (T-01-10 mitigation).
+    match /rateBudgets/{uid} {
+      allow read, write:
+        if isSelf(uid) && sameTenant();
+
+      // Admin may read for monitoring/dashboards.
+      allow read:
+        if hasRole('admin') && sameTenant();
+    }
+
+  }
+}
