@@ -47,7 +47,20 @@ These are hard, non-negotiable boundaries carried from PROJECT.md / config. No p
   3. At least one of EN / BM / 中文 works end-to-end (UI copy + retrieval) and the chosen embedding model clears the multilingual recall bar.
   4. The same chat call succeeds against a second LLM provider via the abstraction layer (model swap provable), with no PII reaching the model unredacted.
   5. All three required spikes are resolved with a documented pass/fallback decision, and a signed PDPA Transfer Impact Assessment is on file.
-**Plans**: TBD
+**Plans**: 13 plans (waves 0-6)
+- [ ] 01-01-PLAN.md — G1 region sign-off with Derek + provision Firebase/App Hosting/QStash/Secret Manager
+- [ ] 01-02-PLAN.md — All test/build infra (vitest/playwright/promptfoo/rules-unit-testing) + llm provider interface + deterministic fake provider + CI PII scan + Next.js-16 lint
+- [ ] 01-03-PLAN.md — src/firebase init + typed 14-collection refs (tenantId source of truth) + deny-by-default firestore.rules + rules-unit-tests (3 roles)
+- [ ] 01-04-PLAN.md — Auth + custom claims (3 roles) + new-agent sign-in + session persistence + Admin SDK claim script
+- [ ] 01-05-PLAN.md — src/audit append-only hashes-only writer + PDPA boundary redaction + pdpa_redacted gate + TIA artifact
+- [ ] 01-06-PLAN.md — i18n scaffold: proxy.ts + 3 next-intl catalogs (en/ms/zh) + app/[lang] segment + franc-min per-message detection
+- [ ] 01-07-PLAN.md — src/router heuristic stub + src/memory (subcollection + leadContext slots + journey seam) + src/ratelimit real decrement
+- [ ] 01-08-PLAN.md — SPIKE-RAG + SPIKE-DEPLOY (escalates to Derek) + SPIKE-CRON + SPIKE-AI-SDK + SPIKE-INGEST + apphosting.yaml
+- [ ] 01-09-PLAN.md — src/rag scaffold: Voyage embed + findNearest (DOT_PRODUCT, lang pre-filter) + chunk-ID citations + Pinecone fallback seam
+- [ ] 01-10-PLAN.md — src/kb chunked client-driven ingestion (idempotent sha256) + minimal authenticated CRUD form + seed one EN doc
+- [ ] 01-11-PLAN.md — src/escalation interface + QStash-signed /api/jobs/stall-detect + heartbeat (no Cloud Functions)
+- [ ] 01-12-PLAN.md — modelFor (Remote Config) + minimal-but-extensible Coach via router + Node SSE chat route spine + mobile-first chat shell
+- [ ] 01-13-PLAN.md — Promptfoo trilingual eval + Opus judge + proof-slice E2E (sign-in→stream→persist→audit) + model-swap test (QUAL-01)
 **UI hint**: yes
 
 ### Phase 2: Coach + Admin v1
@@ -110,7 +123,7 @@ Phases execute in numeric order: 1 → 2 → [week-4 go/no-go gate] → 3 → 4 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundations | 0/TBD | Not started | - |
+| 1. Foundations | 0/13 | Not started | - |
 | 2. Coach + Admin v1 | 0/TBD | Not started | - |
 | 3. Finder + Intent-Routing | 0/TBD | Not started | - |
 | 4. Reply Assistant + Analytics | 0/TBD | Not started | - |
