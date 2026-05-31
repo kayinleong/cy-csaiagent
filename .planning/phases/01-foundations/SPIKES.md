@@ -12,8 +12,14 @@ live Voyage + Firestore). Each spike's DECISION is marked PENDING until those ru
 ## SPIKE-AI-SDK
 
 **What it resolves:** The `ai` package has shipped v6 while TSD locks `ai ^5`. The chat route
-(01-11) depends on the correct stream-response method name. A deliberate pin avoids a silent
+(01-12) depends on the correct stream-response method name. A deliberate pin avoids a silent
 runtime failure when the method name changes between majors.
+
+> **CORRECTION (verified during 01-12 integration):** The original draft of this record claimed
+> v5's method was `toDataStreamResponse()`. That is the AI SDK **v4** name — it was renamed in v5
+> and **does NOT exist in the installed `ai@5.0.193`**. The correct v5 method (the successor to
+> v4's `toDataStreamResponse()`, i.e. the UI-message/data-stream protocol consumed by `useChat`)
+> is **`toUIMessageStreamResponse()`**. The chat route correctly uses `toUIMessageStreamResponse()`.
 
 ### Pin record
 
@@ -22,8 +28,8 @@ runtime failure when the method name changes between majors.
 | Pinned `ai` major | **5** (v5.0.193) |
 | Matching `@ai-sdk/anthropic` | **2.0.80** (v2 provider line — uses `@ai-sdk/provider@2.0.3` which matches `ai@5.0.193`) |
 | `@anthropic-ai/sdk` | **^0.100.1** (documented fallback / escape hatch for raw beta headers) |
-| Stream-response method (v5) | **`toDataStreamResponse()`** |
-| Stream-response method (v6) | `toUIMessageStreamResponse()` — DO NOT USE in Phase 1 |
+| Stream-response method (verified, ai@5.0.193) | **`toUIMessageStreamResponse()`** |
+| Legacy name (AI SDK v4, removed in v5) | `toDataStreamResponse()` — does NOT exist in v5.0.193 |
 
 **Why v5:** TSD locks `ai ^5`; research confirms this is the safe default (RESEARCH Q1 lines 487–490).
 The v6 codemod (`npx @ai-sdk/codemod v6`) is available if a future phase upgrades, but Phase 1
@@ -33,18 +39,19 @@ stays on v5 to match the TSD exactly and de-risk the sprint.
 - `ai@5.0.193` bundles `@ai-sdk/provider@2.0.3`
 - `@ai-sdk/anthropic@2.0.80` bundles `@ai-sdk/provider@2.0.3`
 - Provider versions match — no peer-dependency conflicts at runtime
+- `streamText(...).toUIMessageStreamResponse()` confirmed present on the result object in 5.0.193
 
 **Harness code:** `app/api/spike/stream/route.ts` uses `ReadableStream` + `text/event-stream` (the
-underlying pattern that `streamText().toDataStreamResponse()` wraps). The actual AI SDK stream call
-is wired in 01-11 using `toDataStreamResponse()`.
+underlying pattern the AI SDK stream wraps). The actual AI SDK stream call is wired in 01-12 using
+`result.toUIMessageStreamResponse()` with manual `Cache-Control: no-store` + `X-Accel-Buffering: no`.
 
 ```
 Result:  RECORDED (no live run required — this is a static pin decision)
-Decision: [x] pin ai@5 / toDataStreamResponse  [ ] upgrade to ai@6 / toUIMessageStreamResponse
+Decision: [x] pin ai@5 / toUIMessageStreamResponse  [ ] upgrade to ai@6
 ```
 
-**Impact on downstream:** 01-11 (chat route) MUST call `result.toDataStreamResponse()` — not
-`toUIMessageStreamResponse()`. This decision record is the authoritative reference.
+**Impact on downstream:** 01-12 (chat route) calls `result.toUIMessageStreamResponse()` — NOT the
+removed v4 `toDataStreamResponse()`. This decision record is the authoritative reference.
 
 ---
 
@@ -314,7 +321,7 @@ changed. The live SPIKE-INGEST run must verify:
 
 | Spike | Harness Status | Live Run | Decision |
 |-------|---------------|----------|----------|
-| SPIKE-AI-SDK | Complete | Not required (static pin) | RECORDED: ai@5 / toDataStreamResponse |
+| SPIKE-AI-SDK | Complete | Not required (static pin) | RECORDED: ai@5 / toUIMessageStreamResponse (verified in 01-12) |
 | SPIKE-RAG | Harness committed | PENDING | PENDING |
 | SPIKE-DEPLOY | Harness committed | PENDING | PENDING |
 | SPIKE-CRON | Harness committed (unit tests: 7/7 pass) | PENDING | PENDING |
