@@ -49,16 +49,28 @@ const WRONG_TENANT = 'other-corp'
 /** UID of a completely different agent (not in any downline). */
 const STRANGER_UID = 'test-uid-stranger-999'
 
+// ─── Emulator gate ────────────────────────────────────────────────────────────
+// These rules tests can only run against the local Firestore emulator (you cannot
+// assert deny-by-default against production). `firebase emulators:exec` sets
+// FIRESTORE_EMULATOR_HOST, which is our signal that the emulator is up. When it is
+// absent (default `npm test`, CI without the emulator job), the whole suite skips
+// cleanly instead of hard-failing on ECONNREFUSED. Run them with:
+//   firebase emulators:exec --only firestore "npm run test:rules"
+const RUN_RULES = Boolean(process.env.FIRESTORE_EMULATOR_HOST)
+const rulesSuite = RUN_RULES ? describe : describe.skip
+
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 
-beforeAll(async () => {
-  // Warm up the emulator environment (loads rules).
-  await getTestEnv()
-}, 30_000)
+if (RUN_RULES) {
+  beforeAll(async () => {
+    // Warm up the emulator environment (loads rules).
+    await getTestEnv()
+  }, 30_000)
 
-afterAll(async () => {
-  await cleanup()
-}, 10_000)
+  afterAll(async () => {
+    await cleanup()
+  }, 10_000)
+}
 
 // ─── Helper: seed a doc via admin (bypasses rules for test setup) ─────────────
 
@@ -70,7 +82,7 @@ async function seed(path: string, data: Record<string, unknown>): Promise<void> 
 
 // ─── 1. DENY-BY-DEFAULT: Unauthenticated reads are denied on every collection ──
 
-describe('Deny-by-default: unauthenticated reads', () => {
+rulesSuite('Deny-by-default: unauthenticated reads', () => {
   const collections = [
     'users', 'agentProfiles', 'conversations', 'leads', 'leadContext',
     'projects', 'collateral', 'kbDocs', 'kbChunks', 'kbIngestionJobs',
@@ -88,7 +100,7 @@ describe('Deny-by-default: unauthenticated reads', () => {
 
 // ─── 2. users collection ──────────────────────────────────────────────────────
 
-describe('users collection', () => {
+rulesSuite('users collection', () => {
   const agentDoc = {
     tenantId: D2_TENANT,
     role: 'new-agent',
@@ -148,7 +160,7 @@ describe('users collection', () => {
 
 // ─── 3. agentProfiles collection ─────────────────────────────────────────────
 
-describe('agentProfiles collection', () => {
+rulesSuite('agentProfiles collection', () => {
   const agentProfile = {
     tenantId: D2_TENANT,
     journeyStage: 'onboarding',
@@ -204,7 +216,7 @@ describe('agentProfiles collection', () => {
 
 // ─── 4. conversations collection ─────────────────────────────────────────────
 
-describe('conversations collection', () => {
+rulesSuite('conversations collection', () => {
   const ownConvId = 'conv-own-001'
   const otherConvId = 'conv-other-001'
 
@@ -248,7 +260,7 @@ describe('conversations collection', () => {
 
 // ─── 5. conversations/messages subcollection ──────────────────────────────────
 
-describe('conversations/{cid}/messages subcollection', () => {
+rulesSuite('conversations/{cid}/messages subcollection', () => {
   const convId = 'conv-messages-test-001'
   const msgId = 'msg-001'
 
@@ -311,7 +323,7 @@ describe('conversations/{cid}/messages subcollection', () => {
 
 // ─── 6. leads collection ─────────────────────────────────────────────────────
 
-describe('leads collection', () => {
+rulesSuite('leads collection', () => {
   const ownLeadId = 'lead-own-001'
   const otherLeadId = 'lead-other-001'
 
@@ -357,7 +369,7 @@ describe('leads collection', () => {
 
 // ─── 7. leadContext collection ────────────────────────────────────────────────
 
-describe('leadContext collection', () => {
+rulesSuite('leadContext collection', () => {
   const leadContextId = 'lead-ctx-001'
 
   beforeAll(async () => {
@@ -386,7 +398,7 @@ describe('leadContext collection', () => {
 
 // ─── 8. KB collections (projects, collateral, kbDocs, kbChunks, kbIngestionJobs) ──
 
-describe('KB collections (shared tenant read, admin write)', () => {
+rulesSuite('KB collections (shared tenant read, admin write)', () => {
   const cols = ['projects', 'collateral', 'kbDocs', 'kbChunks', 'kbIngestionJobs'] as const
 
   for (const col of cols) {
@@ -426,7 +438,7 @@ describe('KB collections (shared tenant read, admin write)', () => {
 
 // ─── 9. escalations collection ────────────────────────────────────────────────
 
-describe('escalations collection', () => {
+rulesSuite('escalations collection', () => {
   const downlineEscalationId = 'esc-downline-001'
   const strangerEscalationId = 'esc-stranger-001'
 
@@ -494,7 +506,7 @@ describe('escalations collection', () => {
 
 // ─── 10. auditLogs collection — IMMUTABLE ────────────────────────────────────
 
-describe('auditLogs collection — append-only, immutable (T-01-07)', () => {
+rulesSuite('auditLogs collection — append-only, immutable (T-01-07)', () => {
   const auditDocId = 'audit-log-001'
 
   beforeAll(async () => {
@@ -568,7 +580,7 @@ describe('auditLogs collection — append-only, immutable (T-01-07)', () => {
 
 // ─── 11. evals collection ────────────────────────────────────────────────────
 
-describe('evals collection', () => {
+rulesSuite('evals collection', () => {
   const evalDocId = 'eval-run-001'
 
   beforeAll(async () => {
@@ -612,7 +624,7 @@ describe('evals collection', () => {
 
 // ─── 12. rateBudgets collection — owner-scoped (T-01-10) ─────────────────────
 
-describe('rateBudgets collection — cross-agent isolation (T-01-10)', () => {
+rulesSuite('rateBudgets collection — cross-agent isolation (T-01-10)', () => {
   const agentBudgetId = syntheticNewAgent.uid   // rateBudgets/{uid}
   const strangerBudgetId = STRANGER_UID
 
