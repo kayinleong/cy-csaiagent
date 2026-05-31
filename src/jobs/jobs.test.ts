@@ -21,9 +21,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockFindStalled = vi.hoisted(() => vi.fn())
 const mockEmitHandoffSignal = vi.hoisted(() => vi.fn())
+
+// Heartbeat mock — tracks calls from the route handler
 const mockWriteHeartbeat = vi.hoisted(() => vi.fn())
+
+// adminDb mock — used for direct heartbeat unit test
 const mockHeartbeatSet = vi.hoisted(() => vi.fn())
-const mockHeartbeatDoc = vi.hoisted(() => vi.fn())
+const mockHeartbeatDocFn = vi.hoisted(() => vi.fn())
 
 // ─── Mock @/src/escalation ─────────────────────────────────────────────────────
 
@@ -32,42 +36,14 @@ vi.mock('@/src/escalation', () => ({
   emitHandoffSignal: mockEmitHandoffSignal,
 }))
 
-// ─── Mock @/src/jobs/heartbeat ─────────────────────────────────────────────────
-
-vi.mock('@/src/jobs/heartbeat', () => ({
-  writeHeartbeat: mockWriteHeartbeat,
-}))
-
-// ─── Mock firebase-admin/firestore (for heartbeat unit tests) ─────────────────
-
-vi.mock('firebase-admin/firestore', () => ({
-  FieldValue: {
-    serverTimestamp: vi.fn(() => ({ _serverTimestamp: true })),
-  },
-}))
-
-// ─── Mock @/src/firebase/admin ─────────────────────────────────────────────────
-
-vi.mock('@/src/firebase/admin', () => ({
-  adminDb: {
-    collection: vi.fn(() => ({
-      doc: mockHeartbeatDoc.mockReturnValue({
-        set: mockHeartbeatSet,
-      }),
-    })),
-  },
-}))
-
 // ─── Mock @upstash/qstash/nextjs ──────────────────────────────────────────────
 // We mock verifySignatureAppRouter so we control accept/reject behavior.
-// In "verify mode" we simply call through to the inner handler.
-// In "reject mode" we return a 401 Response without calling the handler.
+// "accept" mode calls the inner handler; "reject" mode returns 401.
 
 let _verifyMode: 'accept' | 'reject' = 'accept'
 
 vi.mock('@upstash/qstash/nextjs', () => ({
   verifySignatureAppRouter: vi.fn((handler: (req: Request) => Promise<Response>) => {
-    // Return a wrapped handler that respects _verifyMode
     return async (req: Request) => {
       if (_verifyMode === 'reject') {
         return new Response('Unauthorized', { status: 401 })
@@ -77,9 +53,44 @@ vi.mock('@upstash/qstash/nextjs', () => ({
   }),
 }))
 
-// ─── Import modules under test AFTER all mocks ────────────────────────────────
+// ─── Mock @/src/jobs/heartbeat — for route handler tests (Tests 1+2) ─────────
+// The route calls writeHeartbeat; we track it via mockWriteHeartbeat.
+// For Test 3 we directly test the heartbeat module by mocking adminDb instead.
 
-import { writeHeartbeat } from '@/src/jobs/heartbeat'
+vi.mock('@/src/jobs/heartbeat', () => ({
+  writeHeartbeat: mockWriteHeartbeat,
+  readHeartbeat: vi.fn(),
+}))
+
+// ─── Mock @/src/firebase/admin — for direct heartbeat tests (Test 3) ─────────
+
+vi.mock('@/src/firebase/admin', () => ({
+  adminDb: {
+    collection: vi.fn(() => ({
+      doc: mockHeartbeatDocFn.mockReturnValue({
+        set: mockHeartbeatSet,
+      }),
+    })),
+  },
+}))
+
+// ─── Mock firebase-admin/firestore ────────────────────────────────────────────
+
+vi.mock('firebase-admin/firestore', () => ({
+  FieldValue: {
+    serverTimestamp: vi.fn(() => ({ _serverTimestamp: true })),
+  },
+}))
+
+// ─── Mock @/src/firebase/collections (for TENANT_ID) ─────────────────────────
+
+vi.mock('@/src/firebase/collections', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/src/firebase/collections')>()
+  return {
+    ...actual,
+    TENANT_ID: 'd2',
+  }
+})
 
 // ─── Test 1: unsigned request is rejected (401) ────────────────────────────────
 
@@ -90,7 +101,6 @@ describe('stall-detect route handler — signature verification', () => {
   })
 
   it('rejects an unsigned request with 401 — no stall processing occurs', async () => {
-    // Dynamic import inside test to get fresh module with the mock in "reject" mode
     const { POST } = await import('../../app/api/jobs/stall-detect/route')
 
     const req = new Request('https://example.app/api/jobs/stall-detect', {
@@ -165,18 +175,34 @@ describe('stall-detect route handler — signed request', () => {
 })
 
 // ─── Test 3: writeHeartbeat upserts heartbeat doc ─────────────────────────────
+// We directly test the REAL writeHeartbeat module by bypassing the mock above.
+// The adminDb mock intercepts the Firestore call.
 
 describe('writeHeartbeat(jobName)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Reset adminDb mock chain for each test
+    mockHeartbeatDocFn.mockReturnValue({ set: mockHeartbeatSet })
   })
 
   it('upserts a heartbeat doc with { job, ts } and tenantId stamped', async () => {
     mockHeartbeatSet.mockResolvedValueOnce(undefined)
 
-    await writeHeartbeat('stall-detect')
+    // Import the REAL heartbeat module bypassing the vi.mock at module level.
+    // We do this by importing from the actual path — Vitest resolves the mock
+    // for the same identifier used in vi.mock(), but we can use the real module
+    // by calling the function directly from a fresh unmocked context.
+    //
+    // In practice, the route test covers writeHeartbeat being called.
+    // For this test, we validate the heartbeat module's real behavior by
+    // re-exporting via a direct call from the module under the adminDb mock.
+    const { writeHeartbeat: realWriteHeartbeat } = await vi.importActual<
+      typeof import('./heartbeat')
+    >('@/src/jobs/heartbeat')
 
-    expect(mockHeartbeatDoc).toHaveBeenCalledWith('stall-detect')
+    await realWriteHeartbeat('stall-detect')
+
+    expect(mockHeartbeatDocFn).toHaveBeenCalledWith('stall-detect')
     expect(mockHeartbeatSet).toHaveBeenCalledWith(
       expect.objectContaining({
         job: 'stall-detect',
