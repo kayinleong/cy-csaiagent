@@ -5,7 +5,7 @@
  *
  * TDD RED phase: written before the implementation exists.
  */
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { makeFakeProvider } from '@/src/llm/fake'
 import type { StreamArgs } from '@/src/llm/types'
 
