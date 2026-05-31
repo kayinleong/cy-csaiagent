@@ -171,6 +171,8 @@ export interface KbChunkDoc {
   /** 1024-d normalized vector (Voyage voyage-3-large, DOT_PRODUCT) */
   embedding: number[]
   tokens: number
+  /** Zero-based position of this chunk in the source document */
+  chunkIndex: number
 }
 
 export interface KbIngestionJobDoc {
@@ -179,6 +181,15 @@ export interface KbIngestionJobDoc {
   total: number
   remaining: number
   status: 'pending' | 'processing' | 'complete' | 'error'
+  /** All chunk texts (stored so the process worker can embed them in batches) */
+  chunkTexts: string[]
+  /** The kbDocs document this job belongs to */
+  docId: string
+  /** Language of the document */
+  lang: 'en' | 'ms' | 'zh'
+  /** Pillar this KB doc belongs to */
+  pillar: 'coach' | 'finder' | 'reply'
+  createdAt: Date | FieldValue
 }
 
 export interface EscalationDoc {

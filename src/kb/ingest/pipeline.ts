@@ -173,15 +173,7 @@ export async function processBatch(jobId: string, limit: number): Promise<Proces
     total,
     docId,
     lang,
-  } = jobData as {
-    chunkTexts: string[]
-    remaining: number
-    total: number
-    docId: string
-    lang: 'en' | 'ms' | 'zh'
-    status: string
-    tenantId: string
-  }
+  } = jobData
 
   if (remaining <= 0) {
     return { remaining: 0 }

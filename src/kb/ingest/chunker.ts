@@ -218,7 +218,7 @@ function extractTailByTokens(text: string, tokenBudget: number): string {
   if (tokenBudget <= 0 || !text) return ''
 
   const words = text.split(/\s+/)
-  let tail: string[] = []
+  const tail: string[] = []
   let tailTokens = 0
 
   // Walk backwards, adding words until we hit the budget
