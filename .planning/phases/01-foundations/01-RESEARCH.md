@@ -482,26 +482,32 @@ await adminAuth.setCustomUserClaims(uid, { role: 'new-agent', tenantId: 'd2' })
 
 **These are the claims that should become user-confirmed decisions (or spike outcomes) before they harden into the plan.**
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All four resolved during planning and folded into plans — see the `RESOLVED:` line under each.
 
 1. **AI SDK version pin: v5 or v6?**
    - What we know: TSD/research lock `ai ^5`; registry ships `ai 6.0.193` GA with a v3 Language Model Spec, `useChat` parts model, and changed provider option shapes; a `@ai-sdk/codemod v6` exists; Vercel calls it low-impact for most users. `@ai-sdk/anthropic 3.0.81` matches the lock. `[VERIFIED: npm + AI SDK 6 blog]`
    - What's unclear: whether `@ai-sdk/anthropic 3.x` pairs with `ai` v6, and whether the `toDataStreamResponse`→`toUIMessageStreamResponse` rename affects the chat route shape.
    - Recommendation: **SPIKE-AI-SDK pins the version deliberately.** Safe default = pin `ai@^5` to match the research exactly and de-risk Phase 1; revisit v6 at the P1→P2 boundary. Whichever is chosen, log it in PROJECT.md Key Decisions and use the exact method name in the chat route.
+   - **RESOLVED:** pin `ai@^5` for Phase 1; SPIKE-AI-SDK (plan 01-08) confirms the streaming/tool method name (`toDataStreamResponse`), consumed by the chat route in 01-12.
 
 2. **Does `next-intl ^4` use `proxy.ts` or `middleware.ts` under Next.js 16?**
    - What we know: Next.js 16 renamed Middleware→Proxy `[VERIFIED: 16-proxy.md]`; next-intl historically shipped a `createMiddleware` helper in `middleware.ts`.
    - What's unclear: whether next-intl v4 has a Next.js-16 `proxy.ts` integration or expects the legacy filename (which Next.js 16 may not pick up).
    - Recommendation: verify against next-intl v4 docs during planning; fold a 30-min check into the i18n task. If next-intl insists on `middleware.ts`, reconcile with the project's "proxy.ts not middleware.ts" rule before the task is locked.
+   - **RESOLVED:** folded into plan 01-06 Task 1 as a ≤30-min proxy-vs-middleware verification; the chosen integration is recorded in the 01-06 SUMMARY.
 
 3. **Firestore region G1 (`asia-southeast1` vs `asia-southeast2`) — immovable.**
    - What we know: TSD default `asia-southeast1` (Singapore); ARCHITECTURE once referenced Jakarta — reconciled to Singapore. `[CITED: TSD §14, ARCH §11]`
    - What's unclear: Derek's final residency preference; PDPA posture differs slightly between SG and Jakarta.
    - Recommendation: **BLOCKING pre-task** — confirm with Derek before any Firebase resource is created. Cannot be changed afterward.
+   - **RESOLVED:** blocking human-gated pre-task in plan 01-01 (G1 sign-off with Derek); default `asia-southeast1` recorded in G1-REGION-SIGNOFF.md before any resource is created.
 
 4. **G2 — Anthropic Asian residency / Bedrock-Singapore fallback.**
    - What we know: direct API has no Asian residency (2026-05); v1 path is TIA + pseudonymization; Bedrock-SG is the documented fallback if legal requires in-region inference. `[CITED: TSD §5.3]`
    - Recommendation: decide in Phase 1 with Derek; log in Key Decisions. The redaction layer + `pdpa_redacted` gate are built regardless.
+   - **RESOLVED:** Derek decision captured in plan 01-01 (G2 in G1-REGION-SIGNOFF.md); the redaction layer + `pdpa_redacted` gate are built regardless in plan 01-05.
 
 ## Environment Availability
 

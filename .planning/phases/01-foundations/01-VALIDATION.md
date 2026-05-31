@@ -47,8 +47,8 @@ created: 2026-05-31
 | 01-01-T2 | 01-01 | 0 | FND-09 | T-01-01 | Secrets via Secret Manager, none in repo | manual + grep | `grep -rIE "(sk-ant\|voyage-\|qstash_)[A-Za-z0-9]{8,}" .planning/` (empty) | ✅ created by plan | ⬜ pending |
 | 01-02-T1 | 01-02 | 0 | FND-02, QUAL-03 | T-01-04 | CI PII scan + Next.js-16 anti-pattern lint | config + CI | `npx vitest run src/llm/fake.test.ts; npm run lint` | ✅ created by plan | ⬜ pending |
 | 01-02-T2 | 01-02 | 0 | FND-02, QUAL-01 | T-01-05 | llm fake provider; src/ Next-free | unit (TDD) | `npx vitest run src/llm/fake.test.ts` | ✅ created by plan | ⬜ pending |
-| 01-03-T1 | 01-03 | 1 | FND-04 | T-01-08 | tenantId stamped; messages subcollection | unit | `npx vitest run src/firebase/collections.test.ts` | ✅ created by plan | ⬜ pending |
-| 01-03-T2 | 01-03 | 1 | AUTH-04, QUAL-05 | T-01-06, T-01-07, T-01-09 | Deny-by-default rules; auditLogs immutable; 3 roles | rules-unit-test | `npm run test:rules` | ✅ created by plan | ⬜ pending |
+| 01-03-T1 | 01-03 | 1 | FND-04 | T-01-08 | tenantId stamped; messages subcollection; rateBudgets declared | unit | `npx vitest run src/firebase/collections.test.ts` | ✅ created by plan | ⬜ pending |
+| 01-03-T2 | 01-03 | 1 | AUTH-04, QUAL-05 | T-01-06, T-01-07, T-01-09, T-01-10 | Deny-by-default rules; auditLogs immutable; rateBudgets owner-scoped (cross-agent denied); 3 roles | rules-unit-test | `npm run test:rules` | ✅ created by plan | ⬜ pending |
 | 01-04-T1 | 01-04 | 2 | AUTH-04 | T-01-10, T-01-11 | requireUser verifies token; claims never from body | unit (TDD) | `npx vitest run src/firebase/auth.test.ts` | ✅ created by plan | ⬜ pending |
 | 01-04-T2 | 01-04 | 2 | AUTH-01, AUTH-05 | T-01-12 | Sign-in; httpOnly session cookie; LOCAL persistence | lint + type | `npm run lint && npx tsc --noEmit` | ✅ created by plan | ⬜ pending |
 | 01-05-T1 | 01-05 | 2 | QUAL-03 | T-01-14 | Pseudonymize at boundary; pdpa_redacted gate throws | unit (TDD) | `npx vitest run src/audit/pdpa.test.ts` | ✅ created by plan | ⬜ pending |
@@ -57,7 +57,7 @@ created: 2026-05-31
 | 01-06-T2 | 01-06 | 1 | AUTH-01 | — | Per-message franc-min detect en\|ms\|zh | unit (TDD) | `npx vitest run src/i18n/detect.test.ts` | ✅ created by plan | ⬜ pending |
 | 01-07-T1 | 01-07 | 2 | FND-06 | — | Heuristic→Coach; classifier dormant; override seam | unit (TDD) | `npx vitest run src/router/heuristic.test.ts` | ✅ created by plan | ⬜ pending |
 | 01-07-T2 | 01-07 | 2 | FND-05 | T-01-21, T-01-22 | Messages subcollection; lead slots; journey seam | unit (TDD) | `npx vitest run src/memory/memory.test.ts` | ✅ created by plan | ⬜ pending |
-| 01-07-T3 | 01-07 | 2 | QUAL-07 | T-01-20 | Real decrement; refuse runaway before LLM | unit (TDD) | `npx vitest run src/ratelimit/window.test.ts` | ✅ created by plan | ⬜ pending |
+| 01-07-T3 | 01-07 | 2 | QUAL-07 | T-01-20 | Real decrement (consumes 01-03 rateBudgetsRef); refuse runaway before LLM | unit (TDD) | `npx vitest run src/ratelimit/window.test.ts` | ✅ created by plan | ⬜ pending |
 | 01-08-T1 | 01-08 | 2 | FND-03 | T-01-26 | SPIKE-RAG p95/read-cost/recall; SPIKE-INGEST budget | spike harness | `npx vitest run src/rag/spike-rag.test.ts` | ✅ created by plan | ⬜ pending |
 | 01-08-T2 | 01-08 | 2 | FND-10, QUAL-04 | T-01-23, T-01-24 | QStash signature verify; ai-sdk pin; apphosting secrets | integration | `npx vitest run src/jobs/signature.test.ts` | ✅ created by plan | ⬜ pending |
 | 01-08-T3 | 01-08 | 2 | QUAL-04 | T-01-25 | SSE token-by-token on real 4G; X-Accel-Buffering:no | manual (checkpoint) + header test | n/a — SPIKE-DEPLOY real-4G; `grep X-Accel-Buffering app/api/spike/stream/route.ts` | ✅ created by plan | ⬜ pending |
@@ -87,7 +87,7 @@ created: 2026-05-31
 - **SC3 (one language E2E + recall bar):** Promptfoo trilingual fixture scores EN end-to-end (01-13); SPIKE-RAG (01-08) asserts BM/中文 recall ≥70% of EN on ~500 chunks (gate, not in-suite).
 - **SC4 (model swap, no unredacted PII):** `src/llm/swap.test.ts` (01-13) runs the same chat call on a 2nd provider via `llm/`; `src/audit/pdpa.test.ts` (01-05) asserts the `pdpa_redacted:true` gate refuses an unredacted call.
 - **SC5 (spikes resolved + TIA):** `SPIKES.md` (01-08) records the pass/fallback decision per spike; `PDPA-TIA.md` (01-05) on file (manual verification).
-- **Rules:** `src/firebase/__tests__/rules.test.ts` (01-03) proves deny-by-default for all 3 roles across every collection — cross-agent/cross-tenant reads denied; `auditLogs` mutation denied.
+- **Rules:** `src/firebase/__tests__/rules.test.ts` (01-03) proves deny-by-default for all 3 roles across every collection — cross-agent/cross-tenant reads denied; `auditLogs` mutation denied; `rateBudgets` cross-agent read/write denied (owner-scoped).
 
 ---
 
