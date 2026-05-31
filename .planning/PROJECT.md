@@ -100,6 +100,8 @@ A multi-pillar AI agent platform for D2, a Malaysian real-estate sales organizat
 | Build Coach first, then Finder, then Reply Assistant | Coach exercises every shared component, lowest reputational risk per Impl Plan | — Pending |
 | Suggested-drafts-only WhatsApp posture (no WABA in v1) | Reply mistakes carry highest reputational risk; account-safety > auto-send | — Pending |
 | Web-first PWA, not native mobile | Faster shipping with one codebase; mobile-responsive suffices for 11pm-on-phone scenario | — Pending |
+| Firestore + Storage region `asia-southeast1` (G1) | Region is immovable at create-time (TSD §14 G1); SG default per stack/PDPA posture | (proposed — pending Derek sign-off, see G1-REGION-SIGNOFF.md) |
+| G2 Anthropic residency: direct API + TIA + boundary pseudonymization | No Anthropic Asian residency 2026-05; pseudonymize PII at the Claude boundary (01-05); Bedrock-SG is the documented fallback | (proposed — pending Derek sign-off, see G1-REGION-SIGNOFF.md) |
 
 ## Evolution
 
