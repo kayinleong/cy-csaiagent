@@ -21,7 +21,7 @@
  *   import { requireUser, setUserClaims } from '@/src/firebase/auth'
  */
 
-import { adminAuth, adminDb } from '@/src/firebase/admin'
+import { adminAuth } from '@/src/firebase/admin'
 import {
   usersRef,
   agentProfilesRef,
