@@ -37,16 +37,27 @@ vi.mock('@/src/firebase/collections', () => {
     where: mockAgentProfilesWhere.mockReturnValue(agentProfilesQuery),
   }))
 
-  // escalationsRef chain: .where().get() for dedup check, and .add() for create
+  // escalationsRef chain: .where().where().where().get() for dedup check, and .add() for create
+  // The dedup chain is: ref.where(agentUid).where(reason).where(status).get()
   const escalationsDedupQuery = {
     get: mockEscalationsWhereGet,
   }
+  // Build a chainable where mock that returns itself (supporting N chained .where() calls)
+  // The final .where() returns the query with .get()
+  const chainableWhere = {
+    where: vi.fn(),
+    get: mockEscalationsWhereGet,
+  }
+  // Make chainableWhere.where return itself for infinite chaining
+  chainableWhere.where.mockReturnValue(chainableWhere)
+
   const escalationsRef = vi.fn(() => ({
-    where: mockEscalationsWhere.mockReturnValue({
-      where: vi.fn().mockReturnValue(escalationsDedupQuery),
-    }),
+    where: mockEscalationsWhere.mockReturnValue(chainableWhere),
     add: mockEscalationsAdd,
   }))
+
+  // Unused but referenced — suppress lint
+  void escalationsDedupQuery
 
   return { agentProfilesRef, escalationsRef }
 })
