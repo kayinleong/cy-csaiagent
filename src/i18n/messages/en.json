@@ -1,0 +1,67 @@
+{
+  "app": {
+    "name": "D2 Agent Assistant",
+    "tagline": "Your 11pm answer, powered by D2 knowledge"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "signInTitle": "Welcome to D2 Agent Assistant",
+    "signInDescription": "Sign in with your D2 Google account to access your AI coaching assistant.",
+    "signingIn": "Signing in…",
+    "signInError": "Sign-in failed. Please try again.",
+    "unauthorised": "You don't have access. Contact your senior coach.",
+    "sessionExpired": "Your session has expired. Please sign in again."
+  },
+  "chat": {
+    "placeholder": "Ask anything about D2 properties, SOPs, or your onboarding journey…",
+    "send": "Send",
+    "thinking": "Thinking…",
+    "emptyState": "Hi! I'm your D2 Agent Assistant. Ask me anything about D2 properties, onboarding steps, or sales SOPs.",
+    "citationLabel": "Source",
+    "citations": "Sources",
+    "copyReply": "Copy reply",
+    "copied": "Copied!",
+    "rateLimit": "You've reached your hourly limit. Please wait a few minutes.",
+    "error": "Something went wrong. Please try again."
+  },
+  "handoff": {
+    "kbMiss": "I couldn't find a D2 knowledge base article for this. Your senior coach has been notified.",
+    "escalated": "This has been escalated to your senior coach.",
+    "stall": "You haven't completed this onboarding step yet. Your coach has been alerted."
+  },
+  "kb": {
+    "title": "Knowledge Base",
+    "addDocument": "Add document",
+    "documentTitle": "Document title",
+    "documentContent": "Document content",
+    "documentType": "Document type",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Document saved.",
+    "delete": "Delete",
+    "confirmDelete": "Are you sure you want to delete this document?",
+    "ingestPdf": "Upload PDF",
+    "ingesting": "Processing PDF…",
+    "ingestDone": "PDF processed and indexed.",
+    "ingestError": "PDF processing failed. Please try again.",
+    "noDocuments": "No knowledge base documents yet.",
+    "types": {
+      "sop": "SOP",
+      "property": "Property info",
+      "training": "Training material",
+      "faq": "FAQ",
+      "other": "Other"
+    }
+  },
+  "nav": {
+    "chat": "Chat",
+    "kb": "Knowledge Base",
+    "settings": "Settings"
+  },
+  "errors": {
+    "notFound": "Page not found.",
+    "serverError": "Something went wrong on our end.",
+    "unauthorized": "You don't have permission to view this page."
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "_review": "native-review-pending",
+  "_note": "Machine-assisted draft — awaiting native BM review before production use (D-08). Do not ship to users without sign-off.",
+  "app": {
+    "name": "Pembantu Ejen D2",
+    "tagline": "Jawapan jam 11 malam anda, dikuasakan oleh pengetahuan D2"
+  },
+  "auth": {
+    "signIn": "Log masuk",
+    "signOut": "Log keluar",
+    "signInTitle": "Selamat datang ke Pembantu Ejen D2",
+    "signInDescription": "Log masuk dengan akaun Google D2 anda untuk mengakses pembantu latihan AI anda.",
+    "signingIn": "Sedang log masuk…",
+    "signInError": "Log masuk gagal. Sila cuba lagi.",
+    "unauthorised": "Anda tidak mempunyai akses. Hubungi jurulatih kanan anda.",
+    "sessionExpired": "Sesi anda telah tamat. Sila log masuk semula."
+  },
+  "chat": {
+    "placeholder": "Tanya apa sahaja tentang hartanah D2, SOP, atau perjalanan onboarding anda…",
+    "send": "Hantar",
+    "thinking": "Sedang berfikir…",
+    "emptyState": "Hai! Saya Pembantu Ejen D2 anda. Tanya saya apa sahaja tentang hartanah D2, langkah onboarding, atau SOP jualan.",
+    "citationLabel": "Sumber",
+    "citations": "Sumber-sumber",
+    "copyReply": "Salin balasan",
+    "copied": "Disalin!",
+    "rateLimit": "Anda telah mencapai had sejam. Sila tunggu beberapa minit.",
+    "error": "Berlaku ralat. Sila cuba lagi."
+  },
+  "handoff": {
+    "kbMiss": "Saya tidak dapat mencari artikel pangkalan pengetahuan D2 untuk ini. Jurulatih kanan anda telah dimaklumkan.",
+    "escalated": "Perkara ini telah dieskalasi kepada jurulatih kanan anda.",
+    "stall": "Anda belum menyelesaikan langkah onboarding ini. Jurulatih anda telah dimaklumkan."
+  },
+  "kb": {
+    "title": "Pangkalan Pengetahuan",
+    "addDocument": "Tambah dokumen",
+    "documentTitle": "Tajuk dokumen",
+    "documentContent": "Kandungan dokumen",
+    "documentType": "Jenis dokumen",
+    "save": "Simpan",
+    "saving": "Menyimpan…",
+    "saved": "Dokumen disimpan.",
+    "delete": "Padam",
+    "confirmDelete": "Adakah anda pasti ingin memadam dokumen ini?",
+    "ingestPdf": "Muat naik PDF",
+    "ingesting": "Memproses PDF…",
+    "ingestDone": "PDF diproses dan diindeks.",
+    "ingestError": "Pemprosesan PDF gagal. Sila cuba lagi.",
+    "noDocuments": "Tiada dokumen pangkalan pengetahuan lagi.",
+    "types": {
+      "sop": "SOP",
+      "property": "Maklumat hartanah",
+      "training": "Bahan latihan",
+      "faq": "Soalan Lazim",
+      "other": "Lain-lain"
+    }
+  },
+  "nav": {
+    "chat": "Sembang",
+    "kb": "Pangkalan Pengetahuan",
+    "settings": "Tetapan"
+  },
+  "errors": {
+    "notFound": "Halaman tidak dijumpai.",
+    "serverError": "Berlaku ralat di pihak kami.",
+    "unauthorized": "Anda tidak mempunyai kebenaran untuk melihat halaman ini."
+  }
+}

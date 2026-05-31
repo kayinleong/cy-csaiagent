@@ -1,0 +1,69 @@
+{
+  "_review": "native-review-pending",
+  "_note": "机器辅助草稿 — 在生产使用前需经母语人士审核（D-08）。未经审核前请勿向用户发布。",
+  "app": {
+    "name": "D2经纪助手",
+    "tagline": "您晚上11点的答案，由D2知识驱动"
+  },
+  "auth": {
+    "signIn": "登录",
+    "signOut": "退出",
+    "signInTitle": "欢迎使用D2经纪助手",
+    "signInDescription": "使用您的D2 Google账户登录，访问您的AI辅导助手。",
+    "signingIn": "登录中…",
+    "signInError": "登录失败，请重试。",
+    "unauthorised": "您没有访问权限，请联系您的高级教练。",
+    "sessionExpired": "您的会话已过期，请重新登录。"
+  },
+  "chat": {
+    "placeholder": "询问有关D2房产、SOP或您的入职培训旅程的任何问题…",
+    "send": "发送",
+    "thinking": "思考中…",
+    "emptyState": "您好！我是您的D2经纪助手。请随时询问有关D2房产、入职步骤或销售SOP的问题。",
+    "citationLabel": "来源",
+    "citations": "参考来源",
+    "copyReply": "复制回复",
+    "copied": "已复制！",
+    "rateLimit": "您已达到每小时限额，请稍候片刻。",
+    "error": "出现错误，请重试。"
+  },
+  "handoff": {
+    "kbMiss": "我在D2知识库中未能找到相关文章，您的高级教练已收到通知。",
+    "escalated": "此事已升级至您的高级教练处理。",
+    "stall": "您尚未完成此入职步骤，您的教练已收到提醒。"
+  },
+  "kb": {
+    "title": "知识库",
+    "addDocument": "添加文档",
+    "documentTitle": "文档标题",
+    "documentContent": "文档内容",
+    "documentType": "文档类型",
+    "save": "保存",
+    "saving": "保存中…",
+    "saved": "文档已保存。",
+    "delete": "删除",
+    "confirmDelete": "确定要删除此文档吗？",
+    "ingestPdf": "上传PDF",
+    "ingesting": "处理PDF中…",
+    "ingestDone": "PDF已处理并建立索引。",
+    "ingestError": "PDF处理失败，请重试。",
+    "noDocuments": "暂无知识库文档。",
+    "types": {
+      "sop": "SOP",
+      "property": "房产信息",
+      "training": "培训材料",
+      "faq": "常见问题",
+      "other": "其他"
+    }
+  },
+  "nav": {
+    "chat": "聊天",
+    "kb": "知识库",
+    "settings": "设置"
+  },
+  "errors": {
+    "notFound": "页面未找到。",
+    "serverError": "我们这边出现了错误。",
+    "unauthorized": "您没有权限查看此页面。"
+  }
+}
