@@ -19,14 +19,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // ─── Mock typed refs from 01-03 ───────────────────────────────────────────────
-// We mock at the collections module level so the actual typed refs are never called.
+// vi.mock() is hoisted by Vitest above variable declarations.
+// Use vi.hoisted() so mock helper variables are available inside the factory.
 
-const mockMessagesAdd = vi.fn()
-const mockMessagesOrderByLimitGet = vi.fn()
-const mockLeadContextUpdate = vi.fn()
-const mockAgentProfileUpdate = vi.fn()
+const {
+  mockMessagesAdd,
+  mockMessagesOrderByLimitGet,
+  mockLeadContextUpdate,
+  mockAgentProfileUpdate,
+} = vi.hoisted(() => ({
+  mockMessagesAdd: vi.fn(),
+  mockMessagesOrderByLimitGet: vi.fn(),
+  mockLeadContextUpdate: vi.fn(),
+  mockAgentProfileUpdate: vi.fn(),
+}))
 
-// messagesRef(cid) mock: returns collection stub with add() + orderBy().limit().get()
+// messagesRef(cid) mock: returns collection stub with add() + orderBy().limitToLast().get()
 vi.mock('@/src/firebase/collections', () => {
   const mockMessagesCollection = {
     add: mockMessagesAdd,
