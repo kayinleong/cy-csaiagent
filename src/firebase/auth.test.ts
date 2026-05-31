@@ -16,11 +16,25 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ── Mock firebase-admin/auth BEFORE importing auth.ts ───────────────────────
 // vi.hoisted() ensures mock variables are available when vi.mock() factories run.
-const { mockVerifyIdToken, mockSetCustomUserClaims, mockUpdate } = vi.hoisted(() => ({
+const { mockVerifyIdToken, mockSetCustomUserClaims, mockDocSet } = vi.hoisted(() => ({
   mockVerifyIdToken: vi.fn(),
   mockSetCustomUserClaims: vi.fn(),
-  mockUpdate: vi.fn(),
+  mockDocSet: vi.fn(),
 }))
+
+// Build a chainable mock: adminDb.collection('x').withConverter(c).doc('id').set(data)
+// collections.ts calls withConverter() on the collection ref, then .doc().set()
+const mockDocRef = {
+  set: () => mockDocSet(),
+  update: vi.fn(),
+}
+const mockCollectionRef = {
+  doc: () => mockDocRef,
+  withConverter: () => ({
+    doc: () => mockDocRef,
+    withConverter: () => ({ doc: () => mockDocRef }),
+  }),
+}
 
 vi.mock('@/src/firebase/admin', () => ({
   adminAuth: {
@@ -28,12 +42,7 @@ vi.mock('@/src/firebase/admin', () => ({
     setCustomUserClaims: mockSetCustomUserClaims,
   },
   adminDb: {
-    collection: vi.fn(() => ({
-      doc: vi.fn(() => ({
-        set: vi.fn().mockResolvedValue(undefined),
-        update: mockUpdate,
-      })),
-    })),
+    collection: () => mockCollectionRef,
   },
 }))
 
@@ -105,7 +114,7 @@ describe('setUserClaims', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSetCustomUserClaims.mockResolvedValue(undefined)
-    mockUpdate.mockResolvedValue(undefined)
+    mockDocSet.mockResolvedValue(undefined)
   })
 
   it('Behavior 3a: calls setCustomUserClaims with { role, tenantId:"d2" } for all valid roles', async () => {
@@ -114,7 +123,7 @@ describe('setUserClaims', () => {
     for (const role of validRoles) {
       vi.clearAllMocks()
       mockSetCustomUserClaims.mockResolvedValue(undefined)
-      mockUpdate.mockResolvedValue(undefined)
+      mockDocSet.mockResolvedValue(undefined)
 
       await setUserClaims('<UID_PLACEHOLDER>', role)
 
