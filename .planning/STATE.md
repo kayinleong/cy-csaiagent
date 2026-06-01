@@ -99,6 +99,7 @@ Items acknowledged and carried forward (v2 / post-pilot):
 
 ## Session Continuity
 
-Last session: 2026-05-31T17:40:00.000Z
-Stopped at: Phase 1 fully planned (13 plans); rateBudgets reconciliation committed — ready to execute
-Resume file: none — next step is /gsd-execute-phase 1
+Last session: 2026-06-01
+Stopped at: Phase 1 executed + stack-override refactor (Gemini, lazy-cron); Phase 2 (Coach + Admin v1) context gathered via discuss-phase --auto (15 decisions). Phase 2 execution BLOCKED until Phase 1 gates close (provisioning 01-01 + live spikes RAG/DEPLOY/INGEST).
+Resume file: .planning/phases/02-coach-admin/02-CONTEXT.md
+Next step: close Phase 1 human gates, then /gsd-plan-phase 2 (do NOT auto-execute Phase 2 over the open spike gate).
