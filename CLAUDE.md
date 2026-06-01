@@ -32,14 +32,14 @@ Planning artifacts (read these before non-trivial work):
 - **Backend:** Firebase only — Auth (+ custom claims), Firestore (Native), Cloud Storage, App Hosting. Region `asia-southeast1` (confirm with Derek before creating resources — immovable).
 - **Vector store:** Firestore native `findNearest` KNN (no Cloud Functions). Fallback behind the `rag/` adapter: Pinecone Serverless.
 - **AI:** Vercel AI SDK v5 (`ai` + `@ai-sdk/anthropic`) over Anthropic SDK. Default `claude-sonnet-4-6`; `claude-opus-4-7` for eval judge; model IDs in **Remote Config, never hard-coded**.
-- **Embeddings:** Voyage `voyage-3-large` (1024-d, multilingual). Standardize 1024-d across all collections.
-- **Scheduled jobs:** Upstash QStash → HMAC-signed `/api/jobs/*` Route Handlers (the ONE sanctioned non-Firebase dependency).
+- **Embeddings:** Gemini `gemini-embedding-001` (1024-d via `outputDimensionality`, normalized, multilingual) through `@ai-sdk/google` (Gemini **Developer API**, key `GOOGLE_GENERATIVE_AI_API_KEY` — NOT Vertex AI). Standardize 1024-d across all collections.
+- **Scheduled jobs:** **on-visit lazy-cron Server Action** — periodic work (stall-detect, escalate, eval-nightly, usage-rollup) runs when an authorized user loads the app, guarded by a Firestore last-run-per-window check. No QStash, no external scheduler. (Tradeoff: not wall-clock cron; fires on visit.)
 - **i18n:** `next-intl ^4`, `app/[lang]/` segment. **EN / BM / 中文 from day one.**
 - **Evals:** Promptfoo (Opus 4.7 judge). **Testing:** Vitest, Playwright, `@firebase/rules-unit-testing`.
 
 ### ⛔ Hard constraints — violating any of these is a defect, not a style choice
 - **No Google Cloud Functions.** All server logic = Next.js Route Handlers / Server Actions / Server Components.
-- **No GCP beyond the Firebase SDK surface.** No Cloud Run (direct), Vertex AI, BigQuery, Pub/Sub, Cloud Scheduler. (QStash fills the cron gap.)
+- **No GCP beyond the Firebase SDK surface.** No Cloud Run (direct), Vertex AI, BigQuery, Pub/Sub, Cloud Scheduler. (No external scheduler at all — periodic work is an on-visit lazy-cron Server Action. Gemini embeddings use the **Developer API**, not Vertex.)
 - **No WhatsApp Business API in v1.** Paste-and-draft only.
 - **No auto-send, ever.** Reply Assistant = copy-to-clipboard; the agent sends from their own phone.
 - **Model-agnostic.** Never hard-code a model ID; resolve from Remote Config.
@@ -76,7 +76,7 @@ Single Next.js 16 monolith on Firebase App Hosting. Firestore is the system of r
 - **Chat flow:** `proxy.ts (auth+locale) → /api/chat (SSE, Node runtime) → router → agent → rag.retrieve (lang-filtered findNearest) → llm.stream (Sonnet, prompt-cached) → SSE tokens`; side effects write `memory`, `audit` (via `after()`), and decrement `ratelimit`.
 - **Cross-pillar memory:** `leadContext/{leadId}` shared doc with **agent-scoped write slots** + rolling summary — the handoff medium between Coach/Finder/Reply.
 - **Intent router:** heuristic-first, LLM-classifier fallback (the seam exists from Phase 1; the LLM classifier activates in Phase 3 when a second pillar shares the surface) + manual-override chip.
-- **Background jobs:** QStash cron → signed `/api/jobs/*` (stall-detect, escalate, eval-nightly, usage-rollup), run as the service account. Each job writes a heartbeat; a UI watchdog surfaces missed windows.
+- **Background jobs:** on-visit lazy-cron Server Action — when an authorized user loads the app, a Server Action runs any DUE jobs (stall-detect, escalate, eval-nightly, usage-rollup), gated by a Firestore last-run-per-window doc (the heartbeat doubles as the run-ledger). No external scheduler. A UI watchdog surfaces a stale last-run.
 
 See `.planning/TSD.md` §3–§4 for the full component map, data-flow diagrams, and the 14-collection Firestore data model.
 <!-- GSD:architecture-end -->

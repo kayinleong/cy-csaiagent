@@ -15,12 +15,12 @@
 | Firebase Auth | email/password (+ custom claims) | — | [ ] pending |
 | App Hosting | backend, `minInstances=1`, region `asia-southeast1` | `<BACKEND_NAME>` | [ ] pending |
 
-## 2. Upstash QStash (the one sanctioned non-Firebase dependency)
+## 2. Scheduled jobs — NO external dependency
 
-| Item | Value | Status |
-|------|-------|--------|
-| QStash account | — | [ ] not created |
-| Cron schedule (TZ `Asia/Kuala_Lumpur`) → `/api/jobs/stall-detect` | — | [ ] pending |
+Periodic work (stall-detect, escalate, eval-nightly, usage-rollup) runs as an **on-visit
+lazy-cron Server Action**, guarded by a Firestore last-run-per-window check. There is **no
+QStash, no Cloud Scheduler, no Cloud Functions** to provision. (Tradeoff: jobs fire when an
+authorized user loads the app, not on a fixed wall-clock schedule.)
 
 ## 3. Secret bindings (App Hosting env → Secret Manager)
 
@@ -29,10 +29,7 @@ Bind each via Secret Manager. Record only the **binding status**, never the valu
 | Secret name | Source dashboard | Bound via Secret Manager? |
 |-------------|------------------|---------------------------|
 | `ANTHROPIC_API_KEY` | Anthropic Console → API Keys | [ ] not bound |
-| `VOYAGE_API_KEY` | Voyage AI dashboard | [ ] not bound |
-| `QSTASH_TOKEN` | Upstash QStash dashboard | [ ] not bound |
-| `QSTASH_CURRENT_SIGNING_KEY` | QStash → Signing Keys | [ ] not bound |
-| `QSTASH_NEXT_SIGNING_KEY` | QStash → Signing Keys | [ ] not bound |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Google AI Studio → API Keys (Gemini Developer API) | [ ] not bound |
 
 Local development reads the same names from `.env.local` (template: [`.env.sample`](../../../.env.sample)).
 

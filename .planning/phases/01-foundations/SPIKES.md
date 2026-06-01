@@ -2,10 +2,12 @@
 
 **Status: HARNESS CODE COMPLETE — live spike runs PENDING human action**
 
-This document is the Phase-1 gate. Downstream phases (01-09 rag, 01-10 jobs, 01-11 chat) depend
+This document is the Phase-1 gate. Downstream phases (01-09 rag, 01-10 kb, 01-12 chat) depend
 on the pass/fallback decision for each spike. The harness code is built and committed.
-The five live spike runs require human infrastructure access (App Hosting deploy, QStash dashboard,
-live Voyage + Firestore). Each spike's DECISION is marked PENDING until those runs complete.
+The remaining live spike runs require human infrastructure access (App Hosting deploy, live Gemini
+Developer API + Firestore). SPIKE-AI-SDK is RECORDED; **SPIKE-CRON is RETIRED** (QStash removed —
+scheduling is now an on-visit lazy-cron Server Action). The other spikes' DECISIONs are PENDING
+until those runs complete.
 
 ---
 
@@ -58,7 +60,8 @@ removed v4 `toDataStreamResponse()`. This decision record is the authoritative r
 ## SPIKE-RAG
 
 **What it resolves:** Whether Firestore native `findNearest` (DOT_PRODUCT, 1024-d) meets p95
-latency, read-cost, and BM/ZH recall targets on ~500 multilingual chunks in `asia-southeast1`.
+latency, read-cost, and BM/ZH recall targets on ~500 multilingual chunks in `asia-southeast1`,
+using **Gemini `gemini-embedding-001` @ 1024-d** (Developer API) as the embedder (replaces Voyage).
 Failure triggers the Pinecone Serverless fallback behind the `rag/` adapter (D-05).
 
 ### Pass criteria (verbatim from RESEARCH + ROADMAP)
@@ -87,7 +90,7 @@ Failure triggers the Pinecone Serverless fallback behind the `rag/` adapter (D-0
 export RUN_SPIKES=1
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 export FIREBASE_PROJECT_ID=your-firebase-project-id
-export VOYAGE_API_KEY=your-voyage-api-key
+export GOOGLE_GENERATIVE_AI_API_KEY=your-gemini-developer-api-key
 
 npx vitest run src/rag/spike-rag.test.ts
 ```
@@ -194,67 +197,26 @@ showing 60s response with no body progress) in this section.
 
 ---
 
-## SPIKE-CRON
+## SPIKE-CRON — RETIRED (2026-06-01)
 
-**What it resolves:** Whether QStash signed callbacks to App Hosting `asia-southeast1` verify
-correctly, retry on 5xx, and honor `Asia/Kuala_Lumpur` timezone. Failure → GitHub Actions fallback.
+**Status: RETIRED — no longer a gate.** QStash was removed by decision override (2026-06-01,
+see PROJECT.md Key Decisions). Scheduled work now runs as an **on-visit lazy-cron Server Action**
+gated by a Firestore last-run-per-window doc — there is no signed external callback to spike, so
+SPIKE-CRON no longer applies and does not block the Phase-1 gate.
 
-### Pass criteria (verbatim from RESEARCH + ROADMAP)
+**What replaced it:** when an authorized user loads the app, a Server Action (`src/jobs/`) runs any
+DUE jobs (stall-detect, escalate, eval-nightly, usage-rollup) via the Admin SDK, idempotent under
+concurrent visits. No QStash, no Cloud Scheduler, no Cloud Functions.
 
-| Criterion | Pass |
-|-----------|------|
-| Signature verify | `verifySignatureAppRouter` accepts valid QStash token |
-| Unsigned rejection | 401 returned for requests without valid signature |
-| Retry on 5xx | QStash retries at least 3 times after a forced 500 response |
-| IANA timezone | `Asia/Kuala_Lumpur` cron fires at the correct local time |
-
-### Harness code
-
-- **Endpoint:** `app/api/jobs/_spike-cron/route.ts` — `POST` wrapped with `verifySignatureAppRouter`
-  from `@upstash/qstash/nextjs`; returns 200 with timestamp heartbeat on valid signature, 401
-  on invalid/absent signature (automatically by the wrapper)
-- **Unit tests:** `src/jobs/signature.test.ts` — 7 OFFLINE assertions (no real keys):
-  - Unsigned request → `SignatureError` (RejectionError)
-  - Tampered/random signature → `SignatureError`
-  - Correctly-signed (current key) → `true`
-  - Correctly-signed (next key / key rotation) → `true`
-  - Wrong key → `SignatureError`
-  - Expired token → `SignatureError`
-  - Valid signature + tampered body → `SignatureError` (hash mismatch)
-
-### Live SPIKE-CRON steps (human action required)
-
-1. Deploy app to App Hosting (same deploy as SPIKE-DEPLOY)
-2. In Upstash QStash dashboard:
-   a. Set destination URL: `https://<app-hosting-url>/api/jobs/_spike-cron`
-   b. Set cron: `* * * * *` (every minute, for spike speed)
-   c. Set timezone: `Asia/Kuala_Lumpur`
-   d. Fire once manually → confirm 200 response and heartbeat in logs
-   e. Force a 500 (temporarily return 500 from handler) → confirm QStash retries appear in the
-      QStash delivery log
-   f. Confirm IANA TZ fires at the expected minute in Malaysia time
-3. Capture all results below
-
-### Result
+**Accepted tradeoff:** not wall-clock cron — a fully idle period defers jobs until the next visit;
+a UI watchdog surfaces a stale last-run. If firm wall-clock scheduling is later required, the
+documented escape hatch is a GitHub Actions scheduled workflow pinging a thin endpoint that invokes
+the same job logic.
 
 ```
-Manual invocation:    PENDING (200 / 401 / 5xx)
-Retry on 5xx:         PENDING (confirmed / not tested)
-IANA TZ fires:        PENDING (correct / incorrect local time)
-Signature verify:     PENDING (unit tests: 7/7 pass — live round-trip PENDING)
+Result:   N/A — spike retired (QStash removed; lazy-cron requires no live signed-callback run)
+Decision: [x] superseded by on-visit lazy-cron Server Action
 ```
-
-```
-Result:   PENDING — live QStash round-trip not yet executed
-Decision: [ ] pass (QStash verifies + retries + Asia/Kuala_Lumpur confirmed)
-          [ ] fallback (GitHub Actions scheduled workflow — log in PROJECT.md per D-05)
-```
-
-### Fallback (if fail)
-
-Per D-05: **GitHub Actions scheduled workflow** — a `schedule:` trigger on the repo fires at the
-required intervals. Log the decision in PROJECT.md Key Decisions. The `jobs/` handler interface
-remains identical; only the trigger mechanism changes.
 
 ---
 
@@ -285,7 +247,7 @@ work correctly for token-aware chunk sizing.
 ### Result (from test output)
 
 The SPIKE-INGEST test runs when `RUN_SPIKES=1` is set. For the chunking algorithm (pure CPU,
-no Firestore), it runs offline. The full ingest spike (pdfjs-dist + Voyage embedding + Firestore
+no Firestore), it runs offline. The full ingest spike (pdfjs-dist + Gemini embedding + Firestore
 batch writes) requires live credentials.
 
 ```
@@ -324,7 +286,7 @@ changed. The live SPIKE-INGEST run must verify:
 | SPIKE-AI-SDK | Complete | Not required (static pin) | RECORDED: ai@5 / toUIMessageStreamResponse (verified in 01-12) |
 | SPIKE-RAG | Harness committed | PENDING | PENDING |
 | SPIKE-DEPLOY | Harness committed | PENDING | PENDING |
-| SPIKE-CRON | Harness committed (unit tests: 7/7 pass) | PENDING | PENDING |
+| SPIKE-CRON | RETIRED — QStash removed; superseded by on-visit lazy-cron | N/A | superseded |
 | SPIKE-INGEST | Harness committed | PENDING | PENDING |
 
 **Gate status:** OPEN — 4 of 5 spikes have harness code committed but live runs PENDING.

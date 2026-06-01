@@ -13,7 +13,7 @@
 
 D2 is a Malaysian real-estate brokerage. New agents currently wait 60 days to ramp; the goal is 7–10 days. The platform is a single mobile-first chat surface that fronts three Claude-powered specialist agents — **Onboarding Coach**, **Property Finder**, **Reply Assistant** — each grounded in D2's proprietary knowledge (PowerBoost transcripts, project inventory, reply SOPs, lead-gen playbooks). A separate admin web app lets non-engineers manage knowledge; a senior-coach dashboard surfaces downline progress, stall alerts, and knowledge gaps.
 
-**Shape:** one Next.js 16 monolith deployed on Firebase App Hosting, with Firestore as the single system of record + vector store + cross-agent message bus. No microservices. No Cloud Functions. The only sanctioned non-Firebase backend dependency is Upstash QStash (scheduled jobs).
+**Shape:** one Next.js 16 monolith deployed on Firebase App Hosting, with Firestore as the single system of record + vector store + cross-agent message bus. No microservices. No Cloud Functions. No external scheduler — periodic work is an on-visit lazy-cron Server Action. External API surfaces are limited to Anthropic (Claude) and Google AI Studio (Gemini embeddings, Developer API).
 
 ### 1.1 Hard Constraints (non-negotiable — see also ROADMAP §Constraints)
 
@@ -46,13 +46,13 @@ Versions verified against current docs/registries as of 2026-05-31. Installed = 
 - **Hosting** — Firebase App Hosting (Cloud Run substrate, managed). Secrets via Secret Manager binding.
 
 ### 2.3 AI layer
-- **Abstraction** — Vercel **AI SDK v5** (`ai ^5` + `@ai-sdk/anthropic ^3.0.81`) as the streaming + tool-calling surface; `@anthropic-ai/sdk ^0.100.1` as an escape hatch for features the SDK lags on. **Not** `@anthropic-ai/claude-agent-sdk`.
+- **Abstraction** — Vercel **AI SDK v5** (`ai ^5` + `@ai-sdk/anthropic ^2` + `@ai-sdk/google ^2` for embeddings) as the streaming + tool-calling surface; `@anthropic-ai/sdk ^0.100.1` as an escape hatch for features the SDK lags on. **Not** `@anthropic-ai/claude-agent-sdk`. (v5 stream method is `toUIMessageStreamResponse()`; the v4 `toDataStreamResponse()` does not exist in v5.)
 - **Models** — `claude-sonnet-4-6` default (all three pillars); `claude-opus-4-7` reserved for the eval judge + manual escalation; `claude-haiku-4-5` for the intent router if/when activated. **Model IDs resolved from Firebase Remote Config at request time.**
-- **Embeddings** — Voyage `voyage-3-large` (1024-d, multilingual). Standardize **1024-d across all collections**. Fallback: OpenAI `text-embedding-3-large` or Mesolitica/Cohere multilingual (decided by SPIKE-RAG).
+- **Embeddings** — Gemini `gemini-embedding-001` (1024-d via `outputDimensionality`, normalized, multilingual) through `@ai-sdk/google` (Gemini **Developer API**, key `GOOGLE_GENERATIVE_AI_API_KEY` — NOT Vertex AI). Standardize **1024-d across all collections**. Fallback: Pinecone Serverless / alternate embedder (decided by SPIKE-RAG).
 - **Prompt caching** — Anthropic ephemeral cache, 4-segment layout (system → voice guide → SOP/KB context → tools).
 
 ### 2.4 Supporting libraries
-- **Scheduled jobs** — Upstash QStash `^2` → HMAC-signed HTTPS callback to `/api/jobs/*`.
+- **Scheduled jobs** — on-visit **lazy-cron Server Action** (no external scheduler); a Firestore last-run-per-window doc gates execution.
 - **i18n** — `next-intl ^4` (App-Router-native), `app/[lang]/` segment, locale detection in `proxy.ts`.
 - **Validation** — Zod `^4` (also AI SDK tool `inputSchema`).
 - **Evals** — Promptfoo (latest), Opus 4.7 as cross-model judge.
@@ -76,11 +76,8 @@ cy-csaiagent/
 │  ├─ api/
 │  │  ├─ chat/route.ts          # SSE streaming chat endpoint (Node runtime)
 │  │  ├─ kb/ingest/process/     # chunked ingestion worker endpoint
-│  │  └─ jobs/                  # QStash-signed cron callbacks
-│  │     ├─ stall-detect/route.ts
-│  │     ├─ escalate/route.ts
-│  │     ├─ eval-nightly/route.ts
-│  │     └─ usage-rollup/route.ts
+│  │  └─ (no /api/jobs/* cron routes — stall-detect / escalate / eval-nightly /
+│  │      usage-rollup run as an on-visit lazy-cron Server Action in src/jobs/)
 │  └─ proxy.ts                  # locale detection, auth gate (was middleware.ts)
 ├─ src/                         # framework-agnostic application core
 │  ├─ agents/                   # one folder per pillar: prompt + tools + schema + handoff
@@ -110,7 +107,7 @@ cy-csaiagent/
 | `router/` | Pick the pillar for a turn. Heuristic-first; LLM-classifier fallback (activated Phase 3); manual-override chip escape hatch. | conversation, message | route decision (logged) |
 | `llm/` | Streaming-native abstraction over AI SDK v5. `generate({messages, tools, model})` → stream. Fake provider for deterministic tests. | Remote Config (model IDs) | token-usage telemetry |
 | `memory/` | `leadContext/{leadId}` shared doc with **agent-scoped write slots** + rolling summary. The cross-pillar handoff medium. | leadContext | leadContext (slot-scoped) |
-| `rag/` | Embed query (Voyage), `findNearest` retrieval with `lang`/`ownerCollection` pre-filters, citation assembly. **Adapter** — Firestore default, Pinecone fallback. | kbChunks (vector) | — |
+| `rag/` | Embed query (Gemini `gemini-embedding-001`, 1024-d), `findNearest` retrieval with `lang`/`ownerCollection` pre-filters, citation assembly. **Adapter** — Firestore default, Pinecone fallback. | kbChunks (vector) | — |
 | `kb/` | Chunked client-driven ingestion, chunk metadata, versioning/supersedes. | Storage, kbIngestionJobs | kbDocs, kbChunks |
 | `escalation/` | Stall detection (cron), handoff-bundle construction, senior-coach queue. | agentProfiles, conversations | escalations |
 | `audit/` | Append-only immutable audit log via `after()`. | — | auditLogs (create-only) |
@@ -131,8 +128,8 @@ cy-csaiagent/
 
 - **Streaming:** `/api/chat/route.ts` is a **Node-runtime Route Handler** returning `streamText().toDataStreamResponse()`. Headers: `Content-Type: text/event-stream`, `Cache-Control: no-store`, `X-Accel-Buffering: no`. Server Actions are for mutations only — **never** for streaming. *(Verify end-to-end on App Hosting: SPIKE-DEPLOY.)*
 - **Long-running ingestion:** two-step, chunked, client-driven. Upload to Storage → Server Action shards into `kbIngestionJobs/{jobId}` → browser polls `/api/kb/ingest/process?limit=N` until `remaining:0`. Idempotent (sha256 file hash), resumable. Never embed a large PDF in one request or inside `after()` (Cloud Run request-timeout trap). *(SPIKE-INGEST confirms chunk budget.)*
-- **Scheduled jobs:** **Upstash QStash** cron → HMAC-signed HTTPS callback to `/api/jobs/*`, executed as the platform service account via Admin SDK. IANA TZ `Asia/Kuala_Lumpur`, built-in retries + DLQ. Each job writes a heartbeat doc; a UI watchdog banner surfaces missed windows. Rejected alternatives: client-driven cron (misses overnight), cron-job.org (no signing/retry), Cloud Scheduler (violates C2), Firestore-trigger tricks (need Cloud Functions). *(SPIKE-CRON verifies the seam in-region; fallback = GitHub Actions scheduled workflow.)*
-- **Secrets:** App Hosting env + Secret Manager binding (`ANTHROPIC_API_KEY`, `QSTASH_*`, embedding key). Never in client bundles, never logged.
+- **Scheduled jobs:** **on-visit lazy-cron Server Action** (decision override — replaces QStash). When an authorized user loads the app, a Server Action runs any DUE jobs (stall-detect, escalate, eval-nightly, usage-rollup) via the Admin SDK, gated by a Firestore `jobRuns`/heartbeat last-run-per-window doc so each job fires at most once per window and is idempotent under concurrent visits. No QStash, no Cloud Scheduler, no Cloud Functions. **Accepted tradeoff:** not wall-clock cron — jobs fire on visit, so a truly idle period defers them; a UI watchdog surfaces a stale last-run. (SPIKE-CRON is retired; if firm wall-clock scheduling is later required, the documented escape hatch is a GitHub Actions scheduled workflow pinging a thin endpoint.)
+- **Secrets:** App Hosting env + Secret Manager binding (`ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`). Never in client bundles, never logged.
 
 ---
 
@@ -157,7 +154,7 @@ cy-csaiagent/
 | `auditLogs/{alid}` | `actorUid`, `action`, `targetRef`, `hashes{}`, `ts` | **append-only, immutable** (create-only rule); 12-mo TTL |
 | `evals/{runId}` | `suite`, `lang`, `score`, `judgeModel`, `failures[]` | nightly cron writes; dashboard reads |
 
-**Vector specifics:** embeddings normalized → `findNearest(DOT_PRODUCT, limit≈8)`; query pre-filtered `where('lang','in',[userLang,'en'])` with cross-lingual fallback. One language-tagged KB collection (not three) — Voyage multilingual embeddings cluster cross-language.
+**Vector specifics:** embeddings normalized → `findNearest(DOT_PRODUCT, limit≈8)`; query pre-filtered `where('lang','in',[userLang,'en'])` with cross-lingual fallback. One language-tagged KB collection (not three) — Gemini multilingual embeddings cluster cross-language.
 
 ---
 
@@ -219,7 +216,7 @@ match /agentProfiles/{uid} {
 
 - **Promptfoo** suites per pillar; Opus 4.7 as cross-model judge (mitigates self-preference bias).
 - Gold sets: trilingual, seeded in Phase 1 (small), grown from real pilot conversations. Human calibration: Derek + a coach, target >85% judge-human agreement.
-- Runs: pre-merge (changed-prompt suites in CI) + nightly full regression via QStash cron → `evals/{runId}`.
+- Runs: pre-merge (changed-prompt suites in CI) + full regression via the lazy-cron Server Action (eval-nightly job, runs at most once per day on first visit) → `evals/{runId}`.
 - Catch: hallucination (sold-out projects, fabricated SOPs), tone drift, multilingual quality cliff, citation integrity.
 
 ---
@@ -229,7 +226,7 @@ match /agentProfiles/{uid} {
 - Structured JSON logs (no PII) → Cloud Logging via OTel (auto on App Hosting).
 - **Token-usage telemetry** per agent/pillar written on each `llm` call; Phase 5 cost dashboard aggregates spend + per-collection read/write.
 - **Rate limiting** (`ratelimit/`): per-agent request + token budgets; a runaway conversation is refused, not allowed to burn the monthly budget.
-- **Cron heartbeats** + UI watchdog banner so a lapsed QStash schedule can't silently break stall detection.
+- **Last-run heartbeats** + UI watchdog banner so a long idle gap (no visits → lazy-cron never fired) is surfaced rather than silently breaking stall detection.
 
 ---
 

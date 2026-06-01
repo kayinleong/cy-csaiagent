@@ -1,6 +1,6 @@
 # Plan 01-08 User Setup
 
-**Who:** Derek (project lead) or the team member with App Hosting deploy access + QStash dashboard access.
+**Who:** Derek (project lead) or the team member with App Hosting deploy access.
 
 **When:** After `01-08-PLAN.md` harness code is merged — this is the live spike confirmation step.
 
@@ -72,74 +72,35 @@ architecture autonomously.
 
 ---
 
-## Service: Upstash QStash dashboard — SPIKE-CRON
+## SPIKE-CRON — RETIRED (2026-06-01)
 
-**Why:** Confirm that the QStash signed callback verifies, retries on 5xx, and honors
-`Asia/Kuala_Lumpur` timezone. This gates 01-10 (jobs module).
-
-### Step 1 — Create a QStash schedule
-
-In the [Upstash QStash dashboard](https://console.upstash.com/qstash):
-
-1. Click "Schedules" → "Create Schedule"
-2. Set:
-   - **Destination URL:** `https://<your-app-hosting-url>/api/jobs/_spike-cron`
-   - **Cron expression:** `* * * * *` (every minute — for spike speed; change after)
-   - **Timezone:** `Asia/Kuala_Lumpur`
-3. Note the schedule ID for the logs
-
-### Step 2 — Confirm signature verification
-
-1. Wait for the next minute boundary — QStash fires
-2. Check App Hosting logs for: `[_spike-cron] heartbeat { job: '_spike-cron', ... }`
-3. Confirm the response was 200 (check QStash delivery log)
-
-### Step 3 — Test retry on 5xx (optional but recommended)
-
-1. Temporarily modify `app/api/jobs/_spike-cron/route.ts` to `return new Response(null, { status: 500 })`
-2. Deploy
-3. Observe QStash delivery log — it should retry 3 times
-4. Revert the change and redeploy
-
-### Step 4 — Record in SPIKES.md
-
-Open `.planning/phases/01-foundations/SPIKES.md` → SPIKE-CRON section and fill in:
-
-```
-Manual invocation:    200  OR  401  OR  5xx
-Retry on 5xx:         confirmed  OR  not tested
-IANA TZ fires:        correct  OR  incorrect local time
-```
-
-Check the appropriate box:
-```
-Decision: [x] pass (QStash verifies + retries + Asia/KL confirmed)
-     OR   [x] fallback (GitHub Actions — see D-05 in CONTEXT.md)
-```
+QStash was removed (decision override 2026-06-01). Scheduling is now an **on-visit lazy-cron
+Server Action** gated by a Firestore last-run-per-window doc — there is **no QStash dashboard,
+no schedule to create, and no signed-callback round-trip to test**. Nothing to do here.
 
 ---
 
-## After completing both steps
+## After completing SPIKE-DEPLOY
 
-Once both SPIKE-DEPLOY and SPIKE-CRON decisions are recorded in SPIKES.md:
+Once the SPIKE-DEPLOY decision is recorded in SPIKES.md:
 
-1. Run the SPIKE-RAG live test (requires `GOOGLE_APPLICATION_CREDENTIALS` + `VOYAGE_API_KEY`):
+1. Run the SPIKE-RAG live test (requires `GOOGLE_APPLICATION_CREDENTIALS` + `GOOGLE_GENERATIVE_AI_API_KEY`):
    ```bash
    export RUN_SPIKES=1
-   export VOYAGE_API_KEY=<your-voyage-key>
+   export GOOGLE_GENERATIVE_AI_API_KEY=<your-gemini-developer-api-key>
    export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
    export FIREBASE_PROJECT_ID=<your-project-id>
    npx vitest run src/rag/spike-rag.test.ts
    ```
    Copy the p95, read-cost ratio, and recall percentages into SPIKES.md.
 
-2. Check all 5 SPIKES.md decisions are recorded (no PENDING remaining).
+2. Check the remaining SPIKES.md decisions are recorded (SPIKE-AI-SDK = RECORDED, SPIKE-CRON =
+   RETIRED; SPIKE-RAG / SPIKE-DEPLOY / SPIKE-INGEST = filled in from live runs).
 
-3. Resume the phase execution from Task 3 (the `checkpoint:human-verify`):
+3. Resume the phase from the `checkpoint:human-verify`:
    - Type "deploy pass" if streaming verified on real 4G
    - Type "deploy fail — escalated to Derek" if buffered, with evidence
 
-The Phase-1 gate (SPIKES.md with all 5 decisions committed) unblocks:
+The Phase-1 gate (SPIKES.md decisions committed) unblocks:
 - `01-09` (rag module — depends on SPIKE-RAG decision)
-- `01-10` (jobs module — depends on SPIKE-CRON decision)
-- `01-11` (chat route — depends on SPIKE-DEPLOY + SPIKE-AI-SDK decisions)
+- `01-12` (chat route — depends on SPIKE-DEPLOY + SPIKE-AI-SDK decisions)

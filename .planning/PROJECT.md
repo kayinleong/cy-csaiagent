@@ -102,6 +102,8 @@ A multi-pillar AI agent platform for D2, a Malaysian real-estate sales organizat
 | Web-first PWA, not native mobile | Faster shipping with one codebase; mobile-responsive suffices for 11pm-on-phone scenario | — Pending |
 | Firestore + Storage region `asia-southeast1` (G1) | Region is immovable at create-time (TSD §14 G1); SG default per stack/PDPA posture | (proposed — pending Derek sign-off, see G1-REGION-SIGNOFF.md) |
 | G2 Anthropic residency: direct API + TIA + boundary pseudonymization | No Anthropic Asian residency 2026-05; pseudonymize PII at the Claude boundary (01-05); Bedrock-SG is the documented fallback | (proposed — pending Derek sign-off, see G1-REGION-SIGNOFF.md) |
+| Embeddings: Gemini `gemini-embedding-001` @ 1024-d (Developer API, `@ai-sdk/google`) — replaces Voyage | User directive 2026-06-01; Gemini Dev API (not Vertex) honors the no-GCP constraint; 1024-d keeps the existing vector index + the standardize-1024-d decision | Adopted 2026-06-01 (overrides Voyage) |
+| Scheduling: on-visit lazy-cron Server Action — replaces Upstash QStash | User directive 2026-06-01; removes the last non-Firebase backend dependency. Tradeoff accepted: jobs fire on visit, not wall-clock; UI watchdog surfaces stale last-run | Adopted 2026-06-01 (overrides QStash; SPIKE-CRON retired) |
 
 ## Evolution
 

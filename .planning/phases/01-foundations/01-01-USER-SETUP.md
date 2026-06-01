@@ -14,7 +14,7 @@ can be closed.
 - [ ] Create the Firebase project in the confirmed region.
 - [ ] Enable Firestore (Native), Cloud Storage, Firebase Auth.
 - [ ] Create an App Hosting backend, `minInstances=1`, region `asia-southeast1`.
-- [ ] Create an Upstash QStash account + a cron schedule (TZ `Asia/Kuala_Lumpur`) → `/api/jobs/stall-detect`.
+- [ ] (No QStash / Cloud Scheduler — scheduled jobs run as an on-visit lazy-cron Server Action.)
 
 ## Step 3 — Secrets
 Bind via **App Hosting + Secret Manager** (and mirror into local `.env.local` from `.env.sample`):
@@ -22,10 +22,7 @@ Bind via **App Hosting + Secret Manager** (and mirror into local `.env.local` fr
 | Env var | Where to get it |
 |---------|-----------------|
 | `ANTHROPIC_API_KEY` | Anthropic Console → API Keys |
-| `VOYAGE_API_KEY` | Voyage AI dashboard |
-| `QSTASH_TOKEN` | Upstash QStash dashboard |
-| `QSTASH_CURRENT_SIGNING_KEY` | QStash → Signing Keys |
-| `QSTASH_NEXT_SIGNING_KEY` | QStash → Signing Keys |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Google AI Studio → API Keys (Gemini Developer API, not Vertex) |
 
 Plus the Firebase client config + Admin service account (see `.env.sample`).
 

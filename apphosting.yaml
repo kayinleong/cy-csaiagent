@@ -38,20 +38,14 @@ env:
   - variable: ANTHROPIC_API_KEY
     secret: ANTHROPIC_API_KEY  # Secret Manager resource: projects/<PROJECT_ID>/secrets/ANTHROPIC_API_KEY
 
-  # ── Voyage AI embeddings (voyage-3-large, 1024-d) ──
-  - variable: VOYAGE_API_KEY
-    secret: VOYAGE_API_KEY  # Secret Manager resource: projects/<PROJECT_ID>/secrets/VOYAGE_API_KEY
+  # ── Gemini embeddings (gemini-embedding-001, 1024-d) via @ai-sdk/google ──
+  # Gemini Developer API (NOT Vertex AI — honors the no-GCP-beyond-Firebase constraint).
+  - variable: GOOGLE_GENERATIVE_AI_API_KEY
+    secret: GOOGLE_GENERATIVE_AI_API_KEY  # Secret Manager: projects/<PROJECT_ID>/secrets/GOOGLE_GENERATIVE_AI_API_KEY
 
-  # ── Upstash QStash (signed /api/jobs/* callbacks) ──
-  # All three QStash env vars are required for verifySignatureAppRouter
-  - variable: QSTASH_TOKEN
-    secret: QSTASH_TOKEN  # Secret Manager resource: projects/<PROJECT_ID>/secrets/QSTASH_TOKEN
-
-  - variable: QSTASH_CURRENT_SIGNING_KEY
-    secret: QSTASH_CURRENT_SIGNING_KEY  # projects/<PROJECT_ID>/secrets/QSTASH_CURRENT_SIGNING_KEY
-
-  - variable: QSTASH_NEXT_SIGNING_KEY
-    secret: QSTASH_NEXT_SIGNING_KEY  # projects/<PROJECT_ID>/secrets/QSTASH_NEXT_SIGNING_KEY
+  # ── Scheduled jobs: NONE. Periodic work (stall-detect, escalate, eval-nightly,
+  #    usage-rollup) runs as an on-visit lazy-cron Server Action guarded by a
+  #    Firestore last-run-per-window check. No QStash, no Cloud Scheduler/Functions. ──
 
   # ── Firebase Admin SDK (service account — only if not using attached service account) ──
   # Prefer attached service account (GOOGLE_APPLICATION_CREDENTIALS is auto-set on App Hosting).
