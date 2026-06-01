@@ -153,7 +153,11 @@ describe('Test 2: retrieveKnowledge tool returns real chunk-ID citations from ra
     })
 
     const tool = makeRetrieveKnowledgeTool('en')
-    const result = await tool.execute({ query: 'What is the D2 onboarding process?' }, {} as never)
+    // The AI SDK Tool type marks execute as optional; we know it's defined here
+    const executeImpl = tool.execute as NonNullable<typeof tool.execute>
+    const rawResult = await executeImpl({ query: 'What is the D2 onboarding process?' }, {} as never)
+    // Resolve: execute may return AsyncIterable or a direct value
+    const result = rawResult as import('./tools').RetrieveResult
 
     // rag.retrieve was called with the query and userLang
     expect(mocks.mockRetrieve).toHaveBeenCalledWith('What is the D2 onboarding process?', 'en')
@@ -173,7 +177,8 @@ describe('Test 2: retrieveKnowledge tool returns real chunk-ID citations from ra
     mocks.mockBuildCitations.mockReturnValue({ citations: [], missed: true })
 
     const toolMs = makeRetrieveKnowledgeTool('ms')
-    await toolMs.execute({ query: 'apa itu D2?' }, {} as never)
+    const executeImpl = toolMs.execute as NonNullable<typeof toolMs.execute>
+    await executeImpl({ query: 'apa itu D2?' }, {} as never)
 
     expect(mocks.mockRetrieve).toHaveBeenCalledWith('apa itu D2?', 'ms')
   })
@@ -183,7 +188,9 @@ describe('Test 2: retrieveKnowledge tool returns real chunk-ID citations from ra
     mocks.mockIsRetrievalMiss.mockReturnValue(true)
 
     const tool = makeRetrieveKnowledgeTool('en')
-    const result = await tool.execute({ query: 'unknown topic xyz' }, {} as never)
+    const executeImpl = tool.execute as NonNullable<typeof tool.execute>
+    const rawResult = await executeImpl({ query: 'unknown topic xyz' }, {} as never)
+    const result = rawResult as import('./tools').RetrieveResult
 
     expect(result.found).toBe(false)
     if (!result.found) {

@@ -209,8 +209,13 @@ export async function POST(req: Request): Promise<Response> {
 
   // ── Stream response with load-bearing headers ─────────────────────────────
   // toUIMessageStreamResponse() is the correct method name for ai@5.0.193.
+  // (SPIKES.md documents toDataStreamResponse() but that method does not exist
+  // in the installed ai@5.0.193 — auto-fix deviation documented in SUMMARY.md.)
+  //
   // The AI SDK sets Content-Type: text/event-stream automatically.
   // Cache-Control and X-Accel-Buffering are added manually (SPIKE-DEPLOY headers).
+  //
+  // X-Accel-Buffering: no — disables nginx buffering on App Hosting (CRITICAL for SSE)
   return result.toUIMessageStreamResponse({
     headers: {
       'Cache-Control': 'no-store',
