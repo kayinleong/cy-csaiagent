@@ -11,11 +11,11 @@
  *           kbIngestionJobs/{jobId} with total=chunkCount, remaining=total, status:'pending'.
  *   Test 3: re-sharding the SAME file (same sha256) is idempotent —
  *           it does NOT create duplicate kbChunks.
- *   Test 4: processBatch(jobId, limit) embeds `limit` chunks (voyageEmbed document),
+ *   Test 4: processBatch(jobId, limit) embeds `limit` chunks (embedText document),
  *           writes them to kbChunks, decrements remaining, and returns { remaining };
  *           when remaining hits 0 it marks the doc/job complete.
  *
- * Firestore and voyageEmbed are mocked — no live credentials needed.
+ * Firestore and embedText are mocked — no live credentials needed.
  * No PII in fixtures.
  *
  * Core/shell rule: this file must NOT import from app/ or next.
@@ -35,7 +35,7 @@ const {
   mockChunksAdd,
   mockKbDocsDoc,
   mockKbDocsUpdate,
-  mockVoyageEmbed,
+  mockEmbedText,
   mockJobDocData,
 } = vi.hoisted(() => {
   // Track calls to Firestore operations
@@ -73,7 +73,7 @@ const {
     update: mockKbDocsUpdate,
   }))
 
-  const mockVoyageEmbed = vi.fn().mockResolvedValue(new Array(1024).fill(0.001))
+  const mockEmbedText = vi.fn().mockResolvedValue(new Array(1024).fill(0.001))
 
   return {
     mockIngestionJobsSet,
@@ -83,7 +83,7 @@ const {
     mockChunksAdd,
     mockKbDocsDoc,
     mockKbDocsUpdate,
-    mockVoyageEmbed,
+    mockEmbedText,
     mockJobDocData,
   }
 })
@@ -111,7 +111,7 @@ vi.mock('@/src/firebase/collections', () => ({
 }))
 
 vi.mock('@/src/rag/embed', () => ({
-  voyageEmbed: mockVoyageEmbed,
+  embedText: mockEmbedText,
   EMBED_DIM: 1024,
 }))
 
@@ -149,8 +149,8 @@ Senior agents with 2+ years receive an additional 0.25% override.
 describe('KB Ingestion Pipeline', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Reset mockVoyageEmbed to return a 1024-d vector
-    mockVoyageEmbed.mockResolvedValue(new Array(1024).fill(0.001))
+    // Reset mockEmbedText to return a 1024-d vector
+    mockEmbedText.mockResolvedValue(new Array(1024).fill(0.001))
   })
 
   // ─── Test 1: chunker ────────────────────────────────────────────────────────
@@ -307,11 +307,11 @@ describe('KB Ingestion Pipeline', () => {
       )
     })
 
-    it('should embed `limit` chunks with voyageEmbed document inputType', async () => {
+    it('should embed `limit` chunks with embedText document inputType', async () => {
       await processBatch('test-job-id', 2)
 
-      expect(mockVoyageEmbed).toHaveBeenCalledTimes(2)
-      for (const call of mockVoyageEmbed.mock.calls) {
+      expect(mockEmbedText).toHaveBeenCalledTimes(2)
+      for (const call of mockEmbedText.mock.calls) {
         expect(call[1]).toMatchObject({ inputType: 'document' })
       }
     })

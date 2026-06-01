@@ -2,7 +2,7 @@
  * Firestore `findNearest` retrieval adapter — the DEFAULT RAG backend.
  *
  * Implements the core retrieval contract:
- *   voyageEmbed(query, {inputType:'query'}) → FieldValue.vector(q) →
+ *   embedText(query, {inputType:'query'}) → FieldValue.vector(q) →
  *   kbChunks.where('lang','in',[userLang,'en']).findNearest(DOT_PRODUCT, limit:8).get()
  *   → map to RetrievalResult[]
  *
@@ -25,7 +25,7 @@
 
 import { FieldValue } from 'firebase-admin/firestore'
 import { adminDb } from '@/src/firebase/admin'
-import { voyageEmbed } from '@/src/rag/embed'
+import { embedText } from '@/src/rag/embed'
 
 /** The result shape returned by all RAG adapter implementations. */
 export interface RetrievalResult {
@@ -51,7 +51,7 @@ const FIND_NEAREST_LIMIT = 8
  * Firestore `findNearest` retrieval (the DEFAULT adapter).
  *
  * Steps:
- *   1. Embed the query with Voyage voyage-3-large (inputType='query', 1024-d).
+ *   1. Embed the query with Gemini gemini-embedding-001 (inputType='query', 1024-d).
  *   2. Build the lang pre-filter: where('lang', 'in', [userLang, 'en']).
  *      - For userLang='en': ['en', 'en'] → deduplicated to ['en'] by Firestore — still valid.
  *      - For userLang='ms': ['ms', 'en'] — cross-lingual EN fallback included.
@@ -71,7 +71,7 @@ export async function firestoreRetrieve(
   userLang: 'en' | 'ms' | 'zh',
 ): Promise<RetrievalResult[]> {
   // 1. Embed the query
-  const q = await voyageEmbed(query, { model: 'voyage-3-large', inputType: 'query' })
+  const q = await embedText(query, { inputType: 'query' })
 
   // 2. Build the pre-filter languages (cross-lingual EN fallback)
   //    For userLang='en': ['en', 'en'] is acceptable; Firestore de-dupes it.

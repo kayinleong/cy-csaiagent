@@ -137,7 +137,7 @@ export interface ProjectDoc {
   vpStatus: boolean
   bumiQuota: boolean
   foreignEligible: boolean
-  /** 1024-d normalized vector (Voyage voyage-3-large) */
+  /** 1024-d normalized vector (Gemini gemini-embedding-001) */
   embedding: number[]
 }
 
@@ -168,7 +168,7 @@ export interface KbChunkDoc {
   lang: 'en' | 'ms' | 'zh'
   /** Collection this chunk belongs to (for pre-filter in findNearest) */
   ownerCollection: string
-  /** 1024-d normalized vector (Voyage voyage-3-large, DOT_PRODUCT) */
+  /** 1024-d normalized vector (Gemini gemini-embedding-001, DOT_PRODUCT) */
   embedding: number[]
   tokens: number
   /** Zero-based position of this chunk in the source document */

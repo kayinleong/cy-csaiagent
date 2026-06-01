@@ -7,7 +7,7 @@
  * `remaining: 0` is returned. Each call processes `limit` chunks:
  *   1. requireUser(req) — HARD admin gate (T-01-30).
  *   2. Read kbIngestionJobs/{jobId} to get the next batch of unembedded chunks.
- *   3. voyageEmbed each chunk (document inputType) → write to kbChunks.
+ *   3. embedText each chunk (document inputType) → write to kbChunks.
  *   4. Decrement remaining on the job doc.
  *   5. Return { remaining } — client polls until 0.
  *

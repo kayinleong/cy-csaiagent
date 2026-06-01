@@ -31,7 +31,7 @@ import { firestoreRetrieve, type RetrievalResult } from '@/src/rag/search'
 import { pineconeRetrieve } from '@/src/rag/pinecone'
 export type { RetrievalResult } from '@/src/rag/search'
 export { buildCitations, isRetrievalMiss } from '@/src/rag/citations'
-export { voyageEmbed, normalize } from '@/src/rag/embed'
+export { embedText, normalize } from '@/src/rag/embed'
 
 /** Supported adapter identifiers (resolved from RAG_ADAPTER env var). */
 type RagAdapter = 'firestore' | 'pinecone'

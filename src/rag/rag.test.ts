@@ -1,7 +1,7 @@
 /**
  * RAG module unit tests — offline (no live Voyage or Firestore).
  *
- * Task 1: voyageEmbed + firestoreRetrieve + retrieve adapter (4 behaviors)
+ * Task 1: embedText + firestoreRetrieve + retrieve adapter (4 behaviors)
  * Task 2: buildCitations + isRetrievalMiss (3 behaviors)
  *
  * All Voyage API calls and Firestore findNearest calls are mocked.
@@ -18,10 +18,10 @@ import type { RetrievalResult } from '@/src/rag/search'
 
 // ─── Mocks (hoisted so vi.mock factories can reference them) ─────────────────
 
-const { mockVoyageEmbed, mockFindNearest } = vi.hoisted(() => {
-  // Stub voyageEmbed: returns a 1024-length vector by default
-  const mockVoyageEmbed = vi.fn(
-    async (_text: string, _opts: { model: string; inputType: 'query' | 'document' }) => {
+const { mockEmbedText, mockFindNearest } = vi.hoisted(() => {
+  // Stub embedText: returns a 1024-length vector by default
+  const mockEmbedText = vi.fn(
+    async (_text: string, _opts: { inputType: 'query' | 'document' }) => {
       return Array.from({ length: 1024 }, (_, i) => (i + 1) / 1024)
     },
   )
@@ -32,12 +32,12 @@ const { mockVoyageEmbed, mockFindNearest } = vi.hoisted(() => {
   const mockWhere = vi.fn(() => ({ findNearest: mockFindNearest }))
   const mockCollection = vi.fn(() => ({ where: mockWhere }))
 
-  return { mockVoyageEmbed, mockFindNearest, mockWhere, mockGet, mockCollection }
+  return { mockEmbedText, mockFindNearest, mockWhere, mockGet, mockCollection }
 })
 
 // Mock the embed module so search.ts and index.ts use the stub
 vi.mock('@/src/rag/embed', () => ({
-  voyageEmbed: mockVoyageEmbed,
+  embedText: mockEmbedText,
 }))
 
 // Mock firebase admin so Firestore is never actually called
@@ -81,14 +81,13 @@ function makeSnap(docs: Array<{ id: string; text: string; lang: string; docId?: 
   }
 }
 
-// ─── Task 1 tests: voyageEmbed ─────────────────────────────────────────────
+// ─── Task 1 tests: embedText ─────────────────────────────────────────────
 
-describe('voyageEmbed', () => {
+describe('embedText', () => {
   it('Test 1: returns a 1024-length number[] and passes inputType through', async () => {
-    const { voyageEmbed } = await import('@/src/rag/embed')
+    const { embedText } = await import('@/src/rag/embed')
 
-    const result = await voyageEmbed('hello world', {
-      model: 'voyage-3-large',
+    const result = await embedText('hello world', {
       inputType: 'query',
     })
 
@@ -97,8 +96,7 @@ describe('voyageEmbed', () => {
     // all entries are numbers
     result.forEach((v) => expect(typeof v).toBe('number'))
     // inputType forwarded (mock records calls)
-    expect(mockVoyageEmbed).toHaveBeenCalledWith('hello world', {
-      model: 'voyage-3-large',
+    expect(mockEmbedText).toHaveBeenCalledWith('hello world', {
       inputType: 'query',
     })
   })
@@ -137,7 +135,7 @@ describe('retrieve (Firestore adapter)', () => {
       adminDb: { collection: mockCollectionFn },
     }))
     vi.doMock('@/src/rag/embed', () => ({
-      voyageEmbed: vi.fn(async () => Array.from({ length: 1024 }, () => 0.001)),
+      embedText: vi.fn(async () => Array.from({ length: 1024 }, () => 0.001)),
     }))
 
     const { firestoreRetrieve } = await import('@/src/rag/search')
@@ -163,7 +161,7 @@ describe('retrieve (Firestore adapter)', () => {
       adminDb: { collection: mockCollectionFn },
     }))
     vi.doMock('@/src/rag/embed', () => ({
-      voyageEmbed: vi.fn(async () => Array.from({ length: 1024 }, () => 0.001)),
+      embedText: vi.fn(async () => Array.from({ length: 1024 }, () => 0.001)),
     }))
 
     const { firestoreRetrieve } = await import('@/src/rag/search')
@@ -183,7 +181,7 @@ describe('retrieve (Firestore adapter)', () => {
       adminDb: { collection: mockCollectionFn },
     }))
     vi.doMock('@/src/rag/embed', () => ({
-      voyageEmbed: vi.fn(async () => Array.from({ length: 1024 }, () => 0.001)),
+      embedText: vi.fn(async () => Array.from({ length: 1024 }, () => 0.001)),
     }))
 
     const { retrieve } = await import('@/src/rag/index')

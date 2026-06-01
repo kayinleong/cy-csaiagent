@@ -39,7 +39,7 @@ export interface Chunk {
 export interface ChunkOptions {
   /**
    * Maximum number of tokens per chunk (inclusive).
-   * Default: 400 tokens — well within voyage-3-large's 32k limit but small
+   * Default: 400 tokens — well within gemini-embedding-001's token limit but small
    * enough that each embedding is topically focused.
    */
   maxTokens?: number

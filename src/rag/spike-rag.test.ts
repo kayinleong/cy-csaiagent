@@ -15,7 +15,7 @@
  *   RUN_SPIKES=1
  *   GOOGLE_APPLICATION_CREDENTIALS=<path-to-service-account.json>
  *   FIREBASE_PROJECT_ID=<your-firebase-project-id>
- *   VOYAGE_API_KEY=<your-voyage-api-key>
+ *   GOOGLE_GENERATIVE_AI_API_KEY=<your-gemini-api-key>
  *
  * The spike collection is written to:
  *   kbChunks-spike-<timestamp>
@@ -108,8 +108,9 @@ liveSuite('SPIKE-RAG — live Firestore findNearest (RUN_SPIKES=1 required)', ()
   let adminDb: any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let FieldValue: any
+  // embedText is imported dynamically to avoid resolution during offline runs
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let VoyageAIClient: any
+  let embedTextFn: any
 
   const SPIKE_COLLECTION = `kbChunks-spike-${Date.now()}`
   const EMBED_DIM = 1024
@@ -119,20 +120,13 @@ liveSuite('SPIKE-RAG — live Firestore findNearest (RUN_SPIKES=1 required)', ()
   const embedCache = new Map<string, number[]>()
 
   /**
-   * Embed a single text via Voyage voyage-3-large (1024-d, normalized).
+   * Embed a single text via Gemini gemini-embedding-001 (1024-d, normalized).
    * Uses the cache to avoid re-embedding identical strings.
    */
   async function embed(text: string, inputType: 'document' | 'query'): Promise<number[]> {
     const key = `${inputType}:${text}`
     if (embedCache.has(key)) return embedCache.get(key)!
-    const client = new VoyageAIClient({ apiKey: process.env.VOYAGE_API_KEY })
-    const result = await client.embed({
-      model: 'voyage-3-large',
-      input: [text],
-      inputType,
-      outputDimension: EMBED_DIM,
-    })
-    const vector: number[] = result.embeddings[0]
+    const vector: number[] = await embedTextFn(text, { inputType })
     embedCache.set(key, vector)
     return vector
   }
@@ -170,8 +164,8 @@ liveSuite('SPIKE-RAG — live Firestore findNearest (RUN_SPIKES=1 required)', ()
     }
     adminDb = firestoreModule.getFirestore()
 
-    const voyageModule = await import('voyageai')
-    VoyageAIClient = voyageModule.VoyageAIClient
+    const embedModule = await import('@/src/rag/embed')
+    embedTextFn = embedModule.embedText
 
     console.log(`[SPIKE-RAG] Using scratch collection: ${SPIKE_COLLECTION}`)
     console.log(`[SPIKE-RAG] Total chunks to embed + upload: ${CHUNK_COUNT}`)

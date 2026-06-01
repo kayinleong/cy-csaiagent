@@ -34,7 +34,7 @@
  */
 
 import type { RetrievalResult } from '@/src/rag/search'
-import { voyageEmbed } from '@/src/rag/embed'
+import { embedText } from '@/src/rag/embed'
 
 /**
  * Pinecone Serverless retrieval (FALLBACK adapter — currently a seam).
@@ -62,7 +62,7 @@ export async function pineconeRetrieve(
   //   const client = new Pinecone({ apiKey })
   //   const index = client.index(indexName)
   //
-  //   const vector = await voyageEmbed(query, { model: 'voyage-3-large', inputType: 'query' })
+  //   const vector = await embedText(query, { inputType: 'query' })
   //
   //   const response = await index.query({
   //     vector,
@@ -82,7 +82,7 @@ export async function pineconeRetrieve(
   // ─────────────────────────────────────────────────────────────────────────────
 
   // Prevent unused-variable linting until this seam is activated
-  void (await voyageEmbed(query, { model: 'voyage-3-large', inputType: 'query' }))
+  void (await embedText(query, { inputType: 'query' }))
   void userLang
 
   throw new Error(

@@ -15,7 +15,7 @@
  *   processBatch(jobId, limit) — poll worker:
  *     1. Read the kbIngestionJobs/{jobId} doc.
  *     2. Take the first `limit` unprocessed chunk texts (chunkTexts[:remaining] tail).
- *     3. For each chunk: voyageEmbed(text, {inputType:'document'}) → write to kbChunks.
+ *     3. For each chunk: embedText(text, {inputType:'document'}) → write to kbChunks.
  *     4. Decrement remaining in the job doc.
  *     5. When remaining === 0: set status:'complete' on both the job and the kbDoc.
  *     6. Return { remaining }.
@@ -30,7 +30,7 @@
 
 import crypto from 'crypto'
 import { kbIngestionJobsRef, kbChunksRef, kbDocsRef, TENANT_ID } from '@/src/firebase/collections'
-import { voyageEmbed } from '@/src/rag/embed'
+import { embedText } from '@/src/rag/embed'
 import { chunk } from '@/src/kb/ingest/chunker'
 import { extractText } from '@/src/kb/ingest/pdf'
 import { countTokens } from 'gpt-tokenizer'
@@ -192,9 +192,8 @@ export async function processBatch(jobId: string, limit: number): Promise<Proces
     const text = batchTexts[i]
     const chunkIndex = processedCount + i
 
-    // Embed via Voyage (document inputType for KB chunks, per TSD §2.3)
-    const embedding = await voyageEmbed(text, {
-      model: 'voyage-3-large',
+    // Embed via Gemini gemini-embedding-001 (document inputType for KB chunks, per TSD §2.3)
+    const embedding = await embedText(text, {
       inputType: 'document',
     })
 
