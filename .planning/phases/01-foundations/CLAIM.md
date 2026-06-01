@@ -23,9 +23,45 @@ Two plans are human-action checkpoints the executor cannot complete:
 
 ## What has changed
 
-- [in progress] tracked per-plan via each plan's SUMMARY.md.
+All 13 Phase-1 plans executed (12 carry SUMMARY.md; **01-01 is an open human-action gate**
+with template artifacts only). Built against real Firebase via env (no emulator/mocks).
+New application core under `src/` (firebase, audit, router, memory, ratelimit, rag, kb,
+escalation, jobs, agents/coach, llm, eval, i18n), the `app/[lang]/` route tree, `proxy.ts`,
+`firestore.rules` + indexes, `/api/chat` SSE spine, admin KB, evals + Playwright specs, CI.
+
+Orchestrator-applied cross-plan fixes (beyond the per-plan SUMMARYs):
+- `01-03` rules suite gated on `FIRESTORE_EMULATOR_HOST` so default `vitest run` stays green.
+- `01-08` SPIKES.md SPIKE-AI-SDK corrected: ai@5 method is `toUIMessageStreamResponse()`
+  (v4's `toDataStreamResponse()` does not exist in 5.0.193).
+- `01-09` real bug: `src/rag/embed.ts` read `result.embeddings[0]`; the Voyage SDK exposes
+  `data[].embedding` (mocks hid it). Fixed.
+- `01-11` `src/escalation/detect.ts` unsafe `FieldValue→{toDate}` cast narrowed through `unknown`.
+- Test/spec type errors + vendored `calendar.tsx` (react-day-picker v10 classNames) fixed to
+  make `tsc --noEmit` clean; added a `tsc` typecheck gate to CI (vitest only transpiles).
 
 ## Verification
 
-- [pending] Per-plan SUMMARY.md self-checks + a phase-level VERIFICATION.md (gsd-verifier).
-- [pending] Regression report before marking the claim `done`.
+**Phase-level VERIFICATION.md (gsd-verifier): status `human_needed`** — 17/22 must-haves verified
+at code level, 0 code-level gaps, all 19 requirement IDs accounted for. The 9 human_needed items
+are the live spike runs (SPIKE-RAG/DEPLOY/CRON/INGEST), Derek's region + TIA sign-off, live Firebase/
+QStash provisioning, and the live-stack proofs (Playwright E2E, Promptfoo eval). See
+`01-VERIFICATION.md`.
+
+**Automated checks (offline):**
+- `npx tsc --noEmit` → 0 errors (CI now enforces this).
+- `npx vitest run` → 155 passed, 81 skipped (emulator/live-gated suites), 0 failed.
+- `npm run lint` → 0 errors (21 warnings, unused test vars only).
+- QUAL-01 model-swap (`src/llm/swap.test.ts`) → 13/13 pass; no unredacted PII reaches a provider.
+
+**Regression report:** `src/` is greenfield — no prior runtime features to regress. Existing files
+modified: `package.json`/lock (deps), `eslint.config.mjs` (Next.js-16 anti-pattern rules + vendored
+ignores), `next.config.ts` (withNextIntl), root `app/layout.tsx` minimized + page restructured into
+`app/[lang]/`, `components/ui/calendar.tsx` (classNames rename for react-day-picker v10),
+`.gitignore` (`!.env.sample`). Risk surface = the `app/` shell restructure + the calendar rename;
+both are TypeScript-clean and the full vitest suite is green. NOT yet exercised: `next build` /
+`next dev` end-to-end and any live-Firebase/Anthropic path — these are part of the live-stack
+verification gate (need user-supplied `.env`).
+
+**Status:** code execution complete + verified; phase remains **spike-gated** — `01-01` provisioning
+and the four live spike runs are open human-action gates before Phase 2. Claim left `in-progress`
+until those gates close.
