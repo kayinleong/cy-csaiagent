@@ -42,6 +42,18 @@ export interface CreateDocInput {
   pillar: 'coach' | 'finder' | 'reply'
 }
 
+export interface CreateDocFromFileInput {
+  title: string
+  /** The uploaded file to extract text from and shard */
+  file: {
+    buffer: Buffer
+    name: string
+    mimeType: string
+  }
+  lang: 'en' | 'ms' | 'zh'
+  pillar: 'coach' | 'finder' | 'reply'
+}
+
 export interface UpdateDocInput {
   title?: string
   content?: string
@@ -93,6 +105,53 @@ export async function createDoc(
 
   // Shard the content into a kbIngestionJobs doc
   const job = await shardJobForContent(input.content, docId, input.lang, input.pillar)
+
+  return { docId, jobId: job.jobId, total: job.total, remaining: job.remaining }
+}
+
+// ─── createDocFromFile ────────────────────────────────────────────────────────
+
+/**
+ * Create a new KB document by sharding a real uploaded file.
+ *
+ * Unlike createDoc (which accepts plain text content), this function accepts
+ * a raw file buffer and delegates text extraction to extractText via shardJob.
+ * The upload Route Handler calls this after receiving a multipart/form-data POST.
+ *
+ * @param user     Verified user from requireUser() — must have role 'admin'.
+ * @param input    Title, file (buffer + name + mimeType), lang, pillar.
+ * @returns        docId + job metadata for the browser poll loop.
+ */
+export async function createDocFromFile(
+  user: AuthenticatedUser,
+  input: CreateDocFromFileInput,
+): Promise<CreateDocResult> {
+  assertAdmin(user)
+
+  // Create the kbDocs document (unpublished until ingestion completes)
+  const docRef = kbDocsRef().doc()
+  const docId = docRef.id
+
+  const docData: Omit<KbDocDoc, 'tenantId'> = {
+    title: input.title,
+    sourcePath: `kb/${docId}/${input.file.name}`,
+    version: 1,
+    lang: input.lang,
+    pillar: input.pillar,
+    publishedAt: FieldValue.serverTimestamp(),
+  }
+
+  await docRef.set({ ...docData, tenantId: TENANT_ID } as KbDocDoc)
+
+  // Shard the file into a kbIngestionJobs doc (text extraction happens inside shardJob)
+  const job = await shardJob({
+    buffer: input.file.buffer,
+    name: input.file.name,
+    mimeType: input.file.mimeType,
+    docId,
+    lang: input.lang,
+    pillar: input.pillar,
+  })
 
   return { docId, jobId: job.jobId, total: job.total, remaining: job.remaining }
 }

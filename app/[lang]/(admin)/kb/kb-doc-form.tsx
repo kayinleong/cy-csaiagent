@@ -8,12 +8,26 @@
  * This is a "use client" island that:
  *   1. Uses vendored shadcn Field/FieldGroup/FieldLabel/FieldError + Card (PATTERNS Tier-A).
  *   2. Validates with a Zod ^4 schema (FieldError renders Zod issues).
- *   3. Submits via Server Actions (NOT a fetch to a Route Handler — mutations are Server Actions).
- *   4. On PDF attachment: kicks off the chunked-poll ingestion loop
- *      (polls /api/kb/ingest/process until remaining:0).
+ *   3. Supports two submit paths:
+ *      a) FILE UPLOAD: builds FormData and POSTs to /api/kb/ingest/upload (Route Handler)
+ *         — bypasses the 1 MB Server Action body limit.
+ *      b) TEXT CONTENT: submits via Server Actions (NOT a fetch to a Route Handler
+ *         — mutations are Server Actions).
+ *   4. On either path: after sharding, polls /api/kb/ingest/process until remaining:0.
  *   5. Surfaces ingestion progress via sonner toast.
  *
- * Mutation flow (PATTERNS Tier-A KB CRUD analog):
+ * File vs. text decision:
+ *   - If a file is selected → use the file upload path; content textarea becomes optional.
+ *   - If no file is selected → use the text path; content textarea requires ≥10 chars.
+ *   - Neither file NOR content → validation error shown in the content field.
+ *
+ * Mutation flow — FILE path:
+ *   file selected → POST /api/kb/ingest/upload (FormData + Bearer token)
+ *   → createDocFromFile() → shardJob() → returns { jobId, total }
+ *   → browser polls GET /api/kb/ingest/process?jobId=&limit=5 until remaining:0
+ *   → toast "Document processed and indexed"
+ *
+ * Mutation flow — TEXT path (unchanged):
  *   KB form submit → Server Action (createKbDocAction / updateKbDocAction)
  *   → shardJob() → returns jobId + total
  *   → browser polls GET /api/kb/ingest/process?jobId=&limit=5 until remaining:0
@@ -26,7 +40,7 @@
  *   - 01-10-PLAN.md Task 2 action
  */
 
-import { useState, useTransition } from 'react'
+import { useState, useRef, useTransition } from 'react'
 import { z } from 'zod'
 import { toast } from 'sonner'
 
@@ -37,16 +51,35 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { createKbDocAction, updateKbDocAction } from './actions'
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const SUPPORTED_EXTENSIONS = ['.pdf', '.docx', '.doc', '.xlsx', '.pptx', '.txt']
+const SUPPORTED_MIMES = [
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain',
+]
+const FILE_ACCEPT = [...SUPPORTED_EXTENSIONS, ...SUPPORTED_MIMES].join(',')
+
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 
-const KbDocSchema = z.object({
+// Base schema (title, lang, pillar always required)
+const KbDocBaseSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title must be 200 characters or fewer'),
-  content: z.string().min(10, 'Content must be at least 10 characters'),
   lang: z.enum(['en', 'ms', 'zh'], { error: 'Language must be en, ms, or zh' }),
   pillar: z.enum(['coach', 'finder', 'reply'], { error: 'Pillar must be coach, finder, or reply' }),
 })
 
-type KbDocFormData = z.infer<typeof KbDocSchema>
+// Full schema when no file is selected (content required)
+const KbDocTextSchema = KbDocBaseSchema.extend({
+  content: z.string().min(10, 'Content must be at least 10 characters'),
+})
+
+type KbDocTextData = z.infer<typeof KbDocTextSchema>
+type KbDocBaseData = z.infer<typeof KbDocBaseSchema>
 
 // ─── Ingestion poll helpers ───────────────────────────────────────────────────
 
@@ -93,14 +126,14 @@ interface KbDocFormProps {
   /** If provided, the form is in edit mode */
   docId?: string
   /** Initial values for edit mode */
-  initialValues?: Partial<KbDocFormData>
+  initialValues?: Partial<KbDocTextData>
   /** Callback after successful create/update */
   onSuccess?: (docId: string) => void
   /** Firebase ID token for the ingest poll (injected from the parent page) */
   idToken?: string
 }
 
-type ValidationErrors = Partial<Record<keyof KbDocFormData, { message?: string }[]>>
+type ValidationErrors = Partial<Record<keyof KbDocTextData | 'file', { message?: string }[]>>
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -108,27 +141,51 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
   const [isPending, startTransition] = useTransition()
   const [errors, setErrors] = useState<ValidationErrors>({})
   const [ingestProgress, setIngestProgress] = useState<{ remaining: number; total: number } | null>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isEdit = !!docId
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null
+    setSelectedFile(file)
+    // Clear file-related errors when user selects/clears a file
+    setErrors((prev) => {
+      const next = { ...prev }
+      delete next.file
+      delete next.content
+      return next
+    })
+  }
+
+  function handleRemoveFile() {
+    setSelectedFile(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+    setErrors((prev) => {
+      const next = { ...prev }
+      delete next.file
+      return next
+    })
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setErrors({})
 
     const formData = new FormData(e.currentTarget)
-    const rawData = {
-      title: formData.get('title') as string,
-      content: formData.get('content') as string,
-      lang: formData.get('lang') as string,
-      pillar: formData.get('pillar') as string,
-    }
+    const title = formData.get('title') as string
+    const lang = formData.get('lang') as string
+    const pillar = formData.get('pillar') as string
+    const content = formData.get('content') as string
 
-    // Validate with Zod
-    const parsed = KbDocSchema.safeParse(rawData)
-    if (!parsed.success) {
+    // ── Validate base fields (title, lang, pillar) ──────────────────────────
+    const baseParsed = KbDocBaseSchema.safeParse({ title, lang, pillar })
+    if (!baseParsed.success) {
       const fieldErrors: ValidationErrors = {}
-      for (const issue of parsed.error.issues) {
-        const field = issue.path[0] as keyof KbDocFormData
+      for (const issue of baseParsed.error.issues) {
+        const field = issue.path[0] as keyof KbDocBaseData
         if (!fieldErrors[field]) fieldErrors[field] = []
         fieldErrors[field]!.push({ message: issue.message })
       }
@@ -136,52 +193,133 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
       return
     }
 
-    const data: KbDocFormData = parsed.data
+    const baseData = baseParsed.data
 
-    startTransition(async () => {
-      try {
-        let result
-        if (isEdit && docId) {
-          result = await updateKbDocAction(docId, data)
-        } else {
-          result = await createKbDocAction(data)
-        }
-
-        if (!result.ok) {
-          toast.error(result.error ?? 'Failed to save document')
-          return
-        }
-
-        // If a job was created, kick off the poll loop
-        if (result.jobId && result.total != null && result.total > 0) {
-          setIngestProgress({ remaining: result.total, total: result.total })
+    // ── Decide path: file vs. text content ──────────────────────────────────
+    if (selectedFile) {
+      // FILE UPLOAD PATH
+      startTransition(async () => {
+        try {
+          const uploadForm = new FormData()
+          uploadForm.set('file', selectedFile)
+          uploadForm.set('title', baseData.title)
+          uploadForm.set('lang', baseData.lang)
+          uploadForm.set('pillar', baseData.pillar)
 
           const token = idToken ?? ''
-          toast.info(`Indexing document… (${result.total} chunks)`)
+          const response = await fetch('/api/kb/ingest/upload', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: uploadForm,
+          })
 
-          try {
-            await pollIngestion(result.jobId, token, result.total, (remaining) => {
-              setIngestProgress({ remaining, total: result.total! })
-            })
-            setIngestProgress(null)
-            toast.success('Document processed and indexed.')
-          } catch (pollErr) {
-            const msg = pollErr instanceof Error ? pollErr.message : 'Ingestion failed'
-            toast.error(msg)
+          const result = await response.json() as {
+            ok: boolean
+            error?: string
+            docId?: string
+            jobId?: string
+            total?: number
+          }
+
+          if (!result.ok) {
+            toast.error(result.error ?? 'Upload failed')
             return
           }
-        } else {
-          toast.success('Document saved.')
-        }
 
-        if (result.docId && onSuccess) {
-          onSuccess(result.docId)
+          if (result.jobId && result.total != null && result.total > 0) {
+            setIngestProgress({ remaining: result.total, total: result.total })
+            toast.info(`Indexing "${selectedFile.name}"… (${result.total} chunks)`)
+
+            try {
+              await pollIngestion(result.jobId, token, result.total, (remaining) => {
+                setIngestProgress({ remaining, total: result.total! })
+              })
+              setIngestProgress(null)
+              toast.success('Document processed and indexed.')
+            } catch (pollErr) {
+              const msg = pollErr instanceof Error ? pollErr.message : 'Ingestion failed'
+              toast.error(msg)
+              return
+            }
+          } else {
+            toast.success('Document saved.')
+          }
+
+          if (result.docId && onSuccess) {
+            onSuccess(result.docId)
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Unknown error'
+          toast.error(msg)
         }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error'
-        toast.error(msg)
+      })
+    } else {
+      // TEXT CONTENT PATH (Server Action)
+      const textParsed = KbDocTextSchema.safeParse({ title, lang, pillar, content })
+      if (!textParsed.success) {
+        const fieldErrors: ValidationErrors = {}
+        for (const issue of textParsed.error.issues) {
+          const field = issue.path[0] as keyof KbDocTextData
+          if (!fieldErrors[field]) fieldErrors[field] = []
+          fieldErrors[field]!.push({ message: issue.message })
+        }
+        // If content failed, surface a helpful hint that file upload is also an option
+        if (fieldErrors.content && !selectedFile) {
+          fieldErrors.content = [
+            ...(fieldErrors.content ?? []),
+            { message: 'Or upload a file above instead of typing content.' },
+          ]
+        }
+        setErrors(fieldErrors)
+        return
       }
-    })
+
+      const data: KbDocTextData = textParsed.data
+
+      startTransition(async () => {
+        try {
+          let result
+          if (isEdit && docId) {
+            result = await updateKbDocAction(docId, data)
+          } else {
+            result = await createKbDocAction(data)
+          }
+
+          if (!result.ok) {
+            toast.error(result.error ?? 'Failed to save document')
+            return
+          }
+
+          if (result.jobId && result.total != null && result.total > 0) {
+            setIngestProgress({ remaining: result.total, total: result.total })
+
+            const token = idToken ?? ''
+            toast.info(`Indexing document… (${result.total} chunks)`)
+
+            try {
+              await pollIngestion(result.jobId, token, result.total, (remaining) => {
+                setIngestProgress({ remaining, total: result.total! })
+              })
+              setIngestProgress(null)
+              toast.success('Document processed and indexed.')
+            } catch (pollErr) {
+              const msg = pollErr instanceof Error ? pollErr.message : 'Ingestion failed'
+              toast.error(msg)
+              return
+            }
+          } else {
+            toast.success('Document saved.')
+          }
+
+          if (result.docId && onSuccess) {
+            onSuccess(result.docId)
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Unknown error'
+          toast.error(msg)
+        }
+      })
+    }
   }
 
   const ingesting = ingestProgress !== null && ingestProgress.remaining > 0
@@ -194,7 +332,7 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
         <p className="text-sm text-muted-foreground">
           {isEdit
             ? 'Update the KB document. Changing content will re-index all chunks.'
-            : 'Create a new KB document. Content will be chunked and indexed for RAG retrieval.'}
+            : 'Create a new KB document. Upload a file or paste text — content will be chunked and indexed for RAG retrieval.'}
         </p>
       </CardHeader>
 
@@ -251,13 +389,59 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
               </Field>
             </div>
 
+            {/* File upload (create mode only — not shown in edit mode) */}
+            {!isEdit && (
+              <Field orientation="vertical">
+                <FieldLabel htmlFor="file-upload">Upload file (optional)</FieldLabel>
+                <div className="space-y-2">
+                  {selectedFile ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm">
+                      <span className="flex-1 truncate text-foreground">{selectedFile.name}</span>
+                      <button
+                        type="button"
+                        onClick={handleRemoveFile}
+                        disabled={isSubmitting}
+                        className="shrink-0 text-muted-foreground underline hover:text-foreground disabled:opacity-50"
+                        aria-label="Remove selected file"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <Input
+                      id="file-upload"
+                      ref={fileInputRef}
+                      type="file"
+                      accept={FILE_ACCEPT}
+                      disabled={isSubmitting}
+                      onChange={handleFileChange}
+                      className="cursor-pointer file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-primary file:px-3 file:py-1 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
+                    />
+                  )}
+                  <FieldDescription>
+                    Supported formats: PDF, DOCX, DOC, XLSX, PPTX, TXT. Max 20 MB.
+                    {selectedFile
+                      ? ' File selected — the content field below is optional.'
+                      : ' Or type/paste content below instead.'}
+                  </FieldDescription>
+                </div>
+                <FieldError errors={errors.file} />
+              </Field>
+            )}
+
             {/* Content */}
             <Field orientation="vertical">
-              <FieldLabel htmlFor="content">Content</FieldLabel>
+              <FieldLabel htmlFor="content">
+                Content{selectedFile ? ' (optional when file is uploaded)' : ''}
+              </FieldLabel>
               <Textarea
                 id="content"
                 name="content"
-                placeholder="Paste or type the KB document content here…"
+                placeholder={
+                  selectedFile
+                    ? 'Leave blank to extract text from the uploaded file…'
+                    : 'Paste or type the KB document content here…'
+                }
                 rows={10}
                 defaultValue={initialValues?.content ?? ''}
                 disabled={isSubmitting}
@@ -265,8 +449,9 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
                 className="min-h-[200px] font-mono text-sm"
               />
               <FieldDescription>
-                Plain text content. This will be chunked into ~400-token passages and embedded
-                for vector retrieval.
+                {selectedFile
+                  ? 'Content is extracted automatically from the uploaded file. You may also type supplemental text here.'
+                  : 'Plain text content. This will be chunked into ~400-token passages and embedded for vector retrieval.'}
               </FieldDescription>
               <FieldError errors={errors.content} />
             </Field>

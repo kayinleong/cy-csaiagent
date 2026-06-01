@@ -100,8 +100,8 @@ export async function shardJob(file: IngestFile): Promise<ShardJobResult> {
     }
   }
 
-  // Step 3: extract text from the file
-  const { text } = await extractText(file.buffer, file.mimeType)
+  // Step 3: extract text from the file (pass name for extension-first dispatch)
+  const { text } = await extractText(file.buffer, file.mimeType, file.name)
 
   // Step 4: chunk the text
   const chunks = chunk(text)
