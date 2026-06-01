@@ -64,7 +64,7 @@ export async function voyageEmbed(text: string, opts: VoyageEmbedOpts): Promise<
     outputDimension: EMBED_DIM,
   })
 
-  const raw: number[] = result.embeddings?.[0] as number[]
+  const raw = result.data?.[0]?.embedding
   if (!raw || raw.length !== EMBED_DIM) {
     throw new Error(
       `Voyage returned unexpected embedding dimension: expected ${EMBED_DIM}, got ${raw?.length ?? 0}`,

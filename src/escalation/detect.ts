@@ -56,11 +56,14 @@ export async function findStalled(options: FindStalledOptions): Promise<StalledA
 
   return snap.docs.map((doc) => {
     const data = doc.data()
-    // lastActiveAt may be a Firestore Timestamp (toDate()) or a plain Date
+    // lastActiveAt may be a Firestore Timestamp (toDate()) or a plain Date.
+    // On read it is never a FieldValue (that is a write-only sentinel), so narrow
+    // through `unknown` before probing for toDate().
+    const lav = data.lastActiveAt as unknown
     const lastActiveAt =
-      data.lastActiveAt && typeof (data.lastActiveAt as { toDate?: () => Date }).toDate === 'function'
-        ? (data.lastActiveAt as { toDate: () => Date }).toDate()
-        : (data.lastActiveAt as Date)
+      lav && typeof (lav as { toDate?: () => Date }).toDate === 'function'
+        ? (lav as { toDate: () => Date }).toDate()
+        : (lav as Date)
 
     return {
       agentUid: doc.id,
