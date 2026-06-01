@@ -63,5 +63,29 @@ both are TypeScript-clean and the full vitest suite is green. NOT yet exercised:
 verification gate (need user-supplied `.env`).
 
 **Status:** code execution complete + verified; phase remains **spike-gated** — `01-01` provisioning
-and the four live spike runs are open human-action gates before Phase 2. Claim left `in-progress`
+and the live spike runs are open human-action gates before Phase 2. Claim left `in-progress`
 until those gates close.
+
+## Amendment — stack override refactor (2026-06-01)
+
+Two locked decisions were overridden by the user after initial execution and the code refactored:
+- **Embeddings: Voyage → Gemini `gemini-embedding-001` @1024-d** via `@ai-sdk/google` (Developer
+  API, `GOOGLE_GENERATIVE_AI_API_KEY`). `src/rag/embed.ts` rewritten; `voyageEmbed`→`embedText`
+  across rag/kb; provider options verified against the installed `@ai-sdk/google@2.0.74` types;
+  `voyageai` removed. 1024-d index unchanged. (commit `7ec5add`)
+- **Scheduling: QStash → on-visit lazy-cron Server Action.** Deleted the QStash-signed routes
+  (`stall-detect`, `_spike-cron`) + `signature.test.ts`; added `src/jobs/runDueJobs.ts` (Firestore
+  transaction-guarded last-run-per-window) + `app/_actions/jobs.ts` (`requireUser`-gated), wired
+  fire-and-forget into the chat page RSC. `@upstash/qstash` removed; **SPIKE-CRON retired.**
+  (commit `31598d7`)
+
+Docs synced: CLAUDE.md, TSD.md, PROJECT.md Key Decisions, SPIKES.md, .env.sample, apphosting.yaml,
+PROVISIONING.md, USER-SETUP, 01-VERIFICATION.md (amendment). Also gitignored `sa.json` + credential
+patterns (a service-account key had appeared untracked in the repo root).
+
+**Re-verification (post-refactor):** `npx tsc --noEmit` 0 errors · `npx vitest run` 153 passed /
+81 skipped / **0 failed** · `npm run lint` 0 errors. **Regression check:** the swaps are isolated
+behind the `rag/embed` adapter and the `src/jobs` module; rag/kb and jobs/escalation suites pass;
+full suite green; no residual Voyage/QStash references in `src/`+`app/` except dated migration-note
+comments. Still NOT exercised live: `next build`/`next dev` + any live Gemini/Firebase/Anthropic
+path (part of the live-stack gate, needs user `.env`).

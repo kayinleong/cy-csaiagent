@@ -2,7 +2,8 @@
 phase: 01-foundations
 plan: "11"
 subsystem: escalation-jobs
-tags: [escalation, stall-detect, qstash, hmac, heartbeat, background-jobs, tdd, framework-free, offline-tested]
+superseded_note: "2026-06-01 — QStash scheduling described below was REPLACED by an on-visit lazy-cron Server Action (src/jobs/runDueJobs.ts + app/_actions/jobs.ts). The QStash-signed stall-detect/_spike-cron routes + signature.test.ts were deleted; SPIKE-CRON retired. findStalled/emitHandoffSignal/heartbeat are retained. See PROJECT.md Key Decisions + 01-VERIFICATION.md amendment."
+tags: [escalation, stall-detect, lazy-cron, heartbeat, background-jobs, tdd, framework-free, offline-tested]
 
 # Dependency graph
 requires:

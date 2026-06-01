@@ -5,18 +5,15 @@ status: human_needed
 score: 17/22 must-haves verified (3 human_needed, 2 code-verified-but-live-gated)
 overrides_applied: 0
 human_verification:
-  - test: "SPIKE-RAG live run: p95 latency, read-cost, BM/ZH recall"
+  - test: "SPIKE-RAG live run: p95 latency, read-cost, BM/ZH recall (Gemini gemini-embedding-001 @1024-d)"
     expected: "p95 < 800ms, read-cost < 10x naive, BM/ZH recall >= 70% of EN"
-    why_human: "Requires live Firestore in asia-southeast1, live Voyage API key, RUN_SPIKES=1"
+    why_human: "Requires live Firestore in asia-southeast1, live GOOGLE_GENERATIVE_AI_API_KEY, RUN_SPIKES=1"
   - test: "SPIKE-DEPLOY: SSE token-by-token on App Hosting over real 4G"
     expected: "Tokens arrive incrementally (not a single buffered dump) on a real phone off WiFi"
     why_human: "Requires deployed App Hosting instance + physical 4G device"
-  - test: "SPIKE-CRON live round-trip: QStash signed callback + retry + Asia/Kuala_Lumpur timezone"
-    expected: "verifySignatureAppRouter accepts QStash token, retries on 5xx, fires at correct KL time"
-    why_human: "Requires QStash dashboard + deployed App Hosting endpoint"
   - test: "SPIKE-INGEST live PDF run: pdfjs-dist 6.x Node path + chunking under 60s timeout"
     expected: "100-200pg PDF chunked within timeout budget; pdfjs 6.x Node API confirmed"
-    why_human: "Requires live Voyage API (embedding) + real PDF file; gpt-tokenizer CPU-only portion runs offline but full ingest path needs credentials"
+    why_human: "Requires live Gemini embedding API + real PDF file; gpt-tokenizer CPU-only portion runs offline but full ingest path needs credentials"
   - test: "Derek region sign-off and Firebase provisioning (G1)"
     expected: "G1-REGION-SIGNOFF.md has Derek's written confirmation of asia-southeast1; PROVISIONING.md rows flipped to done"
     why_human: "Human-action gate: Derek must confirm the region and secrets must be bound via Secret Manager before any Firebase resource exists"
@@ -35,6 +32,18 @@ human_verification:
 ---
 
 # Phase 1: Foundations Verification Report
+
+> **AMENDMENT 2026-06-01 (post-verification stack override).** After this report was written, two
+> locked decisions were overridden by the user and the code refactored accordingly (tsc clean,
+> vitest green, see PROJECT.md Key Decisions):
+> - **Embeddings: Voyage → Gemini `gemini-embedding-001` @1024-d** via `@ai-sdk/google` (Developer
+>   API, `GOOGLE_GENERATIVE_AI_API_KEY`). `voyageEmbed` → `embedText`. The 1024-d index is unchanged.
+>   Evidence rows below that name `voyageEmbed`/Voyage now read `embedText`/Gemini.
+> - **Scheduling: QStash → on-visit lazy-cron Server Action** (`src/jobs/runDueJobs.ts` +
+>   `app/_actions/jobs.ts`, wired into the chat page RSC, Firestore last-run guard). The QStash
+>   routes + `signature.test.ts` were deleted. **SPIKE-CRON is RETIRED** (no external scheduler to
+>   spike) — it is no longer a Phase-1 gate; the remaining live spikes (RAG/DEPLOY/INGEST) stand.
+> Net: the human_needed set drops SPIKE-CRON; everything else in this report still holds.
 
 **Phase Goal:** Every shared component exists in thin, working form, the three project-defining risks are spiked to resolution, and a logged-in user can send a message and get a streamed, audited, persisted Coach response.
 
@@ -65,7 +74,7 @@ This verification ran against the actual codebase (not SUMMARY.md claims). Comma
 | SC2 | Message persists across refresh; append-only audit row is written | HUMAN_NEEDED | appendMessage to subcollection + after(audit.log) are wired in chat route (code-verified). Playwright persist spec exists (e2e/persist.spec.ts). Live run requires deployed stack + credentials. |
 | SC3 | EN/BM/ZH works (UI copy + retrieval); embedding model clears multilingual recall bar | HUMAN_NEEDED | All three i18n catalogs exist (en/ms/zh), proxy.ts locale routing works, franc-min detect verified by unit tests. BM/ZH recall bar (>= 70% of EN) requires SPIKE-RAG live run (PENDING). |
 | SC4 | Same chat call succeeds on a second LLM provider; no PII reaches model unredacted | VERIFIED | `npx vitest run src/llm/swap.test.ts` — 13/13 passed. Proves model swap abstraction + PDPA gate on two fake providers offline. |
-| SC5 | All three required spikes resolved with documented pass/fallback; signed PDPA TIA on file | HUMAN_NEEDED | SPIKE-AI-SDK is RECORDED. SPIKE-RAG, SPIKE-DEPLOY, SPIKE-CRON, SPIKE-INGEST have harness code committed but live runs PENDING. PDPA-TIA.md exists but Derek sign-off line is blank ([ ]). |
+| SC5 | All three required spikes resolved with documented pass/fallback; signed PDPA TIA on file | HUMAN_NEEDED | SPIKE-AI-SDK RECORDED; **SPIKE-CRON RETIRED** (QStash removed → lazy-cron, no spike needed). SPIKE-RAG (now Gemini), SPIKE-DEPLOY, SPIKE-INGEST have harness committed but live runs PENDING. PDPA-TIA.md exists but Derek sign-off line is blank ([ ]). |
 
 ---
 

@@ -2,7 +2,8 @@
 phase: 01-foundations
 plan: "09"
 subsystem: rag
-tags: [rag, voyage, firestore-vector, findnearest, dot-product, citations, adapter, pinecone-seam, tdd]
+superseded_note: "2026-06-01 — the Voyage embedder described below was REPLACED by Gemini gemini-embedding-001 @1024-d via @ai-sdk/google (Developer API). voyageEmbed→embedText; voyageai removed; 1024-d index unchanged. See PROJECT.md Key Decisions + 01-VERIFICATION.md amendment."
+tags: [rag, gemini, firestore-vector, findnearest, dot-product, citations, adapter, pinecone-seam, tdd]
 
 # Dependency graph
 requires:

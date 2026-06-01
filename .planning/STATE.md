@@ -5,7 +5,7 @@ milestone_name: milestone
 status: executed-human-gated
 stopped_at: Phase 1 code-complete (12 SUMMARYs; 01-01 open) — spike gate + provisioning pending before Phase 2
 last_updated: "2026-06-01T00:00:00.000Z"
-last_activity: 2026-06-01 — Phase 1 executed (all 13 plans coded; tsc clean, 155 vitest pass/0 fail, lint 0 err). Verifier=human_needed (17/22 code must-haves, 0 code gaps). Open gates: 01-01 provisioning + 4 live spikes + live-stack proof.
+last_activity: 2026-06-01 — Phase 1 executed (all 13 plans coded) + stack override refactor: embeddings Voyage→Gemini (gemini-embedding-001 @1024-d, @ai-sdk/google) and scheduling QStash→on-visit lazy-cron Server Action. tsc clean, 153 vitest pass/0 fail, lint 0 err. Verifier=human_needed; SPIKE-CRON retired. Open gates: 01-01 provisioning + 3 live spikes (RAG/DEPLOY/INGEST) + live-stack proof.
 progress:
   total_phases: 5
   completed_phases: 0
@@ -33,12 +33,12 @@ Last activity: 2026-06-01 — Phase 1 executed; tsc clean, 155 vitest pass/0 fai
 Progress: [█████████░] 92% (code) — phase not verified-complete until spikes + provisioning close
 
 ### Open human-action gates (block Phase 2)
-1. 01-01 — Derek's written asia-southeast1 region sign-off (G1) + G2 residency; live Firebase + App Hosting + Secret Manager + QStash provisioning; bind 5 secrets (see 01-01-USER-SETUP.md, PROVISIONING.md, .env.sample).
-2. SPIKE-RAG — `RUN_SPIKES=1 npx vitest run src/rag/spike-rag.test.ts` against live Firestore findNearest (p95<800ms, BM/ZH recall ≥70% of EN) or pick Pinecone fallback.
+1. 01-01 — Derek's written asia-southeast1 region sign-off (G1) + G2 residency; live Firebase + App Hosting + Secret Manager provisioning; bind 2 secrets — `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` (see 01-01-USER-SETUP.md, PROVISIONING.md, .env.sample). No QStash to provision (lazy-cron).
+2. SPIKE-RAG — `RUN_SPIKES=1 npx vitest run src/rag/spike-rag.test.ts` against live Firestore findNearest with Gemini embeddings (p95<800ms, BM/ZH recall ≥70% of EN) or pick Pinecone fallback.
 3. SPIKE-DEPLOY — deploy to App Hosting asia-southeast1; verify token-by-token SSE on a real 4G phone.
-4. SPIKE-CRON — register QStash schedule (Asia/Kuala_Lumpur) → /api/jobs/stall-detect; verify signed round-trip + 5xx retry.
-5. SPIKE-INGEST — run a 100–200pg PDF through the chunked-poll loop within budget.
-6. Live-stack proof — Playwright proof-slice/persist E2E + Promptfoo trilingual eval (Opus judge) once .env is populated.
+4. SPIKE-INGEST — run a 100–200pg PDF through the chunked-poll loop within budget.
+5. Live-stack proof — Playwright proof-slice/persist E2E + Promptfoo trilingual eval (Opus judge) once .env is populated.
+(SPIKE-CRON retired — QStash removed; scheduling is an on-visit lazy-cron Server Action, no external scheduler to spike.)
 Record spike pass/fallback decisions in SPIKES.md; the signed week-4 go/no-go memo gates Phase 3.
 
 ## Performance Metrics
