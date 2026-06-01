@@ -104,9 +104,9 @@ test.describe('Proof slice: sign-in → SSE stream → incremental tokens → gr
 
     // Assert the Content-Type header
     expect(chatResponse).not.toBeNull()
-    if (chatResponse) {
-      const headers = (chatResponse as Parameters<Parameters<Page['on']>[1]>[0]).headers()
-      const contentType = (headers as Record<string, string>)['content-type'] ?? ''
+    if (chatResponse !== null) {
+      const headers = (chatResponse as { headers: () => Record<string, string> }).headers()
+      const contentType = headers['content-type'] ?? ''
       expect(contentType).toContain('text/event-stream')
     }
   })

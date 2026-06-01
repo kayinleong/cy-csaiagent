@@ -38,14 +38,14 @@ import type { MessageDoc } from '@/src/firebase/collections'
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
 // Mock appendMessage to capture call args without Firestore
-const mockAppendMessage = vi.fn(async () => 'msg-swap-test-001')
+const mockAppendMessage = vi.fn(async (_cid: string, _msg: MessageDoc) => 'msg-swap-test-001')
 
 vi.mock('@/src/memory', () => ({
   appendMessage: mockAppendMessage,
 }))
 
 // Mock audit.log to capture call args without Firestore
-const mockAuditLog = vi.fn(async () => {})
+const mockAuditLog = vi.fn(async (_entry: { action: string; actorUid: string; raw: Record<string, unknown>; targetRef?: string }) => {})
 
 vi.mock('@/src/audit', async (importOriginal) => {
   // Keep real pseudonymize + assertRedacted — they are under test

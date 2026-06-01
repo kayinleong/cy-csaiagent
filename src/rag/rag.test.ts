@@ -14,6 +14,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { RetrievalResult } from '@/src/rag/search'
 
 // ─── Mocks (hoisted so vi.mock factories can reference them) ─────────────────
 
@@ -128,7 +129,7 @@ describe('retrieve (Firestore adapter)', () => {
         },
       ],
     }))
-    const mockFindNearestFn = vi.fn(() => ({ get: mockGetFn }))
+    const mockFindNearestFn = vi.fn((_opts: { distanceMeasure: string; limit: number; vectorField: string; queryVector: number[] }) => ({ get: mockGetFn }))
     const mockWhereFn = vi.fn(() => ({ findNearest: mockFindNearestFn }))
     const mockCollectionFn = vi.fn(() => ({ where: mockWhereFn }))
 
@@ -198,7 +199,7 @@ describe('buildCitations', () => {
   it('Test 1: maps retrieval results to citation list preserving real chunk IDs', async () => {
     const { buildCitations } = await import('@/src/rag/citations')
 
-    const results = [
+    const results: RetrievalResult[] = [
       { chunkId: 'chunk-abc', text: 'Compliance requirements for new D2 agents.', lang: 'en', score: 0.92, docId: 'doc-1' },
       { chunkId: 'chunk-xyz', text: 'Commission structure explained.', lang: 'en', score: 0.85, docId: 'doc-2' },
     ]
@@ -229,7 +230,7 @@ describe('buildCitations', () => {
     const { buildCitations } = await import('@/src/rag/citations')
 
     // Duplicate chunkId 'chunk-dup' appears twice
-    const results = [
+    const results: RetrievalResult[] = [
       { chunkId: 'chunk-dup', text: 'First occurrence.', lang: 'en', score: 0.95, docId: 'doc-1' },
       { chunkId: 'chunk-dup', text: 'Second occurrence (duplicate).', lang: 'en', score: 0.91, docId: 'doc-1' },
       { chunkId: 'chunk-2', text: 'Other content.', lang: 'en', score: 0.88, docId: 'doc-2' },
