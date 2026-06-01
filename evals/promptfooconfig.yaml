@@ -1,0 +1,56 @@
+# evals/promptfooconfig.yaml — Promptfoo evaluation suite for D2 Coach (FND-07)
+#
+# Judge model: resolved from Firebase Remote Config at eval runtime via the
+# JUDGE_MODEL environment variable. Set by Derek's eval runner script before
+# invoking this config. NEVER hard-code a model ID here.
+#
+# To run (requires live Anthropic key + JUDGE_MODEL set from Remote Config):
+#   JUDGE_MODEL=$(firebase remoteconfig:get --key model.grader.default) \
+#     npx promptfoo eval -c evals/promptfooconfig.yaml
+#
+# See evals/CALIBRATION.md for the human-calibration protocol.
+# See src/eval/judge.ts for the four-domain rubric definition.
+#
+# @see https://www.promptfoo.dev/docs/configuration/guide/
+
+description: 'D2 CS-AI Agent — Coach trilingual eval suite (Phase 1 / FND-07)'
+
+# ─── Providers ───────────────────────────────────────────────────────────────
+# The Coach provider sends the test message to the live /api/chat endpoint.
+# The endpoint itself resolves the Coach model from Remote Config — no model ID here.
+#
+# For offline / CI runs where no live server is available, skip provider execution
+# and use --no-run flag to validate fixture syntax only:
+#   npx promptfoo eval -c evals/promptfooconfig.yaml --no-cache --no-run
+providers:
+  - id: "http"
+    config:
+      url: "${NEXT_PUBLIC_APP_URL:-http://localhost:3000}/api/chat"
+      method: "POST"
+      headers:
+        Content-Type: "application/json"
+        Authorization: "Bearer ${E2E_ID_TOKEN}"
+      body:
+        messages:
+          - role: "user"
+            content: "{{user_message}}"
+        cid: "eval-cid-{{lang}}-{{$index}}"
+
+# ─── Judge (LLM rubric) ───────────────────────────────────────────────────────
+# The judge model ID is provided via the JUDGE_MODEL env var, which is set from
+# Firebase Remote Config (key: model.grader.default). This satisfies the
+# model-agnostic constraint (TSD §2.3, CLAUDE.md).
+#
+# NEVER replace {{env.JUDGE_MODEL}} with a hard-coded model string.
+defaultTest:
+  options:
+    provider: "anthropic:messages:{{env.JUDGE_MODEL}}"
+
+# ─── Test suites ─────────────────────────────────────────────────────────────
+tests:
+  - evals/coach-trilingual.gold.yaml
+
+# ─── Shared LLM-rubric assertion ─────────────────────────────────────────────
+# Applied on top of fixture-level assertions via Promptfoo's defaultTest.
+# The full four-domain rubric is defined in src/eval/judge.ts.
+# Each fixture also carries its own structural assertions (contains, javascript).

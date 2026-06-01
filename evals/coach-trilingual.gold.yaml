@@ -1,0 +1,100 @@
+# evals/coach-trilingual.gold.yaml — Coach ONE trilingual gold fixture (FND-07, D-08)
+#
+# ONE scenario expressed in three languages (EN / Bahasa Malaysia / Mandarin Chinese).
+# Same underlying onboarding question: "What must I complete in my first week at D2?"
+# All content is SYNTHETIC — no real PII, no real phone numbers.
+#
+# Design notes (D-08):
+#   - EN case is the Phase-1 proof slice (D-07): seeded EN KB doc answers this question.
+#   - MS/ZH cases exercise the language-match and lang-filtered RAG retrieval paths.
+#   - Phase 1 KB is EN-only; MS/ZH cases verify the language-detection + retrieval
+#     machinery paths. Full trilingual KB translation is Phase 2.
+#   - MS and ZH reviews are performed by native speakers, NOT machine translation (D-08).
+#
+# Format: promptfoo test list (YAML list of test objects).
+# Reference: https://www.promptfoo.dev/docs/configuration/expected-outputs/
+
+- description: "Coach | EN | onboarding-week1 — English proof-slice question"
+  vars:
+    lang: en
+    user_message: "What do I need to complete in my first week as a new D2 agent?"
+    # Seed KB doc covers: compliance checklist, product knowledge session, CRM setup.
+    # Expected grounded answer cites chunk IDs from kb-doc-d2-onboarding-en-001.
+    expected_chunk_ids:
+      - "kb-chunk-d2-onboarding-en-001-00"
+      - "kb-chunk-d2-onboarding-en-001-01"
+      - "kb-chunk-d2-onboarding-en-001-02"
+      - "kb-chunk-d2-onboarding-en-001-03"
+  assert:
+    - type: contains
+      value: "KB:"
+      description: "Response must cite at least one D2 KB chunk"
+    - type: not-contains
+      value: "Great question"
+      description: "No AI-tell filler phrases"
+    - type: not-contains
+      value: "Certainly"
+      description: "No AI-tell filler phrases"
+    - type: javascript
+      value: |
+        // PII scan: no real Malaysian phone numbers in response
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+
+- description: "Coach | MS | onboarding-week1 — Bahasa Malaysia onboarding question"
+  vars:
+    lang: ms
+    user_message: "Apakah yang perlu saya selesaikan dalam minggu pertama sebagai ejen D2 baharu?"
+    # Bahasa Malaysia: "What do I need to complete in my first week as a new D2 agent?"
+    # Phase 1 KB is EN-only; the Coach is expected to respond in Bahasa Malaysia
+    # using whatever retrieval results are available (may cite EN chunks — acceptable in Phase 1).
+    expected_behavior: "Responds in Bahasa Malaysia; cites D2 KB chunk if available"
+  assert:
+    - type: contains
+      value: "KB:"
+      description: "Response must cite at least one D2 KB chunk (if retrieval returns results)"
+    - type: not-contains
+      value: "Great question"
+      description: "No AI-tell filler phrases"
+    - type: javascript
+      value: |
+        // Language check: response should contain Bahasa Malaysia words
+        // Accept either BM words or a polite redirect in BM (kb-miss path)
+        const bmIndicators = /\b(dan|atau|untuk|dalam|ejen|minggu|perlu|boleh|tidak|dengan)\b/i;
+        return bmIndicators.test(output);
+      description: "Response is in Bahasa Malaysia (language-match check)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+
+- description: "Coach | ZH | onboarding-week1 — Mandarin Chinese onboarding question"
+  vars:
+    lang: zh
+    user_message: "作为新的D2代理，我在第一周需要完成什么？"
+    # Mandarin Chinese: "As a new D2 agent, what do I need to complete in the first week?"
+    # Phase 1 KB is EN-only; the Coach responds in Mandarin Chinese.
+    # Native Chinese speaker review required before promotion to production (D-08).
+    expected_behavior: "Responds in Mandarin Chinese; cites D2 KB chunk if available"
+    native_review_required: true
+    native_review_status: "PENDING — requires native Mandarin speaker review (D-08)"
+  assert:
+    - type: contains
+      value: "KB:"
+      description: "Response must cite at least one D2 KB chunk (if retrieval returns results)"
+    - type: not-contains
+      value: "Great question"
+      description: "No AI-tell filler phrases"
+    - type: javascript
+      value: |
+        // Language check: response should contain CJK characters (Mandarin)
+        const cjkPattern = /[一-鿿]/;
+        return cjkPattern.test(output);
+      description: "Response contains Mandarin Chinese characters (language-match check)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"

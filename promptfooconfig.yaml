@@ -1,19 +1,13 @@
 # Promptfoo evaluation configuration for D2 CS-AI Agent
-# Evals live in the evals/ directory.
-# Judge model: claude-opus-4-7 (Anthropic, via Remote Config — never hard-coded here)
-# Targets: coach | finder | reply pillars
-# @see https://www.promptfoo.dev/docs/configuration/guide/
+# The full eval config lives in evals/promptfooconfig.yaml.
+# This root file is a forwarding alias for the npm eval script.
+# Judge model: resolved from Firebase Remote Config (model.grader.default) at runtime.
+# NEVER hard-code a model ID here.
+# @see evals/promptfooconfig.yaml for the full suite config
+# @see evals/CALIBRATION.md for the human-calibration protocol
 
-description: 'D2 CS-AI Agent — eval suite'
+description: 'D2 CS-AI Agent — eval suite (see evals/promptfooconfig.yaml)'
 
-# Providers are resolved at runtime from the eval fixtures (not hard-coded here)
-# so model IDs stay in Remote Config per the model-agnostic constraint.
-providers: []
-
-# Test suites are discovered from evals/ directory
+# Delegate to the evals/ directory config
+# Run via: JUDGE_MODEL=<from-remote-config> npx promptfoo eval -c evals/promptfooconfig.yaml
 tests: evals/
-
-# Default assertion thresholds
-defaultTest:
-  options:
-    provider: anthropic:messages:claude-opus-4-7
