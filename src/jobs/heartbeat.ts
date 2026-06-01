@@ -1,7 +1,7 @@
 /**
  * src/jobs/heartbeat.ts — Job heartbeat writer (UI watchdog signal)
  *
- * Each QStash job run upserts a heartbeat doc so a UI watchdog (Phase-2 banner)
+ * Each lazy-cron job run upserts a heartbeat doc so a UI watchdog (Phase-2 banner)
  * can detect a missed window.  If no heartbeat appears within the expected
  * interval, the dashboard surfaces a "stall detection offline" alert.
  *

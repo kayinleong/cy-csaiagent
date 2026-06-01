@@ -17,7 +17,7 @@
  *     so the response reliably carries { remaining }.
  *   - NOT a mega-request — each call is bounded by `limit`.
  *
- * Node runtime required: Admin SDK, crypto, Voyage API are server-only.
+ * Node runtime required: Admin SDK, crypto, Gemini embedding API are server-only.
  *
  * Query parameters:
  *   jobId  — the kbIngestionJobs document ID returned by shardJob().
@@ -33,7 +33,7 @@
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
 import { processBatch } from '@/src/kb/ingest/pipeline'
 
-// Node runtime: Admin SDK and Voyage API are not available in the Edge runtime.
+// Node runtime: Admin SDK and the Gemini embedding API are not available in the Edge runtime.
 export const runtime = 'nodejs'
 
 const DEFAULT_LIMIT = 5

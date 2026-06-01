@@ -5,7 +5,7 @@
  *
  * Uses `gpt-tokenizer` (countTokens/encode) to split text into overlapping
  * chunks that respect a maximum token budget. This ensures each chunk passed
- * to the Voyage embedding API does not exceed the model's context limit and
+ * to the Gemini embedding API does not exceed the model's context limit and
  * that chunks stay consistent with the way the model counts tokens.
  *
  * Design:

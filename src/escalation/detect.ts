@@ -2,7 +2,7 @@
  * src/escalation/detect.ts — Stall detection over agentProfiles.lastActiveAt
  *
  * Queries `agentProfiles` for agents whose `lastActiveAt` is older than
- * `days` days.  Used by the QStash stall-detect job (/api/jobs/stall-detect).
+ * `days` days.  Used by the on-visit lazy-cron stall-detect job (src/jobs/runDueJobs.ts).
  *
  * Clock is injectable for deterministic unit tests.
  *

@@ -116,7 +116,7 @@ liveSuite('SPIKE-RAG — live Firestore findNearest (RUN_SPIKES=1 required)', ()
   const EMBED_DIM = 1024
   const LIMIT = 8
 
-  // Voyage embeddings cache (avoid re-embedding the same text twice)
+  // Embedding cache (avoid re-embedding the same text twice)
   const embedCache = new Map<string, number[]>()
 
   /**

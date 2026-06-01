@@ -1,10 +1,10 @@
 /**
- * RAG module unit tests — offline (no live Voyage or Firestore).
+ * RAG module unit tests — offline (no live Gemini or Firestore).
  *
  * Task 1: embedText + firestoreRetrieve + retrieve adapter (4 behaviors)
  * Task 2: buildCitations + isRetrievalMiss (3 behaviors)
  *
- * All Voyage API calls and Firestore findNearest calls are mocked.
+ * All Gemini embedding calls and Firestore findNearest calls are mocked.
  * The default `npx vitest run` MUST stay green without live credentials.
  *
  * References:
