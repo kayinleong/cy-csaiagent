@@ -1,5 +1,5 @@
 /**
- * app/[lang]/(chat)/page.tsx — Mobile-first chat shell (server component).
+ * app/[lang]/chat/page.tsx — Mobile-first chat shell (server component), served at /[lang]/chat.
  *
  * RSC-by-default — this is a Server Component (no "use client").
  * It renders the mobile-first layout and mounts the client island.

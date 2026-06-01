@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * app/[lang]/(chat)/chat-shell.tsx — Client island bridging message list and input.
+ * app/[lang]/chat/chat-shell.tsx — Client island bridging message list and input.
  *
  * This thin client component owns the chat state (messages) so both the
  * MessageList and ChatInput can share it without prop-drilling through the

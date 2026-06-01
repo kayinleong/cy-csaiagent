@@ -1,5 +1,5 @@
 /**
- * app/[lang]/(chat)/message-list.tsx — Streamed message list with citations.
+ * app/[lang]/chat/message-list.tsx — Streamed message list with citations.
  *
  * RSC-by-default (no "use client" needed — render-only component).
  * Composes vendored ScrollArea + Card from @/components/ui (do NOT re-add shadcn).

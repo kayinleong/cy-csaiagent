@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * app/[lang]/(chat)/chat-input.tsx — Client-side chat input island.
+ * app/[lang]/chat/chat-input.tsx — Client-side chat input island.
  *
  * "use client" — this component uses React state + browser APIs (Firebase Auth,
  * ReadableStream, fetch). It is the ONLY interactive leaf in the chat shell;
