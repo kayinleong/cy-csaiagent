@@ -1,33 +1,41 @@
 /**
  * src/jobs/jobs.test.ts
  *
- * Unit tests for the QStash stall-detect job:
- *   - Test 1: unsigned request is rejected before stall processing
- *   - Test 2: signed request runs findStalled, emitHandoffSignal, writeHeartbeat
- *   - Test 3: writeHeartbeat upserts a heartbeat doc with timestamp + tenantId
+ * Unit tests for the on-visit lazy-cron job runner (runDueJobs / runJob).
  *
- * Offline / pure-logic assertions — no real QStash keys or Firestore creds.
- * verifySignatureAppRouter is mocked so we can drive both signed/unsigned paths.
+ * Covers:
+ *   1. A job runs when it is DUE (lastRunAt older than windowMs)
+ *   2. A job is SKIPPED when it is NOT due (lastRunAt is recent)
+ *   3. The last-run doc is written (new lastRunAt) when a job runs
+ *   4. Idempotency under concurrent double-call: both calls hit the same
+ *      transaction; the second sees the updated lastRunAt and skips the body
+ *   5. writeHeartbeat is called after a successful stall-detect run
+ *   6. First-ever run (no existing doc) treats the job as due
+ *
+ * Offline — all Firestore and Firebase Admin calls are mocked.
+ * No real Firebase credentials or network access required.
  *
  * References:
- *   - TSD §3.4 scheduled jobs + §9 cron heartbeats
- *   - 01-11 PLAN.md Task 2 behaviors
- *   - T-01-33 (unsigned cron rejected), T-01-34 (heartbeat per run)
+ *   - src/jobs/runDueJobs.ts (system under test)
+ *   - src/jobs/heartbeat.ts (writeHeartbeat side-effect)
+ *   - Decision override 2026-06-01: on-visit lazy-cron
+ *   - T-01-34: heartbeat per run
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { Timestamp } from 'firebase-admin/firestore'
 
 // ─── vi.hoisted mock variables ─────────────────────────────────────────────────
 
 const mockFindStalled = vi.hoisted(() => vi.fn())
 const mockEmitHandoffSignal = vi.hoisted(() => vi.fn())
-
-// Heartbeat mock — tracks calls from the route handler
 const mockWriteHeartbeat = vi.hoisted(() => vi.fn())
 
-// adminDb mock — used for direct heartbeat unit test
-const mockHeartbeatSet = vi.hoisted(() => vi.fn())
-const mockHeartbeatDocFn = vi.hoisted(() => vi.fn())
+// Firestore transaction mock infrastructure
+const mockTxGet = vi.hoisted(() => vi.fn())
+const mockTxSet = vi.hoisted(() => vi.fn())
+const mockRunTransaction = vi.hoisted(() => vi.fn())
+const mockCollectionDoc = vi.hoisted(() => vi.fn())
 
 // ─── Mock @/src/escalation ─────────────────────────────────────────────────────
 
@@ -36,41 +44,21 @@ vi.mock('@/src/escalation', () => ({
   emitHandoffSignal: mockEmitHandoffSignal,
 }))
 
-// ─── Mock @upstash/qstash/nextjs ──────────────────────────────────────────────
-// We mock verifySignatureAppRouter so we control accept/reject behavior.
-// "accept" mode calls the inner handler; "reject" mode returns 401.
-
-let _verifyMode: 'accept' | 'reject' = 'accept'
-
-vi.mock('@upstash/qstash/nextjs', () => ({
-  verifySignatureAppRouter: vi.fn((handler: (req: Request) => Promise<Response>) => {
-    return async (req: Request) => {
-      if (_verifyMode === 'reject') {
-        return new Response('Unauthorized', { status: 401 })
-      }
-      return handler(req)
-    }
-  }),
-}))
-
-// ─── Mock @/src/jobs/heartbeat — for route handler tests (Tests 1+2) ─────────
-// The route calls writeHeartbeat; we track it via mockWriteHeartbeat.
-// For Test 3 we directly test the heartbeat module by mocking adminDb instead.
+// ─── Mock @/src/jobs/heartbeat ────────────────────────────────────────────────
 
 vi.mock('@/src/jobs/heartbeat', () => ({
   writeHeartbeat: mockWriteHeartbeat,
   readHeartbeat: vi.fn(),
 }))
 
-// ─── Mock @/src/firebase/admin — for direct heartbeat tests (Test 3) ─────────
+// ─── Mock @/src/firebase/admin ────────────────────────────────────────────────
 
 vi.mock('@/src/firebase/admin', () => ({
   adminDb: {
     collection: vi.fn(() => ({
-      doc: mockHeartbeatDocFn.mockReturnValue({
-        set: mockHeartbeatSet,
-      }),
+      doc: mockCollectionDoc,
     })),
+    runTransaction: mockRunTransaction,
   },
 }))
 
@@ -80,129 +68,266 @@ vi.mock('firebase-admin/firestore', () => ({
   FieldValue: {
     serverTimestamp: vi.fn(() => ({ _serverTimestamp: true })),
   },
+  Timestamp: {
+    fromDate: vi.fn((d: Date) => ({
+      toMillis: () => d.getTime(),
+      toDate: () => d,
+    })),
+  },
 }))
 
 // ─── Mock @/src/firebase/collections (for TENANT_ID) ─────────────────────────
 
 vi.mock('@/src/firebase/collections', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/src/firebase/collections')>()
-  return {
-    ...actual,
-    TENANT_ID: 'd2',
-  }
+  return { ...actual, TENANT_ID: 'd2' }
 })
 
-// ─── Test 1: unsigned request is rejected (401) ────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-describe('stall-detect route handler — signature verification', () => {
+/** Build a mock Firestore Timestamp-like object from a Date. */
+function makeTimestamp(d: Date): Pick<Timestamp, 'toMillis' | 'toDate'> {
+  return { toMillis: () => d.getTime(), toDate: () => d }
+}
+
+/**
+ * Set up mockRunTransaction to simulate a Firestore transaction.
+ *
+ * The callback receives a transaction object with `get` and `set` wired to
+ * the shared mock functions. The transaction body is called once.
+ *
+ * @param snapExists  Whether the lastRun doc exists in the simulated store.
+ * @param lastRunDate The lastRunAt value if the doc exists.
+ */
+function setupTransaction(snapExists: boolean, lastRunDate?: Date) {
+  mockRunTransaction.mockImplementation(
+    async (callback: (tx: { get: typeof mockTxGet; set: typeof mockTxSet }) => Promise<void>) => {
+      mockTxGet.mockResolvedValue({
+        exists: snapExists,
+        data: () =>
+          snapExists && lastRunDate
+            ? { jobName: 'stall-detect', lastRunAt: makeTimestamp(lastRunDate), tenantId: 'd2' }
+            : undefined,
+      })
+      await callback({ get: mockTxGet, set: mockTxSet })
+    },
+  )
+}
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
+describe('runJob — due/skip/first-ever logic', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    _verifyMode = 'reject'
+    mockCollectionDoc.mockReturnValue({ id: 'stall-detect' })
+    mockFindStalled.mockResolvedValue([])
+    mockWriteHeartbeat.mockResolvedValue(undefined)
+    mockEmitHandoffSignal.mockResolvedValue(undefined)
   })
 
-  it('rejects an unsigned request with 401 — no stall processing occurs', async () => {
-    const { POST } = await import('../../app/api/jobs/stall-detect/route')
+  it('runs the job when lastRunAt is older than windowMs (due)', async () => {
+    // lastRunAt = 25 hours ago; window = 24 hours → DUE
+    const now = new Date('2026-06-01T10:00:00Z')
+    const lastRun = new Date(now.getTime() - 25 * 60 * 60 * 1000)
 
-    const req = new Request('https://example.app/api/jobs/stall-detect', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    })
-    const res = await POST(req)
-    expect(res.status).toBe(401)
+    setupTransaction(true, lastRun)
+
+    const { runJob } = await import('./runDueJobs')
+    const ran = await runJob('stall-detect', now)
+
+    expect(ran).toBe(true)
+    // The transaction must have committed the new lastRunAt
+    expect(mockTxSet).toHaveBeenCalledOnce()
+    // stall-detect body: findStalled + writeHeartbeat
+    expect(mockFindStalled).toHaveBeenCalledWith({ days: 2 })
+    expect(mockWriteHeartbeat).toHaveBeenCalledWith('stall-detect')
+  })
+
+  it('skips the job when lastRunAt is recent (not due)', async () => {
+    // lastRunAt = 1 hour ago; window = 24 hours → NOT due
+    const now = new Date('2026-06-01T10:00:00Z')
+    const lastRun = new Date(now.getTime() - 1 * 60 * 60 * 1000)
+
+    setupTransaction(true, lastRun)
+
+    const { runJob } = await import('./runDueJobs')
+    const ran = await runJob('stall-detect', now)
+
+    expect(ran).toBe(false)
+    expect(mockTxSet).not.toHaveBeenCalled()
     expect(mockFindStalled).not.toHaveBeenCalled()
-    expect(mockEmitHandoffSignal).not.toHaveBeenCalled()
-    expect(mockWriteHeartbeat).not.toHaveBeenCalled()
+  })
+
+  it('runs on first-ever visit (no existing doc)', async () => {
+    // No doc in the simulated store → job has never run → treat as due
+    setupTransaction(false)
+
+    const now = new Date('2026-06-01T10:00:00Z')
+    const { runJob } = await import('./runDueJobs')
+    const ran = await runJob('stall-detect', now)
+
+    expect(ran).toBe(true)
+    expect(mockTxSet).toHaveBeenCalledOnce()
+    expect(mockFindStalled).toHaveBeenCalledWith({ days: 2 })
+  })
+
+  it('writes the new lastRunAt inside the transaction when the job runs', async () => {
+    const now = new Date('2026-06-01T10:00:00Z')
+    const lastRun = new Date(now.getTime() - 25 * 60 * 60 * 1000)
+
+    setupTransaction(true, lastRun)
+
+    const { runJob } = await import('./runDueJobs')
+    await runJob('stall-detect', now)
+
+    // The set call should include the updated lastRunAt derived from `now`
+    const [, setData] = mockTxSet.mock.calls[0] as [unknown, { lastRunAt: { toMillis(): number } }]
+    expect(setData.lastRunAt.toMillis()).toBe(now.getTime())
+  })
+
+  it('returns false for an unknown job name', async () => {
+    const { runJob } = await import('./runDueJobs')
+    const ran = await runJob('nonexistent-job', new Date())
+    expect(ran).toBe(false)
+    expect(mockRunTransaction).not.toHaveBeenCalled()
   })
 })
 
-// ─── Test 2: signed request runs stall detection loop + heartbeat ─────────────
-
-describe('stall-detect route handler — signed request', () => {
+describe('runJob — idempotency under simulated concurrent double-call', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    _verifyMode = 'accept'
+    mockCollectionDoc.mockReturnValue({ id: 'stall-detect' })
+    mockFindStalled.mockResolvedValue([])
+    mockWriteHeartbeat.mockResolvedValue(undefined)
+    mockEmitHandoffSignal.mockResolvedValue(undefined)
   })
 
-  it('runs findStalled({days:2}), emitHandoffSignal for each stalled agent, writes heartbeat, returns {processed:N}', async () => {
+  it('only runs the job body once when two concurrent calls race', async () => {
+    const now = new Date('2026-06-01T10:00:00Z')
+    // Both callers start with a stale lastRunAt (25 h ago)
+    const lastRun = new Date(now.getTime() - 25 * 60 * 60 * 1000)
+
+    let callCount = 0
+
+    // Simulate the transaction race:
+    //   - First call: doc shows stale lastRunAt → runs body, writes new lastRunAt
+    //   - Second call (retry): doc shows fresh lastRunAt (from call 1) → skips body
+    mockRunTransaction.mockImplementation(
+      async (callback: (tx: { get: typeof mockTxGet; set: typeof mockTxSet }) => Promise<void>) => {
+        callCount++
+        const isFirstCall = callCount === 1
+
+        mockTxGet.mockResolvedValue({
+          exists: true,
+          data: () => ({
+            jobName: 'stall-detect',
+            // First call sees stale; second call sees fresh (post-commit)
+            lastRunAt: makeTimestamp(isFirstCall ? lastRun : now),
+            tenantId: 'd2',
+          }),
+        })
+
+        await callback({ get: mockTxGet, set: mockTxSet })
+      },
+    )
+
+    const { runJob } = await import('./runDueJobs')
+
+    // Simulate two concurrent visitors
+    const [ran1, ran2] = await Promise.all([
+      runJob('stall-detect', now),
+      runJob('stall-detect', now),
+    ])
+
+    // Exactly one should have run; the other skipped
+    const runCount = [ran1, ran2].filter(Boolean).length
+    expect(runCount).toBe(1)
+
+    // Job body (findStalled) called exactly once
+    expect(mockFindStalled).toHaveBeenCalledOnce()
+  })
+})
+
+describe('runDueJobs — stall-detect with stalled agents', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCollectionDoc.mockReturnValue({ id: 'stall-detect' })
+    mockWriteHeartbeat.mockResolvedValue(undefined)
+    mockEmitHandoffSignal.mockResolvedValue(undefined)
+  })
+
+  it('calls emitHandoffSignal for each stalled agent and writes heartbeat', async () => {
     const stalledAgents = [
       { agentUid: 'agent-001', seniorCoachId: 'coach-001', lastActiveAt: new Date() },
       { agentUid: 'agent-002', seniorCoachId: 'coach-001', lastActiveAt: new Date() },
     ]
-    mockFindStalled.mockResolvedValueOnce(stalledAgents)
-    mockEmitHandoffSignal.mockResolvedValue(undefined)
-    mockWriteHeartbeat.mockResolvedValue(undefined)
+    mockFindStalled.mockResolvedValue(stalledAgents)
 
-    const { POST } = await import('../../app/api/jobs/stall-detect/route')
+    const now = new Date('2026-06-01T10:00:00Z')
+    const lastRun = new Date(now.getTime() - 25 * 60 * 60 * 1000)
+    setupTransaction(true, lastRun)
 
-    const req = new Request('https://example.app/api/jobs/stall-detect', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    })
-    const res = await POST(req)
+    const { runDueJobs } = await import('./runDueJobs')
+    const result = await runDueJobs(now)
 
-    expect(res.status).toBe(200)
-    const body = await res.json() as { processed: number }
-    expect(body.processed).toBe(2)
-
-    expect(mockFindStalled).toHaveBeenCalledWith({ days: 2 })
+    expect(result.ran).toContain('stall-detect')
     expect(mockEmitHandoffSignal).toHaveBeenCalledTimes(2)
-    expect(mockEmitHandoffSignal).toHaveBeenCalledWith({
-      agentUid: 'agent-001',
-      seniorCoachId: 'coach-001',
-      reason: 'stall',
-      contextBundle: expect.objectContaining({ lastActiveAt: expect.any(Date) }),
-    })
+    expect(mockEmitHandoffSignal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentUid: 'agent-001',
+        seniorCoachId: 'coach-001',
+        reason: 'stall',
+        contextBundle: expect.objectContaining({ lastActiveAt: expect.any(Date) }),
+      }),
+    )
     expect(mockWriteHeartbeat).toHaveBeenCalledWith('stall-detect')
   })
 
-  it('returns {processed:0} and still writes a heartbeat when no agents are stalled', async () => {
-    mockFindStalled.mockResolvedValueOnce([])
-    mockWriteHeartbeat.mockResolvedValue(undefined)
+  it('returns {processed:0} and writes heartbeat when no agents are stalled', async () => {
+    mockFindStalled.mockResolvedValue([])
 
-    const { POST } = await import('../../app/api/jobs/stall-detect/route')
+    const now = new Date('2026-06-01T10:00:00Z')
+    const lastRun = new Date(now.getTime() - 25 * 60 * 60 * 1000)
+    setupTransaction(true, lastRun)
 
-    const req = new Request('https://example.app/api/jobs/stall-detect', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    })
-    const res = await POST(req)
-    expect(res.status).toBe(200)
-    const body = await res.json() as { processed: number }
-    expect(body.processed).toBe(0)
+    const { runDueJobs } = await import('./runDueJobs')
+    const result = await runDueJobs(now)
+
+    expect(result.ran).toContain('stall-detect')
     expect(mockEmitHandoffSignal).not.toHaveBeenCalled()
     expect(mockWriteHeartbeat).toHaveBeenCalledWith('stall-detect')
   })
 })
 
-// ─── Test 3: writeHeartbeat upserts heartbeat doc ─────────────────────────────
-// We directly test the REAL writeHeartbeat module by bypassing the mock above.
-// The adminDb mock intercepts the Firestore call.
+// ─── Heartbeat unit test (carried over from previous jobs.test.ts) ─────────────
 
 describe('writeHeartbeat(jobName)', () => {
+  const mockHeartbeatSet = vi.fn()
+  const mockHeartbeatDoc = vi.fn()
+
   beforeEach(() => {
     vi.clearAllMocks()
-    // Reset adminDb mock chain for each test
-    mockHeartbeatDocFn.mockReturnValue({ set: mockHeartbeatSet })
+    mockHeartbeatDoc.mockReturnValue({ set: mockHeartbeatSet })
   })
 
   it('upserts a heartbeat doc with { job, ts } and tenantId stamped', async () => {
+    // Re-mock adminDb specifically for the heartbeat module path
+    vi.doMock('@/src/firebase/admin', () => ({
+      adminDb: {
+        collection: vi.fn(() => ({ doc: mockHeartbeatDoc })),
+        runTransaction: mockRunTransaction,
+      },
+    }))
+
     mockHeartbeatSet.mockResolvedValueOnce(undefined)
 
-    // Import the REAL heartbeat module bypassing the vi.mock at module level.
-    // We do this by importing from the actual path — Vitest resolves the mock
-    // for the same identifier used in vi.mock(), but we can use the real module
-    // by calling the function directly from a fresh unmocked context.
-    //
-    // In practice, the route test covers writeHeartbeat being called.
-    // For this test, we validate the heartbeat module's real behavior by
-    // re-exporting via a direct call from the module under the adminDb mock.
     const { writeHeartbeat: realWriteHeartbeat } = await vi.importActual<
       typeof import('./heartbeat')
     >('@/src/jobs/heartbeat')
 
     await realWriteHeartbeat('stall-detect')
 
-    expect(mockHeartbeatDocFn).toHaveBeenCalledWith('stall-detect')
+    expect(mockHeartbeatDoc).toHaveBeenCalledWith('stall-detect')
     expect(mockHeartbeatSet).toHaveBeenCalledWith(
       expect.objectContaining({
         job: 'stall-detect',

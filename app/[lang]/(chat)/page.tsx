@@ -25,6 +25,7 @@ import type { Metadata } from 'next'
 import { getTranslations } from 'next-intl/server'
 import { Toaster } from '@/components/ui/sonner'
 import { ChatShell } from './chat-shell'
+import { triggerDueJobs } from '@/app/_actions/jobs'
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,11 @@ export default async function ChatPage({
   // Next.js 16: params is a Promise — must await
   const { lang } = await params
   void lang // lang is available for future locale-scoped logic
+
+  // On-visit lazy-cron: fire-and-forget; never blocks rendering.
+  // triggerDueJobs() gates on the session cookie — unauthenticated visits
+  // are skipped silently. The last-run guard makes this cheap when no job is due.
+  void triggerDueJobs()
 
   const t = await getTranslations('chat')
   const placeholder = t('placeholder')
