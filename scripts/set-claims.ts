@@ -5,20 +5,27 @@
  * This is the sanctioned provisioning path for senior-coach and admin roles
  * in Phase 1 — they do NOT have a sign-in UI yet (TSD §5.1 D-11).
  *
- * Usage (requires service-account credentials via ADC or env var):
- *
- *   # Provision a new-agent with an upline coach:
- *   npx tsx scripts/set-claims.ts --uid <USER_UID> --role new-agent --upline <COACH_UID>
- *
- *   # Provision a senior coach:
- *   npx tsx scripts/set-claims.ts --uid <USER_UID> --role senior-coach
+ * Usage — run via the npm script, which loads .env.local (a bare `npx tsx` does NOT,
+ * because .env.local is only auto-loaded by Next.js — that causes "Unable to detect a
+ * Project Id"). Pass script flags after `--`:
  *
  *   # Provision an admin:
- *   npx tsx scripts/set-claims.ts --uid <USER_UID> --role admin
+ *   npm run set-claims -- --uid <USER_UID> --role admin
  *
- * Prerequisites:
- *   - GOOGLE_APPLICATION_CREDENTIALS or FIREBASE_SERVICE_ACCOUNT_KEY env var set
- *   - FIREBASE_PROJECT_ID env var set
+ *   # Provision a senior coach:
+ *   npm run set-claims -- --uid <USER_UID> --role senior-coach
+ *
+ *   # Provision a new-agent with an upline coach:
+ *   npm run set-claims -- --uid <USER_UID> --role new-agent --upline <COACH_UID>
+ *
+ * Equivalent without the npm script (inline env):
+ *   FIREBASE_PROJECT_ID=<id> GOOGLE_APPLICATION_CREDENTIALS=./sa.json \
+ *     npx tsx scripts/set-claims.ts --uid <USER_UID> --role admin
+ *
+ * Prerequisites — these MUST be present in .env.local (or the inline env above):
+ *   - FIREBASE_PROJECT_ID  (the project id)
+ *   - GOOGLE_APPLICATION_CREDENTIALS=./sa.json  (path to the service-account key)
+ *     OR  FIREBASE_SERVICE_ACCOUNT_KEY  (the key JSON as a single-line string)
  *
  * Security (T-01-13):
  *   - Runs only with service-account credentials — local dev tool for the 2-engineer team.
