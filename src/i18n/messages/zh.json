@@ -54,6 +54,7 @@
   "kb": {
     "title": "知识库",
     "addDocument": "添加文档",
+    "existingDocuments": "现有文档",
     "documentTitle": "文档标题",
     "documentContent": "文档内容",
     "documentType": "文档类型",
@@ -67,6 +68,11 @@
     "ingestDone": "PDF已处理并建立索引。",
     "ingestError": "PDF处理失败，请重试。",
     "noDocuments": "暂无知识库文档。",
+    "versionHistory": "版本历史",
+    "publish": "发布",
+    "unpublish": "取消发布",
+    "editDocument": "编辑文档",
+    "supersededNotice": "此版本已被较新版本替代。您仍可编辑以创建新版本，但请注意它已不再有效。",
     "types": {
       "sop": "SOP",
       "property": "房产信息",

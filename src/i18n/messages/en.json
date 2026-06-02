@@ -52,6 +52,7 @@
   "kb": {
     "title": "Knowledge Base",
     "addDocument": "Add document",
+    "existingDocuments": "Existing documents",
     "documentTitle": "Document title",
     "documentContent": "Document content",
     "documentType": "Document type",
@@ -65,6 +66,11 @@
     "ingestDone": "PDF processed and indexed.",
     "ingestError": "PDF processing failed. Please try again.",
     "noDocuments": "No knowledge base documents yet.",
+    "versionHistory": "Version history",
+    "publish": "Publish",
+    "unpublish": "Unpublish",
+    "editDocument": "Edit document",
+    "supersededNotice": "This version has been superseded by a newer version. You can still edit it to create a further new version, but note it is no longer active.",
     "types": {
       "sop": "SOP",
       "property": "Property info",

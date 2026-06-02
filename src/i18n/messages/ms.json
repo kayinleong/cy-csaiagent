@@ -54,6 +54,7 @@
   "kb": {
     "title": "Pangkalan Pengetahuan",
     "addDocument": "Tambah dokumen",
+    "existingDocuments": "Dokumen sedia ada",
     "documentTitle": "Tajuk dokumen",
     "documentContent": "Kandungan dokumen",
     "documentType": "Jenis dokumen",
@@ -67,6 +68,11 @@
     "ingestDone": "PDF diproses dan diindeks.",
     "ingestError": "Pemprosesan PDF gagal. Sila cuba lagi.",
     "noDocuments": "Tiada dokumen pangkalan pengetahuan lagi.",
+    "versionHistory": "Sejarah versi",
+    "publish": "Terbitkan",
+    "unpublish": "Batal terbit",
+    "editDocument": "Edit dokumen",
+    "supersededNotice": "Versi ini telah digantikan oleh versi yang lebih baharu. Anda masih boleh mengeditnya untuk mencipta versi baharu, tetapi ia tidak lagi aktif.",
     "types": {
       "sop": "SOP",
       "property": "Maklumat hartanah",

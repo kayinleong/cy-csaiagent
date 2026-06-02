@@ -188,6 +188,62 @@ export async function createDocFromFile(
   return { docId, jobId: job.jobId, total: job.total, remaining: job.remaining }
 }
 
+// ─── updateDocFromFile ────────────────────────────────────────────────────────
+
+/**
+ * Update a KB document by uploading a new file version.
+ *
+ * Creates a new versioned kbDocs document that supersedes the existing one,
+ * then shards the uploaded file. markSuperseded fires on ingest completion
+ * (same as the text updateDoc path).
+ *
+ * @param user   Verified user from requireUser() — must have role 'admin'.
+ * @param docId  The kbDocs document ID being superseded.
+ * @param input  New title (optional, falls back to existing), file buffer + metadata.
+ * @returns      docId + newDocId + job metadata for the browser poll loop.
+ */
+export async function updateDocFromFile(
+  user: AuthenticatedUser,
+  docId: string,
+  input: { title?: string; file: CreateDocFromFileInput['file']; lang?: 'en' | 'ms' | 'zh'; pillar?: 'coach' | 'finder' | 'reply' },
+): Promise<{ docId: string; newDocId: string; jobId: string; total: number; remaining: number }> {
+  assertAdmin(user)
+
+  const existingSnap = await kbDocsRef().doc(docId).get()
+  if (!existingSnap.exists) {
+    throw new Error(`updateDocFromFile: kbDoc "${docId}" not found`)
+  }
+
+  const existing = existingSnap.data()!
+
+  const newDocRef = kbDocsRef().doc()
+  const newDocId = newDocRef.id
+
+  const newDocData: Omit<KbDocDoc, 'tenantId'> = {
+    title: input.title ?? existing.title,
+    sourcePath: `kb/${newDocId}/${input.file.name}`,
+    version: (existing.version ?? 1) + 1,
+    supersedesId: docId,
+    lang: input.lang ?? existing.lang,
+    pillar: input.pillar ?? existing.pillar,
+    status: 'published',
+    publishedAt: FieldValue.serverTimestamp(),
+  }
+
+  await newDocRef.set({ ...newDocData, tenantId: TENANT_ID } as KbDocDoc)
+
+  const job = await shardJob({
+    buffer: input.file.buffer,
+    name: input.file.name,
+    mimeType: input.file.mimeType,
+    docId: newDocId,
+    lang: input.lang ?? existing.lang,
+    pillar: input.pillar ?? existing.pillar,
+  })
+
+  return { docId, newDocId, jobId: job.jobId, total: job.total, remaining: job.remaining }
+}
+
 // ─── updateDoc ───────────────────────────────────────────────────────────────
 
 /**

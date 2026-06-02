@@ -36,7 +36,7 @@
  */
 
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
-import { createDocFromFile } from '@/src/kb/crud'
+import { createDocFromFile, updateDocFromFile } from '@/src/kb/crud'
 
 // Node runtime: Admin SDK, crypto, and Office parsers require Node.js.
 export const runtime = 'nodejs'
@@ -88,6 +88,9 @@ export async function POST(req: Request): Promise<Response> {
   const title = form.get('title')
   const lang = form.get('lang')
   const pillar = form.get('pillar')
+  // Optional: present when the upload replaces an existing doc (edit mode)
+  const supersedesId = form.get('supersedesId')
+  const supersedesDocId = typeof supersedesId === 'string' && supersedesId.trim() ? supersedesId.trim() : null
 
   // ── Validate file presence ────────────────────────────────────────────────
   if (!file || !(file instanceof File)) {
@@ -137,18 +140,36 @@ export async function POST(req: Request): Promise<Response> {
   // ── Convert File → Buffer ─────────────────────────────────────────────────
   const buffer = Buffer.from(await file.arrayBuffer())
 
-  // ── Shard + create doc ────────────────────────────────────────────────────
+  // ── Shard + create or update doc ─────────────────────────────────────────
   try {
-    const result = await createDocFromFile(user, {
-      title: title.trim(),
-      file: {
-        buffer,
-        name: file.name,
-        mimeType: file.type,
-      },
-      lang: lang as 'en' | 'ms' | 'zh',
-      pillar: pillar as 'coach' | 'finder' | 'reply',
-    })
+    let result: { docId: string; jobId: string; total: number; remaining: number }
+
+    if (supersedesDocId) {
+      // Edit mode — create a new versioned doc that supersedes the existing one
+      const updateResult = await updateDocFromFile(user, supersedesDocId, {
+        title: title.trim(),
+        file: {
+          buffer,
+          name: file.name,
+          mimeType: file.type,
+        },
+        lang: lang as 'en' | 'ms' | 'zh',
+        pillar: pillar as 'coach' | 'finder' | 'reply',
+      })
+      result = { docId: updateResult.newDocId, jobId: updateResult.jobId, total: updateResult.total, remaining: updateResult.remaining }
+    } else {
+      // Create mode — new doc
+      result = await createDocFromFile(user, {
+        title: title.trim(),
+        file: {
+          buffer,
+          name: file.name,
+          mimeType: file.type,
+        },
+        lang: lang as 'en' | 'ms' | 'zh',
+        pillar: pillar as 'coach' | 'finder' | 'reply',
+      })
+    }
 
     return Response.json({
       ok: true,

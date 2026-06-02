@@ -205,6 +205,11 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
           uploadForm.set('title', baseData.title)
           uploadForm.set('lang', baseData.lang)
           uploadForm.set('pillar', baseData.pillar)
+          // In edit mode, pass the old docId so the upload route creates a new
+          // versioned doc that supersedes the existing one (02-02 supersede cascade)
+          if (isEdit && docId) {
+            uploadForm.set('supersedesId', docId)
+          }
 
           const token = idToken ?? ''
           const response = await fetch('/api/kb/ingest/upload', {
@@ -235,7 +240,11 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
                 setIngestProgress({ remaining, total: result.total! })
               })
               setIngestProgress(null)
-              toast.success('Document processed and indexed.')
+              toast.success(
+                isEdit
+                  ? 'New version published; old version superseded.'
+                  : 'Document processed and indexed.',
+              )
             } catch (pollErr) {
               const msg = pollErr instanceof Error ? pollErr.message : 'Ingestion failed'
               toast.error(msg)
@@ -301,7 +310,11 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
                 setIngestProgress({ remaining, total: result.total! })
               })
               setIngestProgress(null)
-              toast.success('Document processed and indexed.')
+              toast.success(
+                isEdit
+                  ? 'New version published; old version superseded.'
+                  : 'Document processed and indexed.',
+              )
             } catch (pollErr) {
               const msg = pollErr instanceof Error ? pollErr.message : 'Ingestion failed'
               toast.error(msg)
@@ -389,45 +402,45 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
               </Field>
             </div>
 
-            {/* File upload (create mode only — not shown in edit mode) */}
-            {!isEdit && (
-              <Field orientation="vertical">
-                <FieldLabel htmlFor="file-upload">Upload file (optional)</FieldLabel>
-                <div className="space-y-2">
-                  {selectedFile ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm">
-                      <span className="flex-1 truncate text-foreground">{selectedFile.name}</span>
-                      <button
-                        type="button"
-                        onClick={handleRemoveFile}
-                        disabled={isSubmitting}
-                        className="shrink-0 text-muted-foreground underline hover:text-foreground disabled:opacity-50"
-                        aria-label="Remove selected file"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ) : (
-                    <Input
-                      id="file-upload"
-                      ref={fileInputRef}
-                      type="file"
-                      accept={FILE_ACCEPT}
+            {/* File upload — available in both create and edit modes */}
+            <Field orientation="vertical">
+              <FieldLabel htmlFor="file-upload">
+                Upload file{isEdit ? ' (replaces content — creates new version)' : ' (optional)'}
+              </FieldLabel>
+              <div className="space-y-2">
+                {selectedFile ? (
+                  <div className="flex items-center gap-2 rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm">
+                    <span className="flex-1 truncate text-foreground">{selectedFile.name}</span>
+                    <button
+                      type="button"
+                      onClick={handleRemoveFile}
                       disabled={isSubmitting}
-                      onChange={handleFileChange}
-                      className="cursor-pointer file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-primary file:px-3 file:py-1 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
-                    />
-                  )}
-                  <FieldDescription>
-                    Supported formats: PDF, DOCX, DOC, XLSX, PPTX, TXT. Max 20 MB.
-                    {selectedFile
-                      ? ' File selected — the content field below is optional.'
-                      : ' Or type/paste content below instead.'}
-                  </FieldDescription>
-                </div>
-                <FieldError errors={errors.file} />
-              </Field>
-            )}
+                      className="shrink-0 text-muted-foreground underline hover:text-foreground disabled:opacity-50"
+                      aria-label="Remove selected file"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <Input
+                    id="file-upload"
+                    ref={fileInputRef}
+                    type="file"
+                    accept={FILE_ACCEPT}
+                    disabled={isSubmitting}
+                    onChange={handleFileChange}
+                    className="cursor-pointer file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-primary file:px-3 file:py-1 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
+                  />
+                )}
+                <FieldDescription>
+                  Supported formats: PDF, DOCX, DOC, XLSX, PPTX, TXT. Max 20 MB.
+                  {selectedFile
+                    ? ' File selected — the content field below is optional.'
+                    : ' Or type/paste content below instead.'}
+                </FieldDescription>
+              </div>
+              <FieldError errors={errors.file} />
+            </Field>
 
             {/* Content */}
             <Field orientation="vertical">
