@@ -399,3 +399,275 @@ describe('updateJourneyStage (journey-state seam, D-10)', () => {
     expect(Object.keys(updateArg)).toHaveLength(1)
   })
 })
+
+// ─── 03-06: finderSlot read + criteria-merge + isolation tests (RED) ──────────
+//
+// These tests cover the requirements from FIND-05/06/08 (D-06):
+//   - finderSlot-isolation: writeLeadSlot('finderSlot',...) must not touch coachSlot/replySlot
+//   - finderSlot-read:      readFinderSlot(leadId) returns typed slot or null
+//   - criteria-merge:       mergeFinderCriteria(stored, delta) overrides only changed fields
+//   - discussed-accumulation: mergeDiscussed(prev, next) dedup-unions projectId arrays
+//
+// RED: readFinderSlot, mergeFinderCriteria, mergeDiscussed are NOT yet implemented.
+
+const { mockLeadContextDocGet } = vi.hoisted(() => ({
+  mockLeadContextDocGet: vi.fn(),
+}))
+
+// Extend the existing collections mock to add leadContextRef doc().get() capability
+// We'll augment the mock used by the finderSlot read path.
+// The mock for leadContextRef already exists in vi.mock('@/src/firebase/collections')
+// above and provides doc().update() — we extend doc() to also have .get().
+// Since vi.mock() is module-level and already defined, we use
+// mockLeadContextDocGet in the test body via mockReturnValue to control get() results.
+
+describe('writeLeadSlot finderSlot-isolation (T-03-20 Tampering re-assertion, 03-06)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLeadContextUpdate.mockResolvedValue(undefined)
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('finderSlot-isolation: writeLeadSlot finderSlot updates ONLY finderSlot — coachSlot/replySlot untouched', async () => {
+    const finderValue = { criteria: { segment: 'investment' }, discussedProjectIds: [], lastRankedAt: 1000 }
+
+    await writeLeadSlot('lead-finder-001', 'finderSlot', finderValue)
+
+    expect(mockLeadContextUpdate).toHaveBeenCalledOnce()
+
+    const updateArg = mockLeadContextUpdate.mock.calls[0][0] as Record<string, unknown>
+
+    // Must contain finderSlot
+    expect(updateArg).toHaveProperty('finderSlot', finderValue)
+    // Must contain updatedAt
+    expect(updateArg).toHaveProperty('updatedAt')
+
+    // Must NOT touch coachSlot or replySlot (slot isolation — T-03-20)
+    expect(updateArg).not.toHaveProperty('coachSlot')
+    expect(updateArg).not.toHaveProperty('replySlot')
+  })
+
+  it('finderSlot-isolation: writing finderSlot with summary does NOT spill into coachSlot/replySlot', async () => {
+    const finderValue = { criteria: { segment: 'own_stay' }, discussedProjectIds: ['proj-1'], lastRankedAt: 2000 }
+
+    await writeLeadSlot('lead-finder-002', 'finderSlot', finderValue, 'Lead prefers own-stay, budget 600k.')
+
+    const updateArg = mockLeadContextUpdate.mock.calls[0][0] as Record<string, unknown>
+
+    expect(updateArg).toHaveProperty('finderSlot', finderValue)
+    expect(updateArg).toHaveProperty('rollingSummary', 'Lead prefers own-stay, budget 600k.')
+    expect(updateArg).not.toHaveProperty('coachSlot')
+    expect(updateArg).not.toHaveProperty('replySlot')
+  })
+})
+
+describe('readFinderSlot (returning-client recall FIND-06, 03-06)', () => {
+  // readFinderSlot is NOT yet implemented — these will fail RED.
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockLeadContextDocGet.mockReset()
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('finderSlot-read: readFinderSlot returns the stored FinderSlot when it exists', async () => {
+    const { readFinderSlot } = await import('./leadContext')
+
+    const stored = {
+      criteria: {
+        segment: 'investment' as const,
+        priceMin: null,
+        priceMax: 700_000,
+        monthlyIncome: 8000,
+        nationality: 'malaysian' as const,
+        bumiputera: null,
+        locationPref: 'Cheras',
+        bedrooms: null,
+        freeText: 'looking for investment near LRT',
+      },
+      discussedProjectIds: ['proj-a', 'proj-b'],
+      lastRankedAt: 1_700_000_000_000,
+    }
+
+    // Wire the mock so leadContextRef().doc(leadId).get() returns the stored slot
+    const { leadContextRef: mockedLeadContextRef } = await import('@/src/firebase/collections')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(mockedLeadContextRef as any)().doc.mockReturnValue({
+      get: vi.fn().mockResolvedValue({
+        exists: true,
+        data: () => ({
+          tenantId: 'd2',
+          coachSlot: {},
+          finderSlot: stored,
+          replySlot: {},
+          rollingSummary: '',
+          updatedAt: new Date(),
+        }),
+      }),
+      update: mockLeadContextUpdate,
+    })
+
+    const result = await readFinderSlot('lead-finder-001')
+
+    expect(result).not.toBeNull()
+    expect(result?.criteria.priceMax).toBe(700_000)
+    expect(result?.discussedProjectIds).toEqual(['proj-a', 'proj-b'])
+    expect(result?.lastRankedAt).toBe(1_700_000_000_000)
+  })
+
+  it('finderSlot-read: readFinderSlot returns null on first-touch (doc missing)', async () => {
+    const { readFinderSlot } = await import('./leadContext')
+
+    const { leadContextRef: mockedLeadContextRef } = await import('@/src/firebase/collections')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(mockedLeadContextRef as any)().doc.mockReturnValue({
+      get: vi.fn().mockResolvedValue({ exists: false, data: () => undefined }),
+      update: mockLeadContextUpdate,
+    })
+
+    const result = await readFinderSlot('lead-finder-new')
+
+    expect(result).toBeNull()
+  })
+
+  it('finderSlot-read: readFinderSlot returns null when finderSlot is empty object', async () => {
+    const { readFinderSlot } = await import('./leadContext')
+
+    const { leadContextRef: mockedLeadContextRef } = await import('@/src/firebase/collections')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(mockedLeadContextRef as any)().doc.mockReturnValue({
+      get: vi.fn().mockResolvedValue({
+        exists: true,
+        data: () => ({
+          tenantId: 'd2',
+          coachSlot: { lastTopic: 'meta ads' },
+          finderSlot: {},  // empty — Finder hasn't run yet
+          replySlot: {},
+          rollingSummary: '',
+          updatedAt: new Date(),
+        }),
+      }),
+      update: mockLeadContextUpdate,
+    })
+
+    const result = await readFinderSlot('lead-finder-empty')
+
+    expect(result).toBeNull()
+  })
+})
+
+describe('mergeFinderCriteria (re-rank without re-typing FIND-08, 03-06)', () => {
+  // mergeFinderCriteria is NOT yet implemented — these will fail RED.
+
+  it('criteria-merge: budget shift overrides ONLY priceMax — all other fields preserved', async () => {
+    const { mergeFinderCriteria } = await import('./leadContext')
+
+    const stored = {
+      segment: 'investment' as const,
+      priceMin: null,
+      priceMax: 600_000,
+      monthlyIncome: 8000,
+      nationality: 'malaysian' as const,
+      bumiputera: null,
+      locationPref: 'Cheras',
+      bedrooms: null,
+      freeText: 'looking for investment near LRT',
+    }
+
+    const result = mergeFinderCriteria(stored, { priceMax: 700_000 })
+
+    expect(result.priceMax).toBe(700_000)
+    // All other fields must be preserved
+    expect(result.segment).toBe('investment')
+    expect(result.monthlyIncome).toBe(8000)
+    expect(result.nationality).toBe('malaysian')
+    expect(result.locationPref).toBe('Cheras')
+    expect(result.freeText).toBe('looking for investment near LRT')
+  })
+
+  it('criteria-merge: null/undefined delta field does NOT clobber stored value', async () => {
+    const { mergeFinderCriteria } = await import('./leadContext')
+
+    const stored = {
+      segment: 'own_stay' as const,
+      priceMin: null,
+      priceMax: 500_000,
+      monthlyIncome: 5000,
+      nationality: 'malaysian' as const,
+      bumiputera: true,
+      locationPref: 'Petaling Jaya',
+      bedrooms: 3,
+      freeText: 'family home near school',
+    }
+
+    // Delta provides only bedrooms — all undefined fields must not overwrite stored values
+    const result = mergeFinderCriteria(stored, { bedrooms: 4 })
+
+    expect(result.bedrooms).toBe(4)
+    // priceMax explicitly NOT in delta — must stay as-is
+    expect(result.priceMax).toBe(500_000)
+    expect(result.bumiputera).toBe(true)
+    expect(result.locationPref).toBe('Petaling Jaya')
+  })
+
+  it('criteria-merge: multiple simultaneous field overrides work correctly', async () => {
+    const { mergeFinderCriteria } = await import('./leadContext')
+
+    const stored = {
+      segment: 'investment' as const,
+      priceMin: null,
+      priceMax: 600_000,
+      monthlyIncome: 8000,
+      nationality: 'malaysian' as const,
+      bumiputera: null,
+      locationPref: 'Cheras',
+      bedrooms: null,
+      freeText: 'investment near LRT',
+    }
+
+    const result = mergeFinderCriteria(stored, { priceMax: 800_000, locationPref: 'Ampang', bedrooms: 2 })
+
+    expect(result.priceMax).toBe(800_000)
+    expect(result.locationPref).toBe('Ampang')
+    expect(result.bedrooms).toBe(2)
+    // untouched fields
+    expect(result.segment).toBe('investment')
+    expect(result.monthlyIncome).toBe(8000)
+  })
+})
+
+describe('mergeDiscussed (discussed-accumulation dedup FIND-06, 03-06)', () => {
+  // mergeDiscussed is NOT yet implemented — these will fail RED.
+
+  it('discussed-accumulation: merging new projectIds appends without duplicates', async () => {
+    const { mergeDiscussed } = await import('./leadContext')
+
+    const prev = ['proj-a', 'proj-b']
+    const next = ['proj-b', 'proj-c']  // proj-b is a duplicate
+
+    const result = mergeDiscussed(prev, next)
+
+    expect(result).toContain('proj-a')
+    expect(result).toContain('proj-b')
+    expect(result).toContain('proj-c')
+    // No duplicates
+    expect(result.filter(id => id === 'proj-b')).toHaveLength(1)
+    expect(result).toHaveLength(3)
+  })
+
+  it('discussed-accumulation: merging empty next returns prev unchanged', async () => {
+    const { mergeDiscussed } = await import('./leadContext')
+
+    const prev = ['proj-a', 'proj-b']
+    const result = mergeDiscussed(prev, [])
+
+    expect(result).toEqual(['proj-a', 'proj-b'])
+  })
+
+  it('discussed-accumulation: merging from empty prev works correctly', async () => {
+    const { mergeDiscussed } = await import('./leadContext')
+
+    const result = mergeDiscussed([], ['proj-x', 'proj-y'])
+
+    expect(result).toEqual(['proj-x', 'proj-y'])
+  })
+})
