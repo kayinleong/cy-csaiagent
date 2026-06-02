@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * app/[lang]/(auth)/sign-in/sign-in-form.tsx — Mobile-first new-agent sign-in form.
+ * app/[lang]/(auth)/sign-in/sign-in-form.tsx — Mobile-first sign-in form (AUTH-02/03).
  *
  * Client island ("use client") — handles interactive Firebase Auth sign-in.
  *
@@ -9,19 +9,21 @@
  *   1. User submits email + password.
  *   2. signInWithEmailAndPassword(clientAuth, email, password) — LOCAL persistence
  *      ensures the auth state survives page refresh (AUTH-05).
- *   3. POST the resulting ID token to /api/auth/session — server sets an httpOnly
- *      session cookie for additional refresh-survival (defense-in-depth).
- *   4. Redirect to the chat shell: /[lang]/chat.
- *
- * Mobile-first:
- *   - Full-width inputs with text-base (mobile readable) + md:text-sm
- *   - Uses vendored shadcn Field/FieldLabel/Input/Button (PATTERNS Tier-A)
- *   - useIsMobile() for responsive layout awareness
+ *   3. POST the resulting ID token to /api/auth/session — server verifies token,
+ *      sets an httpOnly session cookie, and returns { ok, role } in the response body.
+ *   4. Redirect by role (AUTH-02/03):
+ *        senior-coach → /[lang]/dashboard
+ *        admin        → /[lang]/kb
+ *        new-agent    → /[lang]/chat  (default)
+ *      Note: /dashboard and /kb routes are created in plans 02-06/02-08; the
+ *      redirect targets are the contract and are safe to wire now (Wave 1).
  *
  * Security:
  *   - NEVER log the user's password, the Firebase ID token, or the session cookie.
+ *   - Role is read ONLY from the server's verified /api/auth/session response — never
+ *     from a client-set value. Redirect is UX only; Firestore reads are independently
+ *     rules-gated (T-02-02 mitigation).
  *   - Error messages are shown via state (not alerts) — user-facing only.
- *   - The server (/api/auth/session) re-verifies the token; we trust the server response.
  */
 
 import { useState } from 'react'
@@ -79,8 +81,22 @@ export function SignInForm() {
         return
       }
 
-      // Step 4: Redirect to the chat shell
-      router.push(`/${lang}/chat`)
+      // Step 4: Read verified role from server response and redirect accordingly.
+      // SECURITY: role is derived from the server's verifyIdToken — never from
+      // a client-supplied value. Every Firestore read is independently rules-gated (T-02-02).
+      const { role } = (await res.json()) as { ok: boolean; role?: string }
+
+      // Route by role (AUTH-02/03):
+      //   senior-coach → /[lang]/dashboard  (plan 02-06)
+      //   admin        → /[lang]/kb          (plan 02-08)
+      //   new-agent    → /[lang]/chat        (default)
+      if (role === 'senior-coach') {
+        router.push(`/${lang}/dashboard`)
+      } else if (role === 'admin') {
+        router.push(`/${lang}/kb`)
+      } else {
+        router.push(`/${lang}/chat`)
+      }
     } catch {
       // Firebase Auth errors (wrong password, user not found, etc.)
       // Do NOT include internal error details in the user-facing message

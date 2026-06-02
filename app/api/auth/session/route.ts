@@ -54,8 +54,12 @@ export async function POST(req: Request): Promise<Response> {
 
   // Verify the Firebase ID token server-side — fail closed on any error.
   // SECURITY: do NOT log `idToken` or the decoded claims (T-01-12).
+  let role: string
   try {
-    await adminAuth.verifyIdToken(idToken)
+    const decoded = await adminAuth.verifyIdToken(idToken)
+    // Read role from verified token claims only — never trust a client-supplied value.
+    // Redirect is UX only; every Firestore read is independently rules-gated (T-02-02).
+    role = (decoded.role as string) ?? 'new-agent'
   } catch {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -70,7 +74,7 @@ export async function POST(req: Request): Promise<Response> {
     maxAge: SESSION_DURATION_SECONDS,
   })
 
-  return Response.json({ ok: true }, { status: 200 })
+  return Response.json({ ok: true, role }, { status: 200 })
 }
 
 // ─── DELETE /api/auth/session ─────────────────────────────────────────────────

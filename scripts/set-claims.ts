@@ -12,11 +12,14 @@
  *   # Provision an admin:
  *   npm run set-claims -- --uid <USER_UID> --role admin
  *
- *   # Provision a senior coach:
+ *   # Provision a senior coach with a downline relationship:
  *   npm run set-claims -- --uid <USER_UID> --role senior-coach
  *
- *   # Provision a new-agent with an upline coach:
+ *   # Provision a new-agent whose upline (senior coach) is <COACH_UID>:
  *   npm run set-claims -- --uid <USER_UID> --role new-agent --upline <COACH_UID>
+ *
+ *   # Provision a new-agent with the seniorCoachId (canonical flag, 02-01+):
+ *   npm run set-claims -- --uid <USER_UID> --role new-agent --seniorCoachId <COACH_UID>
  *
  * Equivalent without the npm script (inline env):
  *   FIREBASE_PROJECT_ID=<id> GOOGLE_APPLICATION_CREDENTIALS=./sa.json \
@@ -58,7 +61,8 @@ function parseArgs(argv: string[]): {
   const uid = get('--uid')
   const roleRaw = get('--role')
   const uplineCoachId = get('--upline')
-  const seniorCoachId = get('--senior')
+  // Accept both --seniorCoachId (canonical) and --senior (short alias)
+  const seniorCoachId = get('--seniorCoachId') ?? get('--senior')
 
   if (!uid) {
     console.error('Error: --uid is required')
