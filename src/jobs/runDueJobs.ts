@@ -17,21 +17,32 @@
  *   { jobName, lastRunAt: Timestamp, tenantId: 'd2' }
  *
  * Phase-1 jobs registered:
- *   - stall-detect  (daily window: 24 h) — runs findStalled + emitHandoffSignal
- *   - escalate      (no-op stub — Phase 2)
- *   - eval-nightly  (no-op stub — Phase 3)
+ *   - stall-detect  (daily window: 24 h) — runs findStalled + in-app nudge + emitHandoffSignal
+ *   - escalate      (daily window: 24 h) — 48h stall → emitHandoffSignal gated to working hours
+ *   - eval-nightly  (daily window: 24 h) — delegates to runNightlyEval seam (02-07 fills body)
  *   - usage-rollup  (no-op stub — Phase 3)
+ *
+ * D-09 RESOLUTION (2026-06-02): ON-VISIT nudges — the lazy-cron fires only when an
+ * authorized user visits the app. A truly idle overnight defers nudges. The wall-clock
+ * GitHub Actions escape hatch was presented to the user and the decision was:
+ * ACCEPT ON-VISIT-ONLY for the pilot. The heartbeat + UI watchdog surfaces a stale
+ * last-run when the cron hasn't fired in the expected window.
  *
  * References:
  *   - TSD §3.4 scheduled jobs
  *   - Decision override 2026-06-01: on-visit lazy-cron Server Action
  *   - T-01-34 (heartbeat / watchdog signal)
+ *   - COACH-04 (stall nudge), COACH-05 (48h escalation), CDASH-06 (working-hours gate)
+ *   - 02-CONTEXT.md D-08/D-09, 02-RESEARCH.md Pattern 4
  */
 
 import { adminDb } from '@/src/firebase/admin'
 import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { findStalled, emitHandoffSignal } from '@/src/escalation'
 import { writeHeartbeat } from '@/src/jobs/heartbeat'
+import { isWithinWorkingHours } from '@/src/jobs/workingHours'
+import { appendMessage, loadRecent } from '@/src/memory/conversation'
+import { runNightlyEval } from '@/src/eval/runNightly'
 import { TENANT_ID } from '@/src/firebase/collections'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -54,8 +65,14 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000
 interface JobDefinition {
   /** Window duration in ms — job fires at most once per window. */
   windowMs: number
-  /** Job body — only called when the job is due. Must be idempotent. */
-  run: () => Promise<void>
+  /**
+   * Job body — only called when the job is due. Must be idempotent.
+   *
+   * Receives the same `now` clock that `runJob` was called with so job bodies
+   * can perform time-relative checks (e.g., working-hours gate in `escalate`)
+   * without importing a separate clock. Injectable for unit tests.
+   */
+  run: (now: Date) => Promise<void>
 }
 
 /**
@@ -66,11 +83,96 @@ interface JobDefinition {
  * require touching the ledger or the trigger.
  */
 const JOB_REGISTRY: Record<string, JobDefinition> = {
+  /**
+   * stall-detect — COACH-04
+   *
+   * Runs daily. For each agent stalled ≥2 days:
+   *   1. Emits a 'stall' escalation row (dedup-guarded by emitHandoffSignal).
+   *   2. Writes ONE in-app nudge into the agent's primary coach thread
+   *      (`coach-{uid}/messages`) — cadence-capped so the same window does not
+   *      produce duplicate nudges (T-02-20 over-nudging mitigation).
+   */
   'stall-detect': {
     windowMs: ONE_DAY_MS,
-    run: async () => {
+    run: async (_now: Date) => {
       const stalled = await findStalled({ days: 2 })
       for (const agent of stalled) {
+        // ── Escalation row (dedup-guarded) ──────────────────────────────────
+        await emitHandoffSignal({
+          agentUid: agent.agentUid,
+          seniorCoachId: agent.seniorCoachId,
+          reason: 'stall',
+          contextBundle: {
+            lastActiveAt: agent.lastActiveAt,
+            // No raw PII — technical metadata only (T-01-36 / PDPA)
+          },
+        })
+
+        // ── In-app nudge (COACH-04, cadence-capped) ─────────────────────────
+        // Query the coach thread for any nudge already written in this stall
+        // window (last 24 h). Only write a new nudge if none exists yet.
+        const cid = `coach-${agent.agentUid}`
+        const recentMessages = await loadRecent(cid, 20)
+        const alreadyNudged = recentMessages.some(
+          (m) => m.data.routeDecision === 'nudge',
+        )
+
+        if (!alreadyNudged) {
+          await appendMessage(cid, {
+            tenantId: TENANT_ID,
+            role: 'assistant',
+            content:
+              "Hey, looks like you haven't checked in for a couple of days. " +
+              "Your D2 onboarding journey is waiting — even 15 minutes today " +
+              'keeps the momentum going. Your coach is here if you need help!',
+            citations: [],
+            routeDecision: 'nudge',
+            tokens: 0,
+            redacted: true,
+          })
+        }
+      }
+      await writeHeartbeat('stall-detect')
+    },
+  },
+
+  /**
+   * escalate — COACH-05 / CDASH-06
+   *
+   * Runs daily. For each agent stalled ≥2 days, if the stall has aged past 48h
+   * and it is currently within working hours (Asia/Kuala_Lumpur 09:00–18:00
+   * Mon–Fri), emit a 'stall' escalation row so it surfaces on the senior-coach
+   * dashboard during their working day.
+   *
+   * Outside working hours: skip the emit (defer to next run inside the window).
+   * The dedup guard in emitHandoffSignal ensures no duplicate escalation is
+   * created if the job runs multiple times during working hours (T-02-21).
+   *
+   * Working-hours default (Assumption A1 — confirm with Derek):
+   *   Asia/Kuala_Lumpur, 09:00–18:00, Mon–Fri
+   */
+  escalate: {
+    windowMs: ONE_DAY_MS,
+    run: async (now: Date) => {
+      const currentTime = now
+
+      // Gate: only surface escalations during working hours (CDASH-06)
+      if (!isWithinWorkingHours(currentTime)) {
+        // Outside working hours — defer escalation visibility until next window
+        await writeHeartbeat('escalate')
+        return
+      }
+
+      const stalled = await findStalled({ days: 2 })
+      for (const agent of stalled) {
+        // Additional 48h gate: lastActiveAt must be at least 48h before now
+        const stalledMs = currentTime.getTime() - agent.lastActiveAt.getTime()
+        const fortyEightHoursMs = 48 * 60 * 60 * 1000
+        if (stalledMs < fortyEightHoursMs) {
+          // Stall is detected (≥2d) but hasn't crossed 48h yet — skip escalation
+          continue
+        }
+
         await emitHandoffSignal({
           agentUid: agent.agentUid,
           seniorCoachId: agent.seniorCoachId,
@@ -81,27 +183,32 @@ const JOB_REGISTRY: Record<string, JobDefinition> = {
           },
         })
       }
-      await writeHeartbeat('stall-detect')
+
+      await writeHeartbeat('escalate')
     },
   },
 
-  // ── Phase-2 stubs — wire bodies when the pillar lands ─────────────────────
-  escalate: {
+  /**
+   * eval-nightly — QUAL-06 seam
+   *
+   * Runs daily. Delegates to `runNightlyEval` (src/eval/runNightly.ts).
+   * The body of runNightlyEval is a no-op placeholder filled by plan 02-07.
+   * This registry entry provides the stable wiring so 02-07 only needs to
+   * implement the Promptfoo run inside runNightlyEval — no registry changes.
+   */
+  'eval-nightly': {
     windowMs: ONE_DAY_MS,
-    // TODO(Phase-2): escalate overdue open escalations to senior coach queue
-    run: async () => {},
+    run: async (_now: Date) => {
+      await runNightlyEval()
+      await writeHeartbeat('eval-nightly')
+    },
   },
 
   // ── Phase-3 stubs ──────────────────────────────────────────────────────────
-  'eval-nightly': {
-    windowMs: ONE_DAY_MS,
-    // TODO(Phase-3): run Promptfoo eval suite and write results to evals/
-    run: async () => {},
-  },
   'usage-rollup': {
     windowMs: ONE_DAY_MS,
     // TODO(Phase-3): roll up per-agent token/request counts into billing summary
-    run: async () => {},
+    run: async (_now: Date) => {},
   },
 }
 
@@ -151,7 +258,7 @@ export async function runJob(jobName: string, now: Date = new Date()): Promise<b
   })
 
   if (shouldRun) {
-    await def.run()
+    await def.run(now)
   }
 
   return shouldRun

@@ -11,6 +11,9 @@
  *      transaction; the second sees the updated lastRunAt and skips the body
  *   5. writeHeartbeat is called after a successful stall-detect run
  *   6. First-ever run (no existing doc) treats the job as due
+ *   7. isWithinWorkingHours: true for KL weekday 10:00, false for 02:00 / weekend
+ *   8. stall-detect writes exactly ONE nudge for a stalled agent (cadence-capped)
+ *   9. escalate defers when outside working hours, emits when inside + stall ≥48h
  *
  * Offline — all Firestore and Firebase Admin calls are mocked.
  * No real Firebase credentials or network access required.
@@ -18,8 +21,12 @@
  * References:
  *   - src/jobs/runDueJobs.ts (system under test)
  *   - src/jobs/heartbeat.ts (writeHeartbeat side-effect)
+ *   - src/jobs/workingHours.ts (isWithinWorkingHours)
  *   - Decision override 2026-06-01: on-visit lazy-cron
  *   - T-01-34: heartbeat per run
+ *   - CDASH-06: working-hours gate
+ *   - COACH-04: in-app nudge, cadence-capped
+ *   - COACH-05: 48h escalation
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -30,6 +37,7 @@ import type { Timestamp } from 'firebase-admin/firestore'
 const mockFindStalled = vi.hoisted(() => vi.fn())
 const mockEmitHandoffSignal = vi.hoisted(() => vi.fn())
 const mockWriteHeartbeat = vi.hoisted(() => vi.fn())
+const mockAppendMessage = vi.hoisted(() => vi.fn())
 
 // Firestore transaction mock infrastructure
 const mockTxGet = vi.hoisted(() => vi.fn())
@@ -42,6 +50,13 @@ const mockCollectionDoc = vi.hoisted(() => vi.fn())
 vi.mock('@/src/escalation', () => ({
   findStalled: mockFindStalled,
   emitHandoffSignal: mockEmitHandoffSignal,
+}))
+
+// ─── Mock @/src/memory/conversation ───────────────────────────────────────────
+
+vi.mock('@/src/memory/conversation', () => ({
+  appendMessage: mockAppendMessage,
+  loadRecent: vi.fn(),
 }))
 
 // ─── Mock @/src/jobs/heartbeat ────────────────────────────────────────────────
@@ -249,11 +264,15 @@ describe('runJob — idempotency under simulated concurrent double-call', () => 
 })
 
 describe('runDueJobs — stall-detect with stalled agents', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     mockCollectionDoc.mockReturnValue({ id: 'stall-detect' })
     mockWriteHeartbeat.mockResolvedValue(undefined)
     mockEmitHandoffSignal.mockResolvedValue(undefined)
+    mockAppendMessage.mockResolvedValue('msg-001')
+    // Default: no existing nudge in thread
+    const memoryMod = await import('@/src/memory/conversation')
+    vi.mocked(memoryMod.loadRecent).mockResolvedValue([])
   })
 
   it('calls emitHandoffSignal for each stalled agent and writes heartbeat', async () => {
@@ -296,6 +315,219 @@ describe('runDueJobs — stall-detect with stalled agents', () => {
     expect(result.ran).toContain('stall-detect')
     expect(mockEmitHandoffSignal).not.toHaveBeenCalled()
     expect(mockWriteHeartbeat).toHaveBeenCalledWith('stall-detect')
+  })
+})
+
+// ─── isWithinWorkingHours tests ───────────────────────────────────────────────
+
+describe('isWithinWorkingHours()', () => {
+  it('returns true for Asia/Kuala_Lumpur weekday within 09:00–18:00', async () => {
+    const { isWithinWorkingHours } = await import('./workingHours')
+    // 2026-06-01 is a Monday. 02:00 UTC = 10:00 KL (UTC+8)
+    const klWeekday10am = new Date('2026-06-01T02:00:00Z')
+    expect(isWithinWorkingHours(klWeekday10am)).toBe(true)
+  })
+
+  it('returns false for Asia/Kuala_Lumpur at 02:00 local time (outside working hours)', async () => {
+    const { isWithinWorkingHours } = await import('./workingHours')
+    // 2026-06-01 is Monday. 18:00 UTC = 02:00+8 KL next day → no, let's use 18:01 UTC = 02:01 KL
+    // More simply: 22:00 UTC = 06:00 KL (before 09:00)
+    const klEarlyMorning = new Date('2026-06-01T22:00:00Z') // Mon 22:00 UTC = Tue 06:00 KL
+    expect(isWithinWorkingHours(klEarlyMorning)).toBe(false)
+  })
+
+  it('returns false for Asia/Kuala_Lumpur on a Saturday', async () => {
+    const { isWithinWorkingHours } = await import('./workingHours')
+    // 2026-06-06 is a Saturday. 02:00 UTC = 10:00 KL
+    const klSaturday = new Date('2026-06-06T02:00:00Z')
+    expect(isWithinWorkingHours(klSaturday)).toBe(false)
+  })
+
+  it('returns false for Asia/Kuala_Lumpur on a Sunday', async () => {
+    const { isWithinWorkingHours } = await import('./workingHours')
+    // 2026-06-07 is a Sunday. 02:00 UTC = 10:00 KL
+    const klSunday = new Date('2026-06-07T02:00:00Z')
+    expect(isWithinWorkingHours(klSunday)).toBe(false)
+  })
+
+  it('respects custom startHour/endHour opts', async () => {
+    const { isWithinWorkingHours } = await import('./workingHours')
+    // 2026-06-01 Mon, 02:00 UTC = 10:00 KL → within 08:00–12:00 custom window
+    const klMon10am = new Date('2026-06-01T02:00:00Z')
+    expect(isWithinWorkingHours(klMon10am, { startHour: 8, endHour: 12 })).toBe(true)
+    // Same time but custom window 11:00–18:00 → 10:00 is before 11:00 → false
+    expect(isWithinWorkingHours(klMon10am, { startHour: 11, endHour: 18 })).toBe(false)
+  })
+})
+
+// ─── stall-detect nudge body tests ────────────────────────────────────────────
+
+describe('runDueJobs — stall-detect nudge write (COACH-04)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCollectionDoc.mockReturnValue({ id: 'stall-detect' })
+    mockWriteHeartbeat.mockResolvedValue(undefined)
+    mockEmitHandoffSignal.mockResolvedValue(undefined)
+    mockAppendMessage.mockResolvedValue('msg-001')
+  })
+
+  it('writes an in-app nudge MessageDoc into coach-{uid}/messages for a stalled agent', async () => {
+    const stalledAgent = {
+      agentUid: 'agent-001',
+      seniorCoachId: 'coach-001',
+      lastActiveAt: new Date('2026-05-29T10:00:00Z'),
+    }
+    mockFindStalled.mockResolvedValue([stalledAgent])
+
+    // No existing nudge within window
+    const mockLoadRecent = vi.mocked(
+      (await import('@/src/memory/conversation')).loadRecent,
+    )
+    mockLoadRecent.mockResolvedValue([])
+
+    const now = new Date('2026-06-01T02:00:00Z') // Mon 10:00 KL
+    const lastRun = new Date(now.getTime() - 25 * 60 * 60 * 1000)
+    setupTransaction(true, lastRun)
+
+    const { runDueJobs } = await import('./runDueJobs')
+    await runDueJobs(now)
+
+    expect(mockAppendMessage).toHaveBeenCalledOnce()
+    const [cid, msg] = mockAppendMessage.mock.calls[0] as [string, unknown]
+    expect(cid).toBe('coach-agent-001')
+    expect(msg).toMatchObject({
+      role: 'assistant',
+      routeDecision: 'nudge',
+      redacted: true,
+      citations: [],
+    })
+  })
+
+  it('does NOT write a second nudge if one already exists within the stall window (cadence-cap)', async () => {
+    const stalledAgent = {
+      agentUid: 'agent-002',
+      seniorCoachId: 'coach-001',
+      lastActiveAt: new Date('2026-05-29T10:00:00Z'),
+    }
+    mockFindStalled.mockResolvedValue([stalledAgent])
+
+    // Simulate an existing nudge in the current window
+    const mockLoadRecent = vi.mocked(
+      (await import('@/src/memory/conversation')).loadRecent,
+    )
+    mockLoadRecent.mockResolvedValue([
+      {
+        id: 'existing-nudge',
+        data: {
+          role: 'assistant' as const,
+          content: 'previous nudge',
+          routeDecision: 'nudge',
+          citations: [],
+          tokens: 10,
+          redacted: true,
+          tenantId: 'd2' as const,
+        },
+      },
+    ])
+
+    const now = new Date('2026-06-01T02:00:00Z')
+    const lastRun = new Date(now.getTime() - 25 * 60 * 60 * 1000)
+    setupTransaction(true, lastRun)
+
+    const { runDueJobs } = await import('./runDueJobs')
+    await runDueJobs(now)
+
+    // appendMessage must NOT be called because a nudge already exists in the window
+    expect(mockAppendMessage).not.toHaveBeenCalled()
+  })
+})
+
+// ─── escalate job body tests ──────────────────────────────────────────────────
+
+describe('runDueJobs — escalate job body (COACH-05 + CDASH-06)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCollectionDoc.mockReturnValue({ id: 'escalate' })
+    mockWriteHeartbeat.mockResolvedValue(undefined)
+    mockEmitHandoffSignal.mockResolvedValue(undefined)
+    mockAppendMessage.mockResolvedValue('msg-001')
+  })
+
+  it('emits a stall escalation when stall ≥48h AND within working hours', async () => {
+    const stalledAgent = {
+      agentUid: 'agent-escalate-001',
+      seniorCoachId: 'coach-001',
+      // lastActiveAt = 3 days ago (well past 48h)
+      lastActiveAt: new Date('2026-05-29T02:00:00Z'),
+    }
+    mockFindStalled.mockResolvedValue([stalledAgent])
+
+    // Mon 02:00 UTC = Mon 10:00 KL — within working hours
+    const now = new Date('2026-06-01T02:00:00Z')
+    const lastRun = new Date(now.getTime() - 25 * 60 * 60 * 1000)
+
+    // Override transaction to target 'escalate' job
+    mockRunTransaction.mockImplementation(
+      async (callback: (tx: { get: typeof mockTxGet; set: typeof mockTxSet }) => Promise<void>) => {
+        mockTxGet.mockResolvedValue({
+          exists: true,
+          data: () => ({
+            jobName: 'escalate',
+            lastRunAt: makeTimestamp(lastRun),
+            tenantId: 'd2',
+          }),
+        })
+        await callback({ get: mockTxGet, set: mockTxSet })
+      },
+    )
+
+    const { runJob } = await import('./runDueJobs')
+    await runJob('escalate', now)
+
+    expect(mockEmitHandoffSignal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentUid: 'agent-escalate-001',
+        seniorCoachId: 'coach-001',
+        reason: 'stall',
+      }),
+    )
+    expect(mockWriteHeartbeat).toHaveBeenCalledWith('escalate')
+  })
+
+  it('does NOT emit a stall escalation when outside working hours (CDASH-06 gate)', async () => {
+    const stalledAgent = {
+      agentUid: 'agent-escalate-002',
+      seniorCoachId: 'coach-001',
+      // lastActiveAt = 3 days ago (well past 48h)
+      lastActiveAt: new Date('2026-05-29T02:00:00Z'),
+    }
+    mockFindStalled.mockResolvedValue([stalledAgent])
+
+    // Sun 22:00 UTC = Mon 06:00 KL — OUTSIDE working hours
+    const now = new Date('2026-05-31T22:00:00Z') // Sunday 22:00 UTC
+    const lastRun = new Date(now.getTime() - 25 * 60 * 60 * 1000)
+
+    mockRunTransaction.mockImplementation(
+      async (callback: (tx: { get: typeof mockTxGet; set: typeof mockTxSet }) => Promise<void>) => {
+        mockTxGet.mockResolvedValue({
+          exists: true,
+          data: () => ({
+            jobName: 'escalate',
+            lastRunAt: makeTimestamp(lastRun),
+            tenantId: 'd2',
+          }),
+        })
+        await callback({ get: mockTxGet, set: mockTxSet })
+      },
+    )
+
+    const { runJob } = await import('./runDueJobs')
+    await runJob('escalate', now)
+
+    // emitHandoffSignal must NOT be called because it's outside working hours
+    expect(mockEmitHandoffSignal).not.toHaveBeenCalled()
+    // heartbeat still written (job ran; no escalation emitted but job succeeded)
+    expect(mockWriteHeartbeat).toHaveBeenCalledWith('escalate')
   })
 })
 
