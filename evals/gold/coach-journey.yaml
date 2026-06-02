@@ -1,0 +1,178 @@
+# evals/gold/coach-journey.yaml — Coach journey prompts gold set (Phase 2, QUAL-06)
+#
+# Covers: day-one pairing intro + a comprehension-gate prompt — in EN / BM / ZH.
+#
+# Day-one pairing (COACH-01): the Coach introduces itself, confirms the senior-coach
+# assignment, and kicks off the PowerBoost playlist as the first journey checkpoint.
+# Comprehension gate (COACH-09): the Coach asks the agent to paraphrase a key concept
+# in their own words (free-text only — no multiple-choice) after delivering KB content.
+#
+# All content is SYNTHETIC — no real PII, no real phone numbers, no real IC numbers.
+#
+# Reference: QUAL-06, D-06 (journey model), D-07 (comprehension checks), COACH-01/09
+
+# ─── Case 1: Day-one pairing — Coach introduction ────────────────────────────
+
+- description: "Coach | EN | journey | day-one pairing intro"
+  vars:
+    lang: en
+    user_message: "Hi, I just joined D2 today. What's next for me?"
+    # Expected: Coach introduces itself, confirms senior-coach assignment, begins
+    # day-one journey checkpoint from the D2 onboarding KB.
+    expected_behavior: >
+      Responds in English; introduces the coaching relationship; cites the onboarding
+      KB chunk covering day-one steps; mentions or asks about the senior-coach assignment.
+    native_review_required: false
+  assert:
+    - type: contains
+      value: "KB:"
+      description: "Response must cite at least one D2 KB chunk (day-one content)"
+    - type: not-contains
+      value: "Certainly"
+      description: "No AI-tell filler (Certainly!)"
+    - type: not-contains
+      value: "Great question"
+      description: "No AI-tell filler (Great question!)"
+    - type: javascript
+      value: |
+        // PII gate: no real MY phone numbers
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+    - type: javascript
+      value: |
+        const IC = /\d{6}-\d{2}-\d{4}/;
+        return !IC.test(output);
+      description: "No real MY IC numbers in output (PII gate)"
+
+- description: "Coach | MS | journey | day-one pairing intro (Bahasa Malaysia)"
+  vars:
+    lang: ms
+    user_message: "Hai, saya baru sahaja menyertai D2 hari ini. Apa yang perlu saya buat seterusnya?"
+    # BM: "Hi, I just joined D2 today. What do I need to do next?"
+    expected_behavior: >
+      Responds in BM; introduces the coaching relationship; cites the onboarding KB chunk.
+    native_review_required: true
+    native_review_status: "PENDING — requires native BM speaker review (D-08)"
+  assert:
+    - type: contains
+      value: "KB:"
+      description: "Response must cite at least one D2 KB chunk"
+    - type: javascript
+      value: |
+        const bmIndicators = /\b(dan|atau|untuk|dalam|ejen|hari|perlu|boleh|tidak|dengan|saya|anda)\b/i;
+        return bmIndicators.test(output);
+      description: "Response is in Bahasa Malaysia (language-match check)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+
+- description: "Coach | ZH | journey | day-one pairing intro (Mandarin Chinese)"
+  vars:
+    lang: zh
+    user_message: "你好，我今天刚加入D2。接下来我需要做什么？"
+    # ZH: "Hi, I just joined D2 today. What do I need to do next?"
+    expected_behavior: >
+      Responds in Mandarin; introduces the coaching relationship; cites the onboarding KB chunk.
+    native_review_required: true
+    native_review_status: "PENDING — requires native Mandarin speaker review (D-08)"
+  assert:
+    - type: contains
+      value: "KB:"
+      description: "Response must cite at least one D2 KB chunk"
+    - type: javascript
+      value: |
+        const cjkPattern = /[一-鿿]/;
+        return cjkPattern.test(output);
+      description: "Response contains Mandarin Chinese characters (language-match check)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+
+# ─── Case 2: Comprehension gate ───────────────────────────────────────────────
+# After the Coach has delivered KB content, it asks the agent to paraphrase.
+# The gold case confirms the Coach uses free-text (not multiple-choice) checks.
+
+- description: "Coach | EN | journey | comprehension gate (free-text paraphrase request)"
+  vars:
+    lang: en
+    user_message: "OK I've read through the compliance checklist. What now?"
+    # Expected: Coach asks agent to paraphrase the key compliance concept in their own
+    # words — NOT multiple-choice, NOT yes/no. This is the COACH-09 comprehension gate.
+    expected_behavior: >
+      Responds in English; asks the agent to paraphrase or explain the compliance concept
+      in their own words; no multiple-choice options given; cites or references the KB chunk.
+    native_review_required: false
+  assert:
+    - type: javascript
+      value: |
+        // Must NOT contain A) B) C) pattern (no multiple-choice — COACH-09)
+        const multiChoice = /\bA\)|B\)|C\)|D\)/;
+        return !multiChoice.test(output);
+      description: "No multiple-choice question format (COACH-09: free-text paraphrase only)"
+    - type: not-contains
+      value: "Certainly"
+      description: "No AI-tell filler"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+
+- description: "Coach | MS | journey | comprehension gate (parafrase teks bebas)"
+  vars:
+    lang: ms
+    user_message: "OK saya sudah baca senarai semak pematuhan. Apa pula selepas ini?"
+    # BM: "OK I've read through the compliance checklist. What now?"
+    expected_behavior: >
+      Responds in BM; asks agent to paraphrase key concept in their own words;
+      no multiple-choice.
+    native_review_required: true
+    native_review_status: "PENDING — requires native BM speaker review (D-08)"
+  assert:
+    - type: javascript
+      value: |
+        const multiChoice = /\bA\)|B\)|C\)|D\)/;
+        return !multiChoice.test(output);
+      description: "No multiple-choice question format (COACH-09)"
+    - type: javascript
+      value: |
+        const bmIndicators = /\b(dan|atau|untuk|dalam|ejen|boleh|tidak|dengan|sendiri|kata-kata|faham)\b/i;
+        return bmIndicators.test(output);
+      description: "Response is in Bahasa Malaysia (language-match check)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+
+- description: "Coach | ZH | journey | comprehension gate (自由文本概述)"
+  vars:
+    lang: zh
+    user_message: "好的，我已经看完了合规清单。接下来怎么做？"
+    # ZH: "OK I've read through the compliance checklist. What now?"
+    expected_behavior: >
+      Responds in Mandarin; asks agent to paraphrase key concept in own words;
+      no multiple-choice.
+    native_review_required: true
+    native_review_status: "PENDING — requires native Mandarin speaker review (D-08)"
+  assert:
+    - type: javascript
+      value: |
+        const multiChoice = /\bA\)|B\)|C\)|D\)/;
+        return !multiChoice.test(output);
+      description: "No multiple-choice question format (COACH-09)"
+    - type: javascript
+      value: |
+        const cjkPattern = /[一-鿿]/;
+        return cjkPattern.test(output);
+      description: "Response contains Mandarin Chinese characters (language-match check)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"

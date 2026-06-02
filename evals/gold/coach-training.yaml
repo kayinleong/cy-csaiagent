@@ -1,0 +1,168 @@
+# evals/gold/coach-training.yaml — Coach training Q&A gold set (Phase 2, QUAL-06)
+#
+# Covers: grounded cited answers to D2 training questions + an out-of-scope
+# refusal — one scenario expressed in three languages (EN / BM / ZH).
+#
+# All content is SYNTHETIC — no real PII, no real phone numbers, no real IC numbers.
+#
+# Design notes:
+#   - Each case asserts the rubric via structural (contains/javascript) checks
+#     that run offline without a live model call.
+#   - The llm-rubric (live Opus judge) is applied on top via promptfooconfig.yaml
+#     defaultTest. Do NOT add a second llm-rubric here.
+#   - native_review_status: PENDING for BM/ZH until Derek recruits native reviewers.
+#
+# Reference: QUAL-06, evals/CALIBRATION.md §8
+
+# ─── Case 1: Training Q&A — grounded cited answer ────────────────────────────
+
+- description: "Coach | EN | training-qa | What is PowerBoost?"
+  vars:
+    lang: en
+    user_message: "Can you explain the D2 PowerBoost programme to me?"
+    # Expected: grounded answer citing the PowerBoost KB doc chunks.
+    expected_behavior: "Responds in English; cites at least one PowerBoost KB chunk; no hallucination."
+    native_review_required: false
+  assert:
+    - type: contains
+      value: "KB:"
+      description: "Response must cite at least one D2 KB chunk"
+    - type: not-contains
+      value: "Certainly"
+      description: "No AI-tell filler (Certainly!)"
+    - type: not-contains
+      value: "Great question"
+      description: "No AI-tell filler (Great question!)"
+    - type: javascript
+      value: |
+        // PII gate: no real MY phone numbers
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+    - type: javascript
+      value: |
+        // No MY IC numbers
+        const IC = /\d{6}-\d{2}-\d{4}/;
+        return !IC.test(output);
+      description: "No real MY IC numbers in output (PII gate)"
+
+- description: "Coach | MS | training-qa | Apakah PowerBoost?"
+  vars:
+    lang: ms
+    user_message: "Boleh terangkan kepada saya tentang program PowerBoost D2?"
+    # Bahasa Malaysia: "Can you explain the D2 PowerBoost programme to me?"
+    expected_behavior: "Responds in Bahasa Malaysia; cites D2 KB chunk if available."
+    native_review_required: true
+    native_review_status: "PENDING — requires native BM speaker review (D-08)"
+  assert:
+    - type: contains
+      value: "KB:"
+      description: "Response must cite at least one D2 KB chunk"
+    - type: javascript
+      value: |
+        // Language check: response should contain BM words
+        const bmIndicators = /\b(dan|atau|untuk|dalam|ejen|program|boleh|tidak|dengan|kepada|tentang)\b/i;
+        return bmIndicators.test(output);
+      description: "Response is in Bahasa Malaysia (language-match check)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+
+- description: "Coach | ZH | training-qa | PowerBoost计划是什么？"
+  vars:
+    lang: zh
+    user_message: "能给我解释一下D2的PowerBoost计划吗？"
+    # Mandarin: "Can you explain the D2 PowerBoost programme to me?"
+    expected_behavior: "Responds in Mandarin Chinese; cites D2 KB chunk if available."
+    native_review_required: true
+    native_review_status: "PENDING — requires native Mandarin speaker review (D-08)"
+  assert:
+    - type: contains
+      value: "KB:"
+      description: "Response must cite at least one D2 KB chunk"
+    - type: javascript
+      value: |
+        // Language check: response should contain CJK characters
+        const cjkPattern = /[一-鿿]/;
+        return cjkPattern.test(output);
+      description: "Response contains Mandarin Chinese characters (language-match check)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+
+# ─── Case 2: Out-of-scope refusal ────────────────────────────────────────────
+# The Coach must politely decline and redirect — NOT answer from general knowledge.
+
+- description: "Coach | EN | training-qa | out-of-scope refusal (generic real-estate question)"
+  vars:
+    lang: en
+    user_message: "What's the average PSF price in KLCC right now?"
+    # Expected: polite refusal citing D2 scope; must NOT give generic market data.
+    expected_behavior: >
+      Responds in English; declines to give generic KLCC PSF data; redirects to
+      D2-specific KB or recommends asking their senior coach.
+    native_review_required: false
+  assert:
+    - type: not-contains
+      value: "RM"
+      description: "Should NOT quote generic market prices (SCOPE check)"
+    - type: not-contains
+      value: "per sq ft"
+      description: "Should NOT provide market PSF data (SCOPE check)"
+    - type: not-contains
+      value: "Certainly"
+      description: "No AI-tell filler"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+
+- description: "Coach | MS | training-qa | out-of-scope refusal (soalan luar skop)"
+  vars:
+    lang: ms
+    user_message: "Apakah harga purata per kaki persegi di KLCC sekarang?"
+    # BM: "What's the average price per sqft in KLCC right now?"
+    expected_behavior: >
+      Responds in BM; declines to give generic KLCC market data; redirects to
+      D2-specific KB.
+    native_review_required: true
+    native_review_status: "PENDING — requires native BM speaker review (D-08)"
+  assert:
+    - type: javascript
+      value: |
+        const bmIndicators = /\b(maaf|tidak|di luar|skop|D2|ejen|kaki)\b/i;
+        return bmIndicators.test(output);
+      description: "Response is in Bahasa Malaysia (language-match check)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+
+- description: "Coach | ZH | training-qa | out-of-scope refusal (超出范围问题)"
+  vars:
+    lang: zh
+    user_message: "现在吉隆坡城中城的平均每平方尺价格是多少？"
+    # ZH: "What's the average PSF in KLCC right now?"
+    expected_behavior: >
+      Responds in Mandarin; declines to give generic KLCC market data; redirects
+      to D2-specific KB.
+    native_review_required: true
+    native_review_status: "PENDING — requires native Mandarin speaker review (D-08)"
+  assert:
+    - type: javascript
+      value: |
+        // Language check: response should contain CJK characters
+        const cjkPattern = /[一-鿿]/;
+        return cjkPattern.test(output);
+      description: "Response contains Mandarin Chinese characters (language-match check)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"

@@ -1,0 +1,185 @@
+# evals/gold/coach-playbooks.yaml — Coach playbook prompts gold set (Phase 2, QUAL-06)
+#
+# Covers: channel playbook (Meta ads) + the first-Meta-ad walkthrough — EN / BM / ZH.
+#
+# Design notes (D-07):
+#   - Channel playbooks are KB documents — the Coach retrieves and walks through
+#     them conversationally; no bespoke per-playbook UI.
+#   - The first-Meta-ad walkthrough is a step-by-step guided walkthrough from
+#     the KB, with comprehension checkpoints along the way.
+#   - SCOPE: the Coach must NOT invent steps from general Meta/Facebook Ads
+#     knowledge — all guidance must come from retrieved D2 KB content.
+#
+# All content is SYNTHETIC — no real PII, no real phone numbers, no real IC numbers.
+#
+# Reference: QUAL-06, D-07 (playbooks), COACH-07/08
+
+# ─── Case 1: Meta Ads channel playbook ───────────────────────────────────────
+
+- description: "Coach | EN | playbooks | Meta Ads channel playbook"
+  vars:
+    lang: en
+    user_message: "Walk me through the D2 Meta Ads playbook."
+    # Expected: Coach retrieves the Meta Ads playbook KB doc and walks through
+    # it step by step, citing the chunk IDs. Must NOT invent steps from
+    # general Meta Ads knowledge.
+    expected_behavior: >
+      Responds in English; cites Meta Ads playbook KB chunks; delivers step-by-step
+      guidance; does NOT invent advertising steps not in D2 KB.
+    native_review_required: false
+  assert:
+    - type: contains
+      value: "KB:"
+      description: "Response must cite at least one D2 KB chunk (Meta Ads playbook)"
+    - type: not-contains
+      value: "Certainly"
+      description: "No AI-tell filler (Certainly!)"
+    - type: not-contains
+      value: "Great question"
+      description: "No AI-tell filler (Great question!)"
+    - type: javascript
+      value: |
+        // PII gate: no real MY phone numbers
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+    - type: javascript
+      value: |
+        const IC = /\d{6}-\d{2}-\d{4}/;
+        return !IC.test(output);
+      description: "No real MY IC numbers in output (PII gate)"
+
+- description: "Coach | MS | playbooks | Meta Ads channel playbook (BM)"
+  vars:
+    lang: ms
+    user_message: "Tolong bimbing saya melalui buku panduan Meta Ads D2."
+    # BM: "Please walk me through the D2 Meta Ads playbook."
+    expected_behavior: >
+      Responds in BM; cites Meta Ads playbook KB chunks; step-by-step guidance.
+    native_review_required: true
+    native_review_status: "PENDING — requires native BM speaker review (D-08)"
+  assert:
+    - type: contains
+      value: "KB:"
+      description: "Response must cite at least one D2 KB chunk"
+    - type: javascript
+      value: |
+        const bmIndicators = /\b(dan|atau|untuk|dalam|ejen|iklan|meta|langkah|boleh|dengan|anda)\b/i;
+        return bmIndicators.test(output);
+      description: "Response is in Bahasa Malaysia (language-match check)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+
+- description: "Coach | ZH | playbooks | Meta Ads channel playbook (ZH)"
+  vars:
+    lang: zh
+    user_message: "请带我了解D2的Meta广告手册。"
+    # ZH: "Please walk me through the D2 Meta Ads playbook."
+    expected_behavior: >
+      Responds in Mandarin; cites Meta Ads playbook KB chunks; step-by-step guidance.
+    native_review_required: true
+    native_review_status: "PENDING — requires native Mandarin speaker review (D-08)"
+  assert:
+    - type: contains
+      value: "KB:"
+      description: "Response must cite at least one D2 KB chunk"
+    - type: javascript
+      value: |
+        const cjkPattern = /[一-鿿]/;
+        return cjkPattern.test(output);
+      description: "Response contains Mandarin Chinese characters (language-match check)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+
+# ─── Case 2: First Meta-ad walkthrough (COACH-08) ────────────────────────────
+# Step-by-step walkthrough of setting up the first Meta ad campaign for a D2 project.
+# The Coach must walk through this from KB content — never from generic Meta Ads knowledge.
+
+- description: "Coach | EN | playbooks | first-Meta-ad walkthrough step 1"
+  vars:
+    lang: en
+    user_message: "I want to run my first Meta ad for a D2 project. Where do I start?"
+    # Expected: Coach retrieves the first-Meta-ad walkthrough KB doc and begins
+    # step 1. Must NOT provide generic FB Ads Manager instructions.
+    expected_behavior: >
+      Responds in English; cites the first-Meta-ad walkthrough KB chunk for step 1;
+      does NOT invent Facebook Ads Manager steps not from D2 KB.
+    native_review_required: false
+  assert:
+    - type: contains
+      value: "KB:"
+      description: "Response must cite at least one D2 KB chunk (Meta-ad walkthrough)"
+    - type: not-contains
+      value: "Certainly"
+      description: "No AI-tell filler"
+    - type: javascript
+      value: |
+        // Must not invent a budget figure not from D2 KB (hallucination sentinel)
+        // A real budget figure pattern: RM 500, RM500, RM 1000, etc.
+        // We check that any RM figure is paired with a KB citation — we can only
+        // do a structural check here (live hallucination check is the llm-rubric domain).
+        // Structural check: no unqualified "minimum" budget claim without KB cite.
+        const hasBudgetClaim = /minimum.{0,20}RM|RM.{0,20}minimum/i.test(output);
+        const hasKBCite = /KB:/.test(output);
+        // If the response makes a budget claim, it MUST have a KB cite
+        return hasBudgetClaim ? hasKBCite : true;
+      description: "Any budget figure must be paired with a KB citation (hallucination guard)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+
+- description: "Coach | MS | playbooks | first-Meta-ad walkthrough step 1 (BM)"
+  vars:
+    lang: ms
+    user_message: "Saya ingin menjalankan iklan Meta pertama saya untuk projek D2. Di mana saya perlu mulakan?"
+    # BM: "I want to run my first Meta ad for a D2 project. Where do I start?"
+    expected_behavior: >
+      Responds in BM; cites the Meta-ad walkthrough KB chunk; step 1 guidance.
+    native_review_required: true
+    native_review_status: "PENDING — requires native BM speaker review (D-08)"
+  assert:
+    - type: contains
+      value: "KB:"
+      description: "Response must cite at least one D2 KB chunk"
+    - type: javascript
+      value: |
+        const bmIndicators = /\b(dan|atau|untuk|dalam|langkah|mula|iklan|projek|D2|anda)\b/i;
+        return bmIndicators.test(output);
+      description: "Response is in Bahasa Malaysia (language-match check)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
+
+- description: "Coach | ZH | playbooks | first-Meta-ad walkthrough step 1 (ZH)"
+  vars:
+    lang: zh
+    user_message: "我想为D2项目投放第一个Meta广告。从哪里开始？"
+    # ZH: "I want to run my first Meta ad for a D2 project. Where do I start?"
+    expected_behavior: >
+      Responds in Mandarin; cites the Meta-ad walkthrough KB chunk; step 1 guidance.
+    native_review_required: true
+    native_review_status: "PENDING — requires native Mandarin speaker review (D-08)"
+  assert:
+    - type: contains
+      value: "KB:"
+      description: "Response must cite at least one D2 KB chunk"
+    - type: javascript
+      value: |
+        const cjkPattern = /[一-鿿]/;
+        return cjkPattern.test(output);
+      description: "Response contains Mandarin Chinese characters (language-match check)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "No real MY phone numbers in output (PII gate)"
