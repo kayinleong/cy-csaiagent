@@ -377,3 +377,373 @@ describe('KB Ingestion Pipeline', () => {
     })
   })
 })
+
+// ─── 02-02 Task 2: crud.ts — version supersede, publish/unpublish, correction ─
+//
+// These tests use vi.resetModules() + vi.doMock() to isolate each test with
+// a fresh mock for kbDocsRef/kbChunksRef since the top-level vi.mock() at the
+// top of this file provides a minimal mock for the pipeline tests above.
+
+describe('02-02 KB CRUD: version supersede + publish/unpublish + correction', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+  })
+
+  // ─── Shared mock factory ────────────────────────────────────────────────────
+
+  function makeCrudMocks() {
+    // kbDocs mock: doc(id) → { get, set, update, delete }
+    const mockKbDocSet = vi.fn().mockResolvedValue(undefined)
+    const mockKbDocUpdate = vi.fn().mockResolvedValue(undefined)
+    const mockKbDocDelete = vi.fn().mockResolvedValue(undefined)
+
+    // Old doc data (the doc being updated/superseded)
+    const mockOldDocData = {
+      title: 'D2 Commission Structure v1',
+      sourcePath: 'kb/old-doc-id',
+      version: 1,
+      lang: 'en' as const,
+      pillar: 'coach' as const,
+      status: 'published' as const,
+      tenantId: 'd2',
+    }
+
+    const mockKbDocGet = vi.fn().mockResolvedValue({
+      exists: true,
+      data: () => ({ ...mockOldDocData }),
+    })
+
+    const mockKbDocRef = vi.fn().mockImplementation((_id?: string) => ({
+      id: _id ?? 'new-doc-id',
+      get: mockKbDocGet,
+      set: mockKbDocSet,
+      update: mockKbDocUpdate,
+      delete: mockKbDocDelete,
+    }))
+
+    // kbChunks mock: where(...).get() → docs[] for bulk status updates
+    const mockChunkDocs = [
+      { id: 'chunk-1', ref: { update: vi.fn().mockResolvedValue(undefined) } },
+      { id: 'chunk-2', ref: { update: vi.fn().mockResolvedValue(undefined) } },
+    ]
+    const mockKbChunksWhere = vi.fn().mockReturnValue({
+      get: vi.fn().mockResolvedValue({ docs: mockChunkDocs }),
+    })
+    const mockKbChunksAdd = vi.fn().mockResolvedValue({ id: 'new-chunk-id' })
+
+    // ingestion jobs mock (for shardJob called from updateDoc)
+    const mockJobSet = vi.fn().mockResolvedValue(undefined)
+    const mockJobDoc = vi.fn().mockReturnValue({
+      id: 'new-job-id',
+      set: mockJobSet,
+      get: vi.fn().mockResolvedValue({ exists: false }),
+    })
+    const mockJobsWhere = vi.fn().mockReturnValue({
+      limit: vi.fn().mockReturnValue({
+        get: vi.fn().mockResolvedValue({ empty: true, docs: [] }),
+      }),
+    })
+
+    return {
+      mockKbDocRef,
+      mockKbDocSet,
+      mockKbDocUpdate,
+      mockKbDocDelete,
+      mockKbDocGet,
+      mockOldDocData,
+      mockChunkDocs,
+      mockKbChunksWhere,
+      mockKbChunksAdd,
+      mockJobSet,
+      mockJobDoc,
+      mockJobsWhere,
+    }
+  }
+
+  // ─── Test 6: version supersede cascade ─────────────────────────────────────
+
+  it('Test 6 (02-02): markSuperseded sets old kbDoc status:superseded + supersededBy, bulk-updates old chunks to superseded', async () => {
+    const {
+      mockKbDocRef,
+      mockKbDocUpdate,
+      mockChunkDocs,
+      mockKbChunksWhere,
+      mockKbChunksAdd,
+      mockJobDoc,
+      mockJobsWhere,
+    } = makeCrudMocks()
+
+    vi.doMock('@/src/firebase/collections', () => ({
+      kbDocsRef: vi.fn(() => ({ doc: mockKbDocRef })),
+      kbChunksRef: vi.fn(() => ({ where: mockKbChunksWhere, add: mockKbChunksAdd }),
+      ),
+      kbIngestionJobsRef: vi.fn(() => ({
+        doc: mockJobDoc,
+        where: mockJobsWhere,
+      })),
+      TENANT_ID: 'd2',
+    }))
+    vi.doMock('@/src/rag/embed', () => ({
+      embedText: vi.fn().mockResolvedValue(new Array(1024).fill(0.001)),
+    }))
+
+    const { markSuperseded } = await import('@/src/kb/crud')
+
+    await markSuperseded('old-doc-id', 'new-doc-id')
+
+    // Old kbDoc should be updated to superseded + supersededBy
+    expect(mockKbDocUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'superseded', supersededBy: 'new-doc-id' }),
+    )
+
+    // Old kbChunks should be fetched by docId and bulk-updated to superseded
+    expect(mockKbChunksWhere).toHaveBeenCalledWith('docId', '==', 'old-doc-id')
+    for (const chunkDoc of mockChunkDocs) {
+      expect(chunkDoc.ref.update).toHaveBeenCalledWith({ status: 'superseded' })
+    }
+  })
+
+  // ─── Test 7: unpublishDoc / publishDoc ──────────────────────────────────────
+
+  it('Test 7a (02-02): unpublishDoc sets kbDoc + its chunks to status:unpublished', async () => {
+    const {
+      mockKbDocRef,
+      mockKbDocUpdate,
+      mockChunkDocs,
+      mockKbChunksWhere,
+      mockKbChunksAdd,
+      mockJobDoc,
+      mockJobsWhere,
+    } = makeCrudMocks()
+
+    vi.doMock('@/src/firebase/collections', () => ({
+      kbDocsRef: vi.fn(() => ({ doc: mockKbDocRef })),
+      kbChunksRef: vi.fn(() => ({ where: mockKbChunksWhere, add: mockKbChunksAdd })),
+      kbIngestionJobsRef: vi.fn(() => ({ doc: mockJobDoc, where: mockJobsWhere })),
+      TENANT_ID: 'd2',
+    }))
+    vi.doMock('@/src/rag/embed', () => ({
+      embedText: vi.fn().mockResolvedValue(new Array(1024).fill(0.001)),
+    }))
+
+    const { unpublishDoc } = await import('@/src/kb/crud')
+    const adminUser = { uid: 'admin-1', role: 'admin' as const, tenantId: 'd2' }
+
+    await unpublishDoc(adminUser, 'doc-123')
+
+    // kbDoc must be set to unpublished
+    expect(mockKbDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'unpublished' }))
+
+    // kbChunks must be queried and bulk-updated to unpublished
+    expect(mockKbChunksWhere).toHaveBeenCalledWith('docId', '==', 'doc-123')
+    for (const chunkDoc of mockChunkDocs) {
+      expect(chunkDoc.ref.update).toHaveBeenCalledWith({ status: 'unpublished' })
+    }
+  })
+
+  it('Test 7b (02-02): publishDoc restores kbDoc + its chunks to status:published', async () => {
+    const {
+      mockKbDocRef,
+      mockKbDocUpdate,
+      mockChunkDocs,
+      mockKbChunksWhere,
+      mockKbChunksAdd,
+      mockJobDoc,
+      mockJobsWhere,
+    } = makeCrudMocks()
+
+    vi.doMock('@/src/firebase/collections', () => ({
+      kbDocsRef: vi.fn(() => ({ doc: mockKbDocRef })),
+      kbChunksRef: vi.fn(() => ({ where: mockKbChunksWhere, add: mockKbChunksAdd })),
+      kbIngestionJobsRef: vi.fn(() => ({ doc: mockJobDoc, where: mockJobsWhere })),
+      TENANT_ID: 'd2',
+    }))
+    vi.doMock('@/src/rag/embed', () => ({
+      embedText: vi.fn().mockResolvedValue(new Array(1024).fill(0.001)),
+    }))
+
+    const { publishDoc } = await import('@/src/kb/crud')
+    const adminUser = { uid: 'admin-1', role: 'admin' as const, tenantId: 'd2' }
+
+    await publishDoc(adminUser, 'doc-123')
+
+    // kbDoc must be set to published
+    expect(mockKbDocUpdate).toHaveBeenCalledWith(expect.objectContaining({ status: 'published' }))
+
+    // kbChunks must be queried and bulk-updated to published
+    expect(mockKbChunksWhere).toHaveBeenCalledWith('docId', '==', 'doc-123')
+    for (const chunkDoc of mockChunkDocs) {
+      expect(chunkDoc.ref.update).toHaveBeenCalledWith({ status: 'published' })
+    }
+  })
+
+  // ─── Test 8: correctKbDoc — correction attribution ──────────────────────────
+
+  it('Test 8 (02-02): correctKbDoc allows senior-coach; creates new version with correctedBy', async () => {
+    const {
+      mockKbDocRef,
+      mockKbDocSet,
+      mockKbChunksWhere,
+      mockKbChunksAdd,
+      mockJobDoc,
+      mockJobsWhere,
+      mockJobSet,
+    } = makeCrudMocks()
+
+    vi.doMock('@/src/firebase/collections', () => ({
+      kbDocsRef: vi.fn(() => ({ doc: mockKbDocRef })),
+      kbChunksRef: vi.fn(() => ({ where: mockKbChunksWhere, add: mockKbChunksAdd })),
+      kbIngestionJobsRef: vi.fn(() => ({ doc: mockJobDoc, where: mockJobsWhere })),
+      TENANT_ID: 'd2',
+    }))
+    vi.doMock('@/src/rag/embed', () => ({
+      embedText: vi.fn().mockResolvedValue(new Array(1024).fill(0.001)),
+    }))
+
+    const { correctKbDoc } = await import('@/src/kb/crud')
+    const seniorCoachUser = { uid: 'coach-uid-1', role: 'senior-coach' as const, tenantId: 'd2' }
+
+    const result = await correctKbDoc(
+      seniorCoachUser,
+      'old-doc-id',
+      'Updated D2 commission: residential 1.75% from Jan 2026.',
+    )
+
+    // Should NOT throw — senior-coach is allowed
+    expect(result).toBeDefined()
+
+    // New doc version must have correctedBy = coach uid
+    const setCall = mockKbDocSet.mock.calls[0]
+    expect(setCall).toBeDefined()
+    const newDocData = setCall[0]
+    expect(newDocData.correctedBy).toBe('coach-uid-1')
+    expect(newDocData.supersedesId).toBe('old-doc-id')
+
+    // A shard job must have been created
+    expect(mockJobSet).toHaveBeenCalled()
+  })
+
+  it('Test 8b (02-02): correctKbDoc rejects new-agent role', async () => {
+    const {
+      mockKbDocRef,
+      mockKbChunksWhere,
+      mockKbChunksAdd,
+      mockJobDoc,
+      mockJobsWhere,
+    } = makeCrudMocks()
+
+    vi.doMock('@/src/firebase/collections', () => ({
+      kbDocsRef: vi.fn(() => ({ doc: mockKbDocRef })),
+      kbChunksRef: vi.fn(() => ({ where: mockKbChunksWhere, add: mockKbChunksAdd })),
+      kbIngestionJobsRef: vi.fn(() => ({ doc: mockJobDoc, where: mockJobsWhere })),
+      TENANT_ID: 'd2',
+    }))
+    vi.doMock('@/src/rag/embed', () => ({
+      embedText: vi.fn().mockResolvedValue(new Array(1024).fill(0.001)),
+    }))
+
+    const { correctKbDoc } = await import('@/src/kb/crud')
+    const agentUser = { uid: 'agent-1', role: 'new-agent' as const, tenantId: 'd2' }
+
+    await expect(
+      correctKbDoc(agentUser, 'doc-id', 'Some correction content'),
+    ).rejects.toThrow()
+  })
+
+  // ─── Test 9: deleteDoc cleans up kbChunks ──────────────────────────────────
+
+  it('Test 9 (02-02): deleteDoc deletes kbDoc AND all associated kbChunks', async () => {
+    const {
+      mockKbDocRef,
+      mockKbDocDelete,
+      mockChunkDocs,
+      mockKbChunksWhere,
+      mockKbChunksAdd,
+      mockJobDoc,
+      mockJobsWhere,
+    } = makeCrudMocks()
+
+    vi.doMock('@/src/firebase/collections', () => ({
+      kbDocsRef: vi.fn(() => ({ doc: mockKbDocRef })),
+      kbChunksRef: vi.fn(() => ({ where: mockKbChunksWhere, add: mockKbChunksAdd })),
+      kbIngestionJobsRef: vi.fn(() => ({ doc: mockJobDoc, where: mockJobsWhere })),
+      TENANT_ID: 'd2',
+    }))
+    vi.doMock('@/src/rag/embed', () => ({
+      embedText: vi.fn().mockResolvedValue(new Array(1024).fill(0.001)),
+    }))
+
+    const { deleteDoc } = await import('@/src/kb/crud')
+    const adminUser = { uid: 'admin-1', role: 'admin' as const, tenantId: 'd2' }
+
+    await deleteDoc(adminUser, 'doc-to-delete')
+
+    // kbDocs doc must be deleted
+    expect(mockKbDocDelete).toHaveBeenCalled()
+
+    // kbChunks for this docId must be fetched and each deleted
+    expect(mockKbChunksWhere).toHaveBeenCalledWith('docId', '==', 'doc-to-delete')
+    for (const chunkDoc of mockChunkDocs) {
+      expect(chunkDoc.ref.update).toHaveBeenCalledWith({ status: 'superseded' })
+    }
+  })
+
+  // ─── Test 10: assertAdmin guards; correctKbDoc allows admin|senior-coach ────
+
+  it('Test 10a (02-02): publishDoc/unpublishDoc reject non-admin (new-agent)', async () => {
+    const {
+      mockKbDocRef,
+      mockKbChunksWhere,
+      mockKbChunksAdd,
+      mockJobDoc,
+      mockJobsWhere,
+    } = makeCrudMocks()
+
+    vi.doMock('@/src/firebase/collections', () => ({
+      kbDocsRef: vi.fn(() => ({ doc: mockKbDocRef })),
+      kbChunksRef: vi.fn(() => ({ where: mockKbChunksWhere, add: mockKbChunksAdd })),
+      kbIngestionJobsRef: vi.fn(() => ({ doc: mockJobDoc, where: mockJobsWhere })),
+      TENANT_ID: 'd2',
+    }))
+    vi.doMock('@/src/rag/embed', () => ({
+      embedText: vi.fn().mockResolvedValue(new Array(1024).fill(0.001)),
+    }))
+
+    const { publishDoc, unpublishDoc } = await import('@/src/kb/crud')
+    const agentUser = { uid: 'agent-1', role: 'new-agent' as const, tenantId: 'd2' }
+
+    await expect(publishDoc(agentUser, 'doc-1')).rejects.toThrow()
+    await expect(unpublishDoc(agentUser, 'doc-1')).rejects.toThrow()
+  })
+
+  it('Test 10b (02-02): correctKbDoc allows admin role too', async () => {
+    const {
+      mockKbDocRef,
+      mockKbDocSet,
+      mockKbChunksWhere,
+      mockKbChunksAdd,
+      mockJobDoc,
+      mockJobsWhere,
+    } = makeCrudMocks()
+
+    vi.doMock('@/src/firebase/collections', () => ({
+      kbDocsRef: vi.fn(() => ({ doc: mockKbDocRef })),
+      kbChunksRef: vi.fn(() => ({ where: mockKbChunksWhere, add: mockKbChunksAdd })),
+      kbIngestionJobsRef: vi.fn(() => ({ doc: mockJobDoc, where: mockJobsWhere })),
+      TENANT_ID: 'd2',
+    }))
+    vi.doMock('@/src/rag/embed', () => ({
+      embedText: vi.fn().mockResolvedValue(new Array(1024).fill(0.001)),
+    }))
+
+    const { correctKbDoc } = await import('@/src/kb/crud')
+    const adminUser = { uid: 'admin-1', role: 'admin' as const, tenantId: 'd2' }
+
+    const result = await correctKbDoc(adminUser, 'old-doc-id', 'Admin correction content')
+    expect(result).toBeDefined()
+
+    const setCall = mockKbDocSet.mock.calls[0]
+    expect(setCall[0].correctedBy).toBe('admin-1')
+  })
+})
