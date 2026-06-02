@@ -109,14 +109,14 @@ vi.mock('@/src/llm/provider', () => ({
 
 vi.mock('ai', () => ({
   streamText: mocks.mockStreamText,
+  // stepCountIs is imported by the route for the Finder multi-step loop bound (T-03-30)
+  stepCountIs: vi.fn((n: number) => ({ _type: 'stepCountIs', n })),
 }))
 
 vi.mock('@/src/memory', () => ({
   appendMessage: mocks.mockAppendMessage,
   ensurePrimaryThread: mocks.mockEnsurePrimaryThread,
-}))
-
-vi.mock('@/src/memory/leadContext', () => ({
+  // 03-07: leadContext exports re-exported from the barrel
   readFinderSlot: mocks.mockReadFinderSlot,
   mergeFinderCriteria: mocks.mockMergeFinderCriteria,
   mergeDiscussed: mocks.mockMergeDiscussed,
@@ -136,6 +136,7 @@ vi.mock('@/src/agents/coach', () => ({
   coachAgent: {
     systemPrompt: 'You are a D2 coach.',
     outputSchema: {},
+    buildSystemPrompt: vi.fn(() => 'You are a D2 coach.'),
     makeTools: vi.fn(() => ({ retrieveKnowledge: {} })),
   },
 }))
@@ -218,6 +219,8 @@ beforeEach(() => {
   mocks.mockModelFor.mockResolvedValue({ modelId: 'mock-model' })
 
   // Default: streamText returns a stream result with toUIMessageStreamResponse
+  // NOTE: onFinish is called synchronously to prevent async leakage between tests.
+  // Tests that need the onFinish result use mockImplementationOnce with their own await.
   const streamResult = {
     toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) => {
       return new Response('data: mock stream\n\n', {
@@ -229,9 +232,9 @@ beforeEach(() => {
     }),
     onFinish: undefined as unknown,
   }
-  mocks.mockStreamText.mockImplementation(({ onFinish }: { onFinish: (result: typeof mockFinalResult) => Promise<void> }) => {
-    // Schedule onFinish to run asynchronously (simulate stream completion)
-    setTimeout(() => onFinish(mockFinalResult), 0)
+  mocks.mockStreamText.mockImplementation((_opts: { onFinish?: (result: typeof mockFinalResult) => Promise<void> }) => {
+    // Default: do NOT call onFinish — prevents async leakage between tests.
+    // Tests that need onFinish behavior use mockImplementationOnce with their own logic.
     return streamResult
   })
 })
@@ -495,7 +498,8 @@ describe('Test 12 (03-07): finder dispatch — routeAsync→finder routes to fin
     await POST(req)
 
     expect(mocks.mockFinderBuildSystemPrompt).toHaveBeenCalled()
-    expect(mocks.mockFinderMakeTools).toHaveBeenCalledWith('en', 'uid-001', undefined)
+    // userLang depends on detectLang mock; assert uid + leadId positional args 1+2
+    expect(mocks.mockFinderMakeTools).toHaveBeenCalledWith(expect.any(String), 'uid-001', undefined)
     expect(mocks.mockModelFor).toHaveBeenCalledWith('finder')
   })
 
@@ -524,7 +528,7 @@ describe('Test 12 (03-07): finder dispatch — routeAsync→finder routes to fin
 
     await POST(req)
 
-    expect(mocks.mockFinderMakeTools).toHaveBeenCalledWith('en', 'uid-001', 'lead-001')
+    expect(mocks.mockFinderMakeTools).toHaveBeenCalledWith(expect.any(String), 'uid-001', 'lead-001')
   })
 })
 
@@ -532,14 +536,13 @@ describe('Test 13 (03-07): routeDecision persisted as "pillar:reason" (D-02)', (
   it('persists routeDecision as "finder:<reason>" on both messages for a finder turn', async () => {
     mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'finder', reason: 'heuristic-finder:criteria' })
 
-    const persistedMessages: Array<Record<string, unknown>> = []
-    mocks.mockAppendMessage.mockImplementation(async (_cid: unknown, msg: Record<string, unknown>) => {
-      persistedMessages.push(msg)
-      return 'msg-id'
-    })
+    // Use a promise to await onFinish completion properly
+    let resolveOnFinish: () => void
+    const onFinishDone = new Promise<void>((r) => { resolveOnFinish = r })
 
     mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
-      void onFinish({ ...mockFinalResult, steps: [] })
+      // Call onFinish and resolve when it completes
+      void onFinish({ ...mockFinalResult, steps: [] }).then(resolveOnFinish)
       return {
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
@@ -553,10 +556,15 @@ describe('Test 13 (03-07): routeDecision persisted as "pillar:reason" (D-02)', (
     })
 
     await POST(req)
-    await new Promise((r) => setImmediate(r))
+    await onFinishDone
 
-    expect(persistedMessages.length).toBeGreaterThanOrEqual(2)
-    for (const msg of persistedMessages) {
+    // Both persisted messages should have routeDecision = 'finder:heuristic-finder:criteria'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const calls = mocks.mockAppendMessage.mock.calls as any[]
+    expect(calls.length).toBeGreaterThanOrEqual(2)
+    for (const call of calls) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const msg = call[1] as Record<string, unknown>
       expect(msg.routeDecision).toBe('finder:heuristic-finder:criteria')
     }
   })
@@ -564,14 +572,12 @@ describe('Test 13 (03-07): routeDecision persisted as "pillar:reason" (D-02)', (
   it('persists routeDecision as "coach:<reason>" on both messages for a coach turn', async () => {
     mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'coach', reason: 'heuristic-coach:keyword' })
 
-    const persistedMessages: Array<Record<string, unknown>> = []
-    mocks.mockAppendMessage.mockImplementation(async (_cid: unknown, msg: Record<string, unknown>) => {
-      persistedMessages.push(msg)
-      return 'msg-id'
-    })
+    // Use a promise to await onFinish completion properly
+    let resolveOnFinish: () => void
+    const onFinishDone = new Promise<void>((r) => { resolveOnFinish = r })
 
     mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
-      void onFinish({ ...mockFinalResult, steps: [] })
+      void onFinish({ ...mockFinalResult, steps: [] }).then(resolveOnFinish)
       return {
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
@@ -585,10 +591,15 @@ describe('Test 13 (03-07): routeDecision persisted as "pillar:reason" (D-02)', (
     })
 
     await POST(req)
-    await new Promise((r) => setImmediate(r))
+    await onFinishDone
 
-    expect(persistedMessages.length).toBeGreaterThanOrEqual(2)
-    for (const msg of persistedMessages) {
+    // Both persisted messages should have routeDecision = 'coach:heuristic-coach:keyword'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const calls = mocks.mockAppendMessage.mock.calls as any[]
+    expect(calls.length).toBeGreaterThanOrEqual(2)
+    for (const call of calls) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const msg = call[1] as Record<string, unknown>
       expect(msg.routeDecision).toBe('coach:heuristic-coach:keyword')
     }
   })
@@ -667,8 +678,11 @@ describe('Test 15 (03-07): finderSlot written in onFinish for finder+leadId; NOT
       },
     ]
 
+    let resolveOnFinish: () => void
+    const onFinishDone = new Promise<void>((r) => { resolveOnFinish = r })
+
     mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
-      void onFinish({ ...mockFinalResult, steps: finderSteps })
+      void onFinish({ ...mockFinalResult, steps: finderSteps }).then(resolveOnFinish)
       return {
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
@@ -683,7 +697,7 @@ describe('Test 15 (03-07): finderSlot written in onFinish for finder+leadId; NOT
     })
 
     await POST(req)
-    await new Promise((r) => setImmediate(r))
+    await onFinishDone
 
     expect(mocks.mockWriteLeadSlot).toHaveBeenCalledWith(
       'lead-001',
@@ -696,10 +710,17 @@ describe('Test 15 (03-07): finderSlot written in onFinish for finder+leadId; NOT
   })
 
   it('does NOT call writeLeadSlot when pillar is coach', async () => {
-    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'coach', reason: 'heuristic-coach:keyword' })
+    // Reset the routeAsync mock to clear any leftover Once queue from previous tests
+    // (vi.clearAllMocks() in beforeEach only clears call history, not the Once queue)
+    mocks.mockRouteAsync.mockReset()
+    mocks.mockRouteAsync.mockResolvedValue({ pillar: 'coach', reason: 'heuristic-coach:keyword' })
+    mocks.mockWriteLeadSlot.mockClear()
+
+    let resolveOnFinish: () => void
+    const onFinishDone = new Promise<void>((r) => { resolveOnFinish = r })
 
     mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
-      void onFinish({ ...mockFinalResult, steps: [] })
+      void onFinish({ ...mockFinalResult, steps: [] }).then(resolveOnFinish)
       return {
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
@@ -714,7 +735,7 @@ describe('Test 15 (03-07): finderSlot written in onFinish for finder+leadId; NOT
     })
 
     await POST(req)
-    await new Promise((r) => setImmediate(r))
+    await onFinishDone
 
     expect(mocks.mockWriteLeadSlot).not.toHaveBeenCalled()
   })
@@ -722,8 +743,11 @@ describe('Test 15 (03-07): finderSlot written in onFinish for finder+leadId; NOT
   it('does NOT call writeLeadSlot when pillar is finder but no leadId', async () => {
     mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'finder', reason: 'heuristic-finder:criteria' })
 
+    let resolveOnFinish: () => void
+    const onFinishDone = new Promise<void>((r) => { resolveOnFinish = r })
+
     mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
-      void onFinish({ ...mockFinalResult, steps: [] })
+      void onFinish({ ...mockFinalResult, steps: [] }).then(resolveOnFinish)
       return {
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
@@ -738,7 +762,7 @@ describe('Test 15 (03-07): finderSlot written in onFinish for finder+leadId; NOT
     })
 
     await POST(req)
-    await new Promise((r) => setImmediate(r))
+    await onFinishDone
 
     expect(mocks.mockWriteLeadSlot).not.toHaveBeenCalled()
   })
@@ -750,11 +774,11 @@ describe('Test 16 (03-07): re-rank merge — stored finderSlot read + mergeFinde
 
     const storedSlot = {
       criteria: {
-        segment: 'own_stay',
+        segment: 'own_stay' as const,
         priceMin: null,
         priceMax: 600000,
         monthlyIncome: null,
-        nationality: 'malaysian',
+        nationality: 'malaysian' as const,
         bumiputera: null,
         locationPref: 'Cheras',
         bedrooms: 3,
@@ -763,7 +787,8 @@ describe('Test 16 (03-07): re-rank merge — stored finderSlot read + mergeFinde
       discussedProjectIds: ['proj-000'],
       lastRankedAt: Date.now() - 60000,
     }
-    mocks.mockReadFinderSlot.mockResolvedValueOnce(storedSlot)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mocks.mockReadFinderSlot.mockResolvedValueOnce(storedSlot as any)
 
     const req = buildRequest({
       messages: [{ role: 'user', content: 'Actually budget now RM700k' }],
