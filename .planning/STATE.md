@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executed-human-gated
-stopped_at: Phase 1 code-complete (12 SUMMARYs; 01-01 open) — spike gate + provisioning pending before Phase 2
-last_updated: "2026-06-01T00:00:00.000Z"
-last_activity: 2026-06-01 — Phase 1 executed (all 13 plans coded) + stack override refactor: embeddings Voyage→Gemini (gemini-embedding-001 @1024-d, @ai-sdk/google) and scheduling QStash→on-visit lazy-cron Server Action. tsc clean, 153 vitest pass/0 fail, lint 0 err. Verifier=human_needed; SPIKE-CRON retired. Open gates: 01-01 provisioning + 3 live spikes (RAG/DEPLOY/INGEST) + live-stack proof.
+stopped_at: Phase 3 code-complete + verified (9 SUMMARYs; 0 code gaps) — live finder/router evals + Playwright e2e + FIND-12 pilot provisioning are the live-gated human step
+last_updated: "2026-06-03T00:00:00.000Z"
+last_activity: 2026-06-03 — Phase 3 (Finder + Intent-Routing Activation) executed (all 9 plans, 5 waves) + verified. tsc clean, 452 vitest pass / 97 skipped / 0 fail, lint 0 err. Verifier=goal_achieved:true (human_needed only for 3 live-gated runs; 0 code gaps); 8/8 hard guarantees pass; no regressions. NOT pushed (user hold).
 progress:
   total_phases: 5
-  completed_phases: 0
-  total_plans: 13
-  completed_plans: 12
-  percent: 92
+  completed_phases: 3
+  total_plans: 30
+  completed_plans: 30
+  percent: 60
 ---
 
 # Project State
@@ -21,25 +21,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-31)
 
 **Core value:** Compress new-agent ramp-up from 60 days to 7–10 days via a D2-grounded multi-pillar AI chat surface (the 11pm-on-a-phone answer).
-**Current focus:** Phase 1 — Foundations
+**Current focus:** Phase 4 — Reply Assistant + Reply Analytics (next)
 
 ## Current Position
 
-Phase: 1 of 5 (Foundations)
-Plan: 12 of 13 have SUMMARY (01-02..01-13 code-complete; 01-01 = open human-action gate)
-Status: Code-complete, SPIKE-GATED — awaiting human-action gates before Phase 2
-Last activity: 2026-06-01 — Phase 1 executed; tsc clean, 155 vitest pass/0 fail; verifier=human_needed (0 code gaps).
+Phase: 3 of 5 complete (Finder + Intent-Routing Activation) — next: Phase 4
+Plan: 9 of 9 Phase-3 plans have SUMMARY (03-01..03-09 code-complete + verified)
+Status: Phase 3 code-complete + verified (0 code gaps) — live finder/router evals + Playwright e2e + FIND-12 pilot provisioning are the live-gated human step
+Last activity: 2026-06-03 — Phase 3 executed (9 plans, 5 waves) + verified; tsc clean, 452 vitest pass / 97 skipped / 0 fail; verifier=goal_achieved:true (human_needed for live runs only, 0 code gaps); 8/8 hard guarantees pass; no regressions. NOT pushed (user hold).
 
-Progress: [█████████░] 92% (code) — phase not verified-complete until spikes + provisioning close
+Progress: [██████░░░░] 60% (3 of 5 phases code-complete + verified)
 
-### Open human-action gates (block Phase 2)
-1. 01-01 — Derek's written asia-southeast1 region sign-off (G1) + G2 residency; live Firebase + App Hosting + Secret Manager provisioning; bind 2 secrets — `ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` (see 01-01-USER-SETUP.md, PROVISIONING.md, .env.sample). No QStash to provision (lazy-cron).
-2. SPIKE-RAG — `RUN_SPIKES=1 npx vitest run src/rag/spike-rag.test.ts` against live Firestore findNearest with Gemini embeddings (p95<800ms, BM/ZH recall ≥70% of EN) or pick Pinecone fallback.
-3. SPIKE-DEPLOY — deploy to App Hosting asia-southeast1; verify token-by-token SSE on a real 4G phone.
-4. SPIKE-INGEST — run a 100–200pg PDF through the chunked-poll loop within budget.
-5. Live-stack proof — Playwright proof-slice/persist E2E + Promptfoo trilingual eval (Opus judge) once .env is populated.
-(SPIKE-CRON retired — QStash removed; scheduling is an on-visit lazy-cron Server Action, no external scheduler to spike.)
-Record spike pass/fallback decisions in SPIKES.md; the signed week-4 go/no-go memo gates Phase 3.
+### Phase 3 open human-action gate (live-gated — does NOT block Phase 4 planning)
+1. Live Promptfoo finder/router evals — need live Anthropic/Gemini/Firestore + Opus judge (model from Remote Config).
+2. Playwright `e2e/finder-flow.spec.ts` + `e2e/inventory-admin.spec.ts` — skip-guarded scaffolds; remove `test.skip`, run against a deployed seeded stack.
+3. FIND-12 pilot provisioning — `scripts/provision-finder-pilot.ts --apply` to 15–20 real finder-pilot agents (dry-run by default).
+
+### Earlier open gates (carried — Phase 1/2 live-stack proofs, run during pilot rollout)
+- 01-01 region/residency sign-off + live Firebase/App Hosting/Secret Manager provisioning (`ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`); SPIKE-RAG/DEPLOY/INGEST live runs; Phase-1/2 Playwright + Promptfoo trilingual eval. (SPIKE-CRON retired — lazy-cron, no external scheduler.)
 
 ## Performance Metrics
 
@@ -99,9 +98,9 @@ Items acknowledged and carried forward (v2 / post-pilot):
 
 ## Session Continuity
 
-Last session: 2026-06-02
-Stopped at: Phase 2 (Coach + Admin v1) EXECUTED — all 8 plans built across 4 waves; tsc clean, 325 vitest pass / 0 fail, lint 0 errors. Verifier=human_needed (0 code gaps — the one markSuperseded wiring gap was found + CLOSED, commit fdb1199). Phase 1 gates user-confirmed closed; D-09=on-visit; working-hours default KL 09:00–18:00; calibration approved. Built against real Firebase (Gemini, on-visit lazy-cron).
-Resume file: .planning/phases/03-finder-routing/03-01-PLAN.md
-Phase 2: shipped (go/no-go SIGNED 2026-06-02); live-stack proofs (e2e waived; eval+calibration) + COACH-10 pilot provisioning run during pilot rollout.
-Phase 3 (Finder + Intent-Routing Activation): PLANNED + verified — 9 plans across 5 waves [1:{01,05} 2:{02} 3:{03,04,06} 4:{07,08} 5:{09}], 13/13 req IDs covered, research + Nyquist validation done, plan-checker remediated (incl. a caught wave bug). Two checkpoints: 03-08 (G4 inventory format → Derek) + 03-09 (FIND-12 pilot provisioning).
-Next step: /gsd-execute-phase 3 (wave-based; sequential, real Firebase, offline-tested). Live finder/router evals + pilot provisioning are live-gated.
+Last session: 2026-06-03
+Stopped at: Phase 3 (Finder + Intent-Routing Activation) EXECUTED + VERIFIED — all 9 plans built across 5 waves [1:{01,05} 2:{02} 3:{03,04,06} 4:{07,08} 5:{09}]; tsc clean, 452 vitest pass / 97 skipped / 0 fail, lint 0 errors. Verifier=goal_achieved:true (human_needed for the 3 live-gated runs only; 0 code gaps); 8/8 hard guarantees pass (active-only two-stage grounding, citation/grounded-refusal, eligibility filter, two-pillar routeAsync dispatch, read-only auth-as-user tools, PDPA boundary on Finder path, model-agnostic Remote Config, no-GCP overrides); no regressions (Coach/audit/ratelimit/KB untouched, 28/28 coach tests pass). Built against real Firebase (Gemini 1024-d, on-visit lazy-cron). NOT pushed — user hold.
+Resume file: .planning/ROADMAP.md → Phase 4 (Reply Assistant + Reply Analytics)
+Phase 3: code-complete + verified; live finder/router Promptfoo evals + Playwright e2e (skip-guarded scaffolds) + FIND-12 pilot provisioning (`scripts/provision-finder-pilot.ts --apply`, dry-run by default) are the live-gated human step — run during pilot rollout, do NOT block Phase 4 planning.
+Phase 4 (Reply Assistant + Reply Analytics): NOT yet started. Reqs REPLY-01..12, ADMIN-05/06, QUAL-02. Paste-and-draft WhatsApp replies in D2's voice (never auto-sent), per-lead isolation, edit-as-signal analytics, reachable via the activated intent router alongside Coach + Finder.
+Next step: /gsd-discuss-phase 4 (then plan → execute). User standing instruction: do NOT push to any remote without explicit confirmation.
