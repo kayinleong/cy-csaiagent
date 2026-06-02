@@ -104,12 +104,16 @@ export function ConversationList({
     }
   }, [])
 
+  // Open-driven one-shot data fetch + search reset. The setState here runs when the
+  // drawer opens (not every render) — intentional, not a cascading-render risk.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (open) {
       void loadConversations()
       setSearchTerm('')
     }
   }, [open, loadConversations])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Client-side substring search (CHAT-07)
   const filteredThreads = searchTerm

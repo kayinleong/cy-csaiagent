@@ -152,7 +152,7 @@ describe('extractText — PPTX', () => {
     const zip = new JSZip()
 
     // Add slide10 before slide2 in the zip to verify sort order
-    for (let n of [10, 2, 1]) {
+    for (const n of [10, 2, 1]) {
       zip.file(
         `ppt/slides/slide${n}.xml`,
         `<?xml version="1.0"?>

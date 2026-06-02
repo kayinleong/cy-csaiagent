@@ -57,6 +57,9 @@ export function DisclosureModal({ onAck }: DisclosureModalProps) {
     if (acked) {
       onAck()
     } else {
+      // One-shot mount-time localStorage gate — running once on mount is intentional
+      // (post-mount read avoids SSR/hydration mismatch). Not a cascading-render risk.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOpen(true)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
