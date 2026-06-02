@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => {
   const mockStreamText = vi.fn()
   const mockAppendMessage = vi.fn(async () => 'msg-id-001')
   const mockAfter = vi.fn((fn: () => void) => fn()) // execute inline for test assertions
+  const mockEnsurePrimaryThread = vi.fn(async () => 'coach-uid-001')
 
   return {
     mockRequireUser,
@@ -44,6 +45,7 @@ const mocks = vi.hoisted(() => {
     mockStreamText,
     mockAppendMessage,
     mockAfter,
+    mockEnsurePrimaryThread,
   }
 })
 
@@ -88,6 +90,7 @@ vi.mock('ai', () => ({
 
 vi.mock('@/src/memory', () => ({
   appendMessage: mocks.mockAppendMessage,
+  ensurePrimaryThread: mocks.mockEnsurePrimaryThread,
 }))
 
 vi.mock('@/src/agents/coach', () => ({
@@ -331,5 +334,159 @@ describe('Test 7: Route Handler is not a Server Action', () => {
     )
     expect(routeSource).not.toContain('"use server"')
     expect(routeSource).not.toContain("'use server'")
+  })
+})
+
+// ─── Test 8 (02-03): Stable cid via ensurePrimaryThread ──────────────────────
+
+describe('Test 8 (02-03): ensurePrimaryThread called when no cid provided', () => {
+  it('calls ensurePrimaryThread when no cid is provided in body', async () => {
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'What is D2 onboarding?' }],
+      // No cid provided
+    })
+
+    await POST(req)
+
+    expect(mocks.mockEnsurePrimaryThread).toHaveBeenCalledWith('uid-001', expect.any(String))
+  })
+
+  it('does NOT call ensurePrimaryThread when cid is explicitly provided', async () => {
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'Hello' }],
+      cid: 'coach-uid-explicit',
+    })
+
+    await POST(req)
+
+    expect(mocks.mockEnsurePrimaryThread).not.toHaveBeenCalled()
+  })
+})
+
+// ─── Test 9 (02-03): langOverride honored ────────────────────────────────────
+
+describe('Test 9 (02-03): langOverride flows to RAG and reply language', () => {
+  it('uses langOverride when provided in body', async () => {
+    const { detectLang } = await import('@/src/i18n/detect')
+    const mockDetect = detectLang as ReturnType<typeof vi.fn>
+    mockDetect.mockReturnValue('en')
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'Hello' }],
+      langOverride: 'ms',
+    })
+
+    await POST(req)
+
+    // coachAgent.makeTools should be called with the overridden lang
+    const { coachAgent } = await import('@/src/agents/coach')
+    expect((coachAgent.makeTools as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('ms')
+  })
+
+  it('falls back to detectLang when langOverride is absent', async () => {
+    const { detectLang } = await import('@/src/i18n/detect')
+    const mockDetect = detectLang as ReturnType<typeof vi.fn>
+    mockDetect.mockReturnValue('zh')
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: '你好' }],
+    })
+
+    await POST(req)
+
+    const { coachAgent } = await import('@/src/agents/coach')
+    expect((coachAgent.makeTools as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith('zh')
+  })
+})
+
+// ─── Test 10 (02-03): User + assistant messages both persisted ────────────────
+
+describe('Test 10 (02-03): both user and assistant messages persisted in onFinish', () => {
+  it('appendMessage is called with user role and then assistant role (via onFinish)', async () => {
+    // Use a local tracking array — independent of accumulated mock history
+    const persistedRoles: string[] = []
+    mocks.mockAppendMessage.mockImplementation(async (_cid: string, msg: { role: string }) => {
+      persistedRoles.push(msg.role)
+      return 'msg-id-local'
+    })
+
+    // Invoke onFinish synchronously via a custom streamText mock for this test
+    mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: typeof mockFinalResult) => Promise<void> }) => {
+      void onFinish({ ...mockFinalResult, steps: [] })
+      return {
+        toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
+          new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
+        ),
+      }
+    })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'Tell me about D2 onboarding' }],
+      cid: 'coach-uid-001',
+    })
+
+    await POST(req)
+    // onFinish is awaited by streamText mock synchronously, but appendMessage is async
+    await new Promise((r) => setImmediate(r))
+
+    // Both user and assistant must have been persisted
+    expect(persistedRoles).toContain('user')
+    expect(persistedRoles).toContain('assistant')
+    // user must come before assistant
+    expect(persistedRoles.indexOf('user')).toBeLessThan(persistedRoles.indexOf('assistant'))
+  })
+})
+
+// ─── Test 11 (02-03): extractCitationChunkIds helper ─────────────────────────
+
+describe('Test 11 (02-03): extractCitationChunkIds extracts chunk IDs from tool results', () => {
+  it('returns chunk IDs from retrieveKnowledge tool result when found', async () => {
+    const { extractCitationChunkIds } = await import('./route')
+
+    const fakeFinish = {
+      steps: [
+        {
+          toolResults: [
+            {
+              toolName: 'retrieveKnowledge',
+              result: {
+                found: true,
+                citations: [
+                  { chunkId: 'chunk-001', docId: 'doc-1', snippet: 'D2 onboarding content' },
+                  { chunkId: 'chunk-002', docId: 'doc-1', snippet: 'PowerBoost content' },
+                ],
+                context: 'content here',
+              },
+            },
+          ],
+        },
+      ],
+    }
+
+    const ids = extractCitationChunkIds(fakeFinish)
+    expect(ids).toEqual(['chunk-001', 'chunk-002'])
+  })
+
+  it('returns [] when no tool was called', async () => {
+    const { extractCitationChunkIds } = await import('./route')
+    const ids = extractCitationChunkIds({ steps: [] })
+    expect(ids).toEqual([])
+  })
+
+  it('returns [] when retrieveKnowledge returned a miss', async () => {
+    const { extractCitationChunkIds } = await import('./route')
+
+    const fakeFinish = {
+      steps: [
+        {
+          toolResults: [
+            { toolName: 'retrieveKnowledge', result: { found: false, reason: 'kb_miss' } },
+          ],
+        },
+      ],
+    }
+
+    const ids = extractCitationChunkIds(fakeFinish)
+    expect(ids).toEqual([])
   })
 })

@@ -40,15 +40,55 @@ import * as audit from '@/src/audit'
 import { route } from '@/src/router'
 import { coachAgent } from '@/src/agents/coach'
 import { modelFor } from '@/src/llm/provider'
-import { appendMessage } from '@/src/memory'
+import { appendMessage, ensurePrimaryThread } from '@/src/memory'
 import { detectLang } from '@/src/i18n/detect'
 import type { MessageDoc } from '@/src/firebase/collections'
 import { TENANT_ID } from '@/src/firebase/collections'
+import type { RetrieveHit } from '@/src/agents/coach/tools'
 
 // ─── Runtime configuration ────────────────────────────────────────────────────
 
 export const runtime = 'nodejs'
 export const maxDuration = 90
+
+// ─── Citation extraction helper ───────────────────────────────────────────────
+
+/**
+ * Extract KB chunk IDs from the AI SDK v5 streamText onFinish payload.
+ *
+ * AI SDK v5 exposes tool call results in `final.steps[*].toolResults` where
+ * each result has a `toolName` and `result` field. The `retrieveKnowledge` tool
+ * returns a `RetrieveHit` when found (`found: true`, `citations: [{chunkId, ...}]`).
+ *
+ * If no tool was called or the tool returned a miss (`found: false`), returns [].
+ * Never throws — citation extraction is best-effort (T-02-14: chunkIds are not PII).
+ *
+ * @param final  The onFinish payload from streamText (StepResult + steps array).
+ * @returns      Array of KB chunk ID strings.
+ */
+export function extractCitationChunkIds(
+  final: { steps?: Array<{ toolResults?: Array<{ toolName?: string; result?: unknown }> }> },
+): string[] {
+  try {
+    const chunkIds: string[] = []
+    for (const step of final.steps ?? []) {
+      for (const tr of step.toolResults ?? []) {
+        if (tr.toolName === 'retrieveKnowledge') {
+          const r = tr.result as RetrieveHit | { found: false } | null | undefined
+          if (r && r.found === true) {
+            for (const c of (r as RetrieveHit).citations) {
+              if (c.chunkId) chunkIds.push(c.chunkId)
+            }
+          }
+        }
+      }
+    }
+    return chunkIds
+  } catch {
+    // Never let citation extraction fail the request
+    return []
+  }
+}
 
 // ─── POST handler ─────────────────────────────────────────────────────────────
 
@@ -94,13 +134,21 @@ export async function POST(req: Request): Promise<Response> {
   // ── Parse request body ──────────────────────────────────────────────────────
   let messages: Array<{ role: 'user' | 'assistant'; content: string }>
   let cid: string
+  let langOverride: 'en' | 'ms' | 'zh' | undefined
   try {
     const body = await req.json() as {
       messages?: Array<{ role: 'user' | 'assistant'; content: string }>
       cid?: string
+      langOverride?: 'en' | 'ms' | 'zh'
     }
     messages = body.messages ?? []
-    cid = body.cid ?? `conv-${uid}-${Date.now()}`
+    // langOverride: manual pin from the language-override chip (CHAT-08)
+    // Only accept valid locales — discard anything else for security (T-02-12)
+    langOverride = (['en', 'ms', 'zh'] as const).includes(body.langOverride as 'en' | 'ms' | 'zh')
+      ? (body.langOverride as 'en' | 'ms' | 'zh')
+      : undefined
+    // cid: use provided value (history navigation) or defer to ensurePrimaryThread below
+    cid = body.cid ?? ''
 
     if (messages.length === 0) {
       return new Response(JSON.stringify({ error: 'No messages provided' }), {
@@ -115,9 +163,16 @@ export async function POST(req: Request): Promise<Response> {
     })
   }
 
-  // Detect the language of the most recent user message for RAG pre-filter
+  // Detect the language of the most recent user message for RAG pre-filter.
+  // CHAT-08: honor manual langOverride chip when present; auto-detect otherwise.
   const lastUserMessage = messages.filter((m) => m.role === 'user').at(-1)
-  const userLang = lastUserMessage ? detectLang(lastUserMessage.content) : 'en'
+  const userLang: 'en' | 'ms' | 'zh' = langOverride ?? (lastUserMessage ? detectLang(lastUserMessage.content) : 'en')
+
+  // Resolve the stable primary thread cid (D-01 / Pitfall 2 fix).
+  // If no cid was provided, create/look up the persistent coach-${uid} thread.
+  if (!cid) {
+    cid = await ensurePrimaryThread(uid, userLang)
+  }
 
   // ── GATE 3: PDPA pseudonymization + assertRedacted ──────────────────────────
   // Pseudonymize any PII in the message content BEFORE the prompt leaves the server.
@@ -162,8 +217,12 @@ export async function POST(req: Request): Promise<Response> {
 
   // ── GATE 5: streamText + onFinish ───────────────────────────────────────────
   // The model call only happens if all gates above have passed.
-  // onFinish persists the message and triggers the audit write via after().
+  // onFinish persists BOTH the user and assistant messages, extracts real citations,
+  // and triggers the audit write via after().
   const redactedMessages = redacted.messages as Array<{ role: 'user' | 'assistant'; content: string }>
+
+  // Snapshot user message content before streaming (stable reference for persistence)
+  const userMessageContent = lastUserMessage?.content ?? ''
 
   const result = streamText({
     model,
@@ -171,18 +230,36 @@ export async function POST(req: Request): Promise<Response> {
     messages: redactedMessages,
     tools: agentTools,
     onFinish: async (final) => {
-      // Persist the assistant message to the subcollection
+      // ── Persist user message (Pitfall 2 fix — CHAT-02) ────────────────────
+      // The user message is persisted AFTER the stream to avoid blocking the
+      // response, but before the assistant message (order is stable).
+      const userMsg: MessageDoc = {
+        tenantId: TENANT_ID,
+        role: 'user',
+        content: userMessageContent,
+        citations: [],
+        routeDecision: pillar,
+        tokens: 0, // user turns have no model token cost
+        redacted: true, // PDPA gate was applied
+      }
+      await appendMessage(cid, userMsg)
+
+      // ── Extract citation chunk IDs from tool results (Pitfall 6 fix) ─────
+      // AI SDK v5 exposes tool results on the finish payload via `steps[*].toolResults`.
+      // Map the retrieveKnowledge tool's RetrieveHit.citations[].chunkId into the
+      // persisted assistant message — this grounds history in real KB references.
+      const citationIds = extractCitationChunkIds(final)
+
+      // ── Persist the assistant message ────────────────────────────────────
       const assistantMsg: MessageDoc = {
         tenantId: TENANT_ID,
         role: 'assistant',
         content: final.text,
-        citations: [], // Phase 2: extract citations from tool results
+        citations: citationIds, // real KB chunk IDs from retrieveKnowledge tool result
         routeDecision: pillar,
         tokens: final.usage.totalTokens ?? 0,
         redacted: true, // PDPA gate was applied
       }
-
-      // Persist to conversations/{cid}/messages subcollection
       await appendMessage(cid, assistantMsg)
 
       // Decrement the rate-limit budget atomically after the turn completes
