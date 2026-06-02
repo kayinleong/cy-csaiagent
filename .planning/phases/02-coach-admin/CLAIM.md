@@ -4,7 +4,7 @@
 - session: claude-code
 - branch: phase-kayinleong-01
 - started: 2026-06-02
-- status: in-progress
+- status: done
 - summary: Execute Phase 2 (Coach + Admin v1) — 8 plans across 4 waves. Onboarding Coach end-to-end + mobile chat surface + senior-coach dashboard + plain-language admin KB app, to a 5–10 agent pilot.
 
 ## What will change
@@ -44,4 +44,4 @@ Orchestrator-applied fixes beyond the per-plan work: lint clean-up (React-19 set
 
 **Regression report:** Phase 2 extends Phase-1 seams; no prior runtime feature regressed (full suite green throughout; the Phase-1 offline tests still pass). Risk surface = the KB status-field change (made optional → no writer breakage; backfill stamps legacy docs) and the shared i18n catalogs (waves serialized to avoid clobbering — verified). NOT yet exercised: `next build`/`next dev` end-to-end, any live Firebase/Gemini/Anthropic path, and the browser UI — these are the live-stack gate (need the running stack + the live Opus-judge calibration that feeds the Phase 2→3 go/no-go memo).
 
-**Status:** code execution complete + verified (0 code gaps); claim remains **in-progress** until the live-stack proofs + calibration run and the Phase 2→3 go/no-go memo is signed.
+**Status:** DONE — code execution complete + verified (0 code gaps); Phase 2→3 go/no-go memo **SIGNED 2026-06-02** (`02-GO-NO-GO-MEMO.md`). Playwright e2e setup waived by the user; live-stack proofs + Opus-judge calibration run during pilot rollout (not blocking Phase 3 planning).
