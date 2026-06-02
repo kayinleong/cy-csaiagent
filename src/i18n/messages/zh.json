@@ -25,7 +25,26 @@
     "copyReply": "复制回复",
     "copied": "已复制！",
     "rateLimit": "您已达到每小时限额，请稍候片刻。",
-    "error": "出现错误，请重试。"
+    "error": "出现错误，请重试。",
+    "disclosure": {
+      "title": "此助手使用人工智能",
+      "body": "D2经纪助手由人工智能驱动。虽然它提供基于D2培训材料的答案，但请向您的高级教练确认重要信息。您的对话可能会被审核以改善服务。",
+      "ackButton": "我明白，继续"
+    },
+    "aiBadge": "AI",
+    "talkToCoach": "联系我的教练",
+    "talkToCoachSent": "您的教练已收到通知。",
+    "talkToCoachError": "无法联系您的教练，请重试。",
+    "langOverride": {
+      "label": "回复语言：",
+      "en": "EN",
+      "ms": "BM",
+      "zh": "中文"
+    },
+    "history": "对话历史",
+    "historyEmpty": "暂无历史对话。",
+    "searchPlaceholder": "搜索对话…",
+    "newConversation": "新对话"
   },
   "handoff": {
     "kbMiss": "我在D2知识库中未能找到相关文章，您的高级教练已收到通知。",

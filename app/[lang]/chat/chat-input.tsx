@@ -42,6 +42,11 @@ interface ChatInputProps {
   initialMessages?: ChatMessage[]
   /** The conversation ID for persistence */
   conversationId?: string
+  /**
+   * Language override from the chat-header ToggleGroup chip (CHAT-08).
+   * When set, overrides per-message auto-detect in the route handler.
+   */
+  langOverride?: 'en' | 'ms' | 'zh'
   /** i18n copy */
   placeholder?: string
   sendLabel?: string
@@ -84,18 +89,25 @@ function useChatStream({
   onMessagesChange,
   initialMessages = [],
   conversationId,
-}: Pick<ChatInputProps, 'onMessagesChange' | 'initialMessages' | 'conversationId'>) {
+  langOverride,
+}: Pick<ChatInputProps, 'onMessagesChange' | 'initialMessages' | 'conversationId' | 'langOverride'>) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [isStreaming, setIsStreaming] = useState(false)
   const [input, setInput] = useState('')
   const cidRef = useRef<string>(conversationId ?? '')
-  // Initialize cidRef on mount only (avoid impure Date.now() during render)
+  // Initialize cidRef on mount; update when conversationId prop changes
+  // (happens when user selects a thread from the history drawer — CHAT-07).
   useEffect(() => {
-    if (!cidRef.current) {
-      cidRef.current = `conv-${Date.now()}`
+    if (conversationId) {
+      // New thread selected from history — use it directly
+      cidRef.current = conversationId
+    } else if (!cidRef.current) {
+      // No cid yet and no prop — leave empty; ensurePrimaryThread on the server
+      // will create/look up the stable coach-${uid} thread (D-01 / Pitfall 2 fix).
+      cidRef.current = ''
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [conversationId])
 
   // Keep parent in sync when messages update
   useEffect(() => {
@@ -128,16 +140,26 @@ function useChatStream({
       const idToken = await currentUser.getIdToken()
 
       // POST to /api/chat with Bearer auth
+      // langOverride: passed when the user has pinned a language via the header chip (CHAT-08)
+      const requestBody: {
+        messages: Array<{ role: string; content: string }>
+        cid: string
+        langOverride?: 'en' | 'ms' | 'zh'
+      } = {
+        messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
+        cid: cidRef.current,
+      }
+      if (langOverride) {
+        requestBody.langOverride = langOverride
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({
-          messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
-          cid: cidRef.current,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
@@ -241,6 +263,7 @@ export function ChatInput({
   onMessagesChange,
   initialMessages,
   conversationId,
+  langOverride,
   placeholder = 'Ask anything about D2 properties, SOPs, or your onboarding journey…',
   sendLabel = 'Send',
 }: ChatInputProps) {
@@ -250,6 +273,7 @@ export function ChatInput({
     onMessagesChange,
     initialMessages,
     conversationId,
+    langOverride,
   })
 
   // Handle keyboard submit: Enter = send (Shift+Enter = new line)

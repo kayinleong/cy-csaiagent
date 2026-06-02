@@ -25,7 +25,26 @@
     "copyReply": "Salin balasan",
     "copied": "Disalin!",
     "rateLimit": "Anda telah mencapai had sejam. Sila tunggu beberapa minit.",
-    "error": "Berlaku ralat. Sila cuba lagi."
+    "error": "Berlaku ralat. Sila cuba lagi.",
+    "disclosure": {
+      "title": "Pembantu ini menggunakan AI",
+      "body": "Pembantu Ejen D2 dikuasakan oleh AI. Walaupun ia memberikan jawapan berdasarkan bahan latihan D2, sila sahkan maklumat penting dengan jurulatih kanan anda. Perbualan anda mungkin disemak untuk menambah baik perkhidmatan.",
+      "ackButton": "Saya faham, teruskan"
+    },
+    "aiBadge": "AI",
+    "talkToCoach": "Hubungi jurulatih saya",
+    "talkToCoachSent": "Jurulatih anda telah dimaklumkan.",
+    "talkToCoachError": "Tidak dapat menghubungi jurulatih anda. Sila cuba lagi.",
+    "langOverride": {
+      "label": "Balas dalam:",
+      "en": "EN",
+      "ms": "BM",
+      "zh": "中文"
+    },
+    "history": "Sejarah perbualan",
+    "historyEmpty": "Tiada perbualan lalu lagi.",
+    "searchPlaceholder": "Cari perbualan…",
+    "newConversation": "Perbualan baru"
   },
   "handoff": {
     "kbMiss": "Saya tidak dapat mencari artikel pangkalan pengetahuan D2 untuk ini. Jurulatih kanan anda telah dimaklumkan.",

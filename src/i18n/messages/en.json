@@ -23,7 +23,26 @@
     "copyReply": "Copy reply",
     "copied": "Copied!",
     "rateLimit": "You've reached your hourly limit. Please wait a few minutes.",
-    "error": "Something went wrong. Please try again."
+    "error": "Something went wrong. Please try again.",
+    "disclosure": {
+      "title": "This assistant uses AI",
+      "body": "D2 Agent Assistant is powered by AI. While it provides answers grounded in D2 training materials, always verify important information with your senior coach. Your conversations may be reviewed to improve the service.",
+      "ackButton": "I understand, continue"
+    },
+    "aiBadge": "AI",
+    "talkToCoach": "Talk to my coach",
+    "talkToCoachSent": "Your coach has been notified.",
+    "talkToCoachError": "Could not reach your coach. Please try again.",
+    "langOverride": {
+      "label": "Reply in:",
+      "en": "EN",
+      "ms": "BM",
+      "zh": "中文"
+    },
+    "history": "Conversation history",
+    "historyEmpty": "No past conversations yet.",
+    "searchPlaceholder": "Search conversations…",
+    "newConversation": "New conversation"
   },
   "handoff": {
     "kbMiss": "I couldn't find a D2 knowledge base article for this. Your senior coach has been notified.",

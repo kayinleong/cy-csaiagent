@@ -88,6 +88,8 @@ vi.mock('ai', () => ({
 
 vi.mock('@/src/memory', () => ({
   appendMessage: mocks.mockAppendMessage,
+  // 02-03: ensurePrimaryThread needed by the updated route (stable cid lifecycle)
+  ensurePrimaryThread: vi.fn(async () => 'coach-uid-001'),
 }))
 
 vi.mock('@/src/agents/coach', () => ({

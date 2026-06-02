@@ -1,0 +1,204 @@
+'use client'
+
+/**
+ * app/[lang]/chat/conversation-list.tsx — Conversation history drawer with search (CHAT-07).
+ *
+ * Renders a Sheet (drawer) listing the agent's past conversations with client-side
+ * substring search on `summary`. Selecting a thread sets the active cid in ChatShell.
+ *
+ * Data loading:
+ *   - Conversations are loaded via the client Firestore SDK (read-only from the client,
+ *     gated by Firestore rules: owner-only reads on conversations/{cid}).
+ *   - On open, queries `conversations` where ownerUid == currentUser.uid, ordered by
+ *     createdAt DESC, limit 50.
+ *
+ * Search:
+ *   - Client-side substring filter over `summary` (Firestore has no native full-text).
+ *   - Acceptable for the MVP pilot size (RESEARCH Don't-Hand-Roll table).
+ *
+ * References: D-01, CHAT-07, TSD §4 conversations collection, RESEARCH §Pitfall 2.
+ */
+
+import { useState, useEffect, useCallback } from 'react'
+import { useTranslations } from 'next-intl'
+import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore'
+import { clientAuth, clientDb } from '@/src/firebase/client'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { ScrollArea } from '@/components/ui/scroll-area'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface ConversationItem {
+  id: string
+  summary: string
+  lang: string
+  createdAt: Date | null
+}
+
+interface ConversationListProps {
+  /** Whether the drawer is open. */
+  open: boolean
+  /** Callback: close the drawer. */
+  onClose: () => void
+  /** Callback: user selected a conversation thread (sets active cid). */
+  onSelectConversation: (cid: string) => void
+  /** Callback: start a new conversation (clear active cid). */
+  onNewConversation: () => void
+}
+
+// ─── ConversationList component ───────────────────────────────────────────────
+
+/**
+ * Conversation history drawer with search.
+ *
+ * Uses the client Firestore SDK to query conversations belonging to the
+ * authenticated user, ordered by createdAt DESC. The owner-only read rule
+ * is enforced by Firestore rules (conversations/{cid}: isSelf(ownerUid)).
+ */
+export function ConversationList({
+  open,
+  onClose,
+  onSelectConversation,
+  onNewConversation,
+}: ConversationListProps) {
+  const t = useTranslations('chat')
+  const [threads, setThreads] = useState<ConversationItem[]>([])
+  const [searchTerm, setSearchTerm] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+
+  // Load conversations when the drawer opens
+  const loadConversations = useCallback(async () => {
+    const currentUser = clientAuth.currentUser
+    if (!currentUser) return
+
+    setIsLoading(true)
+    try {
+      const q = query(
+        collection(clientDb, 'conversations'),
+        where('ownerUid', '==', currentUser.uid),
+        orderBy('createdAt', 'desc'),
+        limit(50),
+      )
+      const snap = await getDocs(q)
+      const items: ConversationItem[] = snap.docs.map((doc) => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          summary: (data.summary as string) || '',
+          lang: (data.lang as string) || 'en',
+          createdAt: data.createdAt?.toDate?.() ?? null,
+        }
+      })
+      setThreads(items)
+    } catch {
+      // Load failure is non-fatal — the user can still chat in the current thread
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (open) {
+      void loadConversations()
+      setSearchTerm('')
+    }
+  }, [open, loadConversations])
+
+  // Client-side substring search (CHAT-07)
+  const filteredThreads = searchTerm
+    ? threads.filter((t) => t.summary.toLowerCase().includes(searchTerm.toLowerCase()))
+    : threads
+
+  const handleSelect = (cid: string) => {
+    onSelectConversation(cid)
+    onClose()
+  }
+
+  const handleNew = () => {
+    onNewConversation()
+    onClose()
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => { if (!v) onClose() }}>
+      <SheetContent
+        side="left"
+        data-slot="conversation-list"
+        className="w-80 flex flex-col p-0"
+      >
+        <SheetHeader className="px-4 py-3 border-b">
+          <SheetTitle className="text-sm font-semibold">{t('history')}</SheetTitle>
+        </SheetHeader>
+
+        {/* Search input */}
+        <div className="px-3 py-2 border-b">
+          <Input
+            data-slot="conversation-search"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder={t('searchPlaceholder')}
+            className="h-8 text-sm"
+            aria-label={t('searchPlaceholder')}
+          />
+        </div>
+
+        {/* New conversation button */}
+        <div className="px-3 py-2 border-b">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-sm h-8"
+            onClick={handleNew}
+          >
+            + {t('newConversation')}
+          </Button>
+        </div>
+
+        {/* Conversation list */}
+        <ScrollArea className="flex-1">
+          {isLoading ? (
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground animate-pulse">
+              {t('thinking')}
+            </div>
+          ) : filteredThreads.length === 0 ? (
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+              {t('historyEmpty')}
+            </div>
+          ) : (
+            <ul className="py-1">
+              {filteredThreads.map((thread) => (
+                <li key={thread.id}>
+                  <button
+                    type="button"
+                    className="w-full text-left px-4 py-3 hover:bg-accent transition-colors group"
+                    onClick={() => handleSelect(thread.id)}
+                  >
+                    <p className="text-sm font-medium truncate group-hover:text-accent-foreground">
+                      {thread.summary || thread.id}
+                    </p>
+                    {thread.createdAt && (
+                      <p className="text-[0.6875rem] text-muted-foreground mt-0.5">
+                        {thread.createdAt.toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </p>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </ScrollArea>
+      </SheetContent>
+    </Sheet>
+  )
+}
