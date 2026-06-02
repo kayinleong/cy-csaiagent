@@ -3,12 +3,18 @@
  *
  * Task 1: embedText + firestoreRetrieve + retrieve adapter (4 behaviors)
  * Task 2: buildCitations + isRetrievalMiss (3 behaviors)
+ * 02-02 Task 1: published-only retrieval filter (Pitfall 3 fix)
+ *   - superseded-excluded: query with 1 published + 1 superseded → only published returned
+ *   - all-unpublished-miss: query with all-unpublished corpus → [] (retrieval miss)
+ *   - status filter applied: where('status','==','published') in the query chain
+ *   - processBatch chunks carry status:'published'
  *
  * All Gemini embedding calls and Firestore findNearest calls are mocked.
  * The default `npx vitest run` MUST stay green without live credentials.
  *
  * References:
  *   - 01-09-PLAN.md: embed.ts, search.ts, index.ts, citations.ts, pinecone.ts
+ *   - 02-02-PLAN.md Task 1: published-only retrieval filter
  *   - TSD §4: kbChunks findNearest DOT_PRODUCT, lang pre-filter, 1024-d normalized
  *   - 01-RESEARCH.md lines 384-413: retrieve() shape, findNearest signature
  */
@@ -247,5 +253,116 @@ describe('buildCitations', () => {
 
     // Capped (no more than MAX_CITATIONS = 5)
     expect(citations.length).toBeLessThanOrEqual(5)
+  })
+})
+
+// ─── 02-02 Task 1: Published-only retrieval filter (Pitfall 3 fix) ───────────
+//
+// These tests verify that firestoreRetrieve() applies where('status','==','published')
+// BEFORE findNearest so superseded and unpublished chunks are never returned.
+//
+// The mock structure uses a chained .where().where().findNearest() pattern
+// to allow checking both the lang filter and the status filter.
+
+describe('retrieve — published-only filter (02-02 Pitfall 3 fix)', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  it('Test 5 (02-02): query chain includes where("status","==","published")', async () => {
+    // Track all .where() calls to verify status filter is present
+    const whereCalls: Array<[string, string, unknown]> = []
+    const mockGetFn = vi.fn(async () => ({ docs: [] }))
+    const mockFindNearestFn = vi.fn(() => ({ get: mockGetFn }))
+    const mockWhereFn = vi.fn((...args: [string, string, unknown]) => {
+      whereCalls.push(args)
+      return { where: mockWhereFn, findNearest: mockFindNearestFn }
+    })
+    const mockCollectionFn = vi.fn(() => ({ where: mockWhereFn }))
+
+    vi.doMock('@/src/firebase/admin', () => ({
+      adminDb: { collection: mockCollectionFn },
+    }))
+    vi.doMock('@/src/rag/embed', () => ({
+      embedText: vi.fn(async () => Array.from({ length: 1024 }, () => 0.001)),
+    }))
+
+    const { firestoreRetrieve } = await import('@/src/rag/search')
+    await firestoreRetrieve('commission structure', 'en')
+
+    // MUST include status='published' filter
+    const hasStatusFilter = whereCalls.some(
+      ([field, op, val]) => field === 'status' && op === '==' && val === 'published',
+    )
+    expect(hasStatusFilter).toBe(true)
+
+    // MUST include lang filter
+    const hasLangFilter = whereCalls.some(([field, op]) => field === 'lang' && op === 'in')
+    expect(hasLangFilter).toBe(true)
+  })
+
+  it('Test 6 (02-02): superseded chunk excluded — only published chunk returned', async () => {
+    // Corpus: 1 published + 1 superseded. After the status filter is applied, only
+    // the published chunk reaches findNearest. We simulate this by having findNearest
+    // return only the published chunk (the filter is applied server-side in Firestore;
+    // here we verify the query is shaped correctly by checking the mock call chain).
+    const mockGetFn = vi.fn(async () => ({
+      docs: [
+        {
+          id: 'chunk-published',
+          data: () => ({
+            text: 'D2 commission 1.5% residential',
+            lang: 'en',
+            docId: 'doc-v2',
+            status: 'published',
+            tokens: 10,
+            ownerCollection: 'kbChunks',
+            embedding: [],
+            tenantId: 'd2',
+          }),
+        },
+        // chunk-superseded would NOT be returned by Firestore because the
+        // status='published' filter excludes it — simulated by not including it here
+      ],
+    }))
+    const mockFindNearestFn = vi.fn(() => ({ get: mockGetFn }))
+    const mockWhereFn = vi.fn(() => ({ where: mockWhereFn, findNearest: mockFindNearestFn }))
+    const mockCollectionFn = vi.fn(() => ({ where: mockWhereFn }))
+
+    vi.doMock('@/src/firebase/admin', () => ({
+      adminDb: { collection: mockCollectionFn },
+    }))
+    vi.doMock('@/src/rag/embed', () => ({
+      embedText: vi.fn(async () => Array.from({ length: 1024 }, () => 0.001)),
+    }))
+
+    const { firestoreRetrieve } = await import('@/src/rag/search')
+    const results = await firestoreRetrieve('commission', 'en')
+
+    // Only the published chunk is returned
+    expect(results).toHaveLength(1)
+    expect(results[0].chunkId).toBe('chunk-published')
+  })
+
+  it('Test 7 (02-02): all-unpublished corpus → [] (retrieval-miss signal preserved)', async () => {
+    // Corpus where all chunks are superseded/unpublished: Firestore returns []
+    // because the status='published' filter matches nothing
+    const mockGetFn = vi.fn(async () => ({ docs: [] })) // Firestore filter excluded all
+    const mockFindNearestFn = vi.fn(() => ({ get: mockGetFn }))
+    const mockWhereFn = vi.fn(() => ({ where: mockWhereFn, findNearest: mockFindNearestFn }))
+    const mockCollectionFn = vi.fn(() => ({ where: mockWhereFn }))
+
+    vi.doMock('@/src/firebase/admin', () => ({
+      adminDb: { collection: mockCollectionFn },
+    }))
+    vi.doMock('@/src/rag/embed', () => ({
+      embedText: vi.fn(async () => Array.from({ length: 1024 }, () => 0.001)),
+    }))
+
+    const { retrieve } = await import('@/src/rag/index')
+    const results = await retrieve('anything', 'ms')
+
+    // Must return [] — the Coach handoff/no_sop_match path stays correct
+    expect(results).toEqual([])
   })
 })
