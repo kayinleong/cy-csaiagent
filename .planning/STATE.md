@@ -100,6 +100,7 @@ Items acknowledged and carried forward (v2 / post-pilot):
 ## Session Continuity
 
 Last session: 2026-06-02
-Stopped at: Phase 2 (Coach + Admin v1) PLANNED — 8 plans across 4 waves, 31/31 req IDs covered, research + Nyquist validation done, plan-checker blockers/warnings remediated. Phase 1 executed + stack-overridden (Gemini, lazy-cron). Phase 2 execution BLOCKED until Phase 1 gates close (provisioning 01-01 + live spikes RAG/DEPLOY/INGEST) and two user decisions are made (D-09 nudge scheduling + working-hours; live Opus-judge calibration).
-Resume file: .planning/phases/02-coach-admin/02-01-PLAN.md
-Next step: close Phase 1 human gates + resolve the 02-05 D-09 checkpoint, then /gsd-execute-phase 2. Do NOT auto-execute over the open spike gate.
+Stopped at: Phase 2 (Coach + Admin v1) EXECUTED — all 8 plans built across 4 waves; tsc clean, 325 vitest pass / 0 fail, lint 0 errors. Verifier=human_needed (0 code gaps — the one markSuperseded wiring gap was found + CLOSED, commit fdb1199). Phase 1 gates user-confirmed closed; D-09=on-visit; working-hours default KL 09:00–18:00; calibration approved. Built against real Firebase (Gemini, on-visit lazy-cron).
+Resume file: .planning/phases/02-coach-admin/02-VERIFICATION.md
+Open (live-gated, before Phase 3): live-stack proofs (Playwright e2e on a real deploy; Promptfoo eval + the Opus-judge calibration ≥85%); UI/dashboard browser render; COACH-10 pilot provisioning via set-claims; confirm working-hours window w/ Derek. Phase 2→3 needs a signed go/no-go memo (the calibration feeds it).
+Next step: run the live-stack proofs once deployed; then the go/no-go memo gates /gsd-plan-phase 3. Do NOT auto-advance to Phase 3 over the go/no-go gate.
