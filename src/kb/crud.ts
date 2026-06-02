@@ -239,6 +239,7 @@ export async function updateDocFromFile(
     docId: newDocId,
     lang: input.lang ?? existing.lang,
     pillar: input.pillar ?? existing.pillar,
+    supersedesId: docId,
   })
 
   return { docId, newDocId, jobId: job.jobId, total: job.total, remaining: job.remaining }
@@ -297,7 +298,7 @@ export async function updateDoc(
     // Shard the new content
     const lang = patch.lang ?? existing.lang
     const pillar = patch.pillar ?? existing.pillar
-    const job = await shardJobForContent(patch.content, newDocId, lang, pillar)
+    const job = await shardJobForContent(patch.content, newDocId, lang, pillar, docId)
 
     return { docId, newDocId, jobId: job.jobId, total: job.total, remaining: job.remaining }
   } else {
@@ -471,7 +472,7 @@ export async function correctKbDoc(
 
   const lang = opts?.lang ?? existing.lang
   const pillar = opts?.pillar ?? existing.pillar
-  const job = await shardJobForContent(content, newDocId, lang, pillar)
+  const job = await shardJobForContent(content, newDocId, lang, pillar, docId)
 
   return { docId, newDocId, jobId: job.jobId, total: job.total, remaining: job.remaining }
 }
@@ -520,6 +521,7 @@ async function shardJobForContent(
   docId: string,
   lang: 'en' | 'ms' | 'zh',
   pillar: 'coach' | 'finder' | 'reply',
+  supersedesId?: string,
 ): Promise<ShardJobResult> {
   return shardJob({
     buffer: Buffer.from(content, 'utf-8'),
@@ -528,5 +530,6 @@ async function shardJobForContent(
     docId,
     lang,
     pillar,
+    ...(supersedesId ? { supersedesId } : {}),
   })
 }

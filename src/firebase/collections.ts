@@ -212,6 +212,12 @@ export interface KbIngestionJobDoc {
   lang: 'en' | 'ms' | 'zh'
   /** Pillar this KB doc belongs to */
   pillar: 'coach' | 'finder' | 'reply'
+  /**
+   * If this job ingests a NEW VERSION, the old kbDoc ID it supersedes.
+   * processBatch marks the old doc + its chunks 'superseded' when remaining===0,
+   * so corrected/updated content replaces the old in retrieval (CDASH-04/ADMIN-03).
+   */
+  supersedesId?: string
   createdAt: Date | FieldValue
 }
 

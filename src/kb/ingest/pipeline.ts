@@ -50,6 +50,8 @@ export interface IngestFile {
   lang: 'en' | 'ms' | 'zh'
   /** Which pillar this KB document belongs to */
   pillar: 'coach' | 'finder' | 'reply'
+  /** If this is a NEW VERSION, the old kbDoc ID to mark superseded on ingest completion. */
+  supersedesId?: string
 }
 
 export interface ShardJobResult {
@@ -125,6 +127,8 @@ export async function shardJob(file: IngestFile): Promise<ShardJobResult> {
     docId: file.docId,
     lang: file.lang,
     pillar: file.pillar,
+    // Carry the supersede target so processBatch can retire the old version on completion.
+    ...(file.supersedesId ? { supersedesId: file.supersedesId } : {}),
     tenantId: TENANT_ID,
     createdAt: new Date(),
   }
@@ -173,6 +177,7 @@ export async function processBatch(jobId: string, limit: number): Promise<Proces
     total,
     docId,
     lang,
+    supersedesId,
   } = jobData
 
   if (remaining <= 0) {
@@ -227,6 +232,20 @@ export async function processBatch(jobId: string, limit: number): Promise<Proces
       await kbDocsRef().doc(docId).update({
         publishedAt: new Date(),
       })
+    }
+
+    // New version is fully embedded → retire the old version it supersedes so the
+    // Coach stops retrieving stale chunks (CDASH-04/ADMIN-03). Inlined here (rather
+    // than importing crud.markSuperseded) to avoid a circular import: crud → pipeline.
+    if (supersedesId && supersedesId !== docId) {
+      await kbDocsRef().doc(supersedesId).update({
+        status: 'superseded',
+        supersededBy: docId,
+      })
+      const oldChunks = await kbChunksRef().where('docId', '==', supersedesId).get()
+      await Promise.all(
+        oldChunks.docs.map((chunk) => chunk.ref.update({ status: 'superseded' })),
+      )
     }
 
     return { remaining: 0 }
