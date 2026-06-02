@@ -95,3 +95,33 @@ export async function log(entry: AuditEntry): Promise<void> {
     // A separate monitoring alert on auditLogs write failure rates handles this.
   }
 }
+
+// ─── auditDrilldown ───────────────────────────────────────────────────────────
+
+/**
+ * Convenience wrapper: record a coach drilldown read of agent data (TSD §5.1).
+ *
+ * PDPA compliance requirement (T-02-29): every coach read of downline agent data
+ * MUST write an audit row. This function standardises the action label and
+ * target reference format so callers don't have to construct them manually.
+ *
+ * Stored values:
+ *   - actorUid: the senior coach reading the data (hashed in the hashes map)
+ *   - action: 'coach_drilldown' (literal — not a PII value)
+ *   - targetRef: the Firestore collection path being read (e.g. 'agentProfiles')
+ *   - hashes.coachUid: sha256 of the coach's UID (never stored raw)
+ *   - hashes.targetRef: sha256 of the targetRef string
+ *
+ * Write failures are swallowed (same fire-and-forget contract as log()).
+ *
+ * @param actorUid   UID of the senior coach performing the read.
+ * @param targetRef  Firestore collection/doc path being read (e.g. 'agentProfiles').
+ */
+export async function auditDrilldown(actorUid: string, targetRef: string): Promise<void> {
+  await log({
+    actorUid,
+    action: 'coach_drilldown',
+    targetRef,
+    raw: { coachUid: actorUid, targetRef },
+  })
+}
