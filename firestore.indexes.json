@@ -66,6 +66,29 @@
           }
         }
       ]
+    },
+    {
+      "collectionGroup": "kbChunks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "lang", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        {
+          "fieldPath": "embedding",
+          "vectorConfig": {
+            "dimension": "1024",
+            "flat": {}
+          }
+        }
+      ]
+    },
+    {
+      "collectionGroup": "knowledgeGaps",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "seniorCoachId", "order": "ASCENDING" },
+        { "fieldPath": "lastSeenAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

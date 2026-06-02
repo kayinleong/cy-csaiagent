@@ -13,12 +13,15 @@
  *  - Cross-tenant admin reads are DENIED (admin with wrong tenantId cannot read)
  *  - auditLogs create/update/delete is DENIED from any client
  *  - rateBudgets cross-agent read/write is DENIED (owner-scoped isolation)
+ *  - knowledgeGaps: senior-coach reads own gaps, cross-coach denied, client create denied
  *
  * Threat mitigations proven:
  *  T-01-06: cross-tenant / cross-agent reads denied
  *  T-01-07: auditLogs client mutation denied
- *  T-01-09: no unruled collection (all 15 enumerated here)
+ *  T-01-09: no unruled collection (all 16 enumerated here)
  *  T-01-10: rateBudgets cross-agent access denied
+ *  T-02-01: cross-coach downline read denied (agentProfiles, knowledgeGaps)
+ *  T-02-03: knowledgeGaps client writes denied (server/Admin-SDK only)
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
@@ -86,7 +89,7 @@ rulesSuite('Deny-by-default: unauthenticated reads', () => {
   const collections = [
     'users', 'agentProfiles', 'conversations', 'leads', 'leadContext',
     'projects', 'collateral', 'kbDocs', 'kbChunks', 'kbIngestionJobs',
-    'escalations', 'auditLogs', 'evals', 'rateBudgets',
+    'escalations', 'auditLogs', 'evals', 'rateBudgets', 'knowledgeGaps',
   ]
 
   for (const col of collections) {
@@ -702,6 +705,82 @@ rulesSuite('rateBudgets collection — cross-agent isolation (T-01-10)', () => {
     const ctx = await unauthContext()
     const db = ctx.firestore()
     await assertFails(getDoc(doc(db, 'rateBudgets', agentBudgetId)))
+  })
+})
+
+// ─── 13. knowledgeGaps collection — downline-scoped (T-02-01, T-02-03) ───────
+
+rulesSuite('knowledgeGaps collection — downline-scoped, server-write-only (T-02-01/T-02-03)', () => {
+  const ownGapId = 'gap-own-001'
+  const otherGapId = 'gap-other-001'
+
+  beforeAll(async () => {
+    await seed(`knowledgeGaps/${ownGapId}`, {
+      tenantId: D2_TENANT,
+      seniorCoachId: syntheticSeniorCoach.uid,
+      agentUid: syntheticNewAgent.uid,
+      topicHash: 'abc123hash',
+      topicLabel: 'OC bumiputera quota',
+      lang: 'en',
+      count: 3,
+      lastSeenAt: new Date(),
+    })
+    await seed(`knowledgeGaps/${otherGapId}`, {
+      tenantId: D2_TENANT,
+      seniorCoachId: 'other-coach-uid',
+      agentUid: STRANGER_UID,
+      topicHash: 'def456hash',
+      topicLabel: 'meta-ads budgeting',
+      lang: 'ms',
+      count: 1,
+      lastSeenAt: new Date(),
+    })
+  })
+
+  // (d) senior-coach reads their own gap — SUCCEEDS
+  it('senior-coach CAN read knowledgeGap where seniorCoachId == self', async () => {
+    const ctx = await seniorCoachCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(getDoc(doc(db, 'knowledgeGaps', ownGapId)))
+  })
+
+  // (e) cross-coach knowledgeGap read — DENIED
+  it('senior-coach CANNOT read a knowledgeGap belonging to a different coach (cross-coach denied)', async () => {
+    const ctx = await seniorCoachCtx()
+    const db = ctx.firestore()
+    await assertFails(getDoc(doc(db, 'knowledgeGaps', otherGapId)))
+  })
+
+  // (f) any client create on knowledgeGaps — DENIED
+  it('any client CREATE on knowledgeGaps is DENIED (server/Admin-SDK writes only)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertFails(
+      setDoc(doc(db, 'knowledgeGaps', 'client-created-gap'), {
+        tenantId: D2_TENANT,
+        seniorCoachId: syntheticSeniorCoach.uid,
+        agentUid: syntheticNewAgent.uid,
+        topicHash: 'fakehash',
+        topicLabel: 'fake topic',
+        lang: 'en',
+        count: 1,
+        lastSeenAt: new Date(),
+      })
+    )
+  })
+
+  // admin reads all knowledgeGaps — SUCCEEDS (T-02-01 admin path)
+  it('admin CAN read any knowledgeGap in the tenant', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(getDoc(doc(db, 'knowledgeGaps', ownGapId)))
+    await assertSucceeds(getDoc(doc(db, 'knowledgeGaps', otherGapId)))
+  })
+
+  it('new-agent CANNOT read knowledgeGaps (not senior-coach or admin)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertFails(getDoc(doc(db, 'knowledgeGaps', ownGapId)))
   })
 })
 

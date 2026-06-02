@@ -222,6 +222,24 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ── Collection 16: knowledgeGaps ─────────────────────────────────────────
+    // Knowledge-gap records written by the server (Admin SDK) only.
+    // Senior-coach reads their own gap feed; admin reads all.
+    // Conversations/messages remain OWNER-ONLY — no senior-coach client read path.
+    // Dashboard reads transcripts server-side via Admin SDK + audit (A6/Pitfall 5),
+    // not through Firestore client rules.
+    match /knowledgeGaps/{gapId} {
+      allow read:
+        if (hasRole('senior-coach')
+            && resource.data.seniorCoachId == request.auth.uid
+            && sameTenant())
+        || (hasRole('admin') && sameTenant());
+
+      // Knowledge-gap records are created/updated by the server (Admin SDK bypasses rules).
+      // No client-side create, update, or delete allowed (T-02-03 mitigation).
+      allow create, update, delete: if false;
+    }
+
     // ── Collection 15: rateBudgets ───────────────────────────────────────────
     // Owner-scoped: each agent reads/writes ONLY their own budget doc.
     // Cross-agent access is explicitly DENIED — a new-agent reading or writing
