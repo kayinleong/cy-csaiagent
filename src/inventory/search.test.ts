@@ -203,8 +203,9 @@ function makeProjectSnap(ids: FixtureId[]) {
  * Deterministic stub vector for embedText.
  * Returns a vector with 1.0 in dim-0 (normalized) to simulate a query
  * that would rank proj-active-a highest by dot product.
+ * Typed as number[] to prevent TypeScript from inferring a narrow (0|1)[] literal tuple.
  */
-const STUB_QUERY_VECTOR = Array.from({ length: 1024 }, (_, i) => (i === 0 ? 1.0 : 0.0))
+const STUB_QUERY_VECTOR: number[] = Array.from({ length: 1024 }, (_, i) => (i === 0 ? 1.0 : 0.0))
 
 const { mockEmbedText, mockProjectsGet, mockWhereFn } = vi.hoisted(() => {
   const mockEmbedText = vi.fn(
@@ -491,7 +492,7 @@ describe('searchProjects', () => {
 
     mockProjectsGet.mockResolvedValue(makeProjectSnap(balancedSet))
     // Use a neutral query vector (equal weight) to let segmentation drive the difference
-    const neutralVector = Array.from({ length: 1024 }, () => 1.0 / Math.sqrt(1024))
+    const neutralVector: number[] = Array.from({ length: 1024 }, () => 1.0 / Math.sqrt(1024))
     mockEmbedText.mockResolvedValue(neutralVector)
 
     const { searchProjects } = await import('@/src/inventory/search')
