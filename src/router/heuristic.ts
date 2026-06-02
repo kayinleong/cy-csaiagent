@@ -56,20 +56,24 @@ export interface RouteDecision {
  * Only strong, unambiguous keywords are included — ambiguity stays for the classifier.
  */
 const FINDER_PATTERNS: RegExp[] = [
-  /\bRM\b/,                      // Malaysian ringgit amount
-  /\bbudget\b/i,                 // "client budget", "budget of"
-  /\bbedroom\b/i,                // "3 bedroom", "bedroom unit"
-  /\blead\b/i,                   // "my lead", "paste lead", "lead criteria"
-  /\bpaste\b/i,                  // "paste lead details", "paste criteria"
-  /\bproject\b/i,                // "show me projects", "matching projects"
-  /\bown[- ]stay\b/i,            // "own stay", "own-stay"
-  /\binvestment\s+propert/i,     // "investment property"
-  /\bunder\s+\d+k\b/i,          // "under 500k", "under 800k"
-  /\bproperty\s+match/i,         // "property match", "property matching"
-  /\bfinancing\b/i,              // "financing options", "bank financing"
-  /\beligib/i,                   // "eligible", "eligibility", "ineligible"
-  /\bcollateral\b/i,             // "collateral attached", "project collateral"
-  /\bpriceBand\b/i,              // schema field name (tool/API context)
+  /\bRM\b/,                          // Malaysian ringgit amount
+  /\bbudget\b/i,                     // "client budget", "budget of"
+  /\bbedroom\b/i,                    // "3 bedroom", "bedroom unit"
+  /\b(?:my|paste|the)\s+lead\b/i,   // "my lead", "paste lead", "the lead" (not "register my first lead")
+  /\blead\s+(?:criteria|details|info|contact|budget)\b/i, // "lead criteria", "lead details"
+  /\bpaste\b/i,                      // "paste lead details", "paste criteria"
+  /\bpropert(?:y|ies)\b/i,          // "property", "properties" — not "project" alone (too broad)
+  /\bshow\s+me\s+projects?\b/i,     // "show me projects", "show me project"
+  /\bmatching\s+projects?\b/i,      // "matching projects"
+  /\bprojects?\s+(?:under|near|in|around|above|below|with|for)\b/i, // "projects under 500k"
+  /\bown[- ]stay\b/i,               // "own stay", "own-stay"
+  /\binvestment\s+propert/i,        // "investment property"
+  /\bunder\s+\d+k\b/i,             // "under 500k", "under 800k"
+  /\bproperty\s+match/i,            // "property match", "property matching"
+  /\bfinancing\b/i,                 // "financing options", "bank financing"
+  /\beligib/i,                      // "eligible", "eligibility", "ineligible"
+  /\bcollateral\b/i,                // "collateral attached", "project collateral"
+  /\bpriceBand\b/i,                 // schema field name (tool/API context)
 ]
 
 /**

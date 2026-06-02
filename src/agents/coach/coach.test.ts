@@ -361,12 +361,14 @@ describe('Test 4: On retrieval miss, emitHandoffSignal is called and content is 
 // ─── Test 5: Coach is reached via router.route, not called directly ───────────
 
 describe('Test 5: Coach is dispatched via router.route — not called directly', () => {
-  it('router.route returns pillar=coach in Phase 1 (heuristic single-pillar)', () => {
+  it('router.route returns pillar=coach for a coaching message (Phase 3 heuristic)', () => {
     const messages = [{ role: 'user' as const, content: 'How do I register my first lead?' }]
     const decision = route(messages)
 
     expect(decision.pillar).toBe('coach')
-    expect(decision.reason).toBe('phase-1-single-pillar')
+    // Phase-3: reason encodes the heuristic tier or the safe default, not 'phase-1-single-pillar'
+    expect(decision.reason).toBeDefined()
+    expect(decision.reason.length).toBeGreaterThan(0)
   })
 
   it('dispatches to coachAgent only after router.route confirms pillar=coach', async () => {

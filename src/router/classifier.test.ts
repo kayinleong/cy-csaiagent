@@ -17,25 +17,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ─── Mock generateObject and modelFor ────────────────────────────────────────
-// These are intercepted so classifyIntent never makes real API calls.
+// vi.hoisted ensures mock variables are initialized before vi.mock factories run.
 
-const mockGenerateObject = vi.fn()
+const mocks = vi.hoisted(() => {
+  return {
+    mockGenerateObject: vi.fn(),
+    mockModelFor: vi.fn(async () => ({ /* fake LanguageModel handle */ })),
+  }
+})
 
 vi.mock('ai', async (importOriginal) => {
   const actual = await importOriginal<typeof import('ai')>()
   return {
     ...actual,
-    generateObject: mockGenerateObject,
+    generateObject: mocks.mockGenerateObject,
   }
 })
 
 vi.mock('@/src/llm/provider', () => ({
-  modelFor: vi.fn(async () => ({ /* fake LanguageModel handle */ })),
+  modelFor: mocks.mockModelFor,
 }))
 
 import { classifyIntent } from './classifier'
 import { routeAsync, ROUTER_CONFIDENCE_THRESHOLD } from './index'
-import { modelFor } from '@/src/llm/provider'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -64,23 +68,23 @@ describe('classifyIntent — activated LLM classifier', () => {
   })
 
   it('calls modelFor("router") to resolve the model — never hard-coded', async () => {
-    mockGenerateObject.mockResolvedValueOnce({
+    mocks.mockGenerateObject.mockResolvedValueOnce({
       object: { pillar: 'coach', confidence: 0.85, reason: 'onboarding question' },
     })
 
     await classifyIntent(makeMessages('How do I run a Meta ad campaign?'))
 
-    expect(modelFor).toHaveBeenCalledWith('router')
+    expect(mocks.mockModelFor).toHaveBeenCalledWith('router')
   })
 
   it('calls generateObject and returns { pillar, confidence, reason }', async () => {
-    mockGenerateObject.mockResolvedValueOnce({
+    mocks.mockGenerateObject.mockResolvedValueOnce({
       object: { pillar: 'finder', confidence: 0.9, reason: 'property matching request' },
     })
 
     const result = await classifyIntent(makeMessages('show me projects matching my lead'))
 
-    expect(mockGenerateObject).toHaveBeenCalledTimes(1)
+    expect(mocks.mockGenerateObject).toHaveBeenCalledTimes(1)
     expect(result.pillar).toBe('finder')
     expect(result.confidence).toBe(0.9)
     expect(result.reason).toBe('property matching request')
@@ -89,8 +93,8 @@ describe('classifyIntent — activated LLM classifier', () => {
   it('does not include "reply" pillar in the schema (Phase 4 only)', async () => {
     // The schema enum is ['coach','finder'] — passing 'reply' should fail Zod validation.
     // We test this by verifying that generateObject is called with a schema that rejects 'reply'.
-    // We do this indirectly: mockGenerateObject receives the call args.
-    mockGenerateObject.mockImplementationOnce(async ({ schema }: { schema: { parse?: (v: unknown) => unknown } }) => {
+    // We do this indirectly: mocks.mockGenerateObject receives the call args.
+    mocks.mockGenerateObject.mockImplementationOnce(async ({ schema }: { schema: { parse?: (v: unknown) => unknown } }) => {
       // The schema should reject 'reply'
       let threw = false
       try {
@@ -104,7 +108,7 @@ describe('classifyIntent — activated LLM classifier', () => {
     })
 
     await classifyIntent(makeMessages('ambiguous message'))
-    expect(mockGenerateObject).toHaveBeenCalledTimes(1)
+    expect(mocks.mockGenerateObject).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -120,7 +124,7 @@ describe('routeAsync — three-tier routing (override→heuristic→classifier)'
     expect(result.pillar).toBe('finder')
     expect(result.reason).toBe('manual-override')
     // The classifier (generateObject) must NOT have been called
-    expect(mockGenerateObject).not.toHaveBeenCalled()
+    expect(mocks.mockGenerateObject).not.toHaveBeenCalled()
   })
 
   it('override-wins: override:"coach" wins even on a finder-keyword message', async () => {
@@ -128,7 +132,7 @@ describe('routeAsync — three-tier routing (override→heuristic→classifier)'
 
     expect(result.pillar).toBe('coach')
     expect(result.reason).toBe('manual-override')
-    expect(mockGenerateObject).not.toHaveBeenCalled()
+    expect(mocks.mockGenerateObject).not.toHaveBeenCalled()
   })
 
   // ─── clear-keyword-finder ─────────────────────────────────────────────────
@@ -137,7 +141,7 @@ describe('routeAsync — three-tier routing (override→heuristic→classifier)'
 
     expect(result.pillar).toBe('finder')
     // Classifier must NOT have been called — heuristic handled it
-    expect(mockGenerateObject).not.toHaveBeenCalled()
+    expect(mocks.mockGenerateObject).not.toHaveBeenCalled()
   })
 
   // ─── clear-keyword-coach ──────────────────────────────────────────────────
@@ -146,18 +150,18 @@ describe('routeAsync — three-tier routing (override→heuristic→classifier)'
 
     expect(result.pillar).toBe('coach')
     // Classifier must NOT have been called — heuristic handled it
-    expect(mockGenerateObject).not.toHaveBeenCalled()
+    expect(mocks.mockGenerateObject).not.toHaveBeenCalled()
   })
 
   // ─── ambiguous→classifier ─────────────────────────────────────────────────
   it('ambiguous: ambiguous message calls classifyIntent and returns its pillar/reason', async () => {
-    mockGenerateObject.mockResolvedValueOnce({
+    mocks.mockGenerateObject.mockResolvedValueOnce({
       object: { pillar: 'finder', confidence: 0.82, reason: 'property inquiry detected' },
     })
 
     const result = await routeAsync(AMBIGUOUS)
 
-    expect(mockGenerateObject).toHaveBeenCalledTimes(1)
+    expect(mocks.mockGenerateObject).toHaveBeenCalledTimes(1)
     expect(result.pillar).toBe('finder')
     // Reason encodes the classifier tier
     expect(result.reason).toContain('classifier')
@@ -165,7 +169,7 @@ describe('routeAsync — three-tier routing (override→heuristic→classifier)'
   })
 
   it('ambiguous: classifier result for coach pillar is returned correctly', async () => {
-    mockGenerateObject.mockResolvedValueOnce({
+    mocks.mockGenerateObject.mockResolvedValueOnce({
       object: { pillar: 'coach', confidence: 0.75, reason: 'onboarding question' },
     })
 
@@ -179,7 +183,7 @@ describe('routeAsync — three-tier routing (override→heuristic→classifier)'
   it('low_confidence: classifier below threshold defaults to coach with low_confidence reason', async () => {
     // Return finder with low confidence — below ROUTER_CONFIDENCE_THRESHOLD
     const lowConfidence = Math.max(0, ROUTER_CONFIDENCE_THRESHOLD - 0.3)
-    mockGenerateObject.mockResolvedValueOnce({
+    mocks.mockGenerateObject.mockResolvedValueOnce({
       object: { pillar: 'finder', confidence: lowConfidence, reason: 'uncertain property intent' },
     })
 
@@ -195,7 +199,7 @@ describe('routeAsync — three-tier routing (override→heuristic→classifier)'
 
   it('low_confidence: confidence exactly at threshold is accepted (not defaulted)', async () => {
     // Exactly at threshold → accept (threshold is the lower bound that passes)
-    mockGenerateObject.mockResolvedValueOnce({
+    mocks.mockGenerateObject.mockResolvedValueOnce({
       object: { pillar: 'finder', confidence: ROUTER_CONFIDENCE_THRESHOLD, reason: 'at boundary' },
     })
 
@@ -207,7 +211,7 @@ describe('routeAsync — three-tier routing (override→heuristic→classifier)'
   })
 
   it('low_confidence: confidence of 0.2 defaults to coach regardless of classifier pillar', async () => {
-    mockGenerateObject.mockResolvedValueOnce({
+    mocks.mockGenerateObject.mockResolvedValueOnce({
       object: { pillar: 'finder', confidence: 0.2, reason: 'very uncertain' },
     })
 
@@ -226,7 +230,7 @@ describe('routeAsync — three-tier routing (override→heuristic→classifier)'
   })
 
   it('reason encodes the classifier tier when classifier is used', async () => {
-    mockGenerateObject.mockResolvedValueOnce({
+    mocks.mockGenerateObject.mockResolvedValueOnce({
       object: { pillar: 'coach', confidence: 0.78, reason: 'training question' },
     })
 
