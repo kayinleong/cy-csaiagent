@@ -165,6 +165,12 @@ export interface KbDocDoc {
    * and a backfill that sets 'published' on all existing docs written without a status.
    */
   status?: 'published' | 'unpublished' | 'superseded'
+  /**
+   * UID of the senior-coach or admin who authored this correction version (CDASH-04).
+   * Only set on versions created via correctKbDoc(). Enables admin oversight of
+   * coach-injected content via the version history chain.
+   */
+  correctedBy?: string
   lang: 'en' | 'ms' | 'zh'
   pillar: 'coach' | 'finder' | 'reply'
   publishedAt: Date | FieldValue

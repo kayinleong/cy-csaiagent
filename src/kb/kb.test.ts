@@ -422,10 +422,10 @@ describe('02-02 KB CRUD: version supersede + publish/unpublish + correction', ()
       delete: mockKbDocDelete,
     }))
 
-    // kbChunks mock: where(...).get() → docs[] for bulk status updates
+    // kbChunks mock: where(...).get() → docs[] for bulk status updates or deletes
     const mockChunkDocs = [
-      { id: 'chunk-1', ref: { update: vi.fn().mockResolvedValue(undefined) } },
-      { id: 'chunk-2', ref: { update: vi.fn().mockResolvedValue(undefined) } },
+      { id: 'chunk-1', ref: { update: vi.fn().mockResolvedValue(undefined), delete: vi.fn().mockResolvedValue(undefined) } },
+      { id: 'chunk-2', ref: { update: vi.fn().mockResolvedValue(undefined), delete: vi.fn().mockResolvedValue(undefined) } },
     ]
     const mockKbChunksWhere = vi.fn().mockReturnValue({
       get: vi.fn().mockResolvedValue({ docs: mockChunkDocs }),
@@ -653,7 +653,7 @@ describe('02-02 KB CRUD: version supersede + publish/unpublish + correction', ()
 
   // ─── Test 9: deleteDoc cleans up kbChunks ──────────────────────────────────
 
-  it('Test 9 (02-02): deleteDoc deletes kbDoc AND all associated kbChunks', async () => {
+  it('Test 9 (02-02): deleteDoc deletes kbDoc AND hard-deletes all associated kbChunks', async () => {
     const {
       mockKbDocRef,
       mockKbDocDelete,
@@ -682,10 +682,10 @@ describe('02-02 KB CRUD: version supersede + publish/unpublish + correction', ()
     // kbDocs doc must be deleted
     expect(mockKbDocDelete).toHaveBeenCalled()
 
-    // kbChunks for this docId must be fetched and each deleted
+    // kbChunks for this docId must be fetched and each hard-deleted
     expect(mockKbChunksWhere).toHaveBeenCalledWith('docId', '==', 'doc-to-delete')
     for (const chunkDoc of mockChunkDocs) {
-      expect(chunkDoc.ref.update).toHaveBeenCalledWith({ status: 'superseded' })
+      expect(chunkDoc.ref.delete).toHaveBeenCalled()
     }
   })
 

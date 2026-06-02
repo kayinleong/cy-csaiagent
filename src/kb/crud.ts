@@ -1,18 +1,39 @@
 /**
  * src/kb/crud.ts
  *
- * KB document CRUD operations — admin-only.
+ * KB document CRUD operations.
+ *
+ * Authorization model:
+ *   - createDoc / updateDoc / listDocs / deleteDoc / publishDoc / unpublishDoc — admin only.
+ *   - correctKbDoc — admin OR senior-coach (CDASH-04 correction path).
  *
  * Supports multi-doc KB management with versioning:
- *   - createDoc: create a new kbDocs document.
- *   - updateDoc: create a new version that supersedes an existing doc.
- *   - listDocs:  list all kbDocs for the tenant.
- *   - deleteDoc: soft-delete a kbDocs document.
+ *   - createDoc:        create a new kbDocs document with status:'published'.
+ *   - updateDoc:        create a new version superseding an existing doc.
+ *   - listDocs:         list all kbDocs for the tenant.
+ *   - deleteDoc:        hard-delete a kbDocs document AND its kbChunks (orphan fix).
+ *   - publishDoc:       set kbDoc + its kbChunks to status:'published'.
+ *   - unpublishDoc:     set kbDoc + its kbChunks to status:'unpublished'.
+ *   - markSuperseded:   set old kbDoc + its kbChunks to status:'superseded' (called
+ *                       on ingest completion — see trigger choice in 02-02-SUMMARY.md).
+ *   - correctKbDoc:     senior-coach correction path — calls updateDoc with correctedBy.
  *
  * All mutations:
  *   - Write via kbDocsRef() (tenantId stamped automatically by the converter).
- *   - Guard on admin role — callers pass the verified requireUser result;
- *     Server Actions re-check the role before calling these functions.
+ *   - Guard on assertAdmin or assertAdminOrCoach (see below).
+ *   - Server Actions re-check the role before calling these functions.
+ *
+ * kbChunks.status denormalization:
+ *   - Always kept in sync with the parent kbDoc.status.
+ *   - New ingests are published (processBatch stamps status:'published').
+ *   - Supersede / publish / unpublish must bulk-update chunks to match.
+ *
+ * Trigger for markSuperseded (DESIGN DECISION documented in 02-02-SUMMARY.md):
+ *   markSuperseded is called by the /api/kb/ingest/process Route Handler when
+ *   remaining hits 0 — i.e. after the new version is fully embedded. This ensures
+ *   the old version stays retrievable until the new version is ready. The old doc's
+ *   supersedesId is the docId passed to updateDoc; the Route Handler receives the
+ *   old docId in the job doc and can call markSuperseded(oldDocId, newDocId).
  *
  * IMPORTANT: createDoc and updateDoc chunk the content and trigger ingestion
  * via shardJob(). Full embedding of the chunks is deferred to the browser-
@@ -20,15 +41,16 @@
  *
  * References:
  *   - TSD §4 kbDocs (versioned, supersedesId, only published chunks retrievable)
- *   - TSD §5.1 roles (admin CRUD)
- *   - 01-10-PLAN.md Task 2 action
- *   - D-10: multi-doc-capable
+ *   - TSD §5.1 roles (admin CRUD; senior-coach correction path)
+ *   - 02-02-PLAN.md Task 2: supersede cascade, publish/unpublish, correction attribution
+ *   - D-12: correction → versioned KB re-ingest, attributed
+ *   - D-13: publish/unpublish (admin CRUD stays admin-only)
  *
  * Core/shell rule: this file must NOT import from app/ or next.
  */
 
 import { FieldValue } from 'firebase-admin/firestore'
-import { kbDocsRef, TENANT_ID, type KbDocDoc } from '@/src/firebase/collections'
+import { kbDocsRef, kbChunksRef, TENANT_ID, type KbDocDoc } from '@/src/firebase/collections'
 import type { AuthenticatedUser } from '@/src/firebase/auth'
 import { shardJob, type ShardJobResult } from '@/src/kb/ingest/pipeline'
 
@@ -57,6 +79,13 @@ export interface CreateDocFromFileInput {
 export interface UpdateDocInput {
   title?: string
   content?: string
+  lang?: 'en' | 'ms' | 'zh'
+  pillar?: 'coach' | 'finder' | 'reply'
+  /** UID of the actor who created this correction version (CDASH-04 attribution). */
+  correctedBy?: string
+}
+
+export interface CorrectKbDocInput {
   lang?: 'en' | 'ms' | 'zh'
   pillar?: 'coach' | 'finder' | 'reply'
 }
@@ -88,7 +117,8 @@ export async function createDoc(
 ): Promise<CreateDocResult> {
   assertAdmin(user)
 
-  // Create the kbDocs document (unpublished until ingestion completes)
+  // Create the kbDocs document — status:'published' because new docs are live once ingested.
+  // kbChunks get status:'published' when processBatch writes them (pipeline.ts).
   const docRef = kbDocsRef().doc()
   const docId = docRef.id
 
@@ -98,6 +128,7 @@ export async function createDoc(
     version: 1,
     lang: input.lang,
     pillar: input.pillar,
+    status: 'published',
     publishedAt: FieldValue.serverTimestamp(),
   }
 
@@ -128,7 +159,7 @@ export async function createDocFromFile(
 ): Promise<CreateDocResult> {
   assertAdmin(user)
 
-  // Create the kbDocs document (unpublished until ingestion completes)
+  // Create the kbDocs document — status:'published' (chunks published on ingest)
   const docRef = kbDocsRef().doc()
   const docId = docRef.id
 
@@ -138,6 +169,7 @@ export async function createDocFromFile(
     version: 1,
     lang: input.lang,
     pillar: input.pillar,
+    status: 'published',
     publishedAt: FieldValue.serverTimestamp(),
   }
 
@@ -162,10 +194,13 @@ export async function createDocFromFile(
  * Update a KB document by creating a new version that supersedes the existing one.
  *
  * If `content` is provided, a new ingestion job is created to re-embed the content.
+ * The old doc is NOT immediately superseded here — supersession happens when the
+ * new version completes ingestion (remaining=0 in /api/kb/ingest/process), at which
+ * point the Route Handler calls markSuperseded(oldDocId, newDocId).
  *
  * @param user   Verified user from requireUser() — must have role 'admin'.
  * @param docId  The kbDocs document ID to update.
- * @param patch  Fields to update.
+ * @param patch  Fields to update. May include correctedBy for CDASH-04 attribution.
  * @returns      { docId } + optional job metadata if content was updated.
  */
 export async function updateDoc(
@@ -195,7 +230,10 @@ export async function updateDoc(
       supersedesId: docId,
       lang: patch.lang ?? existing.lang,
       pillar: patch.pillar ?? existing.pillar,
+      status: 'published',
       publishedAt: FieldValue.serverTimestamp(),
+      // Attribution: stamp the correcting actor's uid if provided (CDASH-04)
+      ...(patch.correctedBy ? { correctedBy: patch.correctedBy } : {}),
     }
 
     await newDocRef.set({ ...newDocData, tenantId: TENANT_ID } as KbDocDoc)
@@ -238,26 +276,187 @@ export async function listDocs(user: AuthenticatedUser): Promise<KbDocWithId[]> 
 // ─── deleteDoc ───────────────────────────────────────────────────────────────
 
 /**
- * Delete a KB document (hard delete — removes the kbDocs/{docId} doc).
+ * Hard-delete a KB document AND all its associated kbChunks.
  *
- * Note: associated kbChunks are NOT automatically deleted in v1 (Phase 2
- * cleanup job). The doc removal means the chunks will not be retrievable
- * because retrieval is keyed by docId in kbChunks.
+ * This closes the orphan-chunk gap noted in Phase 1. Deleting without cleaning up
+ * kbChunks would leave stale chunks in the collection that could be retrieved if
+ * the status filter is ever relaxed or if a future doc reuses the docId.
  *
  * @param user   Verified user from requireUser() — must have role 'admin'.
  * @param docId  The kbDocs document ID to delete.
  */
 export async function deleteDoc(user: AuthenticatedUser, docId: string): Promise<void> {
   assertAdmin(user)
+
+  // Delete the kbDocs document
   await kbDocsRef().doc(docId).delete()
+
+  // Hard-delete all associated kbChunks (close the orphan-chunk note from Phase 1)
+  const chunksSnap = await kbChunksRef().where('docId', '==', docId).get()
+  await Promise.all(chunksSnap.docs.map((chunk) => chunk.ref.delete()))
+}
+
+// ─── publishDoc ──────────────────────────────────────────────────────────────
+
+/**
+ * Publish a KB document — sets the doc and all its kbChunks to status:'published'.
+ *
+ * This makes the doc's chunks retrievable by the Coach. Typically called after
+ * an admin reviews and approves content, or to re-publish a previously unpublished doc.
+ *
+ * @param user   Verified user from requireUser() — must have role 'admin'.
+ * @param docId  The kbDocs document ID to publish.
+ */
+export async function publishDoc(user: AuthenticatedUser, docId: string): Promise<void> {
+  assertAdmin(user)
+  await setDocAndChunksStatus(docId, 'published')
+}
+
+// ─── unpublishDoc ─────────────────────────────────────────────────────────────
+
+/**
+ * Unpublish a KB document — sets the doc and all its kbChunks to status:'unpublished'.
+ *
+ * This hides the doc's chunks from retrieval without deleting them, allowing
+ * them to be re-published later. Used for content review or temporary removal.
+ *
+ * @param user   Verified user from requireUser() — must have role 'admin'.
+ * @param docId  The kbDocs document ID to unpublish.
+ */
+export async function unpublishDoc(user: AuthenticatedUser, docId: string): Promise<void> {
+  assertAdmin(user)
+  await setDocAndChunksStatus(docId, 'unpublished')
+}
+
+// ─── markSuperseded ──────────────────────────────────────────────────────────
+
+/**
+ * Mark an old KB document and all its chunks as superseded by a new version.
+ *
+ * TRIGGER CHOICE: Called by the /api/kb/ingest/process Route Handler when the
+ * new version's ingestion completes (remaining === 0). This ensures the old doc
+ * remains retrievable until the replacement is fully embedded and ready — the Coach
+ * can still answer from the old content during the brief ingest window.
+ *
+ * The Route Handler reads oldDocId from the job doc (kbIngestionJobs.supersedesId)
+ * and calls markSuperseded(oldDocId, newDocId) on completion.
+ *
+ * @param oldDocId  The kbDocs document ID being superseded.
+ * @param newDocId  The new version's kbDocs document ID that supersedes it.
+ */
+export async function markSuperseded(oldDocId: string, newDocId: string): Promise<void> {
+  // Update the old kbDoc: mark superseded + record the new doc ID
+  await kbDocsRef().doc(oldDocId).update({
+    status: 'superseded',
+    supersededBy: newDocId,
+  })
+
+  // Bulk-update the old kbChunks to superseded so they fall out of retrieval
+  const chunksSnap = await kbChunksRef().where('docId', '==', oldDocId).get()
+  await Promise.all(chunksSnap.docs.map((chunk) => chunk.ref.update({ status: 'superseded' })))
+}
+
+// ─── correctKbDoc ────────────────────────────────────────────────────────────
+
+/**
+ * Inline correction path (CDASH-04) — a senior coach corrects KB content.
+ *
+ * Creates an attributed new KB version (new kbDocs + re-ingest via shardJob),
+ * recording the correcting actor's uid in correctedBy. Admin oversight is provided
+ * by the versioning chain (supersedesId). The correction goes through the same
+ * chunker/pipeline as any other ingest — no privileged bypass (T-02-06).
+ *
+ * Unlike createDoc/updateDoc/deleteDoc/publishDoc/unpublishDoc, this function
+ * is accessible to role 'senior-coach' in addition to 'admin'. All other KB
+ * CRUD functions remain admin-only.
+ *
+ * @param user     Verified user — must have role 'admin' or 'senior-coach'.
+ * @param docId    The kbDocs document ID to correct.
+ * @param content  The corrected content (plain text; will be re-chunked + embedded).
+ * @param opts     Optional lang/pillar overrides.
+ * @returns        docId + newDocId + job metadata for the browser poll loop.
+ */
+export async function correctKbDoc(
+  user: AuthenticatedUser,
+  docId: string,
+  content: string,
+  opts?: CorrectKbDocInput,
+): Promise<{ docId: string; newDocId?: string; jobId?: string; total?: number; remaining?: number }> {
+  assertAdminOrCoach(user)
+
+  // Delegate to updateDoc with correctedBy stamped from the correcting actor's uid.
+  // updateDoc validates the existing doc exists and creates the new version.
+  // Note: updateDoc uses assertAdmin internally — we bypass it by calling the
+  // internal implementation directly below rather than calling updateDoc (which
+  // would reject the senior-coach). We replicate the relevant updateDoc logic here.
+  const existingSnap = await kbDocsRef().doc(docId).get()
+  if (!existingSnap.exists) {
+    throw new Error(`correctKbDoc: kbDoc "${docId}" not found`)
+  }
+
+  const existing = existingSnap.data()!
+
+  const newDocRef = kbDocsRef().doc()
+  const newDocId = newDocRef.id
+
+  const newDocData: Omit<KbDocDoc, 'tenantId'> = {
+    title: existing.title,
+    sourcePath: `kb/${newDocId}`,
+    version: (existing.version ?? 1) + 1,
+    supersedesId: docId,
+    lang: opts?.lang ?? existing.lang,
+    pillar: opts?.pillar ?? existing.pillar,
+    status: 'published',
+    publishedAt: FieldValue.serverTimestamp(),
+    correctedBy: user.uid,
+  }
+
+  await newDocRef.set({ ...newDocData, tenantId: TENANT_ID } as KbDocDoc)
+
+  const lang = opts?.lang ?? existing.lang
+  const pillar = opts?.pillar ?? existing.pillar
+  const job = await shardJobForContent(content, newDocId, lang, pillar)
+
+  return { docId, newDocId, jobId: job.jobId, total: job.total, remaining: job.remaining }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/**
+ * Assert admin role. Throws if the user is not an admin.
+ * Used for all standard KB CRUD operations (createDoc/updateDoc/deleteDoc/
+ * publishDoc/unpublishDoc).
+ */
 function assertAdmin(user: AuthenticatedUser): void {
   if (user.role !== 'admin') {
     throw new Error('Forbidden: admin role required for KB CRUD operations')
   }
+}
+
+/**
+ * Assert admin OR senior-coach role.
+ * Used exclusively for correctKbDoc (CDASH-04 correction path).
+ */
+function assertAdminOrCoach(user: AuthenticatedUser): void {
+  if (user.role !== 'admin' && user.role !== 'senior-coach') {
+    throw new Error('Forbidden: admin or senior-coach role required for KB correction')
+  }
+}
+
+/**
+ * Bulk-update the status of a kbDoc and all its kbChunks.
+ * Used by publishDoc and unpublishDoc.
+ */
+async function setDocAndChunksStatus(
+  docId: string,
+  status: 'published' | 'unpublished',
+): Promise<void> {
+  // Update the kbDoc status
+  await kbDocsRef().doc(docId).update({ status })
+
+  // Bulk-update all kbChunks for this doc to match
+  const chunksSnap = await kbChunksRef().where('docId', '==', docId).get()
+  await Promise.all(chunksSnap.docs.map((chunk) => chunk.ref.update({ status })))
 }
 
 async function shardJobForContent(
