@@ -101,6 +101,7 @@ Items acknowledged and carried forward (v2 / post-pilot):
 
 Last session: 2026-06-02
 Stopped at: Phase 2 (Coach + Admin v1) EXECUTED — all 8 plans built across 4 waves; tsc clean, 325 vitest pass / 0 fail, lint 0 errors. Verifier=human_needed (0 code gaps — the one markSuperseded wiring gap was found + CLOSED, commit fdb1199). Phase 1 gates user-confirmed closed; D-09=on-visit; working-hours default KL 09:00–18:00; calibration approved. Built against real Firebase (Gemini, on-visit lazy-cron).
-Resume file: .planning/phases/02-coach-admin/02-VERIFICATION.md
-Open (live-gated, before Phase 3): live-stack proofs (Playwright e2e on a real deploy; Promptfoo eval + the Opus-judge calibration ≥85%); UI/dashboard browser render; COACH-10 pilot provisioning via set-claims; confirm working-hours window w/ Derek. Phase 2→3 needs a signed go/no-go memo (the calibration feeds it).
-Next step: run the live-stack proofs once deployed; then the go/no-go memo gates /gsd-plan-phase 3. Do NOT auto-advance to Phase 3 over the go/no-go gate.
+Resume file: .planning/phases/03-finder-routing/03-01-PLAN.md
+Phase 2: shipped (go/no-go SIGNED 2026-06-02); live-stack proofs (e2e waived; eval+calibration) + COACH-10 pilot provisioning run during pilot rollout.
+Phase 3 (Finder + Intent-Routing Activation): PLANNED + verified — 9 plans across 5 waves [1:{01,05} 2:{02} 3:{03,04,06} 4:{07,08} 5:{09}], 13/13 req IDs covered, research + Nyquist validation done, plan-checker remediated (incl. a caught wave bug). Two checkpoints: 03-08 (G4 inventory format → Derek) + 03-09 (FIND-12 pilot provisioning).
+Next step: /gsd-execute-phase 3 (wave-based; sequential, real Firebase, offline-tested). Live finder/router evals + pilot provisioning are live-gated.
