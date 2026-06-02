@@ -427,9 +427,11 @@ export function composeProjectEmbeddingText(p: ProjectDoc): string {
 | A6 | Confidence-threshold default-to-coach is the right safe fallback | Pattern 1 / Pitfall 2 | LOW — tunable; recorded `routeDecision` + eval make it observable and adjustable. |
 | A7 | `'reply'` excluded from the router enum until Phase 4 | Pattern 1 | LOW — matches roadmap; classifier enum is `['coach','finder']` this phase. |
 
-## Open Questions
+## Open Questions (PARTIALLY RESOLVED)
 
-1. **Inventory source format (G4) — flagged for Derek**
+> RESOLVED in planning: price representation → numeric `priceValue` + discrete `priceBand` (03-01); VP date queries → `vpDate` (03-01); affordability → pluggable `affordabilityCeiling` (03-02). **OPEN by design:** the G4 inventory source format is deferred to Derek via a blocking `checkpoint:decision` in 03-08 (the `ProjectSource` interface + CSV default ship regardless).
+
+1. **Inventory source format (G4) — OPEN (by design): Derek checkpoint in 03-08**
    - What we know: build a CSV/JSON import adapter; `projects` schema is fixed in `collections.ts`.
    - What's unclear: the actual D2 export shape (CSV columns? Sheet? per-project doc?).
    - Recommendation: build `import.ts` behind a `ProjectSource` interface; ship a CSV parser as default; confirm format with Derek before the pilot import. Do NOT block planning on this.
