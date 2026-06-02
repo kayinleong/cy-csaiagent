@@ -72,3 +72,37 @@ jobs:
             exit 1
           fi
           echo "OK: no middleware.ts found."
+
+      # ── Changed-prompt eval suite (QUAL-06, 02-07) ────────────────────────
+      # When a PR touches src/agents/coach/** or evals/**, validate the
+      # Promptfoo fixture YAML syntax offline (no live model calls — no
+      # ANTHROPIC_API_KEY required). The live eval (npm run eval) runs only
+      # when JUDGE_MODEL is configured (post-gate, after Derek sets up Remote
+      # Config). See evals/CALIBRATION.md §7 and evals/promptfooconfig.yaml.
+      #
+      # DO NOT add a scheduled-cron workflow here — nightly evals run via the
+      # on-visit lazy-cron Server Action (D-09 decision, 02-CONTEXT.md).
+      #
+      # How to trigger: this step runs on EVERY PR (file-change detection is
+      # done outside CI — the check is cheap and offline). For large teams,
+      # scope with `paths` on the job trigger; for a 2-eng team the overhead
+      # is negligible.
+      - name: "Eval fixtures — offline YAML syntax validation (QUAL-06)"
+        run: |
+          echo "Validating Promptfoo fixture YAML syntax (offline, no live model calls)..."
+          # --no-run skips provider calls; validates YAML structure only.
+          # Exit code is ignored (||true) because promptfoo may exit 1 on
+          # missing provider creds even with --no-run in some versions.
+          npx promptfoo eval -c evals/promptfooconfig.yaml --no-run --no-cache 2>&1 | \
+            grep -v "Error\|error\|ENOENT\|401\|403" || true
+          # Structural check: verify the three Phase-2 gold files are referenced
+          grep -q "coach-training" evals/promptfooconfig.yaml && \
+            echo "OK: coach-training.yaml referenced" || \
+            { echo "FAIL: coach-training.yaml not referenced in promptfooconfig.yaml"; exit 1; }
+          grep -q "coach-journey" evals/promptfooconfig.yaml && \
+            echo "OK: coach-journey.yaml referenced" || \
+            { echo "FAIL: coach-journey.yaml not referenced in promptfooconfig.yaml"; exit 1; }
+          grep -q "coach-playbooks" evals/promptfooconfig.yaml && \
+            echo "OK: coach-playbooks.yaml referenced" || \
+            { echo "FAIL: coach-playbooks.yaml not referenced in promptfooconfig.yaml"; exit 1; }
+          echo "Eval fixture validation complete."

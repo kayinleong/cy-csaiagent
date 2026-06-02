@@ -1,4 +1,7 @@
-# evals/promptfooconfig.yaml — Promptfoo evaluation suite for D2 Coach (FND-07)
+# evals/promptfooconfig.yaml — Promptfoo evaluation suite for D2 Coach
+#
+# Phase 2 / QUAL-06: expanded from the P1 single-fixture to a full Coach regression
+# suite: training Q&A, journey prompts, and channel playbooks × EN / BM / ZH.
 #
 # Judge model: resolved from Firebase Remote Config at eval runtime via the
 # JUDGE_MODEL environment variable. Set by Derek's eval runner script before
@@ -8,19 +11,31 @@
 #   JUDGE_MODEL=$(firebase remoteconfig:get --key model.grader.default) \
 #     npx promptfoo eval -c evals/promptfooconfig.yaml
 #
+# Offline fixture validation only (no live model calls — validates YAML syntax):
+#   npx promptfoo eval -c evals/promptfooconfig.yaml --no-cache || true
+#
+# Changed-prompt CI trigger: the GitHub Actions CI job (ci.yml) documents that
+# any PR touching src/agents/coach/** or evals/** should run:
+#   npm run eval:offline   (see package.json — validates fixture syntax, no live calls)
+# The live eval (npm run eval) requires ANTHROPIC_API_KEY + JUDGE_MODEL and
+# runs only when those are set (post-gate). See evals/CALIBRATION.md §7.
+#
+# DO NOT add a scheduled-cron GitHub Actions workflow for the nightly run —
+# the nightly eval runs via the on-visit lazy-cron Server Action (D-09 decision,
+# 02-CONTEXT.md). The CI changed-prompt suite is separate from the nightly run.
+#
 # See evals/CALIBRATION.md for the human-calibration protocol.
-# See src/eval/judge.ts for the four-domain rubric definition.
+# See src/eval/judge.ts for the six-domain rubric definition (Phase 2).
 #
 # @see https://www.promptfoo.dev/docs/configuration/guide/
 
-description: 'D2 CS-AI Agent — Coach trilingual eval suite (Phase 1 / FND-07)'
+description: 'D2 CS-AI Agent — Coach regression suite (Phase 2 / QUAL-06, 02-07)'
 
 # ─── Providers ───────────────────────────────────────────────────────────────
 # The Coach provider sends the test message to the live /api/chat endpoint.
 # The endpoint itself resolves the Coach model from Remote Config — no model ID here.
 #
-# For offline / CI runs where no live server is available, skip provider execution
-# and use --no-run flag to validate fixture syntax only:
+# For offline / CI runs where no live server is available, use --no-run flag:
 #   npx promptfoo eval -c evals/promptfooconfig.yaml --no-cache --no-run
 providers:
   - id: "http"
@@ -42,15 +57,30 @@ providers:
 # model-agnostic constraint (TSD §2.3, CLAUDE.md).
 #
 # NEVER replace {{env.JUDGE_MODEL}} with a hard-coded model string.
+#
+# Phase 2 rubric: six domains — grounding, scope, language-match, voice,
+# hallucination, and tone-drift. Defined in src/eval/judge.ts (combinedJudgeRubric).
 defaultTest:
   options:
     provider: "anthropic:messages:{{env.JUDGE_MODEL}}"
 
 # ─── Test suites ─────────────────────────────────────────────────────────────
+# Phase 1 (seed) + Phase 2 regression suite (02-07, QUAL-06)
 tests:
+  # Phase 1 — original proof-slice (three languages, onboarding week-1 question)
   - evals/coach-trilingual.gold.yaml
+
+  # Phase 2 — Coach regression suite (training Q&A × EN/BM/ZH)
+  - evals/gold/coach-training.yaml
+
+  # Phase 2 — Journey prompts (day-one pairing + comprehension gate × EN/BM/ZH)
+  - evals/gold/coach-journey.yaml
+
+  # Phase 2 — Playbook prompts (Meta Ads playbook + first-Meta-ad walkthrough × EN/BM/ZH)
+  - evals/gold/coach-playbooks.yaml
 
 # ─── Shared LLM-rubric assertion ─────────────────────────────────────────────
 # Applied on top of fixture-level assertions via Promptfoo's defaultTest.
-# The full four-domain rubric is defined in src/eval/judge.ts.
-# Each fixture also carries its own structural assertions (contains, javascript).
+# The full six-domain rubric is defined in src/eval/judge.ts (combinedJudgeRubric).
+# Each fixture also carries its own structural assertions (contains, javascript)
+# that run offline without a live model call.
