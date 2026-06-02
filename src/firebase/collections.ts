@@ -129,15 +129,101 @@ export interface LeadContextDoc {
   updatedAt: Date | FieldValue
 }
 
+/**
+ * Discrete price-band labels for equality-filterable Firestore pre-filters.
+ *
+ * Firestore `findNearest` pre-filters are equality-only — range filters cannot
+ * be combined with `findNearest` (Pitfall 6 / research Pattern 4). Storing the
+ * discrete band enables `where('priceBand','==',band).findNearest(embedding,…)`
+ * as an equality pre-filter, while the numeric `priceValue` is used for
+ * in-memory affordability ceiling comparisons (FIND-10).
+ *
+ * Wave-2 `src/inventory/search.ts` and Wave-3 admin reuse these constants —
+ * no magic strings in callers.
+ */
+export const PRICE_BANDS = [
+  'under_500k',
+  '500k_800k',
+  '800k_1.2m',
+  'above_1.2m',
+] as const
+export type PriceBand = typeof PRICE_BANDS[number]
+
+/**
+ * Derive the discrete `PriceBand` label from a numeric asking price in RM.
+ *
+ * This is the single source of truth for band assignment. All paths that write
+ * a `ProjectDoc` (crud, import, admin Server Actions) MUST call this helper so
+ * the stored `priceBand` is always consistent with the stored `priceValue`.
+ *
+ * Band boundaries (v1 — confirm with Derek if revised):
+ *   < 500,000         → 'under_500k'
+ *   500,000 – 799,999 → '500k_800k'
+ *   800,000 – 1,199,999 → '800k_1.2m'
+ *   ≥ 1,200,000       → 'above_1.2m'
+ */
+export function priceBandFor(priceValue: number): PriceBand {
+  if (priceValue < 500_000) return 'under_500k'
+  if (priceValue < 800_000) return '500k_800k'
+  if (priceValue < 1_200_000) return '800k_1.2m'
+  return 'above_1.2m'
+}
+
 export interface ProjectDoc {
   tenantId: TenantId
   name: string
   status: 'active' | 'sold_out' | 'hidden'
-  priceBand: string
+  /**
+   * Discrete equality-filterable price band label.
+   *
+   * Used as the Firestore `findNearest` pre-filter (equality-only — Pitfall 6).
+   * Derived from `priceValue` via `priceBandFor()`. Both fields must be kept in
+   * sync on every write (FIND-03 / D-03 / research Pattern 4 Index note).
+   */
+  priceBand: PriceBand
+  /**
+   * Numeric asking price in RM.
+   *
+   * Used for in-memory affordability ceiling comparisons (FIND-10). Range
+   * filtering on this field happens IN MEMORY because `findNearest` pre-filters
+   * are equality-only — do NOT attempt `where('priceValue','<=',x).findNearest(…)`
+   * as it will throw a Firestore error (Pitfall 6).
+   */
+  priceValue: number
   tenure: string
+  /**
+   * Denormalized convenience flag: true if VP has been completed.
+   * Keep for boolean queries. For date-grain queries ("completed VP this year")
+   * use `vpDate` (FIND-07).
+   */
   vpStatus: boolean
+  /**
+   * VP (Vacant Possession) completion date.
+   *
+   * `null` when `vpStatus === false` (VP not yet completed).
+   * Backs FIND-07 `where('status','==','active').where('vpDate','>=',startOfYear)`
+   * queries with the `(status, vpDate)` composite index.
+   */
+  vpDate: Date | FieldValue | null
   bumiQuota: boolean
   foreignEligible: boolean
+  /**
+   * Human-readable project description. Feeds the embedding-text composer
+   * (`composeProjectEmbeddingText` in `src/inventory/embedText.ts`).
+   * Note: `status` is NOT included in the embedding text — it is a hard filter,
+   * not a semantic signal (research code example).
+   */
+  description: string
+  /**
+   * Location text (e.g. "Cheras, Kuala Lumpur — near LRT Taman Connaught").
+   * Feeds the embedding-text composer for semantic location matching.
+   */
+  locationText: string
+  /**
+   * Number of bedrooms. Feeds the embedding-text composer and enables
+   * structured bedroom-count filtering in `queryInventory` (FIND-07).
+   */
+  bedrooms: number
   /** 1024-d normalized vector (Gemini gemini-embedding-001) */
   embedding: number[]
 }
@@ -146,7 +232,24 @@ export interface CollateralDoc {
   tenantId: TenantId
   projectId: string
   type: string
+  /**
+   * Firebase Storage object path (e.g. `collateral/project-id/poster.pdf`).
+   *
+   * D-09 / C2: This field stores a Firebase Storage path OR a plain external
+   * share URL (see `externalUrl`). NEVER a Google Drive API integration —
+   * the Drive API is forbidden by the no-GCP constraint.
+   */
   storagePath: string
+  /**
+   * Optional plain share URL for assets not hosted in Firebase Storage
+   * (e.g. a Google Drive public share link, OneDrive link, etc.).
+   *
+   * D-09 / C2: Use this field for external URLs. NEVER call the Drive API —
+   * the URL is stored as a plain string; the client renders a download link.
+   * Either `storagePath` is used (Firebase Storage) or `externalUrl` (external),
+   * never a Drive-API integration.
+   */
+  externalUrl?: string
   lang: 'en' | 'ms' | 'zh'
 }
 
