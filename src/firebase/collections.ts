@@ -6,7 +6,7 @@
  * `tenantId: TENANT_ID` on every document write — no caller can write
  * without the tenant field (TSD §4, CLAUDE.md tenantId mandate).
  *
- * Collections (TSD §4 — 14 collections + rateBudgets):
+ * Collections (TSD §4 — 14 collections + rateBudgets + knowledgeGaps):
  *   1.  users/{uid}
  *   2.  agentProfiles/{uid}
  *   3.  conversations/{cid}
@@ -22,6 +22,7 @@
  *   13. auditLogs/{alid}
  *   14. evals/{runId}
  *   15. rateBudgets/{uid}  ← de-facto 15th (TSD §9 ratelimit; ruled + consumed by 01-07)
+ *   16. knowledgeGaps/{gapId} ← Phase-2 knowledge-gap store (CDASH-03; server/Admin-SDK writes only)
  *
  * Import pattern (always use the @/ alias):
  *   import { usersRef, rateBudgetsRef } from '@/src/firebase/collections'
@@ -156,6 +157,14 @@ export interface KbDocDoc {
   version: number
   /** ID of the KB doc this supersedes (versioning) */
   supersedesId?: string
+  /** ID of the KB doc that supersedes this one (set when a new version replaces this doc) */
+  supersededBy?: string
+  /**
+   * Publication status — only 'published' docs are served by retrieval (Pitfall 3 fix).
+   * Optional for backwards-compat with Phase-1 writers; 02-02 adds the retrieval filter
+   * and a backfill that sets 'published' on all existing docs written without a status.
+   */
+  status?: 'published' | 'unpublished' | 'superseded'
   lang: 'en' | 'ms' | 'zh'
   pillar: 'coach' | 'finder' | 'reply'
   publishedAt: Date | FieldValue
@@ -168,6 +177,14 @@ export interface KbChunkDoc {
   lang: 'en' | 'ms' | 'zh'
   /** Collection this chunk belongs to (for pre-filter in findNearest) */
   ownerCollection: string
+  /**
+   * Denormalized from the parent kbDoc — allows retrieval to filter to published
+   * chunks only without a parent-doc JOIN (Pitfall 3 fix).
+   * Must be kept in sync with the parent kbDoc.status on every re-ingest / publish / supersede.
+   * Optional for backwards-compat with Phase-1 writers; 02-02 adds the retrieval filter
+   * and a backfill that sets 'published' on all existing chunks written without a status.
+   */
+  status?: 'published' | 'unpublished' | 'superseded'
   /** 1024-d normalized vector (Gemini gemini-embedding-001, DOT_PRODUCT) */
   embedding: number[]
   tokens: number
@@ -219,6 +236,43 @@ export interface EvalDoc {
   score: number
   judgeModel: string
   failures: string[]
+}
+
+/**
+ * Knowledge-gap record (collection 16, Phase-2 CDASH-03).
+ *
+ * Captures topics that agents frequently ask about but the KB cannot answer,
+ * enabling the senior-coach dashboard to surface a per-coach knowledge-gap feed.
+ *
+ * PDPA / security notes (A3):
+ *   - `topicLabel` MUST be a SHORT pseudonymized descriptor (e.g., "OC bumiputera quota"),
+ *     never the raw query string or any PII. Callers must redact before writing.
+ *   - `topicHash` is the sha256 dedup key (hex) — used to upsert/increment `count`.
+ *   - Server / Admin-SDK writes only — `create, update, delete: if false` in Firestore rules.
+ *   - Read-gated to the owning `seniorCoachId` + admin (deny-by-default, same as escalations).
+ */
+export interface KnowledgeGapDoc {
+  tenantId: TenantId
+  /** UID of the senior coach whose downline triggered this gap. */
+  seniorCoachId: string
+  /** UID of the agent who asked (pseudonymized — do NOT store raw name/email). */
+  agentUid: string
+  /**
+   * SHA-256 hex of the canonical topic string (lowercase, trimmed).
+   * Used as the dedup key for upsert-or-increment writes.
+   */
+  topicHash: string
+  /**
+   * Short, human-readable label for the topic (≤120 chars, no raw query text, no PII).
+   * Example: "OC bumiputera quota", "meta-ads budgeting", "iProperty listing SOP"
+   */
+  topicLabel: string
+  /** Language the question was asked in (drives per-lang gap reporting). */
+  lang: 'en' | 'ms' | 'zh'
+  /** How many times this topic has been hit without a KB answer. */
+  count: number
+  /** Timestamp of the most recent miss for this topic (used for gap-feed ordering). */
+  lastSeenAt: Date | FieldValue
 }
 
 /**
@@ -282,6 +336,7 @@ export const escalationConverter = makeConverter<EscalationDoc>()
 export const auditLogConverter = makeConverter<AuditLogDoc>()
 export const evalConverter = makeConverter<EvalDoc>()
 export const rateBudgetConverter = makeConverter<RateBudgetDoc>()
+export const knowledgeGapConverter = makeConverter<KnowledgeGapDoc>()
 
 // ─── Ref factories ───────────────────────────────────────────────────────────
 // Export one named factory per collection.
@@ -387,4 +442,20 @@ export function evalsRef(): CollectionReference<EvalDoc> {
  */
 export function rateBudgetsRef(): CollectionReference<RateBudgetDoc> {
   return adminDb.collection('rateBudgets').withConverter(rateBudgetConverter)
+}
+
+/**
+ * Collection 16: knowledgeGaps/{gapId}
+ *
+ * Phase-2 knowledge-gap store (CDASH-03). Captures topics agents frequently
+ * ask about without a KB answer, aggregated per seniorCoachId for the dashboard
+ * knowledge-gap feed.
+ *
+ * Server / Admin-SDK writes ONLY — create, update, delete disabled for clients.
+ * Read is scoped to the owning seniorCoachId + admin (firestore.rules).
+ *
+ * PDPA: topicLabel MUST be pseudonymized before writing — never raw query text.
+ */
+export function knowledgeGapsRef(): CollectionReference<KnowledgeGapDoc> {
+  return adminDb.collection('knowledgeGaps').withConverter(knowledgeGapConverter)
 }
