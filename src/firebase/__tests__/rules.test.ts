@@ -439,6 +439,133 @@ rulesSuite('KB collections (shared tenant read, admin write)', () => {
   }
 })
 
+// ─── 8b. projects + collateral — extended schema (FIND-03/07/10, ADMIN-04, T-03-01) ──
+//
+// Proves deny-by-default holds for the extended ProjectDoc (priceValue, vpDate,
+// priceBand, description, locationText, bedrooms) and CollateralDoc (externalUrl).
+// Key guard (T-03-01): senior-coach CANNOT write projects — elevation-of-privilege
+// check that admin-only-inventory boundary is enforced for all non-admin roles.
+
+rulesSuite('projects + collateral — extended schema + senior-coach-deny (T-03-01/ADMIN-04)', () => {
+  const projectDocId = 'project-extended-001'
+  const collateralDocId = 'collateral-extended-001'
+
+  /** Full new-shape ProjectDoc (mirrors the extended ProjectDoc interface from collections.ts). */
+  const fullProjectDoc = {
+    tenantId: D2_TENANT,
+    name: 'Sunway Nexus',
+    status: 'active',
+    priceValue: 600_000,
+    priceBand: '500k_800k',
+    tenure: 'leasehold',
+    vpStatus: false,
+    vpDate: null,
+    bumiQuota: false,
+    foreignEligible: true,
+    description: 'Modern serviced apartment near Subang LRT',
+    locationText: 'Subang Jaya, Selangor',
+    bedrooms: 3,
+    embedding: [],
+  }
+
+  /** Full new-shape CollateralDoc (mirrors the extended CollateralDoc interface). */
+  const fullCollateralDoc = {
+    tenantId: D2_TENANT,
+    projectId: projectDocId,
+    type: 'poster',
+    storagePath: 'gs://cy-csaiagent.appspot.com/collateral/project-001/poster.pdf',
+    externalUrl: null,
+    lang: 'en',
+  }
+
+  beforeAll(async () => {
+    await seed(`projects/${projectDocId}`, fullProjectDoc)
+    await seed(`collateral/${collateralDocId}`, fullCollateralDoc)
+  })
+
+  // ── signed-in tenant user CAN read ──────────────────────────────────────────
+
+  it('new-agent CAN read projects (signed-in, same tenant)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(getDoc(doc(db, 'projects', projectDocId)))
+  })
+
+  it('new-agent CAN read collateral (signed-in, same tenant)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(getDoc(doc(db, 'collateral', collateralDocId)))
+  })
+
+  // ── unauthenticated CANNOT read ──────────────────────────────────────────────
+
+  it('unauthenticated CANNOT read projects (deny-by-default)', async () => {
+    const ctx = await unauthContext()
+    const db = ctx.firestore()
+    await assertFails(getDoc(doc(db, 'projects', projectDocId)))
+  })
+
+  it('unauthenticated CANNOT read collateral (deny-by-default)', async () => {
+    const ctx = await unauthContext()
+    const db = ctx.firestore()
+    await assertFails(getDoc(doc(db, 'collateral', collateralDocId)))
+  })
+
+  // ── non-admin CANNOT write ───────────────────────────────────────────────────
+
+  it('new-agent CANNOT write projects (not admin)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertFails(
+      setDoc(doc(db, 'projects', 'agent-write-attempt'), { ...fullProjectDoc })
+    )
+  })
+
+  it('new-agent CANNOT write collateral (not admin)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertFails(
+      setDoc(doc(db, 'collateral', 'agent-collateral-write'), { ...fullCollateralDoc })
+    )
+  })
+
+  // ── T-03-01 elevation-of-privilege guard: senior-coach CANNOT write projects ──
+
+  it('senior-coach CANNOT write projects (admin-only-inventory boundary — T-03-01)', async () => {
+    const ctx = await seniorCoachCtx()
+    const db = ctx.firestore()
+    await assertFails(
+      setDoc(doc(db, 'projects', 'coach-write-attempt'), { ...fullProjectDoc })
+    )
+  })
+
+  it('senior-coach CANNOT write collateral (admin-only-inventory boundary — T-03-01)', async () => {
+    const ctx = await seniorCoachCtx()
+    const db = ctx.firestore()
+    await assertFails(
+      setDoc(doc(db, 'collateral', 'coach-collateral-write'), { ...fullCollateralDoc })
+    )
+  })
+
+  // ── admin CAN write the full new-shape doc ────────────────────────────────────
+
+  it('admin CAN write full new-shape ProjectDoc (priceValue + vpDate + bedrooms — T-03-02)', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(
+      setDoc(doc(db, 'projects', 'admin-new-shape-project'), { ...fullProjectDoc })
+    )
+  })
+
+  it('admin CAN write full new-shape CollateralDoc (externalUrl field — T-03-02)', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(
+      setDoc(doc(db, 'collateral', 'admin-new-shape-collateral'), { ...fullCollateralDoc })
+    )
+  })
+})
+
 // ─── 9. escalations collection ────────────────────────────────────────────────
 
 rulesSuite('escalations collection', () => {
