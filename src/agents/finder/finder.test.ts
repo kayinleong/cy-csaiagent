@@ -533,9 +533,10 @@ describe('Test 6: read-only — tools never write Firestore; finderSlot write is
 
     // The description must not mention write operations
     expect(tool.description).toBeDefined()
-    expect(tool.description.toLowerCase()).not.toContain('write')
-    expect(tool.description.toLowerCase()).not.toContain('update')
-    expect(tool.description.toLowerCase()).not.toContain('delete')
+    const desc = tool.description ?? ''
+    expect(desc.toLowerCase()).not.toContain('write')
+    expect(desc.toLowerCase()).not.toContain('update')
+    expect(desc.toLowerCase()).not.toContain('delete')
   })
 
   it('makeQueryInventoryTool has an execute function (read-only, structured query)', async () => {
