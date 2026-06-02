@@ -405,13 +405,16 @@ describe('Test 10 (02-03): both user and assistant messages persisted in onFinis
   it('appendMessage is called with user role and then assistant role (via onFinish)', async () => {
     // Use a local tracking array — independent of accumulated mock history
     const persistedRoles: string[] = []
-    mocks.mockAppendMessage.mockImplementation(async (_cid: string, msg: { role: string }) => {
-      persistedRoles.push(msg.role)
-      return 'msg-id-local'
-    })
+    ;(mocks.mockAppendMessage as ReturnType<typeof vi.fn>).mockImplementation(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async (_cid: unknown, msg: any) => {
+        persistedRoles.push((msg as { role: string }).role)
+        return 'msg-id-local'
+      }
+    )
 
     // Invoke onFinish synchronously via a custom streamText mock for this test
-    mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: typeof mockFinalResult) => Promise<void> }) => {
+    mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
       void onFinish({ ...mockFinalResult, steps: [] })
       return {
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>

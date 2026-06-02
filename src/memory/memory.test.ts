@@ -249,7 +249,10 @@ describe('ensurePrimaryThread (D-01 — deterministic primary Coach thread)', ()
     const cid = await ensurePrimaryThread('uid-001', 'en')
 
     expect(cid).toBe('coach-uid-001')
-    expect((conversationsRef as ReturnType<typeof vi.fn>)().doc).toHaveBeenCalledWith('coach-uid-001')
+    // conversationsRef is mocked — verify .doc() was called with the right cid
+    const { conversationsRef: mockedConvRef } = await import('@/src/firebase/collections')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((mockedConvRef as any)().doc).toHaveBeenCalledWith('coach-uid-001')
     expect(mockConversationsDocSet).toHaveBeenCalledWith(
       expect.objectContaining({
         ownerUid: 'uid-001',
@@ -331,42 +334,30 @@ describe('listConversations (CHAT-07 — conversation list, createdAt DESC)', ()
 
 describe('searchConversations (CHAT-07 — client-side substring search)', () => {
   it('filters threads by summary substring (case-insensitive)', () => {
-    // searchConversations is a pure helper — import synchronously via the conv module
-    const threads = [
-      { id: 'c1', data: { ownerUid: 'u', pillar: 'coach' as const, lang: 'en' as const, createdAt: new Date(), summary: 'Meta ads budgeting' } },
-      { id: 'c2', data: { ownerUid: 'u', pillar: 'coach' as const, lang: 'en' as const, createdAt: new Date(), summary: 'iProperty listing SOP' } },
-      { id: 'c3', data: { ownerUid: 'u', pillar: 'coach' as const, lang: 'en' as const, createdAt: new Date(), summary: 'meta ADS ROI' } },
-    ]
-
-    // Import via module (need dynamic import because of vi.mock hoisting)
-    // Use a synchronous approach: we'll test it as part of the listConversations flow
-    // by calling it directly after import in an async wrapper
-    expect(threads.filter(t => t.data.summary.toLowerCase().includes('meta')).length).toBe(2)
+    // Pure logic test — just verify the filter behavior matches our expectation
+    const summaries = ['Meta ads budgeting', 'iProperty listing SOP', 'meta ADS ROI']
+    expect(summaries.filter(s => s.toLowerCase().includes('meta')).length).toBe(2)
   })
 
   it('returns all threads when search term is empty', async () => {
     const convModule = await import('./conversation')
-    if (typeof convModule.searchConversations === 'function') {
-      const threads = [
-        { id: 'c1', data: { ownerUid: 'u', pillar: 'coach' as const, lang: 'en' as const, createdAt: new Date(), summary: 'Meta ads' } },
-        { id: 'c2', data: { ownerUid: 'u', pillar: 'coach' as const, lang: 'en' as const, createdAt: new Date(), summary: 'iProperty SOP' } },
-      ]
-      const result = convModule.searchConversations(threads, '')
-      expect(result).toHaveLength(2)
-    }
+    const threads = [
+      { id: 'c1', data: { tenantId: 'd2' as const, ownerUid: 'u', pillar: 'coach' as const, lang: 'en' as const, createdAt: new Date(), summary: 'Meta ads' } },
+      { id: 'c2', data: { tenantId: 'd2' as const, ownerUid: 'u', pillar: 'coach' as const, lang: 'en' as const, createdAt: new Date(), summary: 'iProperty SOP' } },
+    ]
+    const result = convModule.searchConversations(threads, '')
+    expect(result).toHaveLength(2)
   })
 
   it('searchConversations matches case-insensitively on summary field', async () => {
     const convModule = await import('./conversation')
-    if (typeof convModule.searchConversations === 'function') {
-      const threads = [
-        { id: 'c1', data: { ownerUid: 'u', pillar: 'coach' as const, lang: 'en' as const, createdAt: new Date(), summary: 'Meta Ads Budgeting' } },
-        { id: 'c2', data: { ownerUid: 'u', pillar: 'coach' as const, lang: 'en' as const, createdAt: new Date(), summary: 'iProperty listing SOP' } },
-      ]
-      const result = convModule.searchConversations(threads, 'meta')
-      expect(result).toHaveLength(1)
-      expect(result[0].id).toBe('c1')
-    }
+    const threads = [
+      { id: 'c1', data: { tenantId: 'd2' as const, ownerUid: 'u', pillar: 'coach' as const, lang: 'en' as const, createdAt: new Date(), summary: 'Meta Ads Budgeting' } },
+      { id: 'c2', data: { tenantId: 'd2' as const, ownerUid: 'u', pillar: 'coach' as const, lang: 'en' as const, createdAt: new Date(), summary: 'iProperty listing SOP' } },
+    ]
+    const result = convModule.searchConversations(threads, 'meta')
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe('c1')
   })
 })
 
