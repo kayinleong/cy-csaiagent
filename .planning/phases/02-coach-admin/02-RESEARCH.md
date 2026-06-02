@@ -444,13 +444,13 @@ const openStalls = await escalationsRef()
 | A7 | `recharts@3.8` renders under React 19 in `'use client'` islands (may need `react-is` override) | Pitfall 7 | If render fails without override, add `overrides` pin — minor. |
 | A8 | A `published`/`status` field added to `kbChunks` + retrieval filter is the chosen fix for stale-chunk retrieval | Pitfall 3 | Alternative (delete old chunks on re-ingest) changes the re-ingest path; pick one in planning. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Wall-clock nudges (D-09).** Should the pilot ship the GitHub Actions scheduled-workflow escape hatch, or accept on-visit-only nudges? — *Recommendation: escalate to the user before pilot; default to on-visit per D-09; build the heartbeat/watchdog regardless.*
-2. **Knowledge-gap signal schema (CDASH-03).** New `knowledgeGaps` collection vs. enriched kb_miss escalations? — *Recommendation: decide in planning; lean toward a dedicated aggregated collection so the dashboard read is cheap (Pitfall: read-cost #9).*
-3. **KB stale-chunk fix (Pitfall 3).** Status-filter retrieval vs. delete-on-reingest? — *Recommendation: status-filter (`published`) on `kbChunks` + backfill + index; it also gives publish/unpublish for free (D-13).*
-4. **Transcript drilldown depth (CDASH-03).** Summaries/bundles vs. full transcripts? — *Recommendation: bundles + summaries for the pilot (avoids the PDPA rule + audit complexity); revisit post-pilot.*
-5. **Working-hours definition (CDASH-06).** Exact business-hours window + timezone confirmation. — *Needs Derek.*
+1. **Wall-clock nudges (D-09).** Should the pilot ship the GitHub Actions scheduled-workflow escape hatch, or accept on-visit-only nudges? — **RESOLVED → USER DECISION, gated.** Surfaced as a blocking `checkpoint:decision` in plan 02-05 (D-09); code ships the on-visit default + heartbeat/watchdog regardless. Derek decides before the pilot.
+2. **Knowledge-gap signal schema (CDASH-03).** New `knowledgeGaps` collection vs. enriched kb_miss escalations? — **RESOLVED → dedicated aggregated `knowledgeGaps` collection** (cheap dashboard read; PDPA-safe topicHash/topicLabel, no raw query). Implemented in plan 02-05 Task 2; collection + index declared in 02-01.
+3. **KB stale-chunk fix (Pitfall 3).** Status-filter retrieval vs. delete-on-reingest? — **RESOLVED → `published`/`status` filter** on `kbChunks` + backfill + composite index; gives publish/unpublish for free (D-13). Implemented in plan 02-02 (retrieval filter + supersede cascade) and 02-01 (fields + index).
+4. **Transcript drilldown depth (CDASH-03/Pitfall 5).** Summaries/bundles vs. full transcripts? — **RESOLVED → bundles + summaries for the pilot**, read server-side with an audit row (no client-side owner-only-transcript rule change). Implemented in plan 02-06.
+5. **Working-hours definition (CDASH-06).** Exact business-hours window + timezone. — **RESOLVED → USER DECISION, gated.** Default Asia/Kuala_Lumpur 09:00–18:00 Mon–Fri ships (assumption A1); folded into plan 02-05's D-09 `checkpoint:decision` as a confirm-before-pilot item for Derek (tz, daily window, nudge-vs-escalation hours/weekends).
 
 ## Environment Availability
 

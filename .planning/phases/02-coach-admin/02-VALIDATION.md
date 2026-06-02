@@ -1,9 +1,9 @@
 ---
 phase: 2
 slug: coach-admin
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: ready
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-06-02
 ---
 
@@ -39,16 +39,25 @@ created: 2026-06-02
 
 ---
 
-## Per-Task Verification Map
+## Per-Plan Verification Map
 
-> Populated after `/gsd-plan-phase 2` produces the PLAN.md task IDs. See `02-RESEARCH.md`
-> § Validation Architecture for the per-requirement test-type mapping that seeds this table.
+> Per-plan granularity (one row per PLAN.md). Every executable task in each plan carries its own
+> `<verify><automated>` block (confirmed by the plan-checker — no 3-consecutive-task gap), so the
+> Nyquist sampling-continuity bar is met. `gsd-nyquist-auditor` expands this to per-individual-task
+> rows at execution. Per-requirement test types: see `02-RESEARCH.md § Validation Architecture`.
 
-| Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
-|---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD | — | — | (all 31 Phase-2 IDs) | — | — | per RESEARCH §Validation Architecture | `npm test` / `test:rules` / `test:e2e` / `eval` | — | ⬜ pending |
+| Plan | Wave | Requirements | Primary Test Type | Automated Command | Live-gated? | Status |
+|------|------|--------------|-------------------|-------------------|-------------|--------|
+| 02-01 | 1 | AUTH-02, AUTH-03, AUTH-06 | rules-unit-test + unit | `npm run test:rules` (emulator) + `npm test` | rules need emulator | ⬜ pending |
+| 02-02 | 2 | ADMIN-03, CDASH-04 | unit (retrieval filter, supersede) | `npm test src/rag src/kb` | live findNearest gated | ⬜ pending |
+| 02-03 | 2 | CHAT-01..08 | unit + e2e | `npm test src/memory` + `npm run test:e2e` | e2e needs live stack | ⬜ pending |
+| 02-04 | 2 | COACH-01,02,03,06,07,08,09 | unit (TDD: journey/comprehension) | `npm test src/coach src/agents/coach` | comprehension grading live-gated | ⬜ pending |
+| 02-05 | 2 | COACH-04, COACH-05, CDASH-03, CDASH-06 | unit (injectable clock) | `npm test src/jobs src/escalation` | — (offline) | ⬜ pending |
+| 02-06 | 4 | AUTH-06, CDASH-01,02,03,04,05,07, COACH-10 | unit + rules-unit-test | `npm test src/dashboard` + `npm run test:rules` | downline reads need emulator | ⬜ pending |
+| 02-07 | 3 | QUAL-06 | promptfoo eval + unit | `npm test src/eval` + `npm run eval` | eval needs live Anthropic | ⬜ pending |
+| 02-08 | 3 | ADMIN-01, ADMIN-03 | unit + e2e | `npm test src/kb` + `npm run test:e2e` | e2e needs live stack | ⬜ pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky. Offline tiers (vitest + emulator rules) run now; e2e/eval tiers run after the Phase-1 gate closes.*
 
 ---
 
