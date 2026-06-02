@@ -21,6 +21,29 @@ import { agentProfilesRef } from '@/src/firebase/collections'
 import { FieldValue } from 'firebase-admin/firestore'
 
 /**
+ * Retrieve the current journey state for an agent.
+ *
+ * Returns the agent's current journeyStage and currentCheckpoint from Firestore.
+ * Used by the Coach's read-only journey tool (`getCurrentCheckpoint`).
+ *
+ * @param uid  The agent's user ID.
+ * @returns    The agent's journey state, or null if the profile does not exist.
+ */
+export async function getAgentProfile(
+  uid: string,
+): Promise<{ journeyStage: string; currentCheckpoint: string; seniorCoachId: string } | null> {
+  const snapshot = await agentProfilesRef().doc(uid).get()
+  if (!snapshot.exists) return null
+  const data = snapshot.data()
+  if (!data) return null
+  return {
+    journeyStage: data.journeyStage ?? 'onboarding',
+    currentCheckpoint: data.currentCheckpoint ?? 'start',
+    seniorCoachId: data.seniorCoachId ?? '',
+  }
+}
+
+/**
  * Update the journey stage (and optionally the current checkpoint) for an agent.
  * Also updates `lastActiveAt` — the stall-detect signal.
  *

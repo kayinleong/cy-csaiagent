@@ -1,10 +1,11 @@
 /**
- * Coach agent unit tests — 5 behaviors (offline, no real Firebase/Anthropic).
+ * Coach agent unit tests — 7 behaviors (offline, no real Firebase/Anthropic).
  *
  * All external dependencies are mocked:
  *   - @/src/firebase/admin (remoteConfig) — returns a mock ServerConfig
  *   - @/src/rag (retrieve, buildCitations, isRetrievalMiss) — scripted responses
  *   - @/src/escalation (emitHandoffSignal) — spy to assert calls
+ *   - @/src/memory/agentProfile (getAgentProfile) — returns mock journey state
  *
  * Tests run via: npx vitest run src/agents/coach/coach.test.ts
  * No live Anthropic API calls. No live Firestore reads.
@@ -14,6 +15,8 @@
  * Test 3: Coach output is Zod-valid; rejects empty citations when retrieval succeeded
  * Test 4: On retrieval miss, emitHandoffSignal is called; no content fabricated
  * Test 5: Coach is dispatched via router.route — not called directly
+ * Test 6: Journey tools — getCurrentCheckpoint reads journey state; getCheckpointContent retrieves KB
+ * Test 7: Grown system prompt includes journey/grounding/playbook behavior
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -34,6 +37,12 @@ const mocks = vi.hoisted(() => {
 
   const mockEmitHandoffSignal = vi.fn(async () => {})
 
+  const mockGetAgentProfile = vi.fn(async () => ({
+    journeyStage: 'onboarding',
+    currentCheckpoint: 'channel-playbooks',
+    seniorCoachId: 'senior-uid-001',
+  }))
+
   return {
     mockGetString,
     mockEvaluate,
@@ -43,6 +52,7 @@ const mocks = vi.hoisted(() => {
     mockBuildCitations,
     mockIsRetrievalMiss,
     mockEmitHandoffSignal,
+    mockGetAgentProfile,
   }
 })
 
@@ -67,12 +77,19 @@ vi.mock('@/src/escalation', () => ({
   emitHandoffSignal: mocks.mockEmitHandoffSignal,
 }))
 
+vi.mock('@/src/memory/agentProfile', () => ({
+  getAgentProfile: mocks.mockGetAgentProfile,
+  updateJourneyStage: vi.fn(async () => {}),
+  touchLastActive: vi.fn(async () => {}),
+}))
+
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
 import { modelFor } from '@/src/llm/provider'
 import { CoachOutputSchema } from './schema'
-import { makeRetrieveKnowledgeTool } from './tools'
+import { makeRetrieveKnowledgeTool, makeGetCurrentCheckpointTool, makeGetCheckpointContentTool } from './tools'
 import { coachAgent } from './index'
+import { buildCoachSystemPrompt } from './prompt'
 import { route } from '@/src/router'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -377,5 +394,150 @@ describe('Test 5: Coach is dispatched via router.route — not called directly',
 
     expect(decision.pillar).toBe('coach')
     expect(decision.reason).toBe('manual-override')
+  })
+})
+
+// ─── Test 6: Journey tools — getCurrentCheckpoint + getCheckpointContent ──────
+
+describe('Test 6: Journey tools are read-only and return journey state / KB content', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('getCurrentCheckpoint reads the agent profile and returns stage/checkpoint/stageLabel', async () => {
+    mocks.mockGetAgentProfile.mockResolvedValueOnce({
+      journeyStage: 'onboarding',
+      currentCheckpoint: 'channel-playbooks',
+      seniorCoachId: 'senior-uid-001',
+    })
+
+    const tool = makeGetCurrentCheckpointTool('uid-agent-001')
+    const executeImpl = tool.execute as NonNullable<typeof tool.execute>
+    const rawResult = await executeImpl({}, {} as never)
+    // Narrow away the AsyncIterable branch (AI SDK type includes it; at runtime it's a plain value)
+    const result = rawResult as import('./tools').CheckpointState | { error: string }
+
+    expect(mocks.mockGetAgentProfile).toHaveBeenCalledWith('uid-agent-001')
+    if ('error' in result) throw new Error(`Unexpected error: ${result.error}`)
+    const state = result as import('./tools').CheckpointState
+    expect(state.journeyStage).toBe('onboarding')
+    expect(state.currentCheckpoint).toBe('channel-playbooks')
+    expect(state.seniorCoachId).toBe('senior-uid-001')
+    // stageLabel should be a readable string
+    expect(typeof state.stageLabel).toBe('string')
+    expect(state.stageLabel.length).toBeGreaterThan(0)
+  })
+
+  it('getCurrentCheckpoint returns an error object when the agent profile is not found', async () => {
+    mocks.mockGetAgentProfile.mockResolvedValueOnce(null as unknown as { journeyStage: string; currentCheckpoint: string; seniorCoachId: string })
+
+    const tool = makeGetCurrentCheckpointTool('uid-not-found')
+    const executeImpl = tool.execute as NonNullable<typeof tool.execute>
+    const rawResult = await executeImpl({}, {} as never)
+    const result = rawResult as import('./tools').CheckpointState | { error: string }
+
+    expect('error' in result).toBe(true)
+  })
+
+  it('getCheckpointContent retrieves KB content for a known checkpoint', async () => {
+    mocks.mockRetrieve.mockResolvedValueOnce([
+      { chunkId: 'chunk-playbook-001', docId: 'kb-coach-meta-ads-playbook-en', text: 'Meta ads step 1...', lang: 'en', score: 0.90 },
+    ])
+    mocks.mockIsRetrievalMiss.mockReturnValue(false)
+    mocks.mockBuildCitations.mockReturnValue({
+      citations: [{ chunkId: 'chunk-playbook-001', docId: 'kb-coach-meta-ads-playbook-en', snippet: 'Meta ads step 1...' }],
+      missed: false,
+    })
+
+    const tool = makeGetCheckpointContentTool('en')
+    const executeImpl = tool.execute as NonNullable<typeof tool.execute>
+    const result = await executeImpl({ checkpointId: 'channel-playbooks' }, {} as never)
+
+    // Should find the checkpoint and return content
+    if ('found' in result && result.found === false) {
+      throw new Error(`Unexpected miss: ${result.reason}`)
+    }
+    const hit = result as import('./tools').CheckpointContent
+    expect(hit.checkpointId).toBe('channel-playbooks')
+    expect(Array.isArray(hit.kbDocIds)).toBe(true)
+    expect(hit.kbDocIds.length).toBeGreaterThan(0)
+    expect(typeof hit.context).toBe('string')
+    expect(Array.isArray(hit.citations)).toBe(true)
+    // comprehensionGatePrompt should be present for this checkpoint
+    expect(typeof hit.comprehensionGatePrompt).toBe('string')
+  })
+
+  it('getCheckpointContent returns a miss result for an unknown checkpointId', async () => {
+    const tool = makeGetCheckpointContentTool('en')
+    const executeImpl = tool.execute as NonNullable<typeof tool.execute>
+    const result = await executeImpl({ checkpointId: 'unknown-checkpoint-xyz' }, {} as never)
+
+    expect('found' in result && result.found === false).toBe(true)
+  })
+
+  it('coachAgent.makeTools includes getCurrentCheckpoint and getCheckpointContent when agentUid is provided', () => {
+    const tools = coachAgent.makeTools('en', 'uid-test-agent')
+    expect('retrieveKnowledge' in tools).toBe(true)
+    expect('getCurrentCheckpoint' in tools).toBe(true)
+    expect('getCheckpointContent' in tools).toBe(true)
+  })
+
+  it('coachAgent.makeTools includes only retrieveKnowledge when agentUid is omitted', () => {
+    const tools = coachAgent.makeTools('en')
+    expect('retrieveKnowledge' in tools).toBe(true)
+    expect('getCurrentCheckpoint' in tools).toBe(false)
+    expect('getCheckpointContent' in tools).toBe(false)
+  })
+})
+
+// ─── Test 7: Grown system prompt contains journey + grounding + playbook behavior ──
+
+describe('Test 7: System prompt growth — journey-stage, grounding, playbooks retained', () => {
+  it('base COACH_SYSTEM_PROMPT contains grounding mandate (KB: citation instruction)', () => {
+    expect(coachAgent.systemPrompt).toContain('KB:')
+    expect(coachAgent.systemPrompt).toContain('retrieveKnowledge')
+    expect(coachAgent.systemPrompt).toContain('D2')
+  })
+
+  it('buildSystemPrompt without context returns the base grounding + scope mandate', () => {
+    const prompt = buildCoachSystemPrompt()
+    expect(prompt).toContain('KB:')
+    expect(prompt).toContain('retrieveKnowledge')
+    // Grounding mandate: handoff on miss
+    expect(prompt).toContain('handoff')
+    // Scope: no generic advice
+    expect(prompt).toContain('D2-specific')
+  })
+
+  it('buildSystemPrompt with journey context injects stage + checkpoint into the prompt', () => {
+    const prompt = buildCoachSystemPrompt({
+      journeyStage: 'onboarding',
+      currentCheckpoint: 'channel-playbooks',
+    })
+    expect(prompt).toContain('onboarding')
+    expect(prompt).toContain('channel-playbooks')
+    // Journey tools referenced
+    expect(prompt).toContain('getCheckpointContent')
+  })
+
+  it('prompt mentions comprehension checks and forbids MCQ', () => {
+    const prompt = buildCoachSystemPrompt()
+    expect(prompt).toContain('comprehension')
+    // Prompt forbids MCQ ("Do NOT use multiple-choice questions") — it must contain
+    // the prohibition (not just be silent on it), and must instruct free-text paraphrase.
+    expect(prompt).toContain('free-text paraphrase')
+    // The prompt must not encourage MCQ — it may contain the word to prohibit it,
+    // but must pair it with "do not" or "only".
+    const lower = prompt.toLowerCase()
+    // If "multiple-choice" appears it MUST be in the context of a prohibition
+    if (lower.includes('multiple-choice') || lower.includes('multiple choice')) {
+      expect(lower).toContain('do not')
+    }
+  })
+
+  it('prompt mentions channel playbooks and meta-ad walkthrough grounding (COACH-07/08)', () => {
+    const prompt = buildCoachSystemPrompt()
+    expect(prompt).toContain('playbook')
+    expect(prompt).toContain('KB')
   })
 })

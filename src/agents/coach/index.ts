@@ -2,25 +2,29 @@
  * src/agents/coach/index.ts — D2 Onboarding Coach agent.
  *
  * Exports `coachAgent` which is invoked THROUGH the router (TSD §6, D-09):
- *   const { pillar } = router.route(messages)  // always 'coach' in Phase 1
+ *   const { pillar } = router.route(messages)  // always 'coach' in Phase 1/2
  *   const result = await coachAgent.run({ ... })
  *
- * The Coach is minimal-but-extensible:
- *   - Thin scoped system prompt (prompt.ts)
- *   - ONE read-only tool: retrieveKnowledge → real chunk-ID citations (tools.ts)
- *   - Zod output schema enforcement (schema.ts)
- *   - KB-miss → emitHandoffSignal (never hallucinate)
+ * The Coach is grown in Phase 2 to include:
+ *   - Journey-stage-aware system prompt (buildCoachSystemPrompt with injected context)
+ *   - Journey read-only tools: getCurrentCheckpoint, getCheckpointContent
+ *   - Comprehension gate delivery (free-text paraphrase — no MCQ)
+ *   - KB-miss → emitHandoffSignal (unchanged behavior preserved)
  *
- * Phase-2 extension points (do NOT add these now — follow YAGNI):
- *   - journeyStage / currentCheckpoint injected into prompt
- *   - proactive stall nudges
- *   - voice fingerprint few-shot examples
+ * Anti-patterns (from RESEARCH.md):
+ *   - Tools are READ-ONLY (no Firestore writes inside tool execute — T-02-15).
+ *   - Journey advances happen via a Server Action gated by a passing comprehension grade.
+ *   - Model IDs resolved via modelFor() — never hard-coded.
  *
  * Core/shell rule: this file must NOT import from app/ or next.
  */
 
-import { COACH_SYSTEM_PROMPT } from './prompt'
-import { makeRetrieveKnowledgeTool } from './tools'
+import { buildCoachSystemPrompt, COACH_SYSTEM_PROMPT } from './prompt'
+import {
+  makeRetrieveKnowledgeTool,
+  makeGetCurrentCheckpointTool,
+  makeGetCheckpointContentTool,
+} from './tools'
 import { CoachOutputSchema } from './schema'
 import type { CoachOutput } from './schema'
 import { emitHandoffSignal } from '@/src/escalation'
@@ -32,12 +36,17 @@ export interface CoachRunArgs {
   messages: Array<{ role: 'user' | 'assistant'; content: string }>
   /** Language of the current turn for RAG pre-filter. */
   userLang: 'en' | 'ms' | 'zh'
-  /** The authenticated agent's UID — used for the handoff signal. */
+  /** The authenticated agent's UID — used for the handoff signal + journey tools. */
   agentUid: string
   /** Senior coach UID — used for the handoff escalation. Default empty. */
   seniorCoachId?: string
   /** Conversation ID — used for the handoff context bundle. */
   conversationId?: string
+  /** Journey context — injected at invocation time from the agent's profile. */
+  journeyContext?: {
+    journeyStage: string
+    currentCheckpoint: string
+  }
 }
 
 export interface CoachRunResult {
@@ -55,27 +64,54 @@ export interface CoachRunResult {
  * Usage (invoked THROUGH the router — see /api/chat/route.ts):
  *   const { pillar } = router.route(messages)
  *   if (pillar === 'coach') {
- *     const result = await coachAgent.run({ messages, userLang, agentUid })
+ *     // Build the system prompt with the agent's journey context
+ *     const systemPrompt = coachAgent.buildSystemPrompt({ journeyStage, currentCheckpoint })
+ *     const tools = coachAgent.makeTools(userLang, agentUid)
+ *     // Pass systemPrompt + tools to streamText
  *   }
  *
  * The `run` method is NOT called directly by tests — tests drive via router.route
  * then dispatch (Test 5 of coach.test.ts).
  */
 export const coachAgent = {
-  /** System prompt — injected as `system` in streamText. */
+  /**
+   * Base system prompt (no journey context).
+   * Use buildSystemPrompt() for production runs that inject journey context.
+   * Kept for backwards compatibility with callers that read .systemPrompt directly.
+   */
   systemPrompt: COACH_SYSTEM_PROMPT,
+
+  /**
+   * Build a journey-context-aware system prompt.
+   * Call this at invocation time with the agent's current journey position.
+   */
+  buildSystemPrompt(journeyContext?: { journeyStage: string; currentCheckpoint: string }): string {
+    return buildCoachSystemPrompt(journeyContext)
+  },
 
   /** Output schema — used for Zod validation of the model's structured response. */
   outputSchema: CoachOutputSchema,
 
   /**
    * Build the tool set for this conversation turn.
-   * `userLang` is injected via closure so the RAG pre-filter uses the right language.
+   * Includes retrieveKnowledge (grounding) + journey read-only tools.
+   *
+   * @param userLang  Injected via closure so the RAG pre-filter uses the right language.
+   * @param agentUid  Injected via closure for the getCurrentCheckpoint tool.
    */
-  makeTools(userLang: 'en' | 'ms' | 'zh') {
-    return {
+  makeTools(userLang: 'en' | 'ms' | 'zh', agentUid?: string) {
+    const tools: Record<string, ReturnType<typeof makeRetrieveKnowledgeTool>> = {
       retrieveKnowledge: makeRetrieveKnowledgeTool(userLang),
     }
+
+    // Journey tools require agentUid — only add when available.
+    if (agentUid) {
+      // Type assertion is needed because the tool registry has a mixed type.
+      (tools as Record<string, unknown>)['getCurrentCheckpoint'] = makeGetCurrentCheckpointTool(agentUid);
+      (tools as Record<string, unknown>)['getCheckpointContent'] = makeGetCheckpointContentTool(userLang)
+    }
+
+    return tools
   },
 
   /**
@@ -86,8 +122,8 @@ export const coachAgent = {
    * `run()` is used for offline / unit-testable logic that validates output and
    * emits the handoff signal on a KB miss.
    *
-   * For the streaming path (route handler), the handler passes `coachAgent.systemPrompt`
-   * and `coachAgent.makeTools(userLang)` directly to `streamText`.
+   * For the streaming path (route handler), the handler passes the result of
+   * `buildSystemPrompt(journeyContext)` and `makeTools(userLang, agentUid)` to `streamText`.
    *
    * For testing purposes (the fake provider path), the handler calls `run()` to
    * exercise the full gate: retrieval → handoff detection → Zod validation.

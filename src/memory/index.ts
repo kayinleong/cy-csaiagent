@@ -18,4 +18,4 @@ export type { MessageRecord, ConversationRecord } from './conversation'
 export { writeLeadSlot } from './leadContext'
 export type { LeadSlot } from './leadContext'
 
-export { updateJourneyStage, touchLastActive } from './agentProfile'
+export { updateJourneyStage, touchLastActive, getAgentProfile } from './agentProfile'
