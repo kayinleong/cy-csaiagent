@@ -21,7 +21,7 @@
 
 import { cookies } from 'next/headers'
 import { requireUser } from '@/src/firebase/auth'
-import { createDoc, updateDoc, deleteDoc, type CreateDocInput, type UpdateDocInput } from '@/src/kb/crud'
+import { createDoc, updateDoc, deleteDoc, publishDoc, unpublishDoc, type CreateDocInput, type UpdateDocInput } from '@/src/kb/crud'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -100,6 +100,40 @@ export async function deleteKbDocAction(docId: string): Promise<ActionResult> {
   try {
     const user = await getSessionUser()
     await deleteDoc(user, docId)
+    return { ok: true, docId }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    return { ok: false, error: message }
+  }
+}
+
+// ─── publishKbDoc ─────────────────────────────────────────────────────────────
+
+/**
+ * Publish a KB document — sets status:'published' on the doc + all its chunks,
+ * making them retrievable by the Coach. Admin-gated via assertAdmin inside crud.
+ */
+export async function publishKbDocAction(docId: string): Promise<ActionResult> {
+  try {
+    const user = await getSessionUser()
+    await publishDoc(user, docId)
+    return { ok: true, docId }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    return { ok: false, error: message }
+  }
+}
+
+// ─── unpublishKbDoc ───────────────────────────────────────────────────────────
+
+/**
+ * Unpublish a KB document — sets status:'unpublished' on the doc + all its chunks,
+ * hiding them from retrieval without deletion. Admin-gated via assertAdmin inside crud.
+ */
+export async function unpublishKbDocAction(docId: string): Promise<ActionResult> {
+  try {
+    const user = await getSessionUser()
+    await unpublishDoc(user, docId)
     return { ok: true, docId }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'

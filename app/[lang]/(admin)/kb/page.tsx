@@ -25,6 +25,7 @@ import { getTranslations } from 'next-intl/server'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
 import { listDocs } from '@/src/kb/crud'
 import { KbDocForm } from './kb-doc-form'
+import { KbDocList } from './kb-doc-list'
 
 interface PageProps {
   params: Promise<{ lang: string }>
@@ -96,30 +97,10 @@ export default async function KbAdminPage({ params }: PageProps) {
 
       {/* Existing documents list */}
       <div>
-        <h2 className="mb-4 text-lg font-semibold">Existing documents ({kbDocs.length})</h2>
-        {kbDocs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t('noDocuments')}</p>
-        ) : (
-          <div className="space-y-3">
-            {kbDocs.map(({ id, data }) => (
-              <div
-                key={id}
-                className="flex items-center justify-between rounded-lg border p-4 text-sm"
-              >
-                <div>
-                  <p className="font-medium">{data.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {data.lang.toUpperCase()} · {data.pillar} · v{data.version}
-                    {data.supersedesId ? ` (supersedes ${data.supersedesId.slice(0, 8)}…)` : ''}
-                  </p>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  ID: <code className="font-mono">{id.slice(0, 12)}…</code>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <h2 className="mb-4 text-lg font-semibold">
+          {t('existingDocuments')} ({kbDocs.length})
+        </h2>
+        <KbDocList docs={kbDocs} lang={lang} />
       </div>
     </div>
   )
