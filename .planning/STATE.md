@@ -99,7 +99,7 @@ Items acknowledged and carried forward (v2 / post-pilot):
 
 ## Session Continuity
 
-Last session: 2026-06-01
-Stopped at: Phase 1 executed + stack-override refactor (Gemini, lazy-cron); Phase 2 (Coach + Admin v1) context gathered via discuss-phase --auto (15 decisions). Phase 2 execution BLOCKED until Phase 1 gates close (provisioning 01-01 + live spikes RAG/DEPLOY/INGEST).
-Resume file: .planning/phases/02-coach-admin/02-CONTEXT.md
-Next step: close Phase 1 human gates, then /gsd-plan-phase 2 (do NOT auto-execute Phase 2 over the open spike gate).
+Last session: 2026-06-02
+Stopped at: Phase 2 (Coach + Admin v1) PLANNED — 8 plans across 4 waves, 31/31 req IDs covered, research + Nyquist validation done, plan-checker blockers/warnings remediated. Phase 1 executed + stack-overridden (Gemini, lazy-cron). Phase 2 execution BLOCKED until Phase 1 gates close (provisioning 01-01 + live spikes RAG/DEPLOY/INGEST) and two user decisions are made (D-09 nudge scheduling + working-hours; live Opus-judge calibration).
+Resume file: .planning/phases/02-coach-admin/02-01-PLAN.md
+Next step: close Phase 1 human gates + resolve the 02-05 D-09 checkpoint, then /gsd-execute-phase 2. Do NOT auto-execute over the open spike gate.
