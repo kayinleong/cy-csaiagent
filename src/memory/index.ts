@@ -12,8 +12,8 @@
  * Consumed by: chat route (01-11), stall-detect job (01-10).
  */
 
-export { appendMessage, loadRecent } from './conversation'
-export type { MessageRecord } from './conversation'
+export { appendMessage, loadRecent, ensurePrimaryThread, listConversations, searchConversations } from './conversation'
+export type { MessageRecord, ConversationRecord } from './conversation'
 
 export { writeLeadSlot } from './leadContext'
 export type { LeadSlot } from './leadContext'

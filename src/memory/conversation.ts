@@ -1,22 +1,34 @@
 /**
- * src/memory/conversation.ts — Messages subcollection reader/writer.
+ * src/memory/conversation.ts — Conversation lifecycle + messages subcollection.
  *
  * Messages MUST live in the subcollection `conversations/{cid}/messages/{mid}`.
  * NEVER push to an inline array on the conversation doc — 1 MB doc-size trap (Pitfall E).
  *
  * Security: loadRecent paginates to last-N (T-01-22 — no full-history over-read).
  *
- * Consumed by: src/memory/index.ts → chat route (01-11).
- * References: TSD §4, RESEARCH §Pitfall E, FND-05.
+ * 02-03 additions (CHAT-01/02/07):
+ *   - ensurePrimaryThread(uid, lang): deterministic cid `coach-${uid}`, idempotent create
+ *   - listConversations(uid, n): ordered by createdAt DESC for history drawer (CHAT-07)
+ *   - searchConversations(threads, term): pure client-side substring match on summary
+ *
+ * Consumed by: src/memory/index.ts → chat route, chat-shell, chat-header.
+ * References: TSD §4, RESEARCH §Pitfall E + Pitfall 2, D-01, FND-05.
  */
 
-import { messagesRef } from '@/src/firebase/collections'
-import type { MessageDoc } from '@/src/firebase/collections'
+import { messagesRef, conversationsRef } from '@/src/firebase/collections'
+import type { MessageDoc, ConversationDoc } from '@/src/firebase/collections'
+import { FieldValue } from 'firebase-admin/firestore'
 
 /** A message retrieved from the subcollection, including its document ID. */
 export interface MessageRecord {
   id: string
   data: MessageDoc
+}
+
+/** A conversation document with its ID. */
+export interface ConversationRecord {
+  id: string
+  data: ConversationDoc
 }
 
 /**
@@ -34,6 +46,87 @@ export async function appendMessage(cid: string, msg: MessageDoc): Promise<strin
   // This is the critical distinction that prevents the 1 MB inline-array trap.
   const ref = await messagesRef(cid).add(msg)
   return ref.id
+}
+
+/**
+ * Ensure the primary "Coach" thread for an agent exists.
+ *
+ * The thread has a deterministic cid = `coach-${uid}` (D-01 — ONE persistent
+ * primary Coach thread per agent). Uses get-then-set(merge:true) to be
+ * idempotent: if the doc already exists, it is NOT overwritten — preserving the
+ * existing `summary` field (rolling summary updated by memory module).
+ *
+ * @param uid   The authenticated agent's UID.
+ * @param lang  The language for this thread (from request or user profile).
+ * @returns     The stable cid (`coach-${uid}`).
+ */
+export async function ensurePrimaryThread(
+  uid: string,
+  lang: 'en' | 'ms' | 'zh',
+): Promise<string> {
+  const cid = `coach-${uid}`
+  const docRef = conversationsRef().doc(cid)
+  const snap = await docRef.get()
+
+  if (!snap.exists) {
+    // Create the conversation doc — tenantId stamped by the converter
+    await docRef.set(
+      {
+        ownerUid: uid,
+        pillar: 'coach',
+        lang,
+        createdAt: FieldValue.serverTimestamp(),
+        summary: '',
+        // tenantId stamped by converter — never omitted
+        tenantId: 'd2' as const,
+      },
+      { merge: true },
+    )
+  }
+
+  return cid
+}
+
+/**
+ * List the agent's conversations, ordered by createdAt DESC (most recent first).
+ *
+ * Uses the composite index `(ownerUid, createdAt DESC)` declared in
+ * firestore.indexes.json.  Paginates to n (default 50).
+ *
+ * @param uid  The authenticated agent's UID.
+ * @param n    Max conversations to return (default: 50).
+ * @returns    Array of `{ id, data }` in createdAt DESC order.
+ */
+export async function listConversations(uid: string, n = 50): Promise<ConversationRecord[]> {
+  const snap = await conversationsRef()
+    .where('ownerUid', '==', uid)
+    .orderBy('createdAt', 'desc')
+    .limit(n)
+    .get()
+
+  return snap.docs.map((doc) => ({ id: doc.id, data: doc.data() }))
+}
+
+/**
+ * Pure client-side substring search over conversation summaries.
+ *
+ * Firestore has no native full-text search; this helper is the accepted MVP
+ * per Don't-Hand-Roll (RESEARCH.md §Alternatives). The caller passes the already-
+ * loaded thread list (from listConversations) and a search term.
+ *
+ * Case-insensitive. Returns all threads when `term` is empty.
+ *
+ * @param threads  Conversations to filter (pre-loaded from listConversations).
+ * @param term     The substring to match against `data.summary`.
+ * @returns        Matching conversations, order preserved.
+ */
+export function searchConversations(
+  threads: ConversationRecord[],
+  term: string,
+): ConversationRecord[] {
+  if (!term) return threads
+  const lower = term.toLowerCase()
+  return threads.filter((t) => t.data.summary?.toLowerCase().includes(lower))
 }
 
 /**
