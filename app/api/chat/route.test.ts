@@ -11,6 +11,13 @@
  *   7. Unauthenticated request returns 401
  *   8. Rate-limited request returns 429
  *
+ * 03-07 additions (FIND-01/04/05/08/11):
+ *   12. finder-dispatch: routeAsync→finder routes to finderAgent (buildSystemPrompt + makeTools + modelFor('finder'))
+ *   13. routeDecision-persist (D-02): assistant message gets routeDecision === 'finder:<reason>'
+ *   14. pdpa-on-finder: assertRedacted is called BEFORE streamText on the finder path
+ *   15. finderSlot-write (FIND-05/08): onFinish calls writeLeadSlot for finder+leadId; NOT for coach
+ *   16. rerank-merge (FIND-08): stored finderSlot is read + mergeFinderCriteria called before finder run
+ *
  * The full sign-in→stream→persist E2E and the model-swap integration test are
  * covered in 01-13 (capstone).
  */
@@ -27,11 +34,19 @@ const mocks = vi.hoisted(() => {
   const mockPseudonymize = vi.fn()
   const mockAuditLog = vi.fn(async () => {})
   const mockRoute = vi.fn()
+  const mockRouteAsync = vi.fn()
   const mockModelFor = vi.fn()
   const mockStreamText = vi.fn()
   const mockAppendMessage = vi.fn(async () => 'msg-id-001')
   const mockAfter = vi.fn((fn: () => void) => fn()) // execute inline for test assertions
   const mockEnsurePrimaryThread = vi.fn(async () => 'coach-uid-001')
+  // 03-07: Finder-specific mocks
+  const mockFinderBuildSystemPrompt = vi.fn(() => 'You are a D2 Property Finder.')
+  const mockFinderMakeTools = vi.fn(() => ({ searchProjects: {}, queryInventory: {}, fetchCollateral: {} }))
+  const mockReadFinderSlot = vi.fn(async () => null)
+  const mockMergeFinderCriteria = vi.fn((stored: unknown) => stored)
+  const mockMergeDiscussed = vi.fn((prev: string[], next: string[]) => [...prev, ...next])
+  const mockWriteLeadSlot = vi.fn(async () => {})
 
   return {
     mockRequireUser,
@@ -41,11 +56,18 @@ const mocks = vi.hoisted(() => {
     mockPseudonymize,
     mockAuditLog,
     mockRoute,
+    mockRouteAsync,
     mockModelFor,
     mockStreamText,
     mockAppendMessage,
     mockAfter,
     mockEnsurePrimaryThread,
+    mockFinderBuildSystemPrompt,
+    mockFinderMakeTools,
+    mockReadFinderSlot,
+    mockMergeFinderCriteria,
+    mockMergeDiscussed,
+    mockWriteLeadSlot,
   }
 })
 
@@ -78,6 +100,7 @@ vi.mock('@/src/audit', () => ({
 
 vi.mock('@/src/router', () => ({
   route: mocks.mockRoute,
+  routeAsync: mocks.mockRouteAsync,
 }))
 
 vi.mock('@/src/llm/provider', () => ({
@@ -91,6 +114,22 @@ vi.mock('ai', () => ({
 vi.mock('@/src/memory', () => ({
   appendMessage: mocks.mockAppendMessage,
   ensurePrimaryThread: mocks.mockEnsurePrimaryThread,
+}))
+
+vi.mock('@/src/memory/leadContext', () => ({
+  readFinderSlot: mocks.mockReadFinderSlot,
+  mergeFinderCriteria: mocks.mockMergeFinderCriteria,
+  mergeDiscussed: mocks.mockMergeDiscussed,
+  writeLeadSlot: mocks.mockWriteLeadSlot,
+}))
+
+vi.mock('@/src/agents/finder', () => ({
+  finderAgent: {
+    systemPrompt: 'You are a D2 Property Finder.',
+    outputSchema: {},
+    buildSystemPrompt: mocks.mockFinderBuildSystemPrompt,
+    makeTools: mocks.mockFinderMakeTools,
+  },
 }))
 
 vi.mock('@/src/agents/coach', () => ({
@@ -170,8 +209,10 @@ beforeEach(() => {
   // Default: assertRedacted passes
   mocks.mockAssertRedacted.mockReturnValue(undefined)
 
-  // Default: router routes to coach
+  // Default: sync router routes to coach
   mocks.mockRoute.mockReturnValue({ pillar: 'coach', reason: 'phase-1-single-pillar' })
+  // Default: async router routes to coach (03-07)
+  mocks.mockRouteAsync.mockResolvedValue({ pillar: 'coach', reason: 'heuristic-coach:keyword' })
 
   // Default: modelFor returns a mock model object
   mocks.mockModelFor.mockResolvedValue({ modelId: 'mock-model' })
@@ -437,6 +478,372 @@ describe('Test 10 (02-03): both user and assistant messages persisted in onFinis
     expect(persistedRoles).toContain('assistant')
     // user must come before assistant
     expect(persistedRoles.indexOf('user')).toBeLessThan(persistedRoles.indexOf('assistant'))
+  })
+})
+
+// ─── Tests 12–16 (03-07): Finder dispatch, routeDecision, PDPA, finderSlot ───
+
+describe('Test 12 (03-07): finder dispatch — routeAsync→finder routes to finderAgent', () => {
+  it('calls finderAgent.buildSystemPrompt + makeTools + modelFor("finder") when pillar is finder', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'finder', reason: 'heuristic-finder:criteria' })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'My lead budget RM600k, OC area, own stay' }],
+      cid: 'conv-001',
+    })
+
+    await POST(req)
+
+    expect(mocks.mockFinderBuildSystemPrompt).toHaveBeenCalled()
+    expect(mocks.mockFinderMakeTools).toHaveBeenCalledWith('en', 'uid-001', undefined)
+    expect(mocks.mockModelFor).toHaveBeenCalledWith('finder')
+  })
+
+  it('coach path unchanged when routeAsync returns coach', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'coach', reason: 'heuristic-coach:keyword' })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'What is D2 PowerBoost?' }],
+      cid: 'conv-001',
+    })
+
+    await POST(req)
+
+    expect(mocks.mockFinderBuildSystemPrompt).not.toHaveBeenCalled()
+    expect(mocks.mockModelFor).toHaveBeenCalledWith('coach')
+  })
+
+  it('passes leadId to finderAgent.makeTools when provided', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'finder', reason: 'heuristic-finder:criteria' })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'Find project for my lead' }],
+      cid: 'conv-001',
+      leadId: 'lead-001',
+    })
+
+    await POST(req)
+
+    expect(mocks.mockFinderMakeTools).toHaveBeenCalledWith('en', 'uid-001', 'lead-001')
+  })
+})
+
+describe('Test 13 (03-07): routeDecision persisted as "pillar:reason" (D-02)', () => {
+  it('persists routeDecision as "finder:<reason>" on both messages for a finder turn', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'finder', reason: 'heuristic-finder:criteria' })
+
+    const persistedMessages: Array<Record<string, unknown>> = []
+    mocks.mockAppendMessage.mockImplementation(async (_cid: unknown, msg: Record<string, unknown>) => {
+      persistedMessages.push(msg)
+      return 'msg-id'
+    })
+
+    mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
+      void onFinish({ ...mockFinalResult, steps: [] })
+      return {
+        toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
+          new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
+        ),
+      }
+    })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'Find me a project' }],
+      cid: 'conv-001',
+    })
+
+    await POST(req)
+    await new Promise((r) => setImmediate(r))
+
+    expect(persistedMessages.length).toBeGreaterThanOrEqual(2)
+    for (const msg of persistedMessages) {
+      expect(msg.routeDecision).toBe('finder:heuristic-finder:criteria')
+    }
+  })
+
+  it('persists routeDecision as "coach:<reason>" on both messages for a coach turn', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'coach', reason: 'heuristic-coach:keyword' })
+
+    const persistedMessages: Array<Record<string, unknown>> = []
+    mocks.mockAppendMessage.mockImplementation(async (_cid: unknown, msg: Record<string, unknown>) => {
+      persistedMessages.push(msg)
+      return 'msg-id'
+    })
+
+    mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
+      void onFinish({ ...mockFinalResult, steps: [] })
+      return {
+        toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
+          new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
+        ),
+      }
+    })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'What is D2 PowerBoost?' }],
+      cid: 'conv-001',
+    })
+
+    await POST(req)
+    await new Promise((r) => setImmediate(r))
+
+    expect(persistedMessages.length).toBeGreaterThanOrEqual(2)
+    for (const msg of persistedMessages) {
+      expect(msg.routeDecision).toBe('coach:heuristic-coach:keyword')
+    }
+  })
+})
+
+describe('Test 14 (03-07): assertRedacted called before streamText on FINDER path', () => {
+  it('assertRedacted precedes streamText when routeAsync returns finder', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'finder', reason: 'heuristic-finder:criteria' })
+
+    const callOrder: string[] = []
+
+    mocks.mockAssertRedacted.mockImplementationOnce(() => {
+      callOrder.push('assertRedacted')
+    })
+    mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: typeof mockFinalResult) => Promise<void> }) => {
+      callOrder.push('streamText')
+      setTimeout(() => onFinish(mockFinalResult), 0)
+      return {
+        toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
+          new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
+        ),
+      }
+    })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'Find a project for budget RM600k' }],
+      cid: 'conv-001',
+    })
+
+    await POST(req)
+
+    const assertIdx = callOrder.indexOf('assertRedacted')
+    const streamIdx = callOrder.indexOf('streamText')
+    expect(assertIdx).toBeLessThan(streamIdx)
+  })
+
+  it('returns 422 on finder path when assertRedacted throws PdpaViolationError', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'finder', reason: 'heuristic-finder:criteria' })
+
+    const { PdpaViolationError } = await import('@/src/audit')
+    mocks.mockAssertRedacted.mockImplementationOnce(() => {
+      throw new PdpaViolationError('PII not redacted')
+    })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'Lead name is John, budget RM600k' }],
+      cid: 'conv-001',
+    })
+
+    const response = await POST(req)
+    expect(response.status).toBe(422)
+    expect(mocks.mockStreamText).not.toHaveBeenCalled()
+  })
+})
+
+describe('Test 15 (03-07): finderSlot written in onFinish for finder+leadId; NOT for coach', () => {
+  it('calls writeLeadSlot with finderSlot when pillar is finder and leadId is provided', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'finder', reason: 'heuristic-finder:criteria' })
+    mocks.mockReadFinderSlot.mockResolvedValueOnce(null)
+
+    // Simulate a finder turn with a searchProjects tool result
+    const finderSteps = [
+      {
+        toolResults: [
+          {
+            toolName: 'searchProjects',
+            result: {
+              found: true,
+              matches: [
+                { projectId: 'proj-001' },
+                { projectId: 'proj-002' },
+              ],
+            },
+          },
+        ],
+      },
+    ]
+
+    mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
+      void onFinish({ ...mockFinalResult, steps: finderSteps })
+      return {
+        toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
+          new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
+        ),
+      }
+    })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'Find project for my lead, budget RM600k' }],
+      cid: 'conv-001',
+      leadId: 'lead-001',
+    })
+
+    await POST(req)
+    await new Promise((r) => setImmediate(r))
+
+    expect(mocks.mockWriteLeadSlot).toHaveBeenCalledWith(
+      'lead-001',
+      'finderSlot',
+      expect.objectContaining({
+        discussedProjectIds: expect.any(Array),
+        lastRankedAt: expect.any(Number),
+      }),
+    )
+  })
+
+  it('does NOT call writeLeadSlot when pillar is coach', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'coach', reason: 'heuristic-coach:keyword' })
+
+    mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
+      void onFinish({ ...mockFinalResult, steps: [] })
+      return {
+        toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
+          new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
+        ),
+      }
+    })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'What is D2 PowerBoost?' }],
+      cid: 'conv-001',
+      leadId: 'lead-001',
+    })
+
+    await POST(req)
+    await new Promise((r) => setImmediate(r))
+
+    expect(mocks.mockWriteLeadSlot).not.toHaveBeenCalled()
+  })
+
+  it('does NOT call writeLeadSlot when pillar is finder but no leadId', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'finder', reason: 'heuristic-finder:criteria' })
+
+    mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
+      void onFinish({ ...mockFinalResult, steps: [] })
+      return {
+        toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
+          new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
+        ),
+      }
+    })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'Show me some projects' }],
+      cid: 'conv-001',
+      // no leadId
+    })
+
+    await POST(req)
+    await new Promise((r) => setImmediate(r))
+
+    expect(mocks.mockWriteLeadSlot).not.toHaveBeenCalled()
+  })
+})
+
+describe('Test 16 (03-07): re-rank merge — stored finderSlot read + mergeFinderCriteria called', () => {
+  it('reads finderSlot and calls mergeFinderCriteria when stored slot exists', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'finder', reason: 'heuristic-finder:criteria' })
+
+    const storedSlot = {
+      criteria: {
+        segment: 'own_stay',
+        priceMin: null,
+        priceMax: 600000,
+        monthlyIncome: null,
+        nationality: 'malaysian',
+        bumiputera: null,
+        locationPref: 'Cheras',
+        bedrooms: 3,
+        freeText: 'OC area, 3 bed',
+      },
+      discussedProjectIds: ['proj-000'],
+      lastRankedAt: Date.now() - 60000,
+    }
+    mocks.mockReadFinderSlot.mockResolvedValueOnce(storedSlot)
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'Actually budget now RM700k' }],
+      cid: 'conv-001',
+      leadId: 'lead-001',
+    })
+
+    await POST(req)
+
+    expect(mocks.mockReadFinderSlot).toHaveBeenCalledWith('lead-001')
+    expect(mocks.mockMergeFinderCriteria).toHaveBeenCalledWith(storedSlot.criteria, expect.any(Object))
+  })
+
+  it('skips mergeFinderCriteria when no stored slot exists (first touch)', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'finder', reason: 'heuristic-finder:criteria' })
+    mocks.mockReadFinderSlot.mockResolvedValueOnce(null)
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'Budget RM600k, Cheras area' }],
+      cid: 'conv-001',
+      leadId: 'lead-001',
+    })
+
+    await POST(req)
+
+    expect(mocks.mockReadFinderSlot).toHaveBeenCalledWith('lead-001')
+    expect(mocks.mockMergeFinderCriteria).not.toHaveBeenCalled()
+  })
+})
+
+// ─── Test 17 (03-07): extractFinderProjectIds helper ─────────────────────────
+
+describe('Test 17 (03-07): extractFinderProjectIds extracts project IDs from searchProjects tool results', () => {
+  it('returns projectIds from searchProjects tool result when found', async () => {
+    const { extractFinderProjectIds } = await import('./route')
+
+    const fakeFinish = {
+      steps: [
+        {
+          toolResults: [
+            {
+              toolName: 'searchProjects',
+              result: {
+                found: true,
+                matches: [
+                  { projectId: 'proj-001' },
+                  { projectId: 'proj-002' },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    }
+
+    const ids = extractFinderProjectIds(fakeFinish)
+    expect(ids).toEqual(['proj-001', 'proj-002'])
+  })
+
+  it('returns [] when searchProjects returned no matches (found:false)', async () => {
+    const { extractFinderProjectIds } = await import('./route')
+
+    const fakeFinish = {
+      steps: [
+        {
+          toolResults: [
+            { toolName: 'searchProjects', result: { found: false, reason: 'no_match' } },
+          ],
+        },
+      ],
+    }
+
+    const ids = extractFinderProjectIds(fakeFinish)
+    expect(ids).toEqual([])
+  })
+
+  it('returns [] when no tool was called', async () => {
+    const { extractFinderProjectIds } = await import('./route')
+    const ids = extractFinderProjectIds({ steps: [] })
+    expect(ids).toEqual([])
   })
 })
 
