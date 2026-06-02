@@ -26,7 +26,7 @@
 import { useState } from 'react'
 import { MessageList } from './message-list'
 import { ChatInput } from './chat-input'
-import { ChatHeader, type LangOverride } from './chat-header'
+import { ChatHeader, type LangOverride, type PillarOverride } from './chat-header'
 import { DisclosureModal } from './disclosure-modal'
 import { ConversationList } from './conversation-list'
 import type { ChatMessage } from './message-list'
@@ -52,6 +52,10 @@ export function ChatShell({ placeholder, sendLabel, emptyStateMessage }: ChatShe
   // undefined = auto-detect (franc-min per-message detection in the route).
   // 'en' | 'ms' | 'zh' = pinned language from the header chip.
   const [langOverride, setLangOverride] = useState<LangOverride | undefined>(undefined)
+
+  // ── Pillar override (FIND-11) ────────────────────────────────────────────────
+  // undefined = Auto (routeAsync decides). 'coach' | 'finder' = pinned pillar.
+  const [pillarOverride, setPillarOverride] = useState<PillarOverride | undefined>(undefined)
 
   // ── Conversation history drawer (CHAT-07) ────────────────────────────────────
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -88,11 +92,13 @@ export function ChatShell({ placeholder, sendLabel, emptyStateMessage }: ChatShe
         onNewConversation={handleNewConversation}
       />
 
-      {/* ── Sticky chat header (CHAT-05/06/08) ──────────────────────────────── */}
+      {/* ── Sticky chat header (CHAT-05/06/08/FIND-11) ─────────────────────── */}
       <ChatHeader
         conversationId={activeCid}
         langOverride={langOverride}
         onLangOverride={setLangOverride}
+        pillarOverride={pillarOverride}
+        onPillarOverride={setPillarOverride}
         onOpenHistory={() => setHistoryOpen(true)}
       />
 
@@ -116,6 +122,7 @@ export function ChatShell({ placeholder, sendLabel, emptyStateMessage }: ChatShe
         onMessagesChange={setMessages}
         conversationId={activeCid || undefined}
         langOverride={langOverride}
+        pillarOverride={pillarOverride}
         placeholder={placeholder}
         sendLabel={sendLabel}
       />

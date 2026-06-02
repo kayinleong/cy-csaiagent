@@ -47,6 +47,17 @@ interface ChatInputProps {
    * When set, overrides per-message auto-detect in the route handler.
    */
   langOverride?: 'en' | 'ms' | 'zh'
+  /**
+   * Pillar override from the chat-header pillar chip (FIND-11).
+   * When set, skips the heuristic/LLM router and forces the named pillar.
+   * Undefined = Auto (router decides).
+   */
+  pillarOverride?: 'coach' | 'finder'
+  /**
+   * The current lead ID — threaded into the POST body for Finder finderSlot
+   * persistence (FIND-05/08). Only required for the Finder path.
+   */
+  leadId?: string
   /** i18n copy */
   placeholder?: string
   sendLabel?: string
@@ -90,7 +101,9 @@ function useChatStream({
   initialMessages = [],
   conversationId,
   langOverride,
-}: Pick<ChatInputProps, 'onMessagesChange' | 'initialMessages' | 'conversationId' | 'langOverride'>) {
+  pillarOverride,
+  leadId,
+}: Pick<ChatInputProps, 'onMessagesChange' | 'initialMessages' | 'conversationId' | 'langOverride' | 'pillarOverride' | 'leadId'>) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [isStreaming, setIsStreaming] = useState(false)
   const [input, setInput] = useState('')
@@ -141,16 +154,26 @@ function useChatStream({
 
       // POST to /api/chat with Bearer auth
       // langOverride: passed when the user has pinned a language via the header chip (CHAT-08)
+      // override:     pillar override from the header chip (FIND-11) — 'coach' | 'finder' | undefined
+      // leadId:       current lead ID for Finder finderSlot persistence (FIND-05/08)
       const requestBody: {
         messages: Array<{ role: string; content: string }>
         cid: string
         langOverride?: 'en' | 'ms' | 'zh'
+        override?: 'coach' | 'finder'
+        leadId?: string
       } = {
         messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
         cid: cidRef.current,
       }
       if (langOverride) {
         requestBody.langOverride = langOverride
+      }
+      if (pillarOverride) {
+        requestBody.override = pillarOverride
+      }
+      if (leadId) {
+        requestBody.leadId = leadId
       }
 
       const response = await fetch('/api/chat', {
@@ -245,7 +268,7 @@ function useChatStream({
     } finally {
       setIsStreaming(false)
     }
-  }, [input, isStreaming, messages])
+  }, [input, isStreaming, messages, langOverride, pillarOverride, leadId])
 
   return { messages, isStreaming, input, setInput, sendMessage }
 }
@@ -264,6 +287,8 @@ export function ChatInput({
   initialMessages,
   conversationId,
   langOverride,
+  pillarOverride,
+  leadId,
   placeholder = 'Ask anything about D2 properties, SOPs, or your onboarding journey…',
   sendLabel = 'Send',
 }: ChatInputProps) {
@@ -274,6 +299,8 @@ export function ChatInput({
     initialMessages,
     conversationId,
     langOverride,
+    pillarOverride,
+    leadId,
   })
 
   // Handle keyboard submit: Enter = send (Shift+Enter = new line)

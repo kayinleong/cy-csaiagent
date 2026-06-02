@@ -39,6 +39,12 @@
       "ms": "BM",
       "zh": "中文"
     },
+    "pillarOverride": {
+      "label": "Mode:",
+      "auto": "Auto",
+      "coach": "Coach",
+      "finder": "Finder"
+    },
     "history": "Conversation history",
     "historyEmpty": "No past conversations yet.",
     "searchPlaceholder": "Search conversations…",

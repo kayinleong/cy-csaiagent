@@ -41,6 +41,12 @@
       "ms": "BM",
       "zh": "中文"
     },
+    "pillarOverride": {
+      "label": "模式：",
+      "auto": "自动",
+      "coach": "教练",
+      "finder": "找房"
+    },
     "history": "对话历史",
     "historyEmpty": "暂无历史对话。",
     "searchPlaceholder": "搜索对话…",

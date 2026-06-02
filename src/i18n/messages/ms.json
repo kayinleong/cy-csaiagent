@@ -41,6 +41,12 @@
       "ms": "BM",
       "zh": "中文"
     },
+    "pillarOverride": {
+      "label": "Mod:",
+      "auto": "Auto",
+      "coach": "Jurulatih",
+      "finder": "Pencari"
+    },
     "history": "Sejarah perbualan",
     "historyEmpty": "Tiada perbualan lalu lagi.",
     "searchPlaceholder": "Cari perbualan…",

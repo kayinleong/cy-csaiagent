@@ -28,6 +28,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { requestHandoff } from '@/app/_actions/chat'
 
 export type LangOverride = 'en' | 'ms' | 'zh'
+export type PillarOverride = 'coach' | 'finder'
 
 interface ChatHeaderProps {
   /** The active conversation ID — passed into the handoff context bundle. */
@@ -36,6 +37,13 @@ interface ChatHeaderProps {
   onLangOverride: (lang: LangOverride | undefined) => void
   /** Current override value (controlled — parent owns state). */
   langOverride?: LangOverride
+  /**
+   * Callback: invoked when the user selects a pillar override (FIND-11/SC5).
+   * Passing undefined means 'Auto' (router decides).
+   */
+  onPillarOverride: (pillar: PillarOverride | undefined) => void
+  /** Current pillar override value (controlled — parent owns state). */
+  pillarOverride?: PillarOverride
   /** Callback: open the conversation history drawer. */
   onOpenHistory: () => void
 }
@@ -53,6 +61,8 @@ export function ChatHeader({
   conversationId,
   onLangOverride,
   langOverride,
+  onPillarOverride,
+  pillarOverride,
   onOpenHistory,
 }: ChatHeaderProps) {
   const t = useTranslations('chat')
@@ -81,6 +91,15 @@ export function ChatHeader({
       onLangOverride(undefined)
     } else {
       onLangOverride(value as LangOverride)
+    }
+  }
+
+  const handlePillarChange = (value: string) => {
+    if (value === '' || value === 'auto' || value === pillarOverride) {
+      // Deselect or Auto selected — clear pillar override, router decides
+      onPillarOverride(undefined)
+    } else {
+      onPillarOverride(value as PillarOverride)
     }
   }
 
@@ -113,6 +132,40 @@ export function ChatHeader({
       >
         {t('aiBadge')}
       </Badge>
+
+      {/* Pillar override chip — Auto / Coach / Finder (FIND-11) */}
+      <ToggleGroup
+        type="single"
+        value={pillarOverride ?? 'auto'}
+        onValueChange={handlePillarChange}
+        className="shrink-0 gap-0.5"
+        aria-label={t('pillarOverride.label')}
+      >
+        <ToggleGroupItem
+          value="auto"
+          size="sm"
+          className="h-6 px-1.5 text-[0.625rem] font-medium"
+          aria-label={t('pillarOverride.auto')}
+        >
+          {t('pillarOverride.auto')}
+        </ToggleGroupItem>
+        <ToggleGroupItem
+          value="coach"
+          size="sm"
+          className="h-6 px-1.5 text-[0.625rem] font-medium"
+          aria-label={t('pillarOverride.coach')}
+        >
+          {t('pillarOverride.coach')}
+        </ToggleGroupItem>
+        <ToggleGroupItem
+          value="finder"
+          size="sm"
+          className="h-6 px-1.5 text-[0.625rem] font-medium"
+          aria-label={t('pillarOverride.finder')}
+        >
+          {t('pillarOverride.finder')}
+        </ToggleGroupItem>
+      </ToggleGroup>
 
       {/* Language override chip — EN / BM / 中文 (CHAT-08) */}
       <ToggleGroup
