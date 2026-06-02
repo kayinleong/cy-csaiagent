@@ -67,7 +67,10 @@ export async function pineconeRetrieve(
   //   const response = await index.query({
   //     vector,
   //     topK: 8,
-  //     filter: { lang: { $in: [userLang, 'en'] } },
+  //     // status:'published' filter (Pitfall 3 fix, 02-02): mirrors the Firestore
+  //     // where('status','==','published') filter so a fallback swap preserves the
+  //     // same contract — superseded/unpublished chunks are never retrievable.
+  //     filter: { lang: { $in: [userLang, 'en'] }, status: { $eq: 'published' } },
   //     includeMetadata: true,
   //   })
   //

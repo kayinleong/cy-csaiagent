@@ -116,7 +116,8 @@ describe('retrieve (Firestore adapter)', () => {
   })
 
   it('Test 2: calls findNearest with DOT_PRODUCT + limit:8 for userLang=en', async () => {
-    // Reset the firebase/admin mock to inspect findNearest call args
+    // Reset the firebase/admin mock to inspect findNearest call args.
+    // mockWhereFn returns itself (supports chained .where().where()) AND findNearest.
     const mockGetFn = vi.fn(async () => ({
       docs: [
         {
@@ -134,7 +135,8 @@ describe('retrieve (Firestore adapter)', () => {
       ],
     }))
     const mockFindNearestFn = vi.fn((_opts: { distanceMeasure: string; limit: number; vectorField: string; queryVector: number[] }) => ({ get: mockGetFn }))
-    const mockWhereFn = vi.fn(() => ({ findNearest: mockFindNearestFn }))
+    // where() must be self-referential to support chained .where().where()
+    const mockWhereFn: ReturnType<typeof vi.fn> = vi.fn(() => ({ where: mockWhereFn, findNearest: mockFindNearestFn }))
     const mockCollectionFn = vi.fn(() => ({ where: mockWhereFn }))
 
     vi.doMock('@/src/firebase/admin', () => ({
@@ -149,6 +151,8 @@ describe('retrieve (Firestore adapter)', () => {
 
     // where() called with lang pre-filter ['en', 'en'] or ['en'] (both acceptable for userLang=en)
     expect(mockWhereFn).toHaveBeenCalledWith('lang', 'in', expect.arrayContaining(['en']))
+    // where() also called with status='published' filter (02-02 Pitfall 3 fix)
+    expect(mockWhereFn).toHaveBeenCalledWith('status', '==', 'published')
 
     // findNearest called with DOT_PRODUCT + limit:8
     const findNearestArg = mockFindNearestFn.mock.calls[0][0]
@@ -160,7 +164,8 @@ describe('retrieve (Firestore adapter)', () => {
   it('Test 3: for userLang=ms, pre-filter includes ["ms", "en"]', async () => {
     const mockGetFn = vi.fn(async () => ({ docs: [] }))
     const mockFindNearestFn = vi.fn(() => ({ get: mockGetFn }))
-    const mockWhereFn = vi.fn(() => ({ findNearest: mockFindNearestFn }))
+    // where() must be self-referential to support chained .where().where()
+    const mockWhereFn: ReturnType<typeof vi.fn> = vi.fn(() => ({ where: mockWhereFn, findNearest: mockFindNearestFn }))
     const mockCollectionFn = vi.fn(() => ({ where: mockWhereFn }))
 
     vi.doMock('@/src/firebase/admin', () => ({
@@ -180,7 +185,8 @@ describe('retrieve (Firestore adapter)', () => {
   it('Test 4: returns [] when findNearest returns no docs (retrieval-miss signal)', async () => {
     const mockGetFn = vi.fn(async () => ({ docs: [] }))
     const mockFindNearestFn = vi.fn(() => ({ get: mockGetFn }))
-    const mockWhereFn = vi.fn(() => ({ findNearest: mockFindNearestFn }))
+    // where() must be self-referential to support chained .where().where()
+    const mockWhereFn: ReturnType<typeof vi.fn> = vi.fn(() => ({ where: mockWhereFn, findNearest: mockFindNearestFn }))
     const mockCollectionFn = vi.fn(() => ({ where: mockWhereFn }))
 
     vi.doMock('@/src/firebase/admin', () => ({

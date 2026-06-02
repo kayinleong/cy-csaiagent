@@ -12,8 +12,16 @@
  *   Test 3: re-sharding the SAME file (same sha256) is idempotent —
  *           it does NOT create duplicate kbChunks.
  *   Test 4: processBatch(jobId, limit) embeds `limit` chunks (embedText document),
- *           writes them to kbChunks, decrements remaining, and returns { remaining };
- *           when remaining hits 0 it marks the doc/job complete.
+ *           writes them to kbChunks with status:'published', decrements remaining,
+ *           and returns { remaining }; when remaining hits 0 marks the doc/job complete.
+ *
+ * 02-02 additions:
+ *   Test 5: processBatch writes kbChunks with status:'published' (Pitfall 3 fix).
+ *   Test 6: version supersede cascade — markSuperseded sets old doc + chunks 'superseded'.
+ *   Test 7: publishDoc / unpublishDoc toggles doc + chunk status.
+ *   Test 8: correctKbDoc allows senior-coach role; creates new version with correctedBy.
+ *   Test 9: deleteDoc deletes doc + all associated kbChunks (close orphan-chunk note).
+ *   Test 10: assertAdmin rejects non-admin; correctKbDoc allows 'admin'|'senior-coach'.
  *
  * Firestore and embedText are mocked — no live credentials needed.
  * No PII in fixtures.
@@ -328,6 +336,15 @@ describe('KB Ingestion Pipeline', () => {
       expect(firstCall.embedding.length).toBe(1024)
       expect(typeof firstCall.tokens).toBe('number')
       expect(firstCall.tenantId).toBe('d2')
+    })
+
+    it('Test 5 (02-02): processBatch writes kbChunks with status:"published" (Pitfall 3 fix)', async () => {
+      await processBatch('test-job-id', 2)
+
+      expect(mockChunksAdd).toHaveBeenCalledTimes(2)
+      for (const call of mockChunksAdd.mock.calls) {
+        expect(call[0].status).toBe('published')
+      }
     })
 
     it('should decrement remaining by the number of chunks processed', async () => {

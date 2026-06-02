@@ -3,7 +3,9 @@
  *
  * Implements the core retrieval contract:
  *   embedText(query, {inputType:'query'}) → FieldValue.vector(q) →
- *   kbChunks.where('lang','in',[userLang,'en']).findNearest(DOT_PRODUCT, limit:8).get()
+ *   kbChunks.where('lang','in',[userLang,'en'])
+ *           .where('status','==','published')   ← Pitfall 3 fix (02-02)
+ *           .findNearest(DOT_PRODUCT, limit:8).get()
  *   → map to RetrievalResult[]
  *
  * Returns empty array on no matches — the retrieval-miss signal the Coach uses to
@@ -12,12 +14,16 @@
  * Security:
  *   - Reads kbChunks as the Admin SDK service account (server-only).
  *   - The lang pre-filter prevents cross-language/cross-tenant chunk leakage (T-01-28).
+ *   - The status='published' filter ensures superseded/unpublished chunks are never
+ *     returned to the Coach, closing the stale-chunk gap (T-02-07, 02-RESEARCH Pitfall 3).
  *   - Never logs raw user query text.
  *
  * References:
  *   - TSD §4: kbChunks findNearest DOT_PRODUCT, lang pre-filter, 1024-d
  *   - 01-RESEARCH.md lines 384-413: findNearest signature + billing model
- *   - firestore.indexes.json: kbChunks composite vector index (lang + embedding 1024-d flat)
+ *   - 02-02-PLAN.md Task 1: published-only filter + composite index
+ *   - firestore.indexes.json: kbChunks composite vector index (lang+status+embedding 1024-d flat)
+ *     added in 02-01 Task 2 to back this exact query shape.
  *   - SPIKES.md SPIKE-RAG: Firestore is the DEFAULT adapter; Pinecone is the fallback seam
  *
  * Core/shell rule: this file must NOT import from app/ or next.
@@ -56,11 +62,16 @@ const FIND_NEAREST_LIMIT = 8
  *      - For userLang='en': ['en', 'en'] → deduplicated to ['en'] by Firestore — still valid.
  *      - For userLang='ms': ['ms', 'en'] — cross-lingual EN fallback included.
  *      - For userLang='zh': ['zh', 'en'] — same cross-lingual pattern.
- *   3. Run findNearest(DOT_PRODUCT, limit:8) against the composite vector index.
- *   4. Map snap.docs → RetrievalResult[], using d.id as the chunkId (citation source).
+ *   3. Add status pre-filter: where('status', '==', 'published') — Pitfall 3 fix (02-02).
+ *      Superseded and unpublished chunks are excluded before the vector search.
+ *      Legacy chunks without a status field are treated as published via the backfill
+ *      script (scripts/backfill-kb-status.ts) which stamps status:'published' on all
+ *      existing kbDocs + kbChunks that have no status set.
+ *   4. Run findNearest(DOT_PRODUCT, limit:8) against the composite vector index.
+ *   5. Map snap.docs → RetrievalResult[], using d.id as the chunkId (citation source).
  *
- * The composite vector index (lang + embedding 1024-d flat) is defined in
- * firestore.indexes.json and covers this exact query shape.
+ * The composite vector index (lang + status + embedding 1024-d flat) is defined in
+ * firestore.indexes.json (added in 02-01 Task 2) and covers this exact query shape.
  *
  * @param query      Raw user query text (caller must have PDPA-redacted any PII upstream).
  * @param userLang   Language of the current conversation turn.
@@ -78,9 +89,15 @@ export async function firestoreRetrieve(
   const langFilter = [userLang, 'en'] as const
 
   // 3. Run findNearest against the kbChunks collection
+  //    Two pre-filters are applied before the vector search:
+  //      a) lang filter — only chunks in the user's language + EN fallback
+  //      b) status='published' filter — Pitfall 3 fix (02-02): superseded/unpublished
+  //         chunks are never served to the Coach; backed by the lang+status+embedding
+  //         composite index added in 02-01 Task 2.
   const snap = await adminDb
     .collection('kbChunks')
     .where('lang', 'in', langFilter)
+    .where('status', '==', 'published')
     .findNearest({
       vectorField: 'embedding',
       queryVector: FieldValue.vector(q),

@@ -199,6 +199,9 @@ export async function processBatch(jobId: string, limit: number): Promise<Proces
 
     const tokens = countTokens(text)
 
+    // status:'published' — new ingests are published once embedded (Pitfall 3 fix, 02-02).
+    // Denormalized from the parent kbDoc; must stay in sync on publish/supersede/unpublish
+    // (see src/kb/crud.ts markSuperseded / publishDoc / unpublishDoc).
     await chunksRef.add({
       docId,
       text,
@@ -208,6 +211,7 @@ export async function processBatch(jobId: string, limit: number): Promise<Proces
       tokens,
       tenantId: TENANT_ID,
       chunkIndex,
+      status: 'published' as const,
     })
   }
 
