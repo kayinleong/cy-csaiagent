@@ -1,0 +1,312 @@
+# evals/gold/router-precision.yaml — Router precision gold set (Phase 3, FIND-11)
+#
+# Covers: Coach vs Finder routing accuracy across EN / BM / ZH (FIND-11, SC5).
+#
+# Case categories:
+#   (a) Clear Coach — onboarding, training, journey, playbook, escalation messages.
+#       Expected: routeAsync returns pillar='coach'.
+#   (b) Clear Finder — paste criteria, lead details, property match, budget messages.
+#       Expected: routeAsync returns pillar='finder'.
+#   (c) Ambiguous → safe default — messages that could be either pillar.
+#       Expected: routeAsync defaults to 'coach' (low-confidence safe default, D-01/Pitfall 2).
+#
+# The router test sends messages to the /api/chat endpoint and asserts that:
+#   - The response is in the correct pillar register (Coach tone vs Finder match cards)
+#   - The routeDecision (recorded in the response or as a header — D-02) matches the label
+#
+# IMPORTANT: The offline assertion uses response language + content signals to approximate
+# routing correctness. The live Opus judge asserts that the response pillar matches the label.
+#
+# All prompts SYNTHETIC — no real PII.
+# Run gate: LIVE-PILOT-GATED (requires live intent classifier + judge).
+#
+# Reference: FIND-11, D-01/D-02, Pitfall 2, 03-09-PLAN.md Task 1,
+#            src/router/index.ts routeAsync, src/router/heuristic.ts
+
+# ─── Case A: Clear Coach messages ─────────────────────────────────────────────
+
+- description: "Router | EN | clear-coach | onboarding question routes to Coach"
+  live_pilot_gated: true
+  vars:
+    lang: en
+    expected_pillar: coach
+    user_message: "Hi, I just joined D2 today. Can you explain the onboarding journey to me?"
+    expected_behavior: >
+      Routes to Coach. Responds in English with D2 onboarding content.
+      Does NOT show property match cards. Cites KB chunk.
+  assert:
+    - type: javascript
+      value: |
+        // Coach response: should cite a KB chunk (onboarding grounding)
+        const coachSignal = /KB:|onboarding|journey|checkpoint|training|PowerBoost/i;
+        return coachSignal.test(output);
+      description: "Routed to Coach: response shows onboarding/training content"
+    - type: javascript
+      value: |
+        // Must NOT show finder match-card patterns (project IDs / PROJ: tags)
+        const finderSignal = /\[PROJ:[a-z0-9-]+\]|no match found|priceBand|own.?stay|investment/i;
+        return !finderSignal.test(output);
+      description: "Must NOT be routed to Finder for a clear Coach question"
+    - type: not-contains
+      value: "Certainly"
+      description: "No AI-tell filler"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+- description: "Router | MS | clear-coach | soalan latihan dihalakan ke Coach"
+  live_pilot_gated: true
+  vars:
+    lang: ms
+    expected_pillar: coach
+    user_message: "Boleh terangkan cara D2 PowerBoost berfungsi? Saya baharu sahaja mulakan latihan."
+    expected_behavior: >
+      Routes to Coach. Responds in BM with D2 training content. No match cards.
+    native_review_required: true
+    native_review_status: "PENDING — requires native BM speaker review"
+  assert:
+    - type: javascript
+      value: |
+        const bmCoach = /\b(latihan|perjalanan|PowerBoost|jurulatih|D2|KB:|pencapaian)\b/i;
+        return bmCoach.test(output);
+      description: "Routed to Coach: BM response with training content"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+- description: "Router | ZH | clear-coach | 入职问题路由到Coach"
+  live_pilot_gated: true
+  vars:
+    lang: zh
+    expected_pillar: coach
+    user_message: "你好，我刚加入D2。能解释一下入职培训流程吗？"
+    expected_behavior: >
+      Routes to Coach. Responds in Mandarin with D2 onboarding content. No match cards.
+    native_review_required: true
+    native_review_status: "PENDING — requires native Mandarin speaker review"
+  assert:
+    - type: javascript
+      value: |
+        const cjkPattern = /[一-鿿]/;
+        return cjkPattern.test(output);
+      description: "Language-match: response in Mandarin"
+    - type: javascript
+      value: |
+        const coachZH = /入职|培训|PowerBoost|KB:|旅程|导师|D2/;
+        return coachZH.test(output);
+      description: "Routed to Coach: Mandarin response with onboarding content"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+# ─── Case B: Clear Finder messages ────────────────────────────────────────────
+
+- description: "Router | EN | clear-finder | paste lead criteria routes to Finder"
+  live_pilot_gated: true
+  vars:
+    lang: en
+    expected_pillar: finder
+    user_message: |
+      Here's my lead: Malaysian, non-bumi, budget RM600k, looking for a 3-bedroom
+      unit in Subang Jaya, own stay. Please find matching projects.
+    expected_behavior: >
+      Routes to Finder. Responds in English with property match cards or a grounded
+      refusal. Does NOT show Coach onboarding content. Response includes property
+      match information or a no-match explanation.
+  assert:
+    - type: javascript
+      value: |
+        // Finder response: match cards or grounded refusal signals
+        const finderSignal = /match|project|RM|budget|bedroom|no match|grounded|no active|alternative|collateral/i;
+        return finderSignal.test(output);
+      description: "Routed to Finder: response shows property match or refusal"
+    - type: javascript
+      value: |
+        // Must NOT respond with pure Coach onboarding content (no KB citations for training)
+        // (A Finder response citing a project-grounding is OK — it's different from KB:chunk-id coaching)
+        const coachOnly = /onboarding journey|PowerBoost|training checkpoint|comprehension gate/i;
+        return !coachOnly.test(output);
+      description: "Must NOT be routed to Coach for a clear Finder question"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+- description: "Router | MS | clear-finder | kriteria lead dihalakan ke Finder"
+  live_pilot_gated: true
+  vars:
+    lang: ms
+    expected_pillar: finder
+    user_message: |
+      Ini kriteria lead saya: rakyat Malaysia, bukan bumi, bajet RM600k,
+      cari unit 3 bilik di Subang Jaya, untuk kediaman sendiri.
+    expected_behavior: >
+      Routes to Finder. Responds in BM with property match content or grounded refusal.
+    native_review_required: true
+    native_review_status: "PENDING — requires native BM speaker review"
+  assert:
+    - type: javascript
+      value: |
+        const finderBM = /\b(projek|padanan|bajet|bilik|kediaman|tiada|aktif|RM)\b/i;
+        return finderBM.test(output);
+      description: "Routed to Finder: BM response with property content"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+- description: "Router | ZH | clear-finder | 粘贴客户要求路由到Finder"
+  live_pilot_gated: true
+  vars:
+    lang: zh
+    expected_pillar: finder
+    user_message: |
+      客户资料：马来西亚人，非土著，预算RM60万，在沙叻秀找3房单位，自住用途。
+      请帮我配对项目。
+    expected_behavior: >
+      Routes to Finder. Responds in Mandarin with property match content or grounded refusal.
+    native_review_required: true
+    native_review_status: "PENDING — requires native Mandarin speaker review"
+  assert:
+    - type: javascript
+      value: |
+        const cjkPattern = /[一-鿿]/;
+        return cjkPattern.test(output);
+      description: "Language-match: response in Mandarin"
+    - type: javascript
+      value: |
+        const finderZH = /项目|配对|预算|房间|自住|符合|拒绝|无法|RM/;
+        return finderZH.test(output);
+      description: "Routed to Finder: Mandarin response with property content"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+# ─── Case C: Ambiguous → safe default (Coach) ─────────────────────────────────
+# Ambiguous messages that don't clearly map to either pillar must default to Coach
+# (Pitfall 2 / D-01: low-confidence → 'coach' safe default).
+
+- description: "Router | EN | ambiguous→coach | generic help message defaults to Coach"
+  live_pilot_gated: true
+  vars:
+    lang: en
+    expected_pillar: coach
+    user_message: "Can you help me with something?"
+    expected_behavior: >
+      Ambiguous message — no pillar keyword. Router defaults to Coach (safe default,
+      D-01 / Pitfall 2). Responds in English with a general Coach response asking for
+      clarification or offering onboarding help. Does NOT show property match cards.
+  assert:
+    - type: javascript
+      value: |
+        // Ambiguous → Coach safe default: response should be clarifying or coaching
+        // Not a property match response (no match cards, no RM prices for leads)
+        const finderResponse = /\[PROJ:[a-z0-9-]+\]|matching projects|no match found/i;
+        return !finderResponse.test(output);
+      description: "Ambiguous defaults to Coach: no Finder match card in response"
+    - type: not-contains
+      value: "Certainly"
+      description: "No AI-tell filler"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+- description: "Router | MS | ambiguous→coach | mesej tidak jelas lalai ke Coach"
+  live_pilot_gated: true
+  vars:
+    lang: ms
+    expected_pillar: coach
+    user_message: "Boleh bantu saya dengan sesuatu?"
+    expected_behavior: >
+      Ambiguous message in BM. Defaults to Coach. Response in BM offers clarification
+      or onboarding help. No property match content.
+    native_review_required: true
+    native_review_status: "PENDING — requires native BM speaker review"
+  assert:
+    - type: javascript
+      value: |
+        const bmIndicators = /\b(dan|atau|untuk|dalam|boleh|ya|anda|saya|tolong)\b/i;
+        return bmIndicators.test(output);
+      description: "Language-match: response in Bahasa Malaysia"
+    - type: javascript
+      value: |
+        // No finder match-card content in an ambiguous BM message
+        const finderBM = /padanan projek|tiada padanan|RM.*bajet.*lead/i;
+        return !finderBM.test(output);
+      description: "Ambiguous defaults to Coach: no Finder content in BM response"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+- description: "Router | ZH | ambiguous→coach | 模糊消息默认路由到Coach"
+  live_pilot_gated: true
+  vars:
+    lang: zh
+    expected_pillar: coach
+    user_message: "你好，能帮我吗？"
+    expected_behavior: >
+      Ambiguous message in Mandarin. Defaults to Coach. Response in Mandarin offers
+      clarification or onboarding help. No property match cards.
+    native_review_required: true
+    native_review_status: "PENDING — requires native Mandarin speaker review"
+  assert:
+    - type: javascript
+      value: |
+        const cjkPattern = /[一-鿿]/;
+        return cjkPattern.test(output);
+      description: "Language-match: response in Mandarin"
+    - type: javascript
+      value: |
+        // No Finder match-card content for ambiguous Mandarin message
+        const finderZH = /配对项目|没有匹配|RM.*预算.*客户/;
+        return !finderZH.test(output);
+      description: "Ambiguous defaults to Coach: no Finder content in Mandarin response"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+# ─── Case D: Manual-override chip (wins over all heuristics) ─────────────────
+# When the UI sends an explicit override, routeAsync must honor it regardless of content.
+
+- description: "Router | EN | manual-override | Finder override wins despite Coach content"
+  live_pilot_gated: true
+  vars:
+    lang: en
+    expected_pillar: finder
+    user_message: "Tell me about the D2 onboarding journey."
+    # NOTE: this test requires the E2E setup to send x-pillar-override: finder header
+    # or the equivalent override param. The online scaffold documents this.
+    expected_behavior: >
+      Despite the Coach-looking content ("onboarding journey"), if the UI sends a
+      Finder manual override, the response should come from the Finder pillar
+      (clarifying question or search result). This tests the override chip wins.
+    native_review_required: false
+  assert:
+    - type: javascript
+      value: |
+        // With Finder override: response should be in Finder register (asking for criteria)
+        // OR show a no-match if criteria not provided
+        const finderOverrideSignal = /lead|criteria|match|project|budget|RM|no match|please provide|what.*lead/i;
+        return finderOverrideSignal.test(output);
+      description: "Finder override: response in Finder register despite Coach-content message"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"

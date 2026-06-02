@@ -1,0 +1,206 @@
+# evals/gold/finder-segmentation.yaml — Finder segmentation gold set (Phase 3, FIND-09)
+#
+# Covers: investment vs own_stay segmentation — parallel queries with IDENTICAL
+# surface criteria (location, price band, bedrooms) must produce DIFFERENT top-3
+# ranked matches. The segment flag drives the ranking branch (D-05, FIND-09).
+#
+# Pitfall 4: if investment vs own_stay produce the same ranking, the segmentation
+# branch is broken. This suite catches that regression.
+#
+# Design:
+#   Each pair consists of two queries with identical surface criteria but different
+#   segment. The offline assertions check structural signals (response mentions the
+#   segment, no PII). The live Opus judge checks that the reasoning/ranking differs
+#   in a segment-appropriate way.
+#
+#   Since the live diff assertion (different top-3) requires two responses to compare,
+#   the Promptfoo llm-rubric asserts that EACH response mentions the segment and
+#   uses segment-appropriate criteria (yield/rental for investment; livability for own_stay).
+#
+# All prompts are SYNTHETIC — no real PII.
+# Run gate: LIVE-PILOT-GATED.
+#
+# Reference: FIND-09, D-05, Pitfall 4, 03-09-PLAN.md Task 1
+
+# ─── Pair 1 — EN: identical surface, investment vs own_stay ──────────────────
+
+- description: "Finder | EN | segmentation | investment — identical surface criteria"
+  live_pilot_gated: true
+  vars:
+    lang: en
+    segment: investment
+    user_message: |
+      My lead is looking for a 2-bedroom unit in Shah Alam, budget RM500k–RM700k,
+      Malaysian, non-bumi. This is for INVESTMENT.
+    expected_behavior: >
+      Responds in English. Segment=investment is applied. Top-3 matches prioritise
+      investment-relevant criteria: rental yield signal (vpStatus, bumiQuota for
+      wider market, priceBand in the yield-optimal range). Rationale mentions
+      investment yield or rental potential. Ranking DIFFERS from own-stay ranking
+      for identical surface criteria (segment drives the branch — D-05).
+    native_review_required: false
+  assert:
+    - type: javascript
+      value: |
+        // Investment-segment response must mention yield, rental, or investment signal
+        const investmentSignals = /invest|yield|rental|return|capital|ROI|appreciation/i;
+        return investmentSignals.test(output);
+      description: "Investment segment: response mentions investment-relevant criteria"
+    - type: not-contains
+      value: "Certainly"
+      description: "No AI-tell filler"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+    - type: javascript
+      value: |
+        const IC = /\d{6}-\d{2}-\d{4}/;
+        return !IC.test(output);
+      description: "PII gate: no real MY IC numbers"
+
+- description: "Finder | EN | segmentation | own_stay — identical surface criteria"
+  live_pilot_gated: true
+  vars:
+    lang: en
+    segment: own_stay
+    user_message: |
+      My lead is looking for a 2-bedroom unit in Shah Alam, budget RM500k–RM700k,
+      Malaysian, non-bumi. This is for OWN STAY.
+    expected_behavior: >
+      Responds in English. Segment=own_stay is applied. Top-3 matches prioritise
+      liveability criteria: location convenience, VP completion (move-in ready),
+      tenure (freehold preference). Rationale mentions livability, ready-to-move-in,
+      or family suitability. Ranking DIFFERS from investment ranking for identical
+      surface criteria.
+    native_review_required: false
+  assert:
+    - type: javascript
+      value: |
+        // Own-stay response must mention liveability or move-in signals
+        const ownStaySignals = /live|move.?in|family|liveability|livable|own.?stay|vp|vacant possession|ready/i;
+        return ownStaySignals.test(output);
+      description: "Own-stay segment: response mentions liveability criteria"
+    - type: not-contains
+      value: "Certainly"
+      description: "No AI-tell filler"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+# ─── Pair 2 — BM: segmentation in Bahasa Malaysia ────────────────────────────
+
+- description: "Finder | MS | segmentation | pelaburan — kriteria permukaan sama"
+  live_pilot_gated: true
+  vars:
+    lang: ms
+    segment: investment
+    user_message: |
+      Lead saya mencari unit 2 bilik tidur di Shah Alam, bajet RM500k–RM700k,
+      rakyat Malaysia, bukan bumi. Ini untuk PELABURAN.
+    expected_behavior: >
+      Responds in BM. Investment segment applied. Rationale mentions rental yield
+      or investment potential. Differs from own-stay ranking.
+    native_review_required: true
+    native_review_status: "PENDING — requires native BM speaker review (D-08)"
+  assert:
+    - type: javascript
+      value: |
+        const bmIndicators = /\b(dan|atau|untuk|dalam|projek|pelaburan|sewa|hasil|pulangan)\b/i;
+        return bmIndicators.test(output);
+      description: "Language-match: response is in Bahasa Malaysia with investment signals"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+- description: "Finder | MS | segmentation | kediaman sendiri — kriteria permukaan sama"
+  live_pilot_gated: true
+  vars:
+    lang: ms
+    segment: own_stay
+    user_message: |
+      Lead saya mencari unit 2 bilik tidur di Shah Alam, bajet RM500k–RM700k,
+      rakyat Malaysia, bukan bumi. Ini untuk KEDIAMAN SENDIRI.
+    expected_behavior: >
+      Responds in BM. Own-stay segment applied. Rationale mentions liveability
+      or VP completion. Differs from investment ranking.
+    native_review_required: true
+    native_review_status: "PENDING — requires native BM speaker review (D-08)"
+  assert:
+    - type: javascript
+      value: |
+        const bmOwn = /\b(sendiri|duduk|keluarga|kediaman|pindah|masuk|siap|VP)\b/i;
+        return bmOwn.test(output);
+      description: "Own-stay segment: response mentions liveability criteria in BM"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+# ─── Pair 3 — ZH: segmentation in Mandarin Chinese ───────────────────────────
+
+- description: "Finder | ZH | segmentation | 投资 — 相同表面条件"
+  live_pilot_gated: true
+  vars:
+    lang: zh
+    segment: investment
+    user_message: |
+      我的客户在莎阿南找2房单位，预算RM50万至RM70万，马来西亚人，非土著。
+      用途：投资。
+    expected_behavior: >
+      Responds in Mandarin. Investment segment applied. Rationale mentions
+      rental yield or investment returns. Ranking differs from own-stay.
+    native_review_required: true
+    native_review_status: "PENDING — requires native Mandarin speaker review (D-08)"
+  assert:
+    - type: javascript
+      value: |
+        const cjkPattern = /[一-鿿]/;
+        return cjkPattern.test(output);
+      description: "Language-match: response contains Mandarin Chinese characters"
+    - type: javascript
+      value: |
+        const investZH = /投资|收益|租金|回报|升值|出租/;
+        return investZH.test(output);
+      description: "Investment segment: Mandarin response mentions investment signals"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+- description: "Finder | ZH | segmentation | 自住 — 相同表面条件"
+  live_pilot_gated: true
+  vars:
+    lang: zh
+    segment: own_stay
+    user_message: |
+      我的客户在莎阿南找2房单位，预算RM50万至RM70万，马来西亚人，非土著。
+      用途：自住。
+    expected_behavior: >
+      Responds in Mandarin. Own-stay segment applied. Rationale mentions
+      liveability, VP completion, or family suitability. Ranking differs from investment.
+    native_review_required: true
+    native_review_status: "PENDING — requires native Mandarin speaker review (D-08)"
+  assert:
+    - type: javascript
+      value: |
+        const cjkPattern = /[一-鿿]/;
+        return cjkPattern.test(output);
+      description: "Language-match: response contains Mandarin Chinese characters"
+    - type: javascript
+      value: |
+        const ownZH = /自住|居住|入住|家庭|宜居|VP|交楼/;
+        return ownZH.test(output);
+      description: "Own-stay segment: Mandarin response mentions liveability signals"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"

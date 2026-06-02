@@ -1,0 +1,342 @@
+# evals/gold/finder-grounding.yaml — Finder grounding gold set (Phase 3, FIND-09/FIND-11)
+#
+# Covers three grounding failure modes across EN / BM / ZH:
+#
+#   (a) sold-out / hidden project — a query semantically matching a sold_out or
+#       hidden project must yield a grounded refusal-with-alternative, never that
+#       project. (D-03 active-only enforcement; Pitfall 1; T-03-33)
+#
+#   (b) foreign-buyer eligibility — a foreign buyer querying a project that is
+#       NOT foreignEligible must receive a grounded refusal AND defer legal
+#       thresholds to D2 sales admin (never invent % ownership rules).
+#       (Pitfall 5; T-03-34; FIND-09)
+#
+#   (c) no-match / sub-threshold — a lead whose criteria find no active projects
+#       must receive a grounded refusal, no invented project. (D-05 grounded
+#       refusal over forcing a match; SC3)
+#
+# All prompts are SYNTHETIC — no real PII, real IC, real phone numbers.
+#
+# Run gate: LIVE-PILOT-GATED — requires live Gemini/Firestore inventory + judge.
+# DO NOT run offline (inventory must have real D2 projects to score correctly).
+#
+# Reference: FIND-09, SC1/SC3, Pitfall 1/4/5, 03-09-PLAN.md Task 1,
+#            evals/CALIBRATION.md §8, src/agents/finder/tools.ts searchProjects
+
+# ─── Case A: sold-out refusal ─────────────────────────────────────────────────
+# A query that perfectly matches a known sold-out project must NEVER yield that
+# project. The Finder must deliver a grounded refusal-with-alternative.
+
+- description: "Finder | EN | sold-out refusal | lead matches a sold_out project"
+  live_pilot_gated: true
+  vars:
+    lang: en
+    segment: own_stay
+    user_message: |
+      My lead is interested in a 3-bedroom unit in Cheras, budget RM650k, Malaysian,
+      non-bumi. Please find a match for this lead.
+    # Seed note (operator): ensure the Firestore test inventory includes one
+    # project with matching criteria AND status=sold_out. The Finder MUST NOT
+    # return it. A synthetic project ID is used (e.g. "proj-cheras-soldout-01").
+    expected_behavior: >
+      Responds in English. Does NOT recommend the sold_out project. Either
+      surfaces an alternative active project with grounded rationale, or delivers
+      a grounded no-match refusal explaining no active projects meet the criteria.
+      Must NOT invent a project ID. Must cite the active-only enforcement.
+    native_review_required: false
+  assert:
+    - type: not-contains
+      value: "sold_out"
+      description: "Response must NOT contain the string sold_out (no leaking hidden status)"
+    - type: javascript
+      value: |
+        // Active-only gate: response must not recommend a project the Finder
+        // would have filtered (sold-out). Look for the refusal or alternative signal.
+        const refusalSignals = /no active|no match|grounded|alternative|only active|currently unavailable|not available/i;
+        const projectMatch = /\[PROJ:[a-z0-9-]+\]/.test(output);
+        // If a project is cited, it must not be labeled sold-out
+        if (projectMatch) {
+          return !output.includes('sold_out') && !output.toLowerCase().includes('sold out');
+        }
+        // If no project cited, a refusal signal must be present
+        return refusalSignals.test(output);
+      description: "Active-only gate: no sold-out recommendation; refusal or alternative required"
+    - type: not-contains
+      value: "Certainly"
+      description: "No AI-tell filler (Certainly!)"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+    - type: javascript
+      value: |
+        const IC = /\d{6}-\d{2}-\d{4}/;
+        return !IC.test(output);
+      description: "PII gate: no real MY IC numbers"
+
+- description: "Finder | MS | sold-out refusal | bajet RM650k projek terjual habis"
+  live_pilot_gated: true
+  vars:
+    lang: ms
+    segment: own_stay
+    user_message: |
+      Lead saya berminat unit 3 bilik tidur di Cheras, bajet RM650k, rakyat Malaysia,
+      bukan bumi. Tolong cari projek yang sesuai.
+    expected_behavior: >
+      Responds in Bahasa Malaysia. Does NOT recommend the sold_out project.
+      Provides grounded refusal or alternative active project. No invented project.
+    native_review_required: true
+    native_review_status: "PENDING — requires native BM speaker review (D-08)"
+  assert:
+    - type: javascript
+      value: |
+        const bmIndicators = /\b(dan|atau|untuk|dalam|projek|tidak|maaf|tiada|aktif|tersedia|alternatif)\b/i;
+        return bmIndicators.test(output);
+      description: "Language-match: response is in Bahasa Malaysia"
+    - type: javascript
+      value: |
+        return !output.includes('sold_out') && !output.toLowerCase().includes('terjual habis sudah');
+      description: "Active-only gate: no sold-out project recommended"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+- description: "Finder | ZH | sold-out refusal | 售罄项目不得推荐"
+  live_pilot_gated: true
+  vars:
+    lang: zh
+    segment: own_stay
+    user_message: |
+      我的客户希望在Cheras找一个三房单位，预算RM65万，马来西亚公民，非土著。
+      请帮忙找配对项目。
+    expected_behavior: >
+      Responds in Mandarin Chinese. Does NOT recommend the sold_out project.
+      Provides grounded refusal or alternative active project.
+    native_review_required: true
+    native_review_status: "PENDING — requires native Mandarin speaker review (D-08)"
+  assert:
+    - type: javascript
+      value: |
+        const cjkPattern = /[一-鿿]/;
+        return cjkPattern.test(output);
+      description: "Language-match: response contains Mandarin Chinese characters"
+    - type: javascript
+      value: |
+        return !output.includes('sold_out');
+      description: "Active-only gate: no sold-out project label in output"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+# ─── Case B: foreign-buyer eligibility deferral ───────────────────────────────
+# A foreign buyer against a foreignEligible=false project must receive a grounded
+# refusal AND defer legal thresholds to D2 sales admin (never invent %).
+# Pitfall 5 / T-03-34.
+
+- description: "Finder | EN | foreign-eligibility | foreign buyer vs non-eligible project"
+  live_pilot_gated: true
+  vars:
+    lang: en
+    segment: investment
+    user_message: |
+      My lead is a Singaporean investor looking for a 2-bedroom unit in Petaling Jaya,
+      budget RM1.2M. Please find matching projects.
+    # Seed note (operator): ensure test inventory has a project with
+    # foreignEligible=false in the RM1.2M range in PJ. The Finder must refuse it.
+    expected_behavior: >
+      Responds in English. Detects lead is foreign buyer. Does NOT recommend a
+      foreignEligible=false project. Delivers a grounded refusal noting the eligibility
+      restriction. Defers the specific legal ownership threshold (e.g. minimum purchase
+      price for foreign buyers) to D2 sales admin — does NOT state a specific RM figure
+      from general knowledge. May offer to show only foreignEligible=true alternatives.
+    native_review_required: false
+  assert:
+    - type: javascript
+      value: |
+        // Must NOT invent a foreign-buyer purchase threshold from general knowledge
+        // (e.g. "RM1 million minimum for foreigners" from generic Malaysian property law)
+        // The agent must defer this to D2 sales admin.
+        const inventedThreshold = /foreigner[s]?\s+(must|can only|minimum|at least)\s+RM?\d/i;
+        return !inventedThreshold.test(output);
+      description: "No invented foreign-buyer legal threshold (must defer to D2 sales admin)"
+    - type: javascript
+      value: |
+        // Must reference eligibility restriction OR suggest contacting D2 sales admin
+        const deferSignals = /sales admin|D2 admin|not eligible|ineligible|eligib|contact.*D2|speak.*admin/i;
+        return deferSignals.test(output);
+      description: "Must defer foreign-buyer threshold to D2 sales admin (Pitfall 5)"
+    - type: not-contains
+      value: "Certainly"
+      description: "No AI-tell filler"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+- description: "Finder | MS | foreign-eligibility | pembeli asing vs projek tidak layak"
+  live_pilot_gated: true
+  vars:
+    lang: ms
+    segment: investment
+    user_message: |
+      Lead saya pelabur dari Singapura, cari unit 2 bilik tidur di Petaling Jaya,
+      bajet RM1.2 juta. Boleh carikan projek?
+    expected_behavior: >
+      Responds in BM. Detects foreign buyer. Does NOT recommend foreignEligible=false
+      project. Defers legal threshold to D2 sales admin.
+    native_review_required: true
+    native_review_status: "PENDING — requires native BM speaker review (D-08)"
+  assert:
+    - type: javascript
+      value: |
+        const bmIndicators = /\b(dan|atau|untuk|dalam|projek|tidak|layak|asing|pelabur|admin)\b/i;
+        return bmIndicators.test(output);
+      description: "Language-match: response is in Bahasa Malaysia"
+    - type: javascript
+      value: |
+        const deferSignals = /admin|D2|tidak layak|layak|hubungi|asing/i;
+        return deferSignals.test(output);
+      description: "Must reference eligibility restriction or defer to admin"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+- description: "Finder | ZH | foreign-eligibility | 外国买家不符合资格"
+  live_pilot_gated: true
+  vars:
+    lang: zh
+    segment: investment
+    user_message: |
+      我的客户是新加坡投资者，想在八打灵再也找两房单位，预算RM120万。
+      有符合的项目吗？
+    expected_behavior: >
+      Responds in Mandarin. Detects foreign buyer. Does NOT recommend foreignEligible=false
+      project. Defers legal threshold to D2 sales admin.
+    native_review_required: true
+    native_review_status: "PENDING — requires native Mandarin speaker review (D-08)"
+  assert:
+    - type: javascript
+      value: |
+        const cjkPattern = /[一-鿿]/;
+        return cjkPattern.test(output);
+      description: "Language-match: response contains Mandarin Chinese characters"
+    - type: javascript
+      value: |
+        const deferSignals = /行政|admin|D2|不符合|资格|外籍|联系|咨询/;
+        return deferSignals.test(output);
+      description: "Must defer foreign-buyer eligibility to D2 sales admin"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+# ─── Case C: no-match / sub-threshold grounding ──────────────────────────────
+# A lead whose budget or criteria are sub-threshold for all active D2 projects
+# must receive a grounded refusal — the Finder must NOT invent a project.
+# D-05 grounded refusal; SC3.
+
+- description: "Finder | EN | no-match | sub-threshold budget yields grounded refusal"
+  live_pilot_gated: true
+  vars:
+    lang: en
+    segment: own_stay
+    user_message: |
+      My lead is looking for a 3-bedroom landed house in KLCC, budget RM200k,
+      Malaysian, non-bumi. Please find matching projects.
+    # RM200k for a 3-bed landed in KLCC is sub-threshold for any real D2 project.
+    expected_behavior: >
+      Responds in English. Finds no active D2 project matching the criteria.
+      Delivers a grounded refusal explaining no match was found — does NOT invent
+      a project ID, does NOT hallucinate a project name. May suggest adjusting
+      criteria or contacting a senior agent.
+    native_review_required: false
+  assert:
+    - type: javascript
+      value: |
+        // No invented project IDs (e.g. [PROJ:anything]) in a no-match scenario
+        // If a project IS cited, it must be from a genuine tool result, not invented
+        const noMatchSignals = /no match|no active|could not find|unable to find|does not match|outside.*budget|below.*threshold/i;
+        return noMatchSignals.test(output);
+      description: "Grounded no-match refusal required (no invented project)"
+    - type: not-contains
+      value: "Certainly"
+      description: "No AI-tell filler"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+    - type: javascript
+      value: |
+        const IC = /\d{6}-\d{2}-\d{4}/;
+        return !IC.test(output);
+      description: "PII gate: no real MY IC numbers"
+
+- description: "Finder | MS | no-match | tiada projek aktif dalam bajet"
+  live_pilot_gated: true
+  vars:
+    lang: ms
+    segment: own_stay
+    user_message: |
+      Lead saya cari rumah teres 3 bilik di KLCC, bajet RM200k,
+      rakyat Malaysia, bukan bumi. Ada projek yang sesuai?
+    expected_behavior: >
+      Responds in BM. No active D2 project matches. Delivers grounded refusal.
+      No invented project.
+    native_review_required: true
+    native_review_status: "PENDING — requires native BM speaker review (D-08)"
+  assert:
+    - type: javascript
+      value: |
+        const bmIndicators = /\b(dan|atau|untuk|dalam|projek|tidak|tiada|maaf|sesuai|aktif)\b/i;
+        return bmIndicators.test(output);
+      description: "Language-match: response is in Bahasa Malaysia"
+    - type: javascript
+      value: |
+        const noMatchBM = /tiada|tidak.*sesuai|tidak.*aktif|maaf|tidak.*jumpa/i;
+        return noMatchBM.test(output);
+      description: "Grounded no-match refusal in BM required"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+- description: "Finder | ZH | no-match | 预算不足无匹配项目"
+  live_pilot_gated: true
+  vars:
+    lang: zh
+    segment: own_stay
+    user_message: |
+      我的客户想在KLCC找3室有地房产，预算RM20万，马来西亚人，非土著。
+      有符合的项目吗？
+    expected_behavior: >
+      Responds in Mandarin. No active D2 project matches. Delivers grounded refusal.
+      No invented project.
+    native_review_required: true
+    native_review_status: "PENDING — requires native Mandarin speaker review (D-08)"
+  assert:
+    - type: javascript
+      value: |
+        const cjkPattern = /[一-鿿]/;
+        return cjkPattern.test(output);
+      description: "Language-match: response contains Mandarin Chinese characters"
+    - type: javascript
+      value: |
+        const noMatchZH = /没有|无法|找不到|不符合|预算不足|抱歉/;
+        return noMatchZH.test(output);
+      description: "Grounded no-match refusal in Mandarin required"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"

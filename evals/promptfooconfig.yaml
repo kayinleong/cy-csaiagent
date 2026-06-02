@@ -29,7 +29,7 @@
 #
 # @see https://www.promptfoo.dev/docs/configuration/guide/
 
-description: 'D2 CS-AI Agent — Coach regression suite (Phase 2 / QUAL-06, 02-07)'
+description: 'D2 CS-AI Agent — Coach + Finder + Router eval suite (Phase 2/3, QUAL-06, 02-07, 03-09)'
 
 # ─── Providers ───────────────────────────────────────────────────────────────
 # The Coach provider sends the test message to the live /api/chat endpoint.
@@ -78,6 +78,34 @@ tests:
 
   # Phase 2 — Playbook prompts (Meta Ads playbook + first-Meta-ad walkthrough × EN/BM/ZH)
   - evals/gold/coach-playbooks.yaml
+
+  # ─── Phase 3 — Finder + Router suites (03-09, FIND-09/FIND-11) ──────────────
+  #
+  # These suites are LIVE-PILOT-GATED: they require a live Gemini/Firestore
+  # inventory with real D2 projects seeded, plus the Opus judge. Do NOT run
+  # offline — the grounding / segmentation / routing assertions only pass when
+  # the Finder agent has real inventory to search against.
+  #
+  # Pre-run checklist (operator):
+  #   1. Seed D2 inventory via the admin inventory app (03-08).
+  #   2. Include a sold_out project matching the Cheras 3-bed RM650k criteria.
+  #   3. Include a foreignEligible=false project in PJ RM1.2M range.
+  #   4. Confirm JUDGE_MODEL env var is set from Remote Config (model.grader.default).
+  #   5. Confirm model.router.default + model.finder.default are seeded in Remote Config.
+  #
+  # To run ONLY the Phase-3 suites:
+  #   JUDGE_MODEL=$(firebase remoteconfig:get --key model.grader.default) \
+  #     npx promptfoo eval -c evals/promptfooconfig.yaml \
+  #     --filter-pattern "finder|router"
+
+  # Finder grounding: sold-out refusal + foreign-eligibility + no-match (× EN/BM/ZH)
+  - evals/gold/finder-grounding.yaml
+
+  # Finder segmentation: investment vs own_stay same surface criteria → different top-3 (× EN/BM/ZH)
+  - evals/gold/finder-segmentation.yaml
+
+  # Router precision: clear-coach / clear-finder / ambiguous→coach safe-default (× EN/BM/ZH)
+  - evals/gold/router-precision.yaml
 
 # ─── Shared LLM-rubric assertion ─────────────────────────────────────────────
 # Applied on top of fixture-level assertions via Promptfoo's defaultTest.
