@@ -176,8 +176,8 @@ beforeEach(async () => {
   checkpointVelocity = metricsModule.checkpointVelocity
   trainingFunnel = metricsModule.trainingFunnel
 
-  // Spy on audit log
-  ;(auditModule as { log: typeof mockAuditLog }).log = mockAuditLog
+  // Spy on audit log (cast through unknown for type safety)
+  ;(auditModule as unknown as { log: typeof mockAuditLog }).log = mockAuditLog
 })
 
 afterEach(() => {
