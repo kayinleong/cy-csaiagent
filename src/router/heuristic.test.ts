@@ -1,35 +1,47 @@
 /**
- * Tests for src/router/heuristic.ts — Phase 1 heuristic router.
+ * Tests for src/router/heuristic.ts — Phase 3 sync router (override + content heuristic).
  *
- * Behaviors proved:
- *   1. Any user message routes to 'coach' (Phase 1 single-pillar mode).
- *   2. Even Finder-ish content still routes to 'coach' (heuristic = always Coach).
- *   3. manual-override chip: route(messages, { override:'finder' }) returns 'finder'.
- *   4. classifier.ts is dormant — classifyIntent() is NOT called during routing.
+ * Behaviors proved (Phase 3 contract):
+ *   1. Any onboarding message routes to 'coach' via sync route().
+ *   2. Clear finder keywords (budget/RM/bedroom/project/paste/lead) → route() returns 'finder'
+ *      via heuristicPillar — the Phase-1 "finder-ish always → coach" invariant is RETIRED here.
+ *   3. manual-override chip wins over all heuristics.
+ *   4. classifyIntent is NOT called on override or clear-keyword paths (cost/latency guard).
+ *   5. sync route() shape unchanged — coach.test.ts call shapes still valid.
+ *
+ * Phase-1 invariants intentionally superseded:
+ *   - "finder-ish content still routes to coach" → now routes to 'finder' on clear keywords.
+ *   - "classifyIntent must never be called at all" → narrowed to "not on override/clear-keyword paths".
  *
  * Pure logic — no Firestore, no Firebase, no Next.js. Offline-safe.
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// ─── Behavior 4 guard: ensure classifier module is not called by heuristic ────
-//
-// We spy on the classifier module. If route() ever calls classifyIntent(),
-// the test will fail. classifyIntent() should ONLY exist as a dormant seam.
+// ─── Mock classifyIntent so it never makes real network calls ─────────────────
+// classifyIntent should NOT be called on override or clear-keyword paths.
+// If it IS called on those paths, the spy records the invocation and we assert.
 vi.mock('./classifier', () => ({
-  classifyIntent: vi.fn(() => {
-    throw new Error('classifyIntent should NOT be called in Phase 1 — it is a dormant Phase-3 seam')
-  }),
+  classifyIntent: vi.fn(async () => ({
+    pillar: 'coach' as const,
+    confidence: 0.9,
+    reason: 'mock-classifier',
+  })),
   NotActivatedError: class NotActivatedError extends Error {
     constructor(msg?: string) { super(msg) }
   },
 }))
 
-import { route } from './heuristic'
+import { route, heuristicPillar } from './heuristic'
 import { classifyIntent } from './classifier'
 
-describe('route (Phase 1 heuristic router)', () => {
-  it('Behavior 1: any onboarding message routes to coach', () => {
+describe('route() — Phase 3 sync fast-path (override + content heuristic)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  // ─── Behavior 1: coach keywords → sync coach ────────────────────────────────
+  it('Behavior 1: onboarding message routes to coach via sync route()', () => {
     const result = route([{ role: 'user', content: 'How do I run my first Meta ad?' }])
 
     expect(result.pillar).toBe('coach')
@@ -37,16 +49,30 @@ describe('route (Phase 1 heuristic router)', () => {
     expect(result.reason.length).toBeGreaterThan(0)
   })
 
-  it('Behavior 2: finder-ish content still routes to coach in Phase 1 (single-pillar)', () => {
-    const result = route([{ role: 'user', content: 'show me projects under 500k near KL' }])
+  // ─── Behavior 2: finder keywords → heuristic returns finder ─────────────────
+  it('Behavior 2: clear finder keywords route to finder via heuristic (budget/RM keyword)', () => {
+    const result = route([{ role: 'user', content: 'My client has a budget of RM 650k, show me matching projects' }])
 
-    expect(result.pillar).toBe('coach')
+    expect(result.pillar).toBe('finder')
     expect(result.reason).toBeDefined()
   })
 
+  it('Behavior 2b: bedroom keyword routes to finder via heuristic', () => {
+    const result = route([{ role: 'user', content: '3 bedroom unit under 800k near LRT' }])
+
+    expect(result.pillar).toBe('finder')
+  })
+
+  it('Behavior 2c: lead criteria keyword routes to finder via heuristic', () => {
+    const result = route([{ role: 'user', content: 'paste lead details: young couple, first home, KL area' }])
+
+    expect(result.pillar).toBe('finder')
+  })
+
+  // ─── Behavior 3: manual-override chip wins ───────────────────────────────────
   it('Behavior 3: manual-override chip wins — override:"finder" returns pillar:"finder"', () => {
     const result = route(
-      [{ role: 'user', content: 'show me projects under 500k' }],
+      [{ role: 'user', content: 'How do I run my first Meta ad?' }],
       { override: 'finder' }
     )
 
@@ -64,14 +90,121 @@ describe('route (Phase 1 heuristic router)', () => {
     expect(result.reason).toBe('manual-override')
   })
 
-  it('Behavior 4: classifyIntent is NOT called during Phase 1 routing', () => {
-    // route() runs without throwing — if classifyIntent were called, the vi.mock spy
-    // would throw "classifyIntent should NOT be called in Phase 1"
-    expect(() => {
-      route([{ role: 'user', content: 'anything at all' }])
-    }).not.toThrow()
+  it('Behavior 3c: manual-override with coach keyword message — override wins over heuristic', () => {
+    const result = route(
+      [{ role: 'user', content: 'show me projects under 500k' }],
+      { override: 'coach' }
+    )
 
-    // Confirm classifyIntent mock was never invoked
+    expect(result.pillar).toBe('coach')
+    expect(result.reason).toBe('manual-override')
+  })
+
+  // ─── Behavior 4: classifyIntent NOT called on override or clear-keyword paths ─
+  it('Behavior 4: classifyIntent is NOT called on manual-override paths', () => {
+    route(
+      [{ role: 'user', content: 'anything' }],
+      { override: 'finder' }
+    )
+
     expect(classifyIntent).not.toHaveBeenCalled()
+  })
+
+  it('Behavior 4b: classifyIntent is NOT called on clear coach-keyword paths', () => {
+    route([{ role: 'user', content: 'How do I complete the onboarding checkpoint?' }])
+
+    expect(classifyIntent).not.toHaveBeenCalled()
+  })
+
+  it('Behavior 4c: classifyIntent is NOT called on clear finder-keyword paths', () => {
+    route([{ role: 'user', content: 'My lead has a budget of RM 500k, 2 bedroom preferred' }])
+
+    expect(classifyIntent).not.toHaveBeenCalled()
+  })
+
+  // ─── Behavior 5: sync route() shape unchanged — coach.test.ts call shapes valid
+  it('Behavior 5: sync route() with no opts returns a RouteDecision with pillar + reason', () => {
+    const messages = [{ role: 'user' as const, content: 'How do I register my first lead?' }]
+    const decision = route(messages)
+
+    expect(decision).toHaveProperty('pillar')
+    expect(decision).toHaveProperty('reason')
+    expect(typeof decision.pillar).toBe('string')
+    expect(typeof decision.reason).toBe('string')
+  })
+
+  it('Behavior 5b: sync route() with override returns finder (coach.test.ts override shape)', () => {
+    const messages = [{ role: 'user' as const, content: 'Find me a property' }]
+    const decision = route(messages, { override: 'coach' })
+
+    expect(decision.pillar).toBe('coach')
+    expect(decision.reason).toBe('manual-override')
+  })
+})
+
+// ─── heuristicPillar unit tests ───────────────────────────────────────────────
+
+describe('heuristicPillar() — content keyword classifier', () => {
+  it('returns null for an ambiguous message (no clear keywords)', () => {
+    const result = heuristicPillar([{ role: 'user', content: 'hello there' }])
+    expect(result).toBeNull()
+  })
+
+  it('returns { pillar:"finder" } for a message with RM keyword', () => {
+    const result = heuristicPillar([{ role: 'user', content: 'client has RM 700k budget' }])
+    expect(result).not.toBeNull()
+    expect(result?.pillar).toBe('finder')
+  })
+
+  it('returns { pillar:"finder" } for a message with "bedroom" keyword', () => {
+    const result = heuristicPillar([{ role: 'user', content: 'looking for 3 bedroom apartment' }])
+    expect(result?.pillar).toBe('finder')
+  })
+
+  it('returns { pillar:"finder" } for a message with "lead" keyword', () => {
+    const result = heuristicPillar([{ role: 'user', content: 'paste lead info: young couple, first home' }])
+    expect(result?.pillar).toBe('finder')
+  })
+
+  it('returns { pillar:"finder" } for a message with "budget" keyword', () => {
+    const result = heuristicPillar([{ role: 'user', content: 'my client budget is under 500k' }])
+    expect(result?.pillar).toBe('finder')
+  })
+
+  it('returns { pillar:"finder" } for a message with "investment" keyword', () => {
+    const result = heuristicPillar([{ role: 'user', content: 'looking for investment property' }])
+    expect(result?.pillar).toBe('finder')
+  })
+
+  it('returns { pillar:"coach" } for a message with "onboarding" keyword', () => {
+    const result = heuristicPillar([{ role: 'user', content: 'I need help with my onboarding journey' }])
+    expect(result).not.toBeNull()
+    expect(result?.pillar).toBe('coach')
+  })
+
+  it('returns { pillar:"coach" } for a message with "training" keyword', () => {
+    const result = heuristicPillar([{ role: 'user', content: 'when does training start?' }])
+    expect(result?.pillar).toBe('coach')
+  })
+
+  it('returns { pillar:"coach" } for a message with "playbook" keyword', () => {
+    const result = heuristicPillar([{ role: 'user', content: 'where can I find the playbook?' }])
+    expect(result?.pillar).toBe('coach')
+  })
+
+  it('returns { pillar:"coach" } for a message with "checkpoint" keyword', () => {
+    const result = heuristicPillar([{ role: 'user', content: 'I have completed my checkpoint' }])
+    expect(result?.pillar).toBe('coach')
+  })
+
+  it('returns { pillar:"coach" } for a message with "meta ad" keyword', () => {
+    const result = heuristicPillar([{ role: 'user', content: 'how do I set up a meta ad?' }])
+    expect(result?.pillar).toBe('coach')
+  })
+
+  it('returns a reason string when a pillar is detected', () => {
+    const result = heuristicPillar([{ role: 'user', content: 'RM 600k budget for my lead' }])
+    expect(typeof result?.reason).toBe('string')
+    expect(result?.reason.length).toBeGreaterThan(0)
   })
 })
