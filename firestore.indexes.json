@@ -68,6 +68,29 @@
       ]
     },
     {
+      "collectionGroup": "projects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "priceBand", "order": "ASCENDING" },
+        {
+          "fieldPath": "embedding",
+          "vectorConfig": {
+            "dimension": "1024",
+            "flat": {}
+          }
+        }
+      ]
+    },
+    {
+      "collectionGroup": "projects",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "vpDate", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "kbChunks",
       "queryScope": "COLLECTION",
       "fields": [
