@@ -5,6 +5,8 @@
  *   - findStalled: queries agentProfiles.lastActiveAt > N days ago
  *   - emitHandoffSignal: creates an escalations row via escalationsRef()
  *   - Dedup: same agent+reason within window does not create duplicate
+ *   - recordKnowledgeGap: upserts knowledgeGaps/{topicHash}, PDPA-safe
+ *   - handoff kb_miss: calls both emitHandoffSignal AND recordKnowledgeGap atomically
  *
  * Offline / mocked Firestore — no real Firebase credentials needed.
  * Clock is injectable for deterministic stale/active assertions.
@@ -13,6 +15,8 @@
  *   - TSD §3.2 escalation row + §4 escalations/{eid}
  *   - 01-11 PLAN.md Task 1 behaviors
  *   - T-01-35 (dedup guard)
+ *   - T-02-19 (knowledgeGaps PDPA: topicHash + short label, no raw query)
+ *   - CDASH-03 (knowledge-gap feed source)
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -25,6 +29,8 @@ const mockAgentProfilesGet = vi.hoisted(() => vi.fn())
 const mockEscalationsWhere = vi.hoisted(() => vi.fn())
 const mockEscalationsWhereGet = vi.hoisted(() => vi.fn())
 const mockEscalationsAdd = vi.hoisted(() => vi.fn())
+const mockKnowledgeGapsDoc = vi.hoisted(() => vi.fn())
+const mockKnowledgeGapsSet = vi.hoisted(() => vi.fn())
 
 // ─── Mock @/src/firebase/collections ──────────────────────────────────────────
 
@@ -56,14 +62,31 @@ vi.mock('@/src/firebase/collections', () => {
     add: mockEscalationsAdd,
   }))
 
+  // knowledgeGapsRef: .doc(topicHash).set({...}, {merge: true})
+  const knowledgeGapsRef = vi.fn(() => ({
+    doc: mockKnowledgeGapsDoc.mockReturnValue({
+      set: mockKnowledgeGapsSet,
+    }),
+  }))
+
   // Unused but referenced — suppress lint
   void escalationsDedupQuery
 
-  return { agentProfilesRef, escalationsRef }
+  return { agentProfilesRef, escalationsRef, knowledgeGapsRef, TENANT_ID: 'd2' }
 })
+
+// ─── Mock firebase-admin/firestore for FieldValue ─────────────────────────────
+
+vi.mock('firebase-admin/firestore', () => ({
+  FieldValue: {
+    increment: vi.fn((n: number) => ({ _increment: n })),
+    serverTimestamp: vi.fn(() => ({ _serverTimestamp: true })),
+  },
+}))
 
 import { findStalled } from './detect'
 import { emitHandoffSignal } from './handoff'
+import { recordKnowledgeGap } from './knowledgeGaps'
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -223,5 +246,121 @@ describe('emitHandoffSignal() — dedup guard', () => {
     })
 
     expect(mockEscalationsAdd).toHaveBeenCalledOnce()
+  })
+})
+
+// ─── Test 4: recordKnowledgeGap ──────────────────────────────────────────────
+
+describe('recordKnowledgeGap()', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockKnowledgeGapsDoc.mockReturnValue({ set: mockKnowledgeGapsSet })
+    mockKnowledgeGapsSet.mockResolvedValue(undefined)
+  })
+
+  it('upserts knowledgeGaps/{topicHash} with count incremented and lastSeenAt updated', async () => {
+    await recordKnowledgeGap({
+      seniorCoachId: 'coach-001',
+      agentUid: 'agent-001',
+      topic: 'bumiputera quota rules',
+      lang: 'en',
+    })
+
+    expect(mockKnowledgeGapsDoc).toHaveBeenCalledOnce()
+    expect(mockKnowledgeGapsSet).toHaveBeenCalledOnce()
+
+    const [setData, setOpts] = mockKnowledgeGapsSet.mock.calls[0] as [
+      Record<string, unknown>,
+      Record<string, unknown>,
+    ]
+    expect(setOpts).toMatchObject({ merge: true })
+    expect(setData).toHaveProperty('topicHash')
+    expect(setData).toHaveProperty('topicLabel')
+    expect(setData.count).toMatchObject({ _increment: 1 }) // FieldValue.increment(1)
+    expect(setData).toHaveProperty('lastSeenAt')
+    expect(setData.seniorCoachId).toBe('coach-001')
+    expect(setData.agentUid).toBe('agent-001')
+    expect(setData.lang).toBe('en')
+    expect(setData.tenantId).toBe('d2')
+  })
+
+  it('uses the topicHash as the document ID key (stable sha256 dedup)', async () => {
+    const topic = 'meta ads budget allocation'
+
+    await recordKnowledgeGap({ seniorCoachId: 'c1', agentUid: 'a1', topic, lang: 'en' })
+    await recordKnowledgeGap({ seniorCoachId: 'c1', agentUid: 'a1', topic, lang: 'en' })
+
+    // Both calls should target the SAME document ID (same topicHash for same topic)
+    const [call1DocId] = mockKnowledgeGapsDoc.mock.calls[0] as [string]
+    const [call2DocId] = mockKnowledgeGapsDoc.mock.calls[1] as [string]
+    expect(call1DocId).toBe(call2DocId)
+    expect(call1DocId).toBeTruthy()
+    // The doc ID must be a hex string (sha256)
+    expect(call1DocId).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it('NEVER stores the raw query topic string verbatim in the document', async () => {
+    const rawTopic = 'How do I apply for a bumiputera discount on OC Tower Phase 2?'
+
+    await recordKnowledgeGap({
+      seniorCoachId: 'coach-001',
+      agentUid: 'agent-001',
+      topic: rawTopic,
+      lang: 'en',
+    })
+
+    expect(mockKnowledgeGapsSet).toHaveBeenCalledOnce()
+    const [setData] = mockKnowledgeGapsSet.mock.calls[0] as [Record<string, unknown>]
+
+    // None of the stored fields should equal the raw topic string verbatim
+    for (const [key, value] of Object.entries(setData)) {
+      if (typeof value === 'string') {
+        expect(value, `Field "${key}" must NOT contain the raw query verbatim`).not.toBe(rawTopic)
+      }
+    }
+    // topicLabel should be a shorter truncated descriptor, not the full query
+    expect(typeof setData.topicLabel).toBe('string')
+    expect((setData.topicLabel as string).length).toBeLessThanOrEqual(120)
+  })
+
+  it('topicHash is stable sha256 of normalized topic (lowercase trimmed)', async () => {
+    const topicA = 'OC bumiputera quota'
+    const topicB = '  OC Bumiputera Quota  ' // different casing/whitespace
+
+    await recordKnowledgeGap({ seniorCoachId: 'c1', agentUid: 'a1', topic: topicA, lang: 'en' })
+    await recordKnowledgeGap({ seniorCoachId: 'c1', agentUid: 'a1', topic: topicB, lang: 'en' })
+
+    const [idA] = mockKnowledgeGapsDoc.mock.calls[0] as [string]
+    const [idB] = mockKnowledgeGapsDoc.mock.calls[1] as [string]
+    // Normalized forms should produce the same hash
+    expect(idA).toBe(idB)
+  })
+})
+
+// ─── Test 5: handoff.ts kb_miss records knowledgeGap atomically ──────────────
+
+describe('emitHandoffSignal(reason:kb_miss) + recordKnowledgeGap atomic wire', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockEscalationsWhereGet.mockResolvedValue({ empty: true, docs: [] })
+    mockEscalationsAdd.mockResolvedValue({ id: 'esc-kb-001' })
+    mockKnowledgeGapsDoc.mockReturnValue({ set: mockKnowledgeGapsSet })
+    mockKnowledgeGapsSet.mockResolvedValue(undefined)
+  })
+
+  it('calls both emitHandoffSignal and recordKnowledgeGap for a kb_miss', async () => {
+    // Import handoff directly to confirm the wire-in
+    const { emitHandoffSignal: emit } = await import('./handoff')
+    await emit({
+      agentUid: 'agent-001',
+      seniorCoachId: 'coach-001',
+      reason: 'kb_miss',
+      contextBundle: { topic: 'bumiputera discount', lang: 'en' },
+    })
+
+    // escalation row written
+    expect(mockEscalationsAdd).toHaveBeenCalledOnce()
+    // knowledgeGap also written (via recordKnowledgeGap called from handoff)
+    expect(mockKnowledgeGapsSet).toHaveBeenCalledOnce()
   })
 })

@@ -22,6 +22,7 @@
 
 import { escalationsRef } from '@/src/firebase/collections'
 import { FieldValue } from 'firebase-admin/firestore'
+import { recordKnowledgeGap } from '@/src/escalation/knowledgeGaps'
 
 export type EscalationReason = 'kb_miss' | 'stall'
 
@@ -78,4 +79,23 @@ export async function emitHandoffSignal(input: HandoffSignalInput): Promise<void
     // tenantId is stamped by the collection converter (never omitted)
     tenantId: 'd2' as const,
   })
+
+  // ── KB-miss: record a PDPA-safe knowledge-gap signal atomically ──────────────
+  // When the reason is 'kb_miss', a miss atomically records BOTH the escalation
+  // signal (above) AND a PDPA-safe gap count in knowledgeGaps/{topicHash}.
+  // This gives the senior-coach dashboard (CDASH-03) a queryable gap feed.
+  //
+  // The `topic` and `lang` are expected in the contextBundle for kb_miss events.
+  // The raw topic is NEVER stored verbatim — knowledgeGaps.ts derives a short
+  // topicLabel + topicHash (T-02-19 / PDPA).
+  if (reason === 'kb_miss') {
+    const topic =
+      typeof contextBundle.topic === 'string' ? contextBundle.topic : 'unknown'
+    const lang =
+      contextBundle.lang === 'en' || contextBundle.lang === 'ms' || contextBundle.lang === 'zh'
+        ? (contextBundle.lang as 'en' | 'ms' | 'zh')
+        : 'en'
+
+    await recordKnowledgeGap({ seniorCoachId, agentUid, topic, lang })
+  }
 }

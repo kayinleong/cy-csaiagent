@@ -4,8 +4,9 @@
  * Consumers import from '@/src/escalation' (not sub-modules directly).
  * The stall-detect job uses: findStalled + emitHandoffSignal
  * The coach agent KB-miss path uses: emitHandoffSignal (reason:'kb_miss')
+ * The dashboard gap feed uses: recordKnowledgeGap (written by handoff on kb_miss)
  *
- * References: TSD §3.2, 01-11 PLAN.md, D-10
+ * References: TSD §3.2, 01-11 PLAN.md, D-10, CDASH-03
  */
 
 export { findStalled } from './detect'
@@ -13,3 +14,6 @@ export type { StalledAgent, FindStalledOptions } from './detect'
 
 export { emitHandoffSignal } from './handoff'
 export type { HandoffSignalInput, EscalationReason } from './handoff'
+
+export { recordKnowledgeGap } from './knowledgeGaps'
+export type { RecordKnowledgeGapInput } from './knowledgeGaps'
