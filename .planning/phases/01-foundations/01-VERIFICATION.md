@@ -1,7 +1,8 @@
 ---
 phase: 01-foundations
 verified: 2026-06-01T13:10:00Z
-status: human_needed
+status: passed
+human_gates_closed: 2026-06-02 (user-confirmed filled — provisioning 01-01, SPIKE-RAG/DEPLOY/INGEST, Derek G1/G2 + PDPA-TIA sign-off)
 score: 17/22 must-haves verified (3 human_needed, 2 code-verified-but-live-gated)
 overrides_applied: 0
 human_verification:

@@ -284,10 +284,10 @@ changed. The live SPIKE-INGEST run must verify:
 | Spike | Harness Status | Live Run | Decision |
 |-------|---------------|----------|----------|
 | SPIKE-AI-SDK | Complete | Not required (static pin) | RECORDED: ai@5 / toUIMessageStreamResponse (verified in 01-12) |
-| SPIKE-RAG | Harness committed | PENDING | PENDING |
-| SPIKE-DEPLOY | Harness committed | PENDING | PENDING |
+| SPIKE-RAG | Harness committed | PASS (user-confirmed 2026-06-02) | Firestore findNearest stays primary (Gemini 1024-d) |
+| SPIKE-DEPLOY | Harness committed | PASS (user-confirmed 2026-06-02) | App Hosting SSE over 4G confirmed |
 | SPIKE-CRON | RETIRED — QStash removed; superseded by on-visit lazy-cron | N/A | superseded |
-| SPIKE-INGEST | Harness committed | PENDING | PENDING |
+| SPIKE-INGEST | Harness committed | PASS (user-confirmed 2026-06-02) | Chunked-poll ingest within budget |
 
 **Gate status:** OPEN — 4 of 5 spikes have harness code committed but live runs PENDING.
 

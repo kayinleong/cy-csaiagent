@@ -24,7 +24,7 @@ These are hard, non-negotiable boundaries carried from PROJECT.md / config. No p
 
 (Internally these map to the research Build Order's P0–P4; here they are 1-indexed per GSD convention: Phase 1 = Foundations through Phase 5 = Hardening.)
 
-- [ ] **Phase 1: Foundations** - Shared platform core (Firebase, llm/memory/rag/audit/eval/i18n, chat shell, streaming) plus the three de-risking spikes
+- [x] **Phase 1: Foundations** - Shared platform core (Firebase, llm/memory/rag/audit/eval/i18n, chat shell, streaming) plus the three de-risking spikes — *complete; gates user-confirmed filled 2026-06-02*
 - [ ] **Phase 2: Coach + Admin v1** - Onboarding Coach end-to-end, KB CRUD admin, senior-coach dashboard v1, to a 5–10 agent pilot
 - [ ] **Phase 3: Finder + Intent-Routing Activation** - Property Finder pillar and the LLM intent classifier; two pillars share one surface, pilot expands to 15–20
 - [ ] **Phase 4: Reply Assistant + Reply Analytics** - Paste-and-draft WhatsApp replies in D2's voice, never auto-sent, with edit-as-signal analytics

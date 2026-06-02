@@ -104,6 +104,9 @@ A multi-pillar AI agent platform for D2, a Malaysian real-estate sales organizat
 | G2 Anthropic residency: direct API + TIA + boundary pseudonymization | No Anthropic Asian residency 2026-05; pseudonymize PII at the Claude boundary (01-05); Bedrock-SG is the documented fallback | (proposed — pending Derek sign-off, see G1-REGION-SIGNOFF.md) |
 | Embeddings: Gemini `gemini-embedding-001` @ 1024-d (Developer API, `@ai-sdk/google`) — replaces Voyage | User directive 2026-06-01; Gemini Dev API (not Vertex) honors the no-GCP constraint; 1024-d keeps the existing vector index + the standardize-1024-d decision | Adopted 2026-06-01 (overrides Voyage) |
 | Scheduling: on-visit lazy-cron Server Action — replaces Upstash QStash | User directive 2026-06-01; removes the last non-Firebase backend dependency. Tradeoff accepted: jobs fire on visit, not wall-clock; UI watchdog surfaces stale last-run | Adopted 2026-06-01 (overrides QStash; SPIKE-CRON retired) |
+| D-09 nudge scheduling: **on-visit nudges** (NOT the wall-clock GitHub-Actions hatch) | User decision 2026-06-02; accept that an idle overnight defers the nudge for the pilot; measure whether it matters before adding a scheduler | Confirmed 2026-06-02 (resolves the 02-05 D-09 checkpoint) |
+| Working-hours gate: Asia/Kuala_Lumpur 09:00–18:00, Mon–Fri | Default coded; bundled with D-09 for Derek to confirm exact window before pilot | Default adopted 2026-06-02 (confirm window with Derek) |
+| Live Opus-judge eval calibration (Derek + a coach, >85% agreement) approved | User approved 2026-06-02; the calibration run feeds the Phase 2→3 go/no-go memo | Approved 2026-06-02 (resolves the 02-07 calibration checkpoint approach; live run after stack is up) |
 
 ## Evolution
 

@@ -1,6 +1,6 @@
 # G1 — Region & Residency Sign-off
 
-> **STATUS: ⛔ PENDING DEREK'S WRITTEN CONFIRMATION.**
+> **STATUS: ✅ CONFIRMED FILLED — user-confirmed 2026-06-02.** Region `asia-southeast1` + G2 (direct API + TIA) signed off by Derek; Firebase resources created. (Recorded at user direction "close phase 1 as filled"; paste the exact confirmation link/method below if a written record is kept.)
 > This is a human-action checkpoint (plan 01-01). The region is set at Firebase
 > project creation and is **IMMOVABLE** (TSD §14 G1 — the create-time trap).
 > **Do NOT create any Firebase / Storage resource until Derek confirms below.**

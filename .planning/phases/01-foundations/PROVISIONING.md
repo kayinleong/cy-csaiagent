@@ -1,6 +1,6 @@
 # Provisioning Checklist — D2 CS-AI Agent
 
-> **STATUS: ⛔ PENDING LIVE PROVISIONING (human-action, plan 01-01).**
+> **STATUS: ✅ PROVISIONED — user-confirmed filled 2026-06-02.** Firebase project + Firestore + Storage + Auth + App Hosting (`asia-southeast1`, minInstances=1) created; `ANTHROPIC_API_KEY` + `GOOGLE_GENERATIVE_AI_API_KEY` bound via Secret Manager / `.env.local`. (Recorded at user direction; fill the resource-ID rows below for a complete record.)
 > Gated by [G1-REGION-SIGNOFF.md](./G1-REGION-SIGNOFF.md) — do not create any resource
 > until Derek confirms `asia-southeast1`. Secrets are bound via **App Hosting + Secret Manager**
 > only — never in a client bundle, never logged, never committed. Use placeholders here.
