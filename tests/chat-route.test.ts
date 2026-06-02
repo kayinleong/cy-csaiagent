@@ -27,6 +27,9 @@ const mocks = vi.hoisted(() => {
   const mockPseudonymize = vi.fn()
   const mockAuditLog = vi.fn(async () => {})
   const mockRoute = vi.fn()
+  // 03-07: the route now calls routeAsync (the activated classifier). Default to the
+  // coach pillar so these load-bearing tests exercise the streaming/gate path.
+  const mockRouteAsync = vi.fn(async () => ({ pillar: 'coach', reason: 'heuristic-coach' }))
   const mockModelFor = vi.fn()
   const mockStreamText = vi.fn()
   const mockAppendMessage = vi.fn(async () => 'msg-id-001')
@@ -40,6 +43,7 @@ const mocks = vi.hoisted(() => {
     mockPseudonymize,
     mockAuditLog,
     mockRoute,
+    mockRouteAsync,
     mockModelFor,
     mockStreamText,
     mockAppendMessage,
@@ -76,6 +80,7 @@ vi.mock('@/src/audit', () => ({
 
 vi.mock('@/src/router', () => ({
   route: mocks.mockRoute,
+  routeAsync: mocks.mockRouteAsync,
 }))
 
 vi.mock('@/src/llm/provider', () => ({
@@ -84,19 +89,39 @@ vi.mock('@/src/llm/provider', () => ({
 
 vi.mock('ai', () => ({
   streamText: mocks.mockStreamText,
+  // 03-07: the route imports stepCountIs (finder multi-step tool loop). streamText is
+  // mocked, so the stop-condition value is inert — just satisfy the named export.
+  stepCountIs: vi.fn((n: number) => n),
 }))
 
 vi.mock('@/src/memory', () => ({
   appendMessage: mocks.mockAppendMessage,
   // 02-03: ensurePrimaryThread needed by the updated route (stable cid lifecycle)
   ensurePrimaryThread: vi.fn(async () => 'coach-uid-001'),
+  // 03-07: finder-slot helpers imported by the route (only called on the finder path)
+  readFinderSlot: vi.fn(async () => null),
+  mergeFinderCriteria: vi.fn((_a, _b) => ({})),
 }))
 
 vi.mock('@/src/agents/coach', () => ({
   coachAgent: {
     systemPrompt: 'You are a D2 coach.',
+    // 02-04 added buildSystemPrompt() (journey-context injection); the route's coach
+    // branch now calls it (03-07). Mock it so the route reaches the streaming path.
+    buildSystemPrompt: vi.fn(() => 'You are a D2 coach.'),
     outputSchema: {},
     makeTools: vi.fn(() => ({ retrieveKnowledge: {} })),
+  },
+}))
+
+// 03-07: the route imports finderAgent at module top; mock it so the import resolves
+// (the coach-path tests below never invoke the finder branch).
+vi.mock('@/src/agents/finder', () => ({
+  finderAgent: {
+    buildSystemPrompt: vi.fn(() => 'You are a D2 finder.'),
+    outputSchema: {},
+    makeTools: vi.fn(() => ({ searchProjects: {} })),
+    run: vi.fn(),
   },
 }))
 
