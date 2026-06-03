@@ -259,6 +259,90 @@ describe('getKnowledgeGaps', () => {
   })
 })
 
+// ─── Timestamp normalization (regression: dashboard "Invalid time value") ──────
+// The Admin SDK returns Firestore Timestamp objects, not Dates. queries.ts must
+// normalize them so page.tsx .toISOString() and metrics.daysInJourney .getTime()
+// receive real Dates. A Timestamp is shaped { toDate(): Date, seconds, nanoseconds }.
+describe('Firestore Timestamp normalization', () => {
+  function fakeTimestamp(iso: string) {
+    const d = new Date(iso)
+    return {
+      toDate: () => d,
+      seconds: Math.floor(d.getTime() / 1000),
+      nanoseconds: 0,
+    }
+  }
+
+  it('getOpenStalls.openedAt is a real Date with a valid toISOString() (not a Timestamp)', async () => {
+    mockEscalationsRef.get.mockResolvedValueOnce(
+      makeQueryResult([
+        {
+          id: 'esc-ts',
+          data: {
+            tenantId: 'd2',
+            agentUid: 'agent-1',
+            seniorCoachId: COACH_A,
+            reason: 'stall',
+            status: 'open',
+            openedAt: fakeTimestamp('2026-05-28T08:00:00Z'),
+            contextBundle: {},
+          },
+        },
+      ]),
+    )
+    const result = (await getOpenStalls(COACH_A)) as Array<{ data: { openedAt: Date } }>
+    expect(result[0]!.data.openedAt).toBeInstanceOf(Date)
+    expect(() => result[0]!.data.openedAt.toISOString()).not.toThrow()
+    expect(result[0]!.data.openedAt.toISOString()).toBe('2026-05-28T08:00:00.000Z')
+  })
+
+  it('getKnowledgeGaps.lastSeenAt is a real Date with a valid toISOString()', async () => {
+    mockKnowledgeGapsRef.get.mockResolvedValueOnce(
+      makeQueryResult([
+        {
+          id: 'gap-ts',
+          data: {
+            tenantId: 'd2',
+            seniorCoachId: COACH_A,
+            agentUid: 'agent-1',
+            topicHash: 'abc',
+            topicLabel: 'foreign buyer eligibility',
+            lang: 'en',
+            count: 2,
+            lastSeenAt: fakeTimestamp('2026-05-31T09:00:00Z'),
+          },
+        },
+      ]),
+    )
+    const result = (await getKnowledgeGaps(COACH_A)) as Array<{ data: { lastSeenAt: Date } }>
+    expect(result[0]!.data.lastSeenAt).toBeInstanceOf(Date)
+    expect(result[0]!.data.lastSeenAt.toISOString()).toBe('2026-05-31T09:00:00.000Z')
+  })
+
+  it('getDownline.lastActiveAt is a real Date usable by daysInJourney (.getTime())', async () => {
+    mockAgentProfilesRef.get.mockResolvedValueOnce(
+      makeQueryResult([
+        {
+          id: 'agent-ts',
+          data: {
+            tenantId: 'd2',
+            journeyStage: 'onboarding',
+            currentCheckpoint: 'start',
+            lastActiveAt: fakeTimestamp('2026-05-23T00:00:00Z'),
+            activeLeadIds: [],
+            seniorCoachId: COACH_A,
+          },
+        },
+      ]),
+    )
+    const result = (await getDownline(COACH_A)) as Array<{ data: { lastActiveAt: Date } }>
+    expect(result[0]!.data.lastActiveAt).toBeInstanceOf(Date)
+    // daysInJourney calls .getTime() — would throw on a raw Timestamp
+    const now = new Date('2026-05-30T00:00:00Z')
+    expect(daysInJourney({ lastActiveAt: result[0]!.data.lastActiveAt }, now)).toBe(7)
+  })
+})
+
 // ─── Metric tests ─────────────────────────────────────────────────────────────
 
 describe('daysInJourney', () => {

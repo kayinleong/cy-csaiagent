@@ -29,6 +29,20 @@ import { auditDrilldown } from '@/src/audit/log'
 // Re-export auditDrilldown so callers can import it from here (TDD test expects it)
 export { auditDrilldown }
 
+// ─── Timestamp normalization ────────────────────────────────────────────────────
+// The Admin SDK returns Firestore `Timestamp` objects for timestamp fields, but the
+// result types below declare `Date`. The shared converter casts raw (no conversion),
+// so we normalize here at the boundary — matching the defensive idiom used in
+// src/escalation/detect.ts and src/ratelimit/window.ts. Downstream consumers
+// (page.tsx .toISOString(), metrics.daysInJourney .getTime()) then get real Dates.
+function toDate(value: unknown): Date {
+  if (value instanceof Date) return value
+  if (value && typeof (value as { toDate?: () => Date }).toDate === 'function') {
+    return (value as { toDate: () => Date }).toDate()
+  }
+  return new Date(value as string | number)
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 /** A resolved agent profile document with its Firestore document ID. */
@@ -108,10 +122,13 @@ export async function getDownline(
 
   const snap = await query.get()
 
-  return snap.docs.map((doc) => ({
-    id: doc.id,
-    data: doc.data() as DownlineAgent['data'],
-  }))
+  return snap.docs.map((doc) => {
+    const data = doc.data() as DownlineAgent['data']
+    return {
+      id: doc.id,
+      data: { ...data, lastActiveAt: toDate(data.lastActiveAt) },
+    }
+  })
 }
 
 // ─── getOpenStalls ────────────────────────────────────────────────────────────
@@ -148,10 +165,13 @@ export async function getOpenStalls(
 
   const snap = await query.get()
 
-  return snap.docs.map((doc) => ({
-    id: doc.id,
-    data: doc.data() as StallEscalation['data'],
-  }))
+  return snap.docs.map((doc) => {
+    const data = doc.data() as StallEscalation['data']
+    return {
+      id: doc.id,
+      data: { ...data, openedAt: toDate(data.openedAt) },
+    }
+  })
 }
 
 // ─── getKnowledgeGaps ─────────────────────────────────────────────────────────
@@ -192,8 +212,11 @@ export async function getKnowledgeGaps(
 
   const snap = await query.get()
 
-  return snap.docs.map((doc) => ({
-    id: doc.id,
-    data: doc.data() as KnowledgeGapItem['data'],
-  }))
+  return snap.docs.map((doc) => {
+    const data = doc.data() as KnowledgeGapItem['data']
+    return {
+      id: doc.id,
+      data: { ...data, lastSeenAt: toDate(data.lastSeenAt) },
+    }
+  })
 }
