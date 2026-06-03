@@ -24,8 +24,10 @@
 
 import { cookies } from 'next/headers'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
-import { escalationsRef } from '@/src/firebase/collections'
-import { correctKbDoc } from '@/src/kb/crud'
+import { escalationsRef, agentProfilesRef } from '@/src/firebase/collections'
+import { correctKbDoc, listDocsForReview } from '@/src/kb/crud'
+import { loadRecent } from '@/src/memory/conversation'
+import { auditDrilldown } from '@/src/audit/log'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -143,6 +145,132 @@ export async function submitCorrection(
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Correction failed'
+    return { ok: false, error: msg }
+  }
+}
+
+// ─── listKbDocsForCorrection ────────────────────────────────────────────────────
+
+export interface KbDocSummary {
+  id: string
+  title: string
+  lang: string
+  pillar: string
+  version: number
+  status: string
+}
+
+export interface ListKbDocsResult {
+  ok: boolean
+  docs?: KbDocSummary[]
+  error?: string
+}
+
+/**
+ * List KB documents for the correction picker (CDASH-04) — replaces the raw
+ * "enter a Firestore doc ID" step that business users could not use.
+ *
+ * Role gate: senior-coach or admin (same as the correction path). Read-only;
+ * returns lightweight metadata only (no content), serializable to the client.
+ */
+export async function listKbDocsForCorrection(): Promise<ListKbDocsResult> {
+  let user: Awaited<ReturnType<typeof requireUser>>
+  try {
+    user = await getSessionUser()
+  } catch {
+    return { ok: false, error: 'Unauthorized' }
+  }
+
+  if (user.role !== 'senior-coach' && user.role !== 'admin') {
+    return { ok: false, error: 'Forbidden: senior-coach or admin role required' }
+  }
+
+  try {
+    const docs = await listDocsForReview(user)
+    return {
+      ok: true,
+      docs: docs.map((d) => ({
+        id: d.id,
+        title: d.data.title,
+        lang: d.data.lang,
+        pillar: d.data.pillar,
+        version: d.data.version,
+        status: d.data.status ?? 'published',
+      })),
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to list documents'
+    return { ok: false, error: msg }
+  }
+}
+
+// ─── getAgentChatHistory ────────────────────────────────────────────────────────
+
+export interface ChatHistoryMessage {
+  id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  redacted: boolean
+}
+
+export interface ChatHistoryResult {
+  ok: boolean
+  messages?: ChatHistoryMessage[]
+  error?: string
+}
+
+/**
+ * Fetch an agent's recent AI-Coach training thread for the stall-alert drill-down
+ * (CDASH-02). When a coach clicks an alert, they see what the agent was actually
+ * asking — the context behind the escalation.
+ *
+ * Security / PDPA:
+ *   - Role gate: senior-coach or admin (T-02-31 — role from verified token).
+ *   - Downline scope (AUTH-06): a non-admin coach may only read an agent whose
+ *     agentProfiles.seniorCoachId === their own uid. Admin may read any agent.
+ *   - The read is audited (auditDrilldown, TSD §5.1).
+ *   - Scoped to the COACH-pillar training thread (`coach-${agentUid}`) — the
+ *     agent↔AI Q&A, NOT client (Finder/Reply) conversations that carry lead PII.
+ *
+ * @param agentUid  The agent (downline member) whose coach thread to read.
+ */
+export async function getAgentChatHistory(agentUid: string): Promise<ChatHistoryResult> {
+  let user: Awaited<ReturnType<typeof requireUser>>
+  try {
+    user = await getSessionUser()
+  } catch {
+    return { ok: false, error: 'Unauthorized' }
+  }
+
+  if (user.role !== 'senior-coach' && user.role !== 'admin') {
+    return { ok: false, error: 'Forbidden: senior-coach or admin role required' }
+  }
+
+  // AUTH-06: a non-admin coach may only read their own downline.
+  if (user.role !== 'admin') {
+    const profileSnap = await agentProfilesRef().doc(agentUid).get()
+    const profile = profileSnap.data()
+    if (!profile || profile.seniorCoachId !== user.uid) {
+      return { ok: false, error: 'Forbidden: agent is not in your downline' }
+    }
+  }
+
+  try {
+    // PDPA: audit the drill-down before returning any conversation data.
+    await auditDrilldown(user.uid, 'conversations')
+
+    const records = await loadRecent(`coach-${agentUid}`, 30)
+    return {
+      ok: true,
+      messages: records.map((r) => ({
+        id: r.id,
+        role: r.data.role,
+        content: r.data.content,
+        redacted: r.data.redacted ?? false,
+      })),
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to load chat history'
     return { ok: false, error: msg }
   }
 }

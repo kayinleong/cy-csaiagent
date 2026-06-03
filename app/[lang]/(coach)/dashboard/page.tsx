@@ -37,7 +37,7 @@ import { DownlineTable } from '../_components/downline-table'
 import { StallInbox } from '../_components/stall-inbox'
 import { KnowledgeGapFeed } from '../_components/knowledge-gap-feed'
 import { MetricsPanel } from '../_components/metrics-panel'
-import { InlineCorrectionDialog } from '../_components/inline-correction-dialog'
+import { KbDocExplorer } from '../_components/kb-doc-explorer'
 
 interface PageProps {
   params: Promise<{ lang: string }>
@@ -183,10 +183,10 @@ export default async function CoachDashboardPage({ params }: PageProps) {
           />
         </section>
 
-        {/* CDASH-04: Inline AI correction dialog (trigger button only — dialog is client) */}
+        {/* CDASH-04: KB document explorer → inline AI correction (client island) */}
         <section>
           <h2 className="mb-4 text-lg font-semibold">{t('correctionTitle')}</h2>
-          <InlineCorrectionDialog idToken={sessionCookie.value} />
+          <KbDocExplorer idToken={sessionCookie.value} />
         </section>
 
         {/* CDASH-05/07: Metrics panel with recharts (client island) */}

@@ -330,6 +330,27 @@ export async function listDocs(user: AuthenticatedUser): Promise<KbDocWithId[]> 
   return snap.docs.map((doc) => ({ id: doc.id, data: doc.data() }))
 }
 
+// ─── listDocsForReview ─────────────────────────────────────────────────────────
+
+/**
+ * List KB documents for the coach correction picker (CDASH-04).
+ *
+ * Read-only, gated to admin OR senior-coach (same gate as correctKbDoc), so a
+ * coach can browse and pick a document to correct WITHOUT knowing its Firestore
+ * doc ID — without exposing the admin-only /kb management surface. Excludes
+ * already-superseded versions (they are not the live document).
+ *
+ * @param user  Verified user from requireUser() — must be 'admin' or 'senior-coach'.
+ */
+export async function listDocsForReview(user: AuthenticatedUser): Promise<KbDocWithId[]> {
+  assertAdminOrCoach(user)
+
+  const snap = await kbDocsRef().get()
+  return snap.docs
+    .map((doc) => ({ id: doc.id, data: doc.data() }))
+    .filter((d) => d.data.status !== 'superseded')
+}
+
 // ─── deleteDoc ───────────────────────────────────────────────────────────────
 
 /**

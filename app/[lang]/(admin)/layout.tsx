@@ -1,18 +1,17 @@
 /**
- * app/[lang]/(coach)/layout.tsx — Senior-coach route-group shell + role gate.
+ * app/[lang]/(admin)/layout.tsx — Admin route-group shell + role gate.
  *
- * This layout is the access boundary for the (coach) console surfaces (the
- * dashboard). It resolves the verified role server-side and:
- *   - no session            → /[lang]/sign-in
- *   - new-agent             → /[lang]/chat (no console access)
- *   - senior-coach | admin  → render the console (sidebar + content)
+ * Access boundary for the admin console surfaces (KB, inventory). Resolves the
+ * verified role server-side and:
+ *   - no session     → /[lang]/sign-in
+ *   - new-agent      → /[lang]/chat
+ *   - senior-coach   → /[lang]/dashboard (has a console, but not admin pages)
+ *   - admin          → render the console (sidebar + content)
  *
- * The role gate lives here (defense-in-depth alongside each page's own check)
+ * The gate lives here (defense-in-depth alongside each page's own admin check)
  * and the verified role drives the role-filtered AppSidebar.
  *
- * References:
- *   - AUTH-06 (coach sees only downline) · D-10 (single focused dashboard)
- *   - access matrix: new-agent→chat, senior-coach→dashboard, admin→all
+ * References: access matrix — only admin manages KB + inventory.
  */
 
 import { cookies } from 'next/headers'
@@ -20,7 +19,7 @@ import { redirect } from 'next/navigation'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
 import { ConsoleShell } from '../_components/console-shell'
 
-export default async function CoachLayout({
+export default async function AdminLayout({
   children,
   params,
 }: {
@@ -37,7 +36,7 @@ export default async function CoachLayout({
 
   let user: Awaited<ReturnType<typeof requireUser>>
   try {
-    const syntheticReq = new Request('https://d2.app/coach', {
+    const syntheticReq = new Request('https://d2.app/admin', {
       headers: { Authorization: `Bearer ${sessionCookie.value}` },
     })
     user = await requireUser(syntheticReq)
@@ -48,8 +47,9 @@ export default async function CoachLayout({
     throw err
   }
 
-  if (user.role !== 'senior-coach' && user.role !== 'admin') {
-    redirect(`/${lang}/chat`)
+  if (user.role !== 'admin') {
+    // Senior-coaches have a console (dashboard) but not the admin pages.
+    redirect(user.role === 'senior-coach' ? `/${lang}/dashboard` : `/${lang}/chat`)
   }
 
   return (

@@ -39,10 +39,8 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Field, FieldGroup, FieldLabel, FieldError, FieldDescription } from '@/components/ui/field'
 import { submitCorrection } from '../dashboard/actions'
@@ -61,7 +59,7 @@ const CorrectionSchema = z.object({
 
 type CorrectionData = z.infer<typeof CorrectionSchema>
 
-type ValidationErrors = Partial<Record<keyof CorrectionData, { message?: string }[]>>
+type ValidationErrors = Partial<Record<'content', { message?: string }[]>>
 
 // ─── Poll helper ─────────────────────────────────────────────────────────────
 
@@ -100,19 +98,27 @@ async function pollIngestion(
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+/** The KB document being corrected, selected from the explorer. */
+export interface CorrectionTarget {
+  id: string
+  title: string
+}
+
 interface InlineCorrectionDialogProps {
   /** Firebase ID token for authenticating the ingest poll (from the RSC session cookie). */
   idToken: string
-  /** Optional: pre-populate the KB doc ID (e.g. from a knowledge-gap or escalation row). */
-  initialDocId?: string
+  /** The document to correct (null = dialog closed). Selected in the KB explorer. */
+  doc: CorrectionTarget | null
+  /** Controlled close handler — clears the selected doc in the parent. */
+  onClose: () => void
 }
 
 export function InlineCorrectionDialog({
   idToken,
-  initialDocId,
+  doc,
+  onClose,
 }: InlineCorrectionDialogProps) {
   const t = useTranslations('dashboard')
-  const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [errors, setErrors] = useState<ValidationErrors>({})
   const [ingestProgress, setIngestProgress] = useState<{
@@ -122,15 +128,14 @@ export function InlineCorrectionDialog({
 
   const ingesting = ingestProgress !== null && ingestProgress.remaining > 0
   const isSubmitting = isPending || ingesting
+  const open = doc !== null
 
   function handleOpenChange(nextOpen: boolean) {
-    if (!isSubmitting) {
-      setOpen(nextOpen)
-      if (!nextOpen) {
-        // Reset state when dialog closes
-        setErrors({})
-        setIngestProgress(null)
-      }
+    if (!nextOpen && !isSubmitting) {
+      // Reset state when dialog closes
+      setErrors({})
+      setIngestProgress(null)
+      onClose()
     }
   }
 
@@ -138,18 +143,20 @@ export function InlineCorrectionDialog({
     e.preventDefault()
     setErrors({})
 
+    if (!doc) return
+
     const formData = new FormData(e.currentTarget)
-    const docId = (formData.get('docId') as string).trim()
     const content = formData.get('content') as string
 
-    // Validate
-    const parsed = CorrectionSchema.safeParse({ docId, content })
+    // Validate (docId comes from the selected document, not user-typed)
+    const parsed = CorrectionSchema.safeParse({ docId: doc.id, content })
     if (!parsed.success) {
       const fieldErrors: ValidationErrors = {}
       for (const issue of parsed.error.issues) {
-        const field = issue.path[0] as keyof CorrectionData
-        if (!fieldErrors[field]) fieldErrors[field] = []
-        fieldErrors[field]!.push({ message: issue.message })
+        if (issue.path[0] === 'content') {
+          if (!fieldErrors.content) fieldErrors.content = []
+          fieldErrors.content.push({ message: issue.message })
+        }
       }
       setErrors(fieldErrors)
       return
@@ -177,7 +184,7 @@ export function InlineCorrectionDialog({
             })
             setIngestProgress(null)
             toast.success(t('correctionSuccess'))
-            setOpen(false)
+            onClose()
           } catch (pollErr) {
             const msg = pollErr instanceof Error ? pollErr.message : t('correctionError')
             toast.error(msg)
@@ -185,7 +192,7 @@ export function InlineCorrectionDialog({
           }
         } else {
           toast.success(t('correctionSuccess'))
-          setOpen(false)
+          onClose()
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : t('correctionError')
@@ -196,10 +203,6 @@ export function InlineCorrectionDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <Button variant="outline">{t('correctionOpenButton')}</Button>
-      </DialogTrigger>
-
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('correctionDialogTitle')}</DialogTitle>
@@ -210,22 +213,12 @@ export function InlineCorrectionDialog({
 
         <form onSubmit={handleSubmit} className="mt-4">
           <FieldGroup>
-            {/* KB Document ID */}
+            {/* Selected document (no raw doc ID — picked in the explorer) */}
             <Field orientation="vertical">
-              <FieldLabel htmlFor="docId">{t('correctionDocIdLabel')}</FieldLabel>
-              <Input
-                id="docId"
-                name="docId"
-                placeholder={t('correctionDocIdPlaceholder')}
-                defaultValue={initialDocId ?? ''}
-                disabled={isSubmitting}
-                aria-invalid={!!errors.docId?.length}
-                className="font-mono text-sm"
-              />
-              <FieldDescription>
-                The Firestore document ID of the KB document to correct.
-              </FieldDescription>
-              <FieldError errors={errors.docId} />
+              <FieldLabel>{t('correctionSelectedDoc')}</FieldLabel>
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm font-medium">
+                {doc?.title}
+              </div>
             </Field>
 
             {/* Corrected content */}

@@ -11,12 +11,10 @@
  *      ensures the auth state survives page refresh (AUTH-05).
  *   3. POST the resulting ID token to /api/auth/session — server verifies token,
  *      sets an httpOnly session cookie, and returns { ok, role } in the response body.
- *   4. Redirect by role (AUTH-02/03):
+ *   4. Redirect by role (access matrix):
  *        senior-coach → /[lang]/dashboard
- *        admin        → /[lang]/kb
- *        new-agent    → /[lang]/chat  (default)
- *      Note: /dashboard and /kb routes are created in plans 02-06/02-08; the
- *      redirect targets are the contract and are safe to wire now (Wave 1).
+ *        admin        → /[lang]/dashboard  (KB/Inventory reached via the sidebar)
+ *        new-agent    → /[lang]/chat       (default)
  *
  * Security:
  *   - NEVER log the user's password, the Firebase ID token, or the session cookie.
@@ -86,14 +84,12 @@ export function SignInForm() {
       // a client-supplied value. Every Firestore read is independently rules-gated (T-02-02).
       const { role } = (await res.json()) as { ok: boolean; role?: string }
 
-      // Route by role (AUTH-02/03):
-      //   senior-coach → /[lang]/dashboard  (plan 02-06)
-      //   admin        → /[lang]/kb          (plan 02-08)
-      //   new-agent    → /[lang]/chat        (default)
-      if (role === 'senior-coach') {
+      // Route by role (access matrix):
+      //   senior-coach → /[lang]/dashboard
+      //   admin        → /[lang]/dashboard (lands on dashboard; KB/Inventory via sidebar)
+      //   new-agent    → /[lang]/chat      (default)
+      if (role === 'senior-coach' || role === 'admin') {
         router.push(`/${lang}/dashboard`)
-      } else if (role === 'admin') {
-        router.push(`/${lang}/kb`)
       } else {
         router.push(`/${lang}/chat`)
       }

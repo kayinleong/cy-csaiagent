@@ -156,10 +156,13 @@
     "vpDateLabel": "Tarikh VP (kosongkan jika VP belum selesai)"
   },
   "nav": {
+    "dashboard": "Papan Pemuka",
     "chat": "Sembang",
     "kb": "Pangkalan Pengetahuan",
     "inventory": "Inventori",
-    "settings": "Tetapan"
+    "settings": "Tetapan",
+    "console": "Konsol",
+    "signedInAs": "Log masuk sebagai {role}"
   },
   "errors": {
     "notFound": "Halaman tidak dijumpai.",
@@ -207,7 +210,31 @@
     "correctionError": "Pembetulan gagal. Sila cuba lagi.",
     "correctionOpenButton": "Betulkan dokumen KB",
     "correctionDialogTitle": "Betulkan pengetahuan AI",
-    "correctionDialogDescription": "Masukkan ID dokumen KB dan kandungan yang dibetulkan. Pembetulan anda akan mencipta versi berattribut baharu yang menggantikan kandungan sedia ada.",
-    "correctionCorrectedBy": "dibetulkan oleh anda"
+    "correctionDialogDescription": "Pilih dokumen di bawah, kemudian tampal kandungan yang dibetulkan. Pembetulan anda akan mencipta versi berattribut baharu yang menggantikan kandungan sedia ada.",
+    "correctionCorrectedBy": "dibetulkan oleh anda",
+    "correctionSelectedDoc": "Membetulkan dokumen",
+    "kbExplorerTitle": "Dokumen Pangkalan Pengetahuan",
+    "kbExplorerDescription": "Semak dokumen yang digunakan AI. Pilih satu untuk dibetulkan — tiada ID dokumen diperlukan.",
+    "kbExplorerSearch": "Cari mengikut tajuk…",
+    "kbExplorerColTitle": "Dokumen",
+    "kbExplorerColLang": "Bahasa",
+    "kbExplorerColPillar": "Digunakan oleh",
+    "kbExplorerColVersion": "Versi",
+    "kbExplorerColStatus": "Status",
+    "kbExplorerCorrect": "Betulkan",
+    "kbExplorerEmpty": "Tiada dokumen pangkalan pengetahuan dijumpai.",
+    "kbExplorerLoading": "Memuatkan dokumen…",
+    "kbExplorerError": "Tidak dapat memuatkan dokumen. Sila cuba lagi.",
+    "viewChat": "Lihat sembang",
+    "reasonKbMiss": "Jurang pengetahuan — ejen bertanya sesuatu yang AI tidak dapat jawab dari KB",
+    "reasonStall": "Terhenti — tiada aktiviti selama 2+ hari",
+    "chatHistoryTitle": "Sejarah sembang ejen",
+    "chatHistoryDescription": "Perbualan latihan terkini ejen dengan AI Coach.",
+    "chatHistoryEmpty": "Tiada sejarah sembang dijumpai untuk ejen ini lagi.",
+    "chatHistoryLoading": "Memuatkan sejarah sembang…",
+    "chatHistoryError": "Tidak dapat memuatkan sejarah sembang.",
+    "roleUser": "Ejen",
+    "roleAssistant": "AI Coach",
+    "roleSystem": "Sistem"
   }
 }

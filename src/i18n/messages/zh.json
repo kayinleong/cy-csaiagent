@@ -156,10 +156,13 @@
     "vpDateLabel": "交付日期（VP未完成则留空）"
   },
   "nav": {
+    "dashboard": "仪表板",
     "chat": "聊天",
     "kb": "知识库",
     "inventory": "库存",
-    "settings": "设置"
+    "settings": "设置",
+    "console": "控制台",
+    "signedInAs": "登录身份：{role}"
   },
   "errors": {
     "notFound": "页面未找到。",
@@ -207,7 +210,31 @@
     "correctionError": "纠正失败，请重试。",
     "correctionOpenButton": "纠正知识库文档",
     "correctionDialogTitle": "纠正AI知识",
-    "correctionDialogDescription": "输入知识库文档ID和纠正后的内容。您的纠正将创建一个新的带属性版本，取代现有内容。",
-    "correctionCorrectedBy": "由您纠正"
+    "correctionDialogDescription": "在下方选择文档，然后粘贴纠正后的内容。您的纠正将创建一个新的带属性版本，取代现有内容。",
+    "correctionCorrectedBy": "由您纠正",
+    "correctionSelectedDoc": "正在纠正文档",
+    "kbExplorerTitle": "知识库文档",
+    "kbExplorerDescription": "浏览AI使用的文档。选择一个进行纠正——无需文档ID。",
+    "kbExplorerSearch": "按标题搜索…",
+    "kbExplorerColTitle": "文档",
+    "kbExplorerColLang": "语言",
+    "kbExplorerColPillar": "使用方",
+    "kbExplorerColVersion": "版本",
+    "kbExplorerColStatus": "状态",
+    "kbExplorerCorrect": "纠正",
+    "kbExplorerEmpty": "未找到知识库文档。",
+    "kbExplorerLoading": "正在加载文档…",
+    "kbExplorerError": "无法加载文档。请重试。",
+    "viewChat": "查看聊天",
+    "reasonKbMiss": "知识缺口——学员提出的问题AI无法从知识库回答",
+    "reasonStall": "停滞——超过2天无活动",
+    "chatHistoryTitle": "学员聊天记录",
+    "chatHistoryDescription": "学员与AI教练最近的培训对话。",
+    "chatHistoryEmpty": "尚未找到该学员的聊天记录。",
+    "chatHistoryLoading": "正在加载聊天记录…",
+    "chatHistoryError": "无法加载聊天记录。",
+    "roleUser": "学员",
+    "roleAssistant": "AI教练",
+    "roleSystem": "系统"
   }
 }

@@ -154,10 +154,13 @@
     "vpDateLabel": "VP date (leave blank if VP not completed)"
   },
   "nav": {
+    "dashboard": "Dashboard",
     "chat": "Chat",
     "kb": "Knowledge Base",
     "inventory": "Inventory",
-    "settings": "Settings"
+    "settings": "Settings",
+    "console": "Console",
+    "signedInAs": "Signed in as {role}"
   },
   "errors": {
     "notFound": "Page not found.",
@@ -205,7 +208,31 @@
     "correctionError": "Correction failed. Please try again.",
     "correctionOpenButton": "Correct a KB document",
     "correctionDialogTitle": "Correct AI knowledge",
-    "correctionDialogDescription": "Enter the KB document ID and corrected content. Your correction will create a new attributed version that supersedes the existing content.",
-    "correctionCorrectedBy": "corrected by you"
+    "correctionDialogDescription": "Pick the document below, then paste the corrected content. Your correction creates a new attributed version that supersedes the existing content.",
+    "correctionCorrectedBy": "corrected by you",
+    "correctionSelectedDoc": "Correcting document",
+    "kbExplorerTitle": "Knowledge Base documents",
+    "kbExplorerDescription": "Browse the documents the AI uses. Pick one to correct — no document ID needed.",
+    "kbExplorerSearch": "Search by title…",
+    "kbExplorerColTitle": "Document",
+    "kbExplorerColLang": "Language",
+    "kbExplorerColPillar": "Used by",
+    "kbExplorerColVersion": "Version",
+    "kbExplorerColStatus": "Status",
+    "kbExplorerCorrect": "Correct",
+    "kbExplorerEmpty": "No knowledge-base documents found.",
+    "kbExplorerLoading": "Loading documents…",
+    "kbExplorerError": "Could not load documents. Please try again.",
+    "viewChat": "View chat",
+    "reasonKbMiss": "Knowledge gap — the agent asked something the AI could not answer from the KB",
+    "reasonStall": "Stalled — no activity for 2+ days",
+    "chatHistoryTitle": "Agent chat history",
+    "chatHistoryDescription": "The agent's recent training conversation with the AI Coach.",
+    "chatHistoryEmpty": "No chat history found for this agent yet.",
+    "chatHistoryLoading": "Loading chat history…",
+    "chatHistoryError": "Could not load chat history.",
+    "roleUser": "Agent",
+    "roleAssistant": "AI Coach",
+    "roleSystem": "System"
   }
 }
