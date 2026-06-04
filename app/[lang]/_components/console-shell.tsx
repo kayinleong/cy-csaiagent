@@ -15,6 +15,7 @@ import {
   SidebarInset,
   SidebarTrigger,
 } from '@/components/ui/sidebar'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppSidebar } from './app-sidebar'
 
 interface ConsoleShellProps {
@@ -25,14 +26,16 @@ interface ConsoleShellProps {
 
 export function ConsoleShell({ role, lang, children }: ConsoleShellProps) {
   return (
-    <SidebarProvider>
-      <AppSidebar role={role} lang={lang} />
-      <SidebarInset>
-        <header className="flex h-12 items-center gap-2 border-b px-4 md:hidden">
-          <SidebarTrigger />
-        </header>
-        {children}
-      </SidebarInset>
-    </SidebarProvider>
+    <TooltipProvider>
+      <SidebarProvider>
+        <AppSidebar role={role} lang={lang} />
+        <SidebarInset>
+          <header className="flex h-12 items-center gap-2 border-b px-4 md:hidden">
+            <SidebarTrigger />
+          </header>
+          {children}
+        </SidebarInset>
+      </SidebarProvider>
+    </TooltipProvider>
   )
 }
