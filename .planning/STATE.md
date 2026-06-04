@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executed-human-gated
-stopped_at: Phase 3 code-complete + verified (9 SUMMARYs; 0 code gaps) — live finder/router evals + Playwright e2e + FIND-12 pilot provisioning are the live-gated human step
-last_updated: "2026-06-03T00:00:00.000Z"
-last_activity: 2026-06-03 — Phase 3 (Finder + Intent-Routing Activation) executed (all 9 plans, 5 waves) + verified. tsc clean, 452 vitest pass / 97 skipped / 0 fail, lint 0 err. Verifier=goal_achieved:true (human_needed only for 3 live-gated runs; 0 code gaps); 8/8 hard guarantees pass; no regressions. NOT pushed (user hold).
+status: phase-4-context-gathered
+stopped_at: Phase 4 context gathered (04-CONTEXT.md + 04-DISCUSSION-LOG.md committed) — next is /gsd-plan-phase 4
+last_updated: "2026-06-04T00:00:00.000Z"
+last_activity: 2026-06-04 — Phase 4 (Reply Assistant + Reply Analytics) context gathered via discuss-phase --auto. 23 decisions (D-01..D-23) across 9 categories. Grow-don't-fork discipline: Reply mirrors Finder shape; extends router/dispatch/leadSlot/admin/dashboard in place. NOT pushed (user hold).
 progress:
   total_phases: 5
   completed_phases: 3
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 
 ## Current Position
 
-Phase: 3 of 5 complete (Finder + Intent-Routing Activation) — next: Phase 4
-Plan: 9 of 9 Phase-3 plans have SUMMARY (03-01..03-09 code-complete + verified)
-Status: Phase 3 code-complete + verified (0 code gaps) — live finder/router evals + Playwright e2e + FIND-12 pilot provisioning are the live-gated human step
-Last activity: 2026-06-03 — Phase 3 executed (9 plans, 5 waves) + verified; tsc clean, 452 vitest pass / 97 skipped / 0 fail; verifier=goal_achieved:true (human_needed for live runs only, 0 code gaps); 8/8 hard guarantees pass; no regressions. NOT pushed (user hold).
+Phase: 3 of 5 complete (Finder + Intent-Routing Activation) — Phase 4 context gathered, next: /gsd-plan-phase 4
+Plan: Phase 4 has 0 plans yet (CONTEXT.md ready); Phase 3 = 9/9 plans w/ SUMMARY (code-complete + verified)
+Status: Phase 4 context gathered (--auto, 23 decisions, 9 categories). Reply mirrors Finder; grow-don't-fork everywhere.
+Last activity: 2026-06-04 — Phase 4 discuss-phase --auto: 04-CONTEXT.md + 04-DISCUSSION-LOG.md created. NOT pushed (user hold).
 
-Progress: [██████░░░░] 60% (3 of 5 phases code-complete + verified)
+Progress: [██████░░░░] 60% (3 of 5 phases code-complete + verified; Phase 4 context ready)
 
 ### Phase 3 open human-action gate (live-gated — does NOT block Phase 4 planning)
 1. Live Promptfoo finder/router evals — need live Anthropic/Gemini/Firestore + Opus judge (model from Remote Config).
