@@ -23,6 +23,7 @@
  *   14. evals/{runId}
  *   15. rateBudgets/{uid}  ← de-facto 15th (TSD §9 ratelimit; ruled + consumed by 01-07)
  *   16. knowledgeGaps/{gapId} ← Phase-2 knowledge-gap store (CDASH-03; server/Admin-SDK writes only)
+ *   17. replyEdits/{eventId}  ← Phase-4 reply edit-as-signal store (REPLY-09/ADMIN-06; append-only, server-only writes)
  *
  * Import pattern (always use the @/ alias):
  *   import { usersRef, rateBudgetsRef } from '@/src/firebase/collections'
@@ -416,6 +417,62 @@ export interface KnowledgeGapDoc {
 }
 
 /**
+ * Reply edit-as-signal record (collection 17, Phase-4 REPLY-09 / ADMIN-06, D-18/D-19).
+ *
+ * Captures the model's `originalDraft` vs the agent's `editedFinal` on EVERY Copy
+ * of a Reply draft, plus a numeric `editRatio` (src/reply/diff.ts) and the cited
+ * `sopDocIds`. Read-time aggregation (D-20) powers the senior-coach / admin
+ * "Reply Quality" dashboard: per-SOP edit-rate, top-edited SOP, and the
+ * thumbs-down rate (`count(thumbsDown==true) / count(all)`, ADMIN-06).
+ *
+ * Append-only, top-level collection (D-19 — NOT buried in `messages`):
+ *   - Clients can NEVER write it — `create, update, delete: if false` in
+ *     firestore.rules. The ONLY writer is the `captureReplyEdit` Server Action
+ *     via the Admin SDK (which bypasses rules).
+ *   - A row is written on EVERY Copy, including unchanged copies (`editRatio: 0`),
+ *     so the per-SOP edit-rate aggregation has a denominator (Pitfall E).
+ *
+ * Read scoping (mirrors escalations/knowledgeGaps):
+ *   - An agent reads ONLY their own rows (agentUid == auth.uid).
+ *   - A senior-coach reads their downline rows — this requires `seniorCoachId`
+ *     to be DENORMALIZED onto every row at write time so the rule can match
+ *     `resource.data.seniorCoachId == request.auth.uid` (Pitfall D). The writer
+ *     looks it up from `agentProfiles/{agentUid}.seniorCoachId`.
+ *   - An admin reads all same-tenant rows.
+ *
+ * PDPA: `originalDraft`/`editedFinal` are STORED (residual content possible) but
+ * MUST NEVER be logged — the converter stamps tenantId; only counts may be logged.
+ */
+export interface ReplyEditDoc {
+  tenantId: TenantId
+  /** The lead this draft was for (per-lead isolation — leadContext/{leadId}). */
+  leadId: string
+  /** Stable id for the specific draft turn the edit applies to. */
+  draftId: string
+  /** SOP doc IDs the draft cited — the per-SOP edit-rate group key (ARRAY_CONTAINS). */
+  sopDocIds: string[]
+  /** The model's original draft text (stored, never logged). */
+  originalDraft: string
+  /** The agent's final text at Copy time (stored, never logged). */
+  editedFinal: string
+  /** Normalized char-level edit metric in [0,1]; 0 on an unchanged copy. */
+  editRatio: number
+  /** UID of the agent who drafted/copied (read scope: agent reads own). */
+  agentUid: string
+  /**
+   * Denormalized at write so the coach read-rule can match (Pitfall D).
+   * Looked up from agentProfiles/{agentUid}.seniorCoachId; '' if absent.
+   */
+  seniorCoachId: string
+  /** Language of the draft (drives per-lang reporting). */
+  lang: 'en' | 'ms' | 'zh'
+  /** Optional thumbs-down signal (ADMIN-06 KPI producer); absent when not given. */
+  thumbsDown?: boolean
+  /** Append-only write time (FieldValue.serverTimestamp() on write). */
+  timestamp: Date | FieldValue
+}
+
+/**
  * Per-agent rate-budget document (de-facto 15th collection, TSD §9).
  *
  * Owner-scoped: an agent reads/writes only `rateBudgets/{own-uid}`.
@@ -477,6 +534,7 @@ export const auditLogConverter = makeConverter<AuditLogDoc>()
 export const evalConverter = makeConverter<EvalDoc>()
 export const rateBudgetConverter = makeConverter<RateBudgetDoc>()
 export const knowledgeGapConverter = makeConverter<KnowledgeGapDoc>()
+export const replyEditConverter = makeConverter<ReplyEditDoc>()
 
 // ─── Ref factories ───────────────────────────────────────────────────────────
 // Export one named factory per collection.
@@ -598,4 +656,23 @@ export function rateBudgetsRef(): CollectionReference<RateBudgetDoc> {
  */
 export function knowledgeGapsRef(): CollectionReference<KnowledgeGapDoc> {
   return adminDb.collection('knowledgeGaps').withConverter(knowledgeGapConverter)
+}
+
+/**
+ * Collection 17: replyEdits/{eventId}
+ *
+ * Phase-4 reply edit-as-signal store (REPLY-09 / ADMIN-06, D-18/D-19).
+ * Append-only, top-level collection — clients can NEVER write it
+ * (create, update, delete: if false in firestore.rules). The ONLY writer is the
+ * `captureReplyEdit` Server Action via the Admin SDK (which bypasses rules).
+ *
+ * Read scope (mirrors knowledgeGaps): an agent reads their own rows; a senior-coach
+ * reads downline rows (requires the DENORMALIZED `seniorCoachId` on each row —
+ * Pitfall D); an admin reads all same-tenant rows.
+ *
+ * PDPA: originalDraft / editedFinal are stored but MUST NEVER be logged — only
+ * counts may be logged (CLAUDE.md no-PII-in-logs).
+ */
+export function replyEditsRef(): CollectionReference<ReplyEditDoc> {
+  return adminDb.collection('replyEdits').withConverter(replyEditConverter)
 }
