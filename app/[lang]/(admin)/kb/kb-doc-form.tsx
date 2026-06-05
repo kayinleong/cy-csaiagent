@@ -43,6 +43,7 @@
 import { useState, useRef, useTransition } from 'react'
 import { z } from 'zod'
 import { toast } from 'sonner'
+import { useTranslations } from 'next-intl'
 
 import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card'
 import { Field, FieldGroup, FieldLabel, FieldError, FieldDescription } from '@/components/ui/field'
@@ -66,11 +67,16 @@ const FILE_ACCEPT = [...SUPPORTED_EXTENSIONS, ...SUPPORTED_MIMES].join(',')
 
 // ─── Zod schema ───────────────────────────────────────────────────────────────
 
-// Base schema (title, lang, pillar always required)
+// Seeded Reply SOP categories (D-09/D-12) — the form offers this fixed enum, but
+// CreateDocInput.category is an open `string?`, so the backend accepts other values.
+//
+// Base schema (title, lang, pillar always required; category optional — D-09)
 const KbDocBaseSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title must be 200 characters or fewer'),
   lang: z.enum(['en', 'ms', 'zh'], { error: 'Language must be en, ms, or zh' }),
   pillar: z.enum(['coach', 'finder', 'reply'], { error: 'Pillar must be coach, finder, or reply' }),
+  // Optional SOP category metadata (D-09). Empty string → omitted from the payload.
+  category: z.string().max(64, 'Category must be 64 characters or fewer').optional(),
 })
 
 // Full schema when no file is selected (content required)
@@ -138,6 +144,7 @@ type ValidationErrors = Partial<Record<keyof KbDocTextData | 'file', { message?:
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFormProps) {
+  const t = useTranslations('kb')
   const [isPending, startTransition] = useTransition()
   const [errors, setErrors] = useState<ValidationErrors>({})
   const [ingestProgress, setIngestProgress] = useState<{ remaining: number; total: number } | null>(null)
@@ -179,9 +186,12 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
     const lang = formData.get('lang') as string
     const pillar = formData.get('pillar') as string
     const content = formData.get('content') as string
+    // Category is optional (D-09). Empty string → undefined so the payload omits it.
+    const rawCategory = (formData.get('category') as string | null) ?? ''
+    const category = rawCategory.trim() === '' ? undefined : rawCategory.trim()
 
-    // ── Validate base fields (title, lang, pillar) ──────────────────────────
-    const baseParsed = KbDocBaseSchema.safeParse({ title, lang, pillar })
+    // ── Validate base fields (title, lang, pillar, category) ─────────────────
+    const baseParsed = KbDocBaseSchema.safeParse({ title, lang, pillar, category })
     if (!baseParsed.success) {
       const fieldErrors: ValidationErrors = {}
       for (const issue of baseParsed.error.issues) {
@@ -205,6 +215,10 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
           uploadForm.set('title', baseData.title)
           uploadForm.set('lang', baseData.lang)
           uploadForm.set('pillar', baseData.pillar)
+          // SOP category metadata (D-09) — only set when provided.
+          if (baseData.category) {
+            uploadForm.set('category', baseData.category)
+          }
           // In edit mode, pass the old docId so the upload route creates a new
           // versioned doc that supersedes the existing one (02-02 supersede cascade)
           if (isEdit && docId) {
@@ -264,7 +278,7 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
       })
     } else {
       // TEXT CONTENT PATH (Server Action)
-      const textParsed = KbDocTextSchema.safeParse({ title, lang, pillar, content })
+      const textParsed = KbDocTextSchema.safeParse({ title, lang, pillar, category, content })
       if (!textParsed.success) {
         const fieldErrors: ValidationErrors = {}
         for (const issue of textParsed.error.issues) {
@@ -386,7 +400,7 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
               </Field>
 
               <Field orientation="vertical">
-                <FieldLabel htmlFor="pillar">Pillar</FieldLabel>
+                <FieldLabel htmlFor="pillar">{t('pillarSelectLabel')}</FieldLabel>
                 <select
                   id="pillar"
                   name="pillar"
@@ -401,6 +415,29 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
                 <FieldError errors={errors.pillar} />
               </Field>
             </div>
+
+            {/* Category (D-09) — SOP metadata. Optional; seeded enum incl. the
+                curated voice doc (D-12). Open-string at the type level. */}
+            <Field orientation="vertical">
+              <FieldLabel htmlFor="category">{t('category.label')}</FieldLabel>
+              <select
+                id="category"
+                name="category"
+                defaultValue={initialValues?.category ?? ''}
+                disabled={isSubmitting}
+                className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">—</option>
+                <option value="cold-prospect">{t('category.coldProspect')}</option>
+                <option value="objection-handling">{t('category.objectionHandling')}</option>
+                <option value="financing">{t('category.financing')}</option>
+                <option value="voice">{t('category.voice')}</option>
+              </select>
+              <FieldDescription>
+                Used for Reply SOPs (cold-prospect / objection-handling / financing / voice).
+              </FieldDescription>
+              <FieldError errors={errors.category} />
+            </Field>
 
             {/* File upload — available in both create and edit modes */}
             <Field orientation="vertical">

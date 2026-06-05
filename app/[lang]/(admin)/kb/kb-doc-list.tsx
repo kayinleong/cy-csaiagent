@@ -17,10 +17,14 @@
  *   - T-02-24: admin gate on Server Action (assertAdmin in crud)
  *   - T-02-25: publish/unpublish flips chunk status via 02-02 backend
  *   - ADMIN-01/03: Derek sees all docs with status/version/lang/pillar
+ *   - ADMIN-05 (04-09): pillar filter (All / Coach / Reply) over the fetched docs;
+ *     Reply tab + zero Reply SOPs → kb.noReplySops empty state. Client-side filter
+ *     on d.data.pillar — same useState pattern as the showSuperseded toggle. (D-10)
  */
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import {
   Table,
@@ -30,6 +34,7 @@ import {
   TableRow,
   TableCell,
 } from '@/components/ui/table'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PublishToggle } from './publish-toggle'
@@ -60,6 +65,13 @@ const PILLAR_LABEL: Record<string, string> = {
   reply: 'Reply',
 }
 
+// ─── Pillar filter ────────────────────────────────────────────────────────────
+
+// ADMIN-05 (D-10): the pillar filter exposes All / Coach / Reply. Finder docs are
+// still visible under "All"; the explicit tabs surface the two pillars Derek
+// actively manages via this editor (Coach training, Reply SOPs).
+type PillarFilter = 'all' | 'coach' | 'reply'
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface KbDocListProps {
@@ -68,15 +80,26 @@ interface KbDocListProps {
 }
 
 export function KbDocList({ docs, lang }: KbDocListProps) {
+  const t = useTranslations('kb')
   const [showSuperseded, setShowSuperseded] = useState(false)
+  // Same useState filter shape as showSuperseded — client-side over the fetched docs.
+  const [pillarFilter, setPillarFilter] = useState<PillarFilter>('all')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  const visibleDocs = showSuperseded
-    ? docs
-    : docs.filter((d) => d.data.status !== 'superseded')
+  // Apply the pillar filter first (ADMIN-05), then the superseded toggle.
+  const pillarFilteredDocs =
+    pillarFilter === 'all'
+      ? docs
+      : docs.filter((d) => d.data.pillar === pillarFilter)
 
-  const supersededCount = docs.filter((d) => d.data.status === 'superseded').length
+  const visibleDocs = showSuperseded
+    ? pillarFilteredDocs
+    : pillarFilteredDocs.filter((d) => d.data.status !== 'superseded')
+
+  const supersededCount = pillarFilteredDocs.filter(
+    (d) => d.data.status === 'superseded',
+  ).length
 
   function handleDelete(docId: string, title: string) {
     if (!window.confirm(`Delete "${title}"? This will also remove all its chunks.`)) return
@@ -99,8 +122,35 @@ export function KbDocList({ docs, lang }: KbDocListProps) {
     return <p className="text-sm text-muted-foreground">No knowledge base documents yet.</p>
   }
 
+  // Pillar filter control (ADMIN-05) — always shown when there are docs so Derek
+  // can narrow to Reply SOPs even when none exist yet (the empty state guides him).
+  const pillarTabs = (
+    <Tabs
+      value={pillarFilter}
+      onValueChange={(v) => setPillarFilter(v as PillarFilter)}
+    >
+      <TabsList>
+        <TabsTrigger value="all">{t('pillarFilter.all')}</TabsTrigger>
+        <TabsTrigger value="coach">{t('pillarFilter.coach')}</TabsTrigger>
+        <TabsTrigger value="reply">{t('pillarFilter.reply')}</TabsTrigger>
+      </TabsList>
+    </Tabs>
+  )
+
+  // Reply tab selected but no Reply SOPs → reuse the existing empty-state pattern.
+  if (pillarFilter === 'reply' && pillarFilteredDocs.length === 0) {
+    return (
+      <div className="space-y-3">
+        {pillarTabs}
+        <p className="text-sm text-muted-foreground">{t('noReplySops')}</p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-3">
+      {pillarTabs}
+
       {/* Superseded filter toggle */}
       {supersededCount > 0 && (
         <div className="flex items-center gap-2">
