@@ -92,6 +92,52 @@ const COACH_PATTERNS: RegExp[] = [
   /\bcomprehension\b/i,          // "comprehension check", "comprehension gate"
 ]
 
+/**
+ * Reply keywords (Phase 4, REPLY-10): clear STRUCTURAL signals that the agent has
+ * pasted an INCOMING WhatsApp message from a lead/client and wants a drafted reply
+ * (cold-prospect qualifying / objection-handling / financing).
+ *
+ * ⚠️ Precedence (04-RESEARCH §Q8 / Pitfall C): these are checked BEFORE the generic
+ * FINDER_PATTERNS keyword scan in `heuristicPillar`. A pasted inbound that mentions
+ * "RM" or "financing" (both Finder keywords) is a Reply-draft request, NOT a Finder
+ * query — so the Reply structural signal must win. The override chip + LLM classifier
+ * remain the safety net for ambiguity (A6).
+ *
+ * Only strong, unambiguous structural signals are included — ambiguity stays for the
+ * classifier (the inbound-block heuristic below adds a multi-line-paste signal).
+ */
+const REPLY_PATTERNS: RegExp[] = [
+  /\bdraft (a )?repl/i,                      // "draft a reply", "draft reply to this"
+  /\breply to (this|him|her|them|the lead|the client)\b/i, // "reply to this", "reply to her"
+  /\bwhat (should|do) i (say|reply)\b/i,     // "what should I say", "what do I reply"
+  /\bhow (should|do) i (reply|respond)\b/i,  // "how should I reply", "how do I respond"
+  /\b(lead|client|prospect) (said|wrote|sent|asked|replied)\b/i, // "lead said", "client wrote"
+  /\bhelp me (reply|respond)\b/i,            // "help me reply to this message"
+]
+
+/**
+ * Inbound-block heuristic (Phase 4): flags a pasted/quoted incoming message even when
+ * no single REPLY_PATTERNS regex matches the whole text. A pasted WhatsApp inbound is
+ * typically multi-line OR carries a quote marker, AND co-occurs with a reply trigger
+ * word. This is the STRUCTURAL "this is a paste, draft a reply" signal (Pitfall C).
+ *
+ * Returns true when the recent text contains BOTH:
+ *   - a paste shape: 2+ newlines OR a quote marker (a `"…"` quoted segment, or a
+ *     leading `>` quote line), AND
+ *   - a reply trigger word: reply / respond / draft / said / wrote / sent.
+ *
+ * Kept conservative so a multi-line Finder criteria paste (no reply trigger) does NOT
+ * trip it — those still fall through to the FINDER_PATTERNS scan.
+ */
+const REPLY_TRIGGER_WORD = /\b(repl(y|ies|ied)|respond|draft|said|wrote|sent)\b/i
+const QUOTE_MARKER = /"[^"]+"|(^|\n)\s*>/
+
+function looksLikeInboundPaste(text: string): boolean {
+  const newlineCount = (text.match(/\n/g) ?? []).length
+  const hasPasteShape = newlineCount >= 2 || QUOTE_MARKER.test(text)
+  return hasPasteShape && REPLY_TRIGGER_WORD.test(text)
+}
+
 // ─── heuristicPillar ─────────────────────────────────────────────────────────
 
 /**
@@ -106,14 +152,27 @@ const COACH_PATTERNS: RegExp[] = [
  */
 export function heuristicPillar(
   messages: MessageTurn[]
-): { pillar: 'coach' | 'finder'; reason: string } | null {
+): { pillar: 'coach' | 'finder' | 'reply'; reason: string } | null {
   // Inspect the last few turns for keyword signals
   const recentText = messages
     .slice(-4)
     .map((m) => m.content)
     .join(' ')
 
-  // Check finder patterns first (finder keywords are more specific)
+  // ⚠️ Check Reply STRUCTURAL signals FIRST (REPLY-10, Pitfall C). A pasted inbound
+  // that mentions "RM"/"financing" (Finder keywords) is a Reply-draft request — the
+  // structural Reply signal must win over the generic Finder keyword scan below.
+  for (const pattern of REPLY_PATTERNS) {
+    if (pattern.test(recentText)) {
+      return { pillar: 'reply', reason: `heuristic-reply:${pattern.source}` }
+    }
+  }
+  // Inbound-block heuristic: a multi-line / quoted paste + a reply trigger word.
+  if (looksLikeInboundPaste(recentText)) {
+    return { pillar: 'reply', reason: 'heuristic-reply:inbound-block' }
+  }
+
+  // Check finder patterns (finder keywords are more specific)
   for (const pattern of FINDER_PATTERNS) {
     if (pattern.test(recentText)) {
       return { pillar: 'finder', reason: `heuristic-finder:${pattern.source}` }

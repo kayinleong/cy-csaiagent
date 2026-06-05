@@ -209,20 +209,20 @@ describe('heuristicPillar() — content keyword classifier', () => {
   })
 })
 
-// ─── REPLY-10 (Phase 4) — Reply heuristic patterns + precedence (RED, Wave 0) ──
+// ─── REPLY-10 (Phase 4) — Reply heuristic patterns + precedence (GREEN, Plan 04-04) ──
 //
-// Plan 04-04 adds REPLY_PATTERNS (e.g. /draft (a )?repl/i, /reply to (this|him|her)/i,
+// Plan 04-04 added REPLY_PATTERNS (e.g. /draft (a )?repl/i, /reply to (this|him|her)/i,
 // /what (should|do) i (say|reply)/i, /(lead|client) (said|wrote|sent|asked)/i) AND
 // checks Reply STRUCTURAL signals BEFORE the generic Finder keyword scan (Pitfall C).
 //
-// Today: a "draft a reply" message has no finder/coach keyword → heuristicPillar
-// returns null (route() then defaults to 'coach'); and a paste mentioning "RM" hits
-// FINDER_PATTERNS first → routes to 'finder'. Both assertions below are EXPECTED-FAIL
-// (`it.fails`) so they fail RED against current code while keeping the offline suite
-// green; they flip to passes when 04-04 lands the REPLY_PATTERNS + ordering.
+// Before 04-04: a "draft a reply" message had no finder/coach keyword → heuristicPillar
+// returned null (route() then defaulted to 'coach'); and a paste mentioning "RM" hit
+// FINDER_PATTERNS first → routed to 'finder'. These assertions were EXPECTED-FAIL
+// (`it.fails`) RED guards; 04-04 landed REPLY_PATTERNS + precedence ordering, so they
+// are now real passing assertions.
 
-describe('heuristicPillar() — Reply patterns (REPLY-10, RED until Plan 04-04)', () => {
-  it.fails('"draft a reply to this: …" routes to pillar:"reply" (RED until Plan 04-04)', () => {
+describe('heuristicPillar() — Reply patterns (REPLY-10, GREEN since Plan 04-04)', () => {
+  it('"draft a reply to this: …" routes to pillar:"reply"', () => {
     const result = heuristicPillar([
       { role: 'user', content: 'draft a reply to this: hi, still keen on the unit?' },
     ])
@@ -230,19 +230,27 @@ describe('heuristicPillar() — Reply patterns (REPLY-10, RED until Plan 04-04)'
     expect(result?.pillar).toBe('reply')
   })
 
-  it.fails('"what should I reply" routes to pillar:"reply" (RED until Plan 04-04)', () => {
+  it('"what should I reply" routes to pillar:"reply"', () => {
     const result = heuristicPillar([
       { role: 'user', content: 'the lead said they want to think about it — what should I reply?' },
     ])
     expect(result?.pillar).toBe('reply')
   })
 
-  it.fails('precedence (Pitfall C): a pasted inbound with "RM" + "draft a reply" routes to reply, NOT finder (RED until Plan 04-04)', () => {
-    // "RM" matches FINDER_PATTERNS today, so this mis-routes to 'finder'. Plan 04-04
-    // checks Reply structural signals first, so the inbound paste routes to 'reply'.
+  it('precedence (Pitfall C): a pasted inbound with "RM" + "draft a reply" routes to reply, NOT finder', () => {
+    // "RM" matches FINDER_PATTERNS, so before 04-04 this mis-routed to 'finder'. The
+    // Reply structural signals are now checked first, so the inbound paste routes to 'reply'.
     const result = heuristicPillar([
       { role: 'user', content: 'lead said: "can you do RM 600k?" — draft a reply for me' },
     ])
     expect(result?.pillar).toBe('reply')
+  })
+
+  it('precedence preserved: a PURE Finder query (no reply signal) still routes to finder', () => {
+    // Regression guard for Pitfall C ordering: REPLY_PATTERNS must not steal Finder traffic.
+    const result = heuristicPillar([
+      { role: 'user', content: 'show me projects matching my lead, budget RM500k, own-stay' },
+    ])
+    expect(result?.pillar).toBe('finder')
   })
 })
