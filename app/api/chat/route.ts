@@ -145,6 +145,49 @@ export function extractFinderProjectIds(
   }
 }
 
+// ─── Reply SOP doc ID extraction helper ───────────────────────────────────────
+
+/**
+ * Extract cited SOP doc IDs from the AI SDK v5 streamText onFinish payload.
+ *
+ * Reads the `retrieveReplySop` tool results across all steps and collects the
+ * `docId` of each returned citation (found: true). These IDs are the grounding
+ * trail written to the replySlot in onFinish (REPLY-09) — the SOPs the draft cited.
+ *
+ * Mirrors extractFinderProjectIds (Finder's project-ID extraction). If no
+ * retrieveReplySop call was made, or it returned found:false (a no_sop_match miss),
+ * returns []. Never throws — SOP ID extraction is best-effort (docIds are not PII).
+ *
+ * @param final  The onFinish payload from streamText (StepResult + steps array).
+ * @returns      Array of cited SOP doc ID strings.
+ */
+export function extractReplySopIds(
+  final: { steps?: Array<{ toolResults?: Array<{ toolName?: string; result?: unknown }> }> },
+): string[] {
+  try {
+    const sopDocIds: string[] = []
+    for (const step of final.steps ?? []) {
+      for (const tr of step.toolResults ?? []) {
+        if (tr.toolName === 'retrieveReplySop') {
+          const r = tr.result as
+            | { found: boolean; citations?: Array<{ docId: string }> }
+            | null
+            | undefined
+          if (r && r.found === true && Array.isArray(r.citations)) {
+            for (const c of r.citations) {
+              if (c.docId) sopDocIds.push(c.docId)
+            }
+          }
+        }
+      }
+    }
+    return sopDocIds
+  } catch {
+    // Never let extraction fail the request
+    return []
+  }
+}
+
 // ─── POST handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: Request): Promise<Response> {
@@ -315,15 +358,27 @@ export async function POST(req: Request): Promise<Response> {
     })
   }
 
+  // Snapshot user message content before dispatch/streaming (stable reference used by
+  // the Reply dispatch branch's buildSystemPrompt and by onFinish persistence).
+  const userMessageContent = lastUserMessage?.content ?? ''
+
   // ── Dispatch: build agent system prompt + tools based on pillar ──────────────
   // Phase 3 adds the Finder branch alongside the existing Coach branch.
+  // Phase 4 (Plan 04-06) adds the Reply branch as a third dispatch arm.
   // Each branch resolves its own system prompt, tools, and model (never hard-coded).
   let agentSystemPrompt: string
-  let agentTools: ReturnType<typeof coachAgent.makeTools> | ReturnType<typeof finderAgent.makeTools>
+  let agentTools:
+    | ReturnType<typeof coachAgent.makeTools>
+    | ReturnType<typeof finderAgent.makeTools>
+    | ReturnType<typeof replyAgent.makeTools>
   // finderSlotForBuild: stored finderSlot to inject into the Finder system prompt
   let storedFinderSlot: FinderSlot | null = null
   // mergedCriteria: criteria to write back to finderSlot in onFinish (FIND-08)
   let mergedCriteria: ParsedCriteria | null = null
+  // storedReplySlot: stored replySlot to inject into the Reply system prompt (REPLY-03)
+  let storedReplySlot: ReplySlot | null = null
+  // replyClassification: inbound classification for this reply turn — written to replySlot
+  let replyClassification: ReplySlot['classification'] = 'other'
 
   if (pillar === 'finder') {
     // Read the stored finderSlot for re-rank-without-re-typing (FIND-08, SC2)
@@ -346,6 +401,31 @@ export async function POST(req: Request): Promise<Response> {
       leadContext: storedFinderSlot ? (storedFinderSlot as unknown as Record<string, unknown>) : undefined,
     })
     agentTools = finderAgent.makeTools(userLang, uid, leadId)
+  } else if (pillar === 'reply') {
+    // Reply branch (Plan 04-06) — mirrors the Finder branch shape.
+    // leadId is GUARANTEED present here (the required-leadId fail-closed gate above
+    // returns 400 for a leadless reply), but we still guard the read defensively.
+    if (leadId) {
+      // Read the stored replySlot for per-lead reply-context recall (REPLY-03 / SC2).
+      // Keyed by leadId — reading lead-B never returns lead-A content (parallel-lead
+      // isolation is structural).
+      storedReplySlot = await readReplySlot(leadId)
+      // Carry the prior classification forward as the default for this turn; the live
+      // tool loop refines it. (Offline/test path leaves it at the stored or 'other'.)
+      if (storedReplySlot?.classification) {
+        replyClassification = storedReplySlot.classification
+      }
+    }
+
+    agentSystemPrompt = replyAgent.buildSystemPrompt({
+      // The builder reads the slot for context injection only (no structural mutation).
+      replySlot: storedReplySlot ? (storedReplySlot as unknown as Record<string, unknown>) : undefined,
+      // Pass the current inbound so the agent can draft against it; the voice doc is
+      // fetched by the fetchVoiceSamples tool during the loop (one retrieval path).
+      incoming: userMessageContent,
+      leadId,
+    })
+    agentTools = replyAgent.makeTools(userLang, uid, leadId)
   } else {
     // Coach branch — unchanged from Phase 1/2
     agentSystemPrompt = coachAgent.buildSystemPrompt()
@@ -363,17 +443,15 @@ export async function POST(req: Request): Promise<Response> {
   // writes the finderSlot for Finder turns (FIND-05/08), and triggers audit.
   const redactedMessages = redacted.messages as Array<{ role: 'user' | 'assistant'; content: string }>
 
-  // Snapshot user message content before streaming (stable reference for persistence)
-  const userMessageContent = lastUserMessage?.content ?? ''
-
   const result = streamText({
     model,
     system: agentSystemPrompt,
     messages: redactedMessages,
     tools: agentTools,
-    // Finder uses a multi-step tool loop (parse→search→collateral): bound at 5 steps
-    // to prevent unbounded cost (T-03-30 / D-05). Coach keeps the default (1 step).
-    stopWhen: pillar === 'finder' ? stepCountIs(5) : stepCountIs(1),
+    // Finder uses a multi-step tool loop (parse→search→collateral) and Reply uses one
+    // (retrieve SOP → maybe voice → draft): both bounded at 5 steps to prevent unbounded
+    // cost (T-03-30 / T-04-COST / D-05). Coach keeps the default (1 step).
+    stopWhen: pillar === 'finder' || pillar === 'reply' ? stepCountIs(5) : stepCountIs(1),
     onFinish: async (final) => {
       // ── Persist user message (Pitfall 2 fix — CHAT-02) ────────────────────
       // The user message is persisted AFTER the stream to avoid blocking the
@@ -434,6 +512,21 @@ export async function POST(req: Request): Promise<Response> {
           criteria: criteriaToWrite,
           discussedProjectIds,
           lastRankedAt: Date.now(),
+        })
+      }
+
+      // ── Reply: write replySlot in onFinish (REPLY-09 / D-06) ─────────────
+      // Only for Reply turns with a leadId — agent-scoped, per-lead-isolated slot
+      // write (T-04-BLEED-route / T-04-TOOLWRITE-route). The write happens HERE in
+      // onFinish, NEVER inside a tool (Reply tools are read-only). The latestDraft
+      // stored is the REDACTED model output (final.text — GATE 3 already ran).
+      if (pillar === 'reply' && leadId) {
+        const sopDocIds = extractReplySopIds(final)
+        await writeLeadSlot(leadId, 'replySlot', {
+          classification: replyClassification,
+          latestDraft: final.text, // already PDPA-redacted (GATE 3 ran before streamText)
+          sopDocIds,
+          lastDraftedAt: Date.now(),
         })
       }
 

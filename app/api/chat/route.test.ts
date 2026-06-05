@@ -977,7 +977,7 @@ describe('Test 11 (02-03): extractCitationChunkIds extracts chunk IDs from tool 
 // injection + replySlot onFinish + no_sop_match→recordKnowledgeGap) flip them to passes.
 
 describe('04-01 (REPLY-02): reply dispatch builds reply prompt + tools + modelFor("reply")', () => {
-  it.fails('a reply turn calls replyAgent.buildSystemPrompt + makeTools + modelFor("reply") (RED until Plan 04-06)', async () => {
+  it('a reply turn calls replyAgent.buildSystemPrompt + makeTools + modelFor("reply") (GREEN as of Plan 04-06)', async () => {
     mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'reply', reason: 'heuristic-reply:draft-a-reply' })
 
     const req = buildRequest({
@@ -1030,7 +1030,7 @@ describe('04-01 (PDPA / Q3): reply turn injects known lead names into pseudonymi
 })
 
 describe('04-01 (REPLY-09): replySlot written in onFinish for a reply turn with a leadId', () => {
-  it.fails('onFinish calls writeLeadSlot("replySlot", …) for a reply turn with a leadId (RED until Plan 04-06)', async () => {
+  it('onFinish calls writeLeadSlot("replySlot", …) for a reply turn with a leadId (GREEN as of Plan 04-06)', async () => {
     mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'reply', reason: 'heuristic-reply:draft-a-reply' })
 
     let resolveOnFinish: () => void
@@ -1060,7 +1060,7 @@ describe('04-01 (REPLY-09): replySlot written in onFinish for a reply turn with 
 })
 
 describe('04-01 (REPLY-03 / SC2): parallel-lead isolation at the route level', () => {
-  it.fails('two reply turns for different leads each pass their own leadId to readReplySlot (RED until Plan 04-06)', async () => {
+  it('two reply turns for different leads each pass their own leadId to readReplySlot (GREEN as of Plan 04-06)', async () => {
     mocks.mockRouteAsync.mockResolvedValue({ pillar: 'reply', reason: 'heuristic-reply:draft-a-reply' })
 
     await POST(buildRequest({
