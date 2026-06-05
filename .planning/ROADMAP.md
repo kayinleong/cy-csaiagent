@@ -100,7 +100,17 @@ These are hard, non-negotiable boundaries carried from PROJECT.md / config. No p
   3. When the agent edits a draft, the edit is captured as a signal, and the change surfaces in a reply-quality dashboard showing edit-rate per SOP trending down.
   4. The Reply Assistant is reachable through the intent router alongside Coach and Finder — all three pillars active in one chat surface.
   5. Reply SOPs are manageable through the admin app, and the WABA graduation gate criteria are documented (criteria only, not implemented).
-**Plans**: TBD
+**Plans**: 10 plans (waves 0-6)
+- [ ] 04-01-PLAN.md — Wave-0 failing-test stubs (PDPA coverage, reply agent, diff, router, rules, rag/kb pillar, route, gold sets, e2e)
+- [ ] 04-02-PLAN.md — PDPA gate closure: free-text IC/email/RM-financial redaction [security blocker]
+- [ ] 04-03-PLAN.md — kbChunks.pillar schema + ingest write + backfill + parameterized retrieval + composite vector index
+- [ ] 04-04-PLAN.md — Router 3-pillar extension (heuristic precedence + ternary classifier)
+- [ ] 04-05-PLAN.md — Reply agent core (mirror Finder) + read-only tools + ReplySlot/readReplySlot
+- [ ] 04-06-PLAN.md — 3-pillar route dispatch + required-leadId fail-closed + GATE-3 lead-name injection + replySlot onFinish
+- [ ] 04-07-PLAN.md — replyEdits collection + deny-by-default downline rules + indexes + editRatio util + captureReplyEdit action
+- [ ] 04-08-PLAN.md — Reply draft card (copy-only) + lead selector + override chip + disclosure + all Phase-4 i18n
+- [ ] 04-09-PLAN.md — Reply SOP admin pillar filter (ADMIN-05) + tone-aware judge rubric + Reply gold sets
+- [ ] 04-10-PLAN.md — Reply Quality dashboard panel (REPLY-11/ADMIN-06) + WABA-GATE.md (REPLY-12)
 **UI hint**: yes
 
 ### Phase 5: Hardening + Scale-Up
@@ -126,5 +136,5 @@ Phases execute in numeric order: 1 → 2 → [week-4 go/no-go gate] → 3 → 4 
 | 1. Foundations | 0/13 | Not started | - |
 | 2. Coach + Admin v1 | 0/TBD | Not started | - |
 | 3. Finder + Intent-Routing | 0/TBD | Not started | - |
-| 4. Reply Assistant + Analytics | 0/TBD | Not started | - |
+| 4. Reply Assistant + Analytics | 0/10 | Planned | - |
 | 5. Hardening + Scale-Up | 0/TBD | Not started | - |
