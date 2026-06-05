@@ -28,8 +28,18 @@ Continues on branch `phase-kayinleong-01`; not pushed (standing user hold).
 
 ## What has changed
 
-(pending — updated per wave as plans complete; per-plan detail in each `04-0{1..10}-SUMMARY.md`)
+(per-plan detail in each `04-0{1..10}-SUMMARY.md`)
+
+- **04-01 (Wave 0) — DONE** (commits `cb8ba1e`, `c2cd157`, `e34d2a9`): Wave-0 RED/skip-guarded test stubs for all Phase-4 requirements. 7 files created, 8 modified. Every requirement now has an automated verify (Nyquist gate). Security-critical PDPA coverage (IC/email/RM-financial), the ADMIN-06 `captureReplyEdit(thumbsDown:true)` producer, the inverted classifier 'reply' assertion, replyEdits downline rules, pillar retrieval, route dispatch, three EN reply gold sets, and a copy-only e2e — all failing-now/passing-later. See `04-01-SUMMARY.md`.
 
 ## Verification
 
-(pending — gsd-verifier goal-backward verification → `04-VERIFICATION.md` after all waves; quality gates `tsc`/`vitest`/`lint`; regression report)
+(gsd-verifier goal-backward verification → `04-VERIFICATION.md` after all waves)
+
+### 04-01 Regression Report (Wave 0)
+
+- **Quality gates:** `npm run test` exits 0 (457 passed | 37 expected-fail | 107 skipped | **0 failed**); `tsc --noEmit` exits 0; `eslint` 0 errors (warnings only, in-style with existing test files).
+- **What was tested:** ran the three Task-1 files, the six Task-2 files, the rules file (skips offline), and the full offline suite; YAML-parsed all three gold sets + promptfooconfig; PII-scanned the gold sets (zero `+60`/IC literals).
+- **What passed:** all pre-existing tests stay green; the 2 new green baselines in pdpa (known-name + MY-phone) act as regression guards; the 37 expected-fail markers genuinely capture unmet contracts (no false-green `it.fails`).
+- **Ruled out (regression surface):** these are TEST-ONLY changes — no `src/` runtime, no `app/` runtime, no `firestore.rules`, no config behavior changed. The only non-test edits are `evals/promptfooconfig.yaml` (added 3 `tests:` entries; existing suites untouched) and `src/firebase/__tests__/rules.test.ts` (added a `replyEdits` describe + one entry to the deny-by-default list; existing collection blocks untouched). No production code path can break from this plan.
+- **Deviations:** 3 auto-fixed (all Rule 3 blocking — mock typing for tsc, classifier RED-test correctness, e2e path note); documented in `04-01-SUMMARY.md`. The `tests/e2e/` vs playwright `testDir: ./e2e` mismatch is flagged for Plan 04-08 to reconcile.
