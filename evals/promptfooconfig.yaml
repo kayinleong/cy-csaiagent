@@ -107,6 +107,27 @@ tests:
   # Router precision: clear-coach / clear-finder / ambiguous→coach safe-default (× EN/BM/ZH)
   - evals/gold/router-precision.yaml
 
+  # ─── Phase 4 — Reply Assistant suites (04-01 Wave 0, REPLY-05/06/07) ─────────
+  #
+  # LIVE-GATED: require ANTHROPIC_API_KEY + JUDGE_MODEL (from Remote Config) + seeded
+  # reply SOPs (pillar:'reply', categories cold-prospect / objection-handling / financing)
+  # plus the curated org-voice doc (pillar:'reply', category:'voice'). DO NOT run offline.
+  # The Reply judge rubric (voiceMatch / qualifyingQuestions / noAutoPitch) is added to
+  # src/eval/judge.ts in a later Phase-4 wave (D-13). All prompts are SYNTHETIC (no PII).
+  #
+  # To run ONLY the Reply suites:
+  #   JUDGE_MODEL=$(firebase remoteconfig:get --key model.grader.default) \
+  #     npx promptfoo eval -c evals/promptfooconfig.yaml --filter-pattern "reply"
+
+  # Reply cold-prospect: qualifying-questions framework, not a pitch (REPLY-05) (EN)
+  - evals/gold/reply-cold-prospect.yaml
+
+  # Reply objection-handling: price / competitor / timing reframes, grounded (REPLY-06) (EN)
+  - evals/gold/reply-objection.yaml
+
+  # Reply financing: D2 financing SOP, defer rates/eligibility to bank (REPLY-07) (EN)
+  - evals/gold/reply-financing.yaml
+
 # ─── Shared LLM-rubric assertion ─────────────────────────────────────────────
 # Applied on top of fixture-level assertions via Promptfoo's defaultTest.
 # The full six-domain rubric is defined in src/eval/judge.ts (combinedJudgeRubric).

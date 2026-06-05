@@ -1,0 +1,91 @@
+# evals/gold/reply-cold-prospect.yaml — Reply cold-prospect gold set (Phase 4, REPLY-05)
+#
+# Cold-prospect inbound WhatsApp pastes → the drafted reply MUST use a
+# QUALIFYING-QUESTIONS framework (budget / timeline / area), NOT an auto-pitch
+# (CONTEXT D-13 / REPLY-05). The draft must be grounded in a cold-prospect reply
+# SOP and cite a [SOP:doc-id]. Copy-only posture (no auto-send — QUAL-02).
+#
+# Live-gated: requires ANTHROPIC_API_KEY + JUDGE_MODEL (from Remote Config) + seeded
+# reply SOPs (pillar:'reply', category:'cold-prospect') in a live Firestore. DO NOT run
+# offline — the grounding + voice assertions only pass against a seeded live stack.
+#
+# Judge rubric domains referenced (Wave 5 adds them to src/eval/judge.ts):
+#   voiceMatch · qualifyingQuestions · noAutoPitch · languageMatch · grounded ([SOP:)
+#
+# All prompts are SYNTHETIC — no real names, phones, IC, or emails (Pitfall #32; T-04-01).
+#
+# EN-first (D-14); BM / 中文 cold-prospect gold sets land when Derek supplies voice samples.
+#
+# Reference: REPLY-05, CONTEXT D-13/D-16/D-17, 04-RESEARCH §Q6, 04-VALIDATION §REPLY-05,
+#            evals/CALIBRATION.md, src/agents/reply/tools.ts retrieveReplySop
+
+- description: "Reply | EN | cold-prospect | new lead 'saw your ad, tell me more'"
+  live_pilot_gated: true
+  vars:
+    lang: en
+    category: cold-prospect
+    user_message: |
+      A new lead just messaged me on WhatsApp: "Hi, saw your ad for the Cheras project,
+      can you tell me more?" Draft a reply for me.
+    expected_behavior: >
+      Responds in English in the D2 senior-agent voice. Uses qualifying QUESTIONS
+      (budget, timeline, own-stay vs investment, preferred area) before any pitch.
+      Does NOT dump a feature list or auto-pitch a specific unit. Cites a [SOP:doc-id]
+      from the cold-prospect reply SOP. Copy-only — never claims to have sent anything.
+    native_review_required: false
+  assert:
+    - type: contains
+      value: "?"
+      description: "qualifyingQuestions: the draft asks at least one qualifying question"
+    - type: javascript
+      value: |
+        // grounded: the draft cites a reply SOP id in the [SOP:...] form
+        return /\[SOP:[a-z0-9-]+\]/i.test(output);
+      description: "grounded: draft cites a [SOP:doc-id] (no invented SOP)"
+    - type: not-contains
+      value: "Certainly"
+      description: "voiceMatch / no-AI-tell: no 'Certainly!' filler"
+    - type: not-contains
+      value: "Great question"
+      description: "voiceMatch / no-AI-tell: no 'Great question!' filler"
+    - type: javascript
+      value: |
+        // noAutoPitch: a cold-prospect opener must not hard-pitch price/booking up front
+        return !/book now|pay (the )?deposit|sign today|limited units/i.test(output);
+      description: "noAutoPitch: no premature hard-sell in a cold-prospect opener"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+    - type: javascript
+      value: |
+        const IC = /\d{6}-\d{2}-\d{4}/;
+        return !IC.test(output);
+      description: "PII gate: no real MY IC numbers"
+
+- description: "Reply | EN | cold-prospect | vague inbound 'is it still available?'"
+  live_pilot_gated: true
+  vars:
+    lang: en
+    category: cold-prospect
+    user_message: |
+      Lead wrote: "Is it still available?" (no other context). Draft a reply.
+    expected_behavior: >
+      Responds in English. Asks qualifying questions to establish which project/unit,
+      budget, and intent rather than guessing. Grounded in the cold-prospect SOP with a
+      [SOP:doc-id] citation. No auto-pitch, no fabricated availability claim.
+    native_review_required: false
+  assert:
+    - type: contains
+      value: "?"
+      description: "qualifyingQuestions: draft asks a clarifying/qualifying question"
+    - type: javascript
+      value: |
+        return /\[SOP:[a-z0-9-]+\]/i.test(output);
+      description: "grounded: draft cites a [SOP:doc-id]"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"

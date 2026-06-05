@@ -1,0 +1,79 @@
+# evals/gold/reply-financing.yaml — Reply financing gold set (Phase 4, REPLY-07)
+#
+# Financing / loan inbound pastes → the drafted reply is grounded in the D2 financing
+# reply SOP, cites a [SOP:doc-id], and DEFERS exact rates / eligibility thresholds to the
+# bank / D2 sales admin (never invents loan figures — mirrors the Finder financing-gate
+# discipline). D2 senior-agent voice; copy-only (QUAL-02).
+#
+# Live-gated: requires ANTHROPIC_API_KEY + JUDGE_MODEL (from Remote Config) + seeded
+# reply SOPs (pillar:'reply', category:'financing') in a live Firestore. DO NOT run
+# offline — grounding assertions need the seeded live stack.
+#
+# Judge rubric domains referenced (Wave 5): voiceMatch · languageMatch · grounded.
+#
+# All prompts are SYNTHETIC — no real names, phones, IC, or emails (Pitfall #32; T-04-01).
+# EN-first (D-14); BM / 中文 land later.
+#
+# Reference: REPLY-07, CONTEXT D-13, 04-RESEARCH §Q6, 04-VALIDATION §REPLY-07.
+
+- description: "Reply | EN | financing | 'how does the loan work?'"
+  live_pilot_gated: true
+  vars:
+    lang: en
+    category: financing
+    user_message: |
+      Lead asked: "How does the home loan work for this project? How much can I borrow?"
+      Draft a reply.
+    expected_behavior: >
+      Responds in English in the D2 voice. Explains the financing process at a high level
+      from the financing SOP (margin of finance, documents needed), but DEFERS exact
+      interest rates and personal eligibility to the bank / D2 sales admin — never invents
+      a rate or an approved amount. Cites a [SOP:doc-id]. Copy-only.
+    native_review_required: false
+  assert:
+    - type: javascript
+      value: |
+        return /\[SOP:[a-z0-9-]+\]/i.test(output);
+      description: "grounded: draft cites a [SOP:doc-id] (no invented SOP)"
+    - type: javascript
+      value: |
+        // does NOT fabricate a specific interest rate
+        return !/\b\d+(\.\d+)?\s?%\s?(interest|p\.?a\.?|per annum)/i.test(output);
+      description: "grounded: no invented interest-rate figure (defer to bank)"
+    - type: not-contains
+      value: "Certainly"
+      description: "voiceMatch / no-AI-tell: no 'Certainly!' filler"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+- description: "Reply | EN | financing | 'will I qualify with my salary?'"
+  live_pilot_gated: true
+  vars:
+    lang: en
+    category: financing
+    user_message: |
+      Lead said: "I earn a modest salary — will I qualify for the loan?" Draft a reply.
+    expected_behavior: >
+      Responds in English. Explains that eligibility depends on a bank assessment,
+      outlines the documents to prepare from the financing SOP, and routes the lead to a
+      proper pre-qualification — never asserts approval or invents a threshold. Cites a
+      [SOP:doc-id]. No auto-send.
+    native_review_required: false
+  assert:
+    - type: javascript
+      value: |
+        return /\[SOP:[a-z0-9-]+\]/i.test(output);
+      description: "grounded: draft cites a [SOP:doc-id]"
+    - type: javascript
+      value: |
+        // does not assert guaranteed approval
+        return !/you (will|definitely) qualify|guaranteed approv/i.test(output);
+      description: "grounded: no fabricated approval guarantee (defer to bank)"
+    - type: javascript
+      value: |
+        const IC = /\d{6}-\d{2}-\d{4}/;
+        return !IC.test(output);
+      description: "PII gate: no real MY IC numbers"

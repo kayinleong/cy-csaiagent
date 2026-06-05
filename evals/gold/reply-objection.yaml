@@ -1,0 +1,76 @@
+# evals/gold/reply-objection.yaml — Reply objection-handling gold set (Phase 4, REPLY-06)
+#
+# Objection-handling inbound pastes (price / competitor / timing) → the drafted reply
+# acknowledges the objection and reframes value, grounded in an objection-handling reply
+# SOP with a [SOP:doc-id] citation. D2 senior-agent voice; copy-only (QUAL-02).
+#
+# Live-gated: requires ANTHROPIC_API_KEY + JUDGE_MODEL (from Remote Config) + seeded
+# reply SOPs (pillar:'reply', category:'objection-handling') in a live Firestore. DO NOT
+# run offline — grounding + voice assertions need the seeded live stack.
+#
+# Judge rubric domains referenced (Wave 5): voiceMatch · noAutoPitch · languageMatch · grounded.
+#
+# All prompts are SYNTHETIC — no real names, phones, IC, or emails (Pitfall #32; T-04-01).
+# EN-first (D-14); BM / 中文 land later.
+#
+# Reference: REPLY-06, CONTEXT D-13/D-16, 04-RESEARCH §Q6, 04-VALIDATION §REPLY-06.
+
+- description: "Reply | EN | objection | 'too expensive, competitor is cheaper'"
+  live_pilot_gated: true
+  vars:
+    lang: en
+    category: objection-handling
+    user_message: |
+      Lead said: "Your project is too expensive, the one down the road is cheaper."
+      Draft a reply.
+    expected_behavior: >
+      Responds in English in the D2 voice. Acknowledges the price concern first, then
+      reframes around value (location, tenure, VP timeline) WITHOUT disparaging the
+      competitor and WITHOUT inventing prices. Cites a [SOP:doc-id] from the
+      objection-handling SOP. Copy-only.
+    native_review_required: false
+  assert:
+    - type: javascript
+      value: |
+        return /\[SOP:[a-z0-9-]+\]/i.test(output);
+      description: "grounded: draft cites a [SOP:doc-id] (no invented SOP)"
+    - type: not-contains
+      value: "Certainly"
+      description: "voiceMatch / no-AI-tell: no 'Certainly!' filler"
+    - type: javascript
+      value: |
+        // does not invent a concrete competitor price the agent did not provide
+        return !/competitor (is|costs) RM\s?\d/i.test(output);
+      description: "grounded: no fabricated competitor pricing"
+    - type: javascript
+      value: |
+        const MY_PHONE = /\+?60\d{9,10}/;
+        return !MY_PHONE.test(output);
+      description: "PII gate: no real MY phone numbers"
+
+- description: "Reply | EN | objection | timing 'not ready to decide yet'"
+  live_pilot_gated: true
+  vars:
+    lang: en
+    category: objection-handling
+    user_message: |
+      Lead said: "I'm not ready to decide, maybe next year." Draft a reply.
+    expected_behavior: >
+      Responds in English. Respects the timing objection, keeps the relationship warm,
+      offers a low-pressure next step (info pack, check-in), grounded in the
+      objection-handling SOP with a [SOP:doc-id]. No hard-sell, no auto-send.
+    native_review_required: false
+  assert:
+    - type: javascript
+      value: |
+        return /\[SOP:[a-z0-9-]+\]/i.test(output);
+      description: "grounded: draft cites a [SOP:doc-id]"
+    - type: javascript
+      value: |
+        return !/book now|sign today|pay (the )?deposit/i.test(output);
+      description: "noAutoPitch: respects the timing objection (no hard-sell)"
+    - type: javascript
+      value: |
+        const IC = /\d{6}-\d{2}-\d{4}/;
+        return !IC.test(output);
+      description: "PII gate: no real MY IC numbers"
