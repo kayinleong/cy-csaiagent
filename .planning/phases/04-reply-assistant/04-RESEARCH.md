@@ -501,27 +501,21 @@ Phase 4 is mostly greenfield code, but the `kbChunks.pillar` denormalization is 
 | A6 | The Reply heuristic should be checked before the generic Finder keyword scan to avoid mis-routes on "RM"/"financing" pastes. | Q8 / Pitfall C | MEDIUM — ordering is a routing-quality decision; the override chip + classifier are the safety net. Validate with router gold sets. |
 | A7 | `model.reply.default` is (or will be) seeded in Remote Config by Derek. | Runtime State | LOW — fallback `claude-sonnet-4-6` exists (`provider.ts:42`), so it degrades gracefully; but production should set it explicitly. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **PDPA v1 posture for free-text pastes**
-   - What we know: the gate is a presence-gate; only passed names + phone regexes are redacted today.
-   - What's unclear: whether v1 ships with regex-coverage + known-name injection (pragmatic) or a stronger NER-based redactor (heavier). The FND-09 TIA must explicitly cover WhatsApp paste content.
-   - Recommendation: regex + known-name injection + comprehensive coverage tests for v1; flag NER as a Phase-5 hardening item. Confirm with Derek/legal.
+> Resolved during Phase-4 planning + the plan-checker revision (2026-06-05). Each item below carries an inline resolution; no open items remain for planning.
 
-2. **kb-miss feed integration for Reply**
-   - What we know: `knowledgeGaps` exists and feeds the dashboard.
-   - What's unclear: whether Reply misses should share that feed or have a separate "SOP gap" surface, and whether `KnowledgeGapDoc` needs a pillar discriminator.
-   - Recommendation: reuse `knowledgeGaps` with a `pillar`/`source` field; planner confirms with the dashboard design.
+1. **PDPA v1 posture for free-text pastes** — RESOLVED.
+   - Resolution: v1 ships **regex coverage + known-name injection** (NOT NER). Plan 02 adds IC (`\d{6}-\d{2}-\d{4}`) / email / RM-financial regexes to `pdpa.ts`; Plan 06 injects lead names into the GATE-3 `pseudonymize` call (closing the `names:[]` hook); Plan 01 carries per-PII-class RED coverage tests. The **FND-09 TIA covers WhatsApp paste content** for Reply, with Derek/legal sign-off noted as a manual gate. NER-based redaction is deferred to Phase-5 hardening (not v1).
 
-3. **Edit-rate denominator**
-   - What we know: D-20 wants per-SOP edit-rate on read.
-   - What's unclear: whether to write a row on every Copy or maintain a separate draft counter (A2).
-   - Recommendation: row-on-every-copy (single-collection aggregation).
+2. **kb-miss feed integration for Reply** — RESOLVED (now planned).
+   - Resolution: Reply `no_sop_match` **reuses the existing `knowledgeGaps` feed** via the Coach `recordKnowledgeGap` primitive (PDPA-safe topicHash/topicLabel). Plan 03 adds an OPTIONAL `KnowledgeGapDoc.pillar?: 'coach'|'reply'` discriminator (absent ⇒ coach, so Phase-2 rows are unchanged); Plan 06's route `onFinish` calls `recordKnowledgeGap({..., pillar:'reply'})` on a Reply miss (outside any tool); Plan 01 asserts the write with a RED route test. Derek sees Reply SOP gaps tagged distinctly on the existing dashboard feed — no separate surface.
 
-4. **Thumbs-down capture surface (ADMIN-06)**
-   - What we know: ADMIN-06 wants thumbs-down rate; `replyEdits` schema includes an optional `thumbsDown`.
-   - What's unclear: where the thumbs-down control lives (on the draft card? after copy?). Not explicitly in D-15/16/18.
-   - Recommendation: a small thumbs-down affordance on the draft card writing the same `replyEdits` row (or a patch); planner to design within the copy-only constraint (a feedback control is not a "send" affordance, so it doesn't violate D-16).
+3. **Edit-rate denominator** — RESOLVED.
+   - Resolution: **row-on-every-copy** (single-collection aggregation). Plan 07's `captureReplyEdit` writes one `replyEdits` row on every Copy (editRatio:0 when unchanged) so the per-SOP edit-rate denominator = total copies citing that SOP. No separate draft counter.
+
+4. **Thumbs-down capture surface (ADMIN-06)** — RESOLVED.
+   - Resolution: a **distinct thumbs-down feedback control on the draft card** (NOT a send affordance — checker-confirmed it does not violate HR-1/D-16, since "exactly one action" governs the SEND/egress path, and feedback is not a send). Plan 08 renders an icon-only ghost `ThumbsDown` button (separate `data-testid`, distinct from the Copy CTA) that calls `captureReplyEdit({..., thumbsDown:true})`; Plan 07's `ReplyEditDoc`/action already carries the optional `thumbsDown` field; Plan 01 carries a RED `captureReplyEdit` test asserting the `thumbsDown:true` write — so Plan 10's `count(thumbsDown==true)/count(all)` KPI has a guaranteed producer (closing the prior ADMIN-06 BLOCKER).
 
 ## Environment Availability
 
