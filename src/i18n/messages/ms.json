@@ -22,13 +22,40 @@
     "emptyState": "Hai! Saya Pembantu Ejen D2 anda. Tanya saya apa sahaja tentang hartanah D2, langkah onboarding, atau SOP jualan.",
     "citationLabel": "Sumber",
     "citations": "Sumber-sumber",
-    "copyReply": "Salin balasan",
+    "copyReply": "Salin draf",
     "copied": "Disalin!",
     "rateLimit": "Anda telah mencapai had sejam. Sila tunggu beberapa minit.",
     "error": "Berlaku ralat. Sila cuba lagi.",
+    "replyDraft": {
+      "incomingLabel": "Mesej masuk",
+      "sourcesLabel": "Sumber:",
+      "copiedGoSend": "Disalin — hantar dari WhatsApp anda",
+      "copyFailed": "Tidak dapat menyalin. Pilih teks dan salin secara manual.",
+      "refusalLabel": "Tiada SOP balasan dijumpai",
+      "refusalBody": "Saya tiada SOP balasan D2 untuk ini — sila draf secara manual, atau semak dengan jurulatih kanan anda.",
+      "category": {
+        "coldProspect": "Prospek baharu",
+        "objectionHandling": "Mengendalikan bantahan",
+        "financing": "Pembiayaan"
+      },
+      "editAgain": "Edit semula",
+      "thumbsDownAria": "Tandakan draf ini sebagai tidak membantu.",
+      "thumbsDownToast": "Terima kasih — maklum balas direkodkan."
+    },
+    "leadSelector": {
+      "title": "Lead yang mana?",
+      "searchPlaceholder": "Cari lead…",
+      "recentGroup": "Lead terkini",
+      "recentBadge": "terkini",
+      "empty": "Belum ada lead — tambah satu sebelum mendraf balasan.",
+      "loading": "Memuatkan lead…",
+      "confirmRecent": "Guna lead ini",
+      "pickExplicit": "Pilih lead untuk balasan ini."
+    },
     "disclosure": {
       "title": "Pembantu ini menggunakan AI",
       "body": "Pembantu Ejen D2 dikuasakan oleh AI. Walaupun ia memberikan jawapan berdasarkan bahan latihan D2, sila sahkan maklumat penting dengan jurulatih kanan anda. Perbualan anda mungkin disemak untuk menambah baik perkhidmatan.",
+      "replyLine": "Draf adalah cadangan AI — semak sebelum menghantar dari telefon anda.",
       "ackButton": "Saya faham, teruskan"
     },
     "aiBadge": "AI",
@@ -45,7 +72,8 @@
       "label": "Mod:",
       "auto": "Auto",
       "coach": "Jurulatih",
-      "finder": "Pencari"
+      "finder": "Pencari",
+      "reply": "Balas"
     },
     "history": "Sejarah perbualan",
     "historyEmpty": "Tiada perbualan lalu lagi.",
@@ -85,7 +113,21 @@
       "training": "Bahan latihan",
       "faq": "Soalan Lazim",
       "other": "Lain-lain"
-    }
+    },
+    "pillarFilter": {
+      "all": "Semua",
+      "coach": "Jurulatih",
+      "reply": "Balas"
+    },
+    "category": {
+      "label": "Kategori",
+      "coldProspect": "Prospek baharu",
+      "objectionHandling": "Mengendalikan bantahan",
+      "financing": "Pembiayaan",
+      "voice": "Suara"
+    },
+    "noReplySops": "Belum ada SOP Balas. Tambah satu di atas.",
+    "pillarSelectLabel": "Digunakan oleh"
   },
   "inventory": {
     "title": "Pengurus Inventori",
@@ -235,6 +277,18 @@
     "chatHistoryError": "Tidak dapat memuatkan sejarah sembang.",
     "roleUser": "Ejen",
     "roleAssistant": "AI Coach",
-    "roleSystem": "Sistem"
+    "roleSystem": "Sistem",
+    "replyQuality": {
+      "title": "Kualiti Balasan",
+      "editRateTitle": "Kadar edit setiap SOP",
+      "editRateSubtitle": "Trend menurun adalah baik — kurang edit bermakna draf tepat.",
+      "topEditedTitle": "SOP paling banyak diedit",
+      "thumbsDownLabel": "Kadar ibu jari ke bawah",
+      "escalationRateLabel": "Kadar eskalasi",
+      "draftsPerAgentLabel": "Draf setiap ejen",
+      "noData": "Belum ada edit balasan direkodkan.",
+      "scopeDownline": "Downline anda",
+      "scopeOrg": "Seluruh organisasi"
+    }
   }
 }

@@ -22,13 +22,40 @@
     "emptyState": "您好！我是您的D2经纪助手。请随时询问有关D2房产、入职步骤或销售SOP的问题。",
     "citationLabel": "来源",
     "citations": "参考来源",
-    "copyReply": "复制回复",
+    "copyReply": "复制草稿",
     "copied": "已复制！",
     "rateLimit": "您已达到每小时限额，请稍候片刻。",
     "error": "出现错误，请重试。",
+    "replyDraft": {
+      "incomingLabel": "收到的消息",
+      "sourcesLabel": "来源：",
+      "copiedGoSend": "已复制——请从WhatsApp发送",
+      "copyFailed": "无法复制。请手动选择文本并复制。",
+      "refusalLabel": "未找到回复SOP",
+      "refusalBody": "我没有针对此情况的D2回复SOP——请手动起草，或咨询您的高级教练。",
+      "category": {
+        "coldProspect": "潜在新客",
+        "objectionHandling": "异议处理",
+        "financing": "融资"
+      },
+      "editAgain": "重新编辑",
+      "thumbsDownAria": "将此草稿标记为无帮助。",
+      "thumbsDownToast": "谢谢——已记录反馈。"
+    },
+    "leadSelector": {
+      "title": "哪位客户？",
+      "searchPlaceholder": "搜索客户…",
+      "recentGroup": "最近客户",
+      "recentBadge": "最近",
+      "empty": "暂无客户——起草回复前请先添加一位。",
+      "loading": "正在加载客户…",
+      "confirmRecent": "使用此客户",
+      "pickExplicit": "请选择此回复对应的客户。"
+    },
     "disclosure": {
       "title": "此助手使用人工智能",
       "body": "D2经纪助手由人工智能驱动。虽然它提供基于D2培训材料的答案，但请向您的高级教练确认重要信息。您的对话可能会被审核以改善服务。",
+      "replyLine": "草稿为AI建议——请在用手机发送前先审核。",
       "ackButton": "我明白，继续"
     },
     "aiBadge": "AI",
@@ -45,7 +72,8 @@
       "label": "模式：",
       "auto": "自动",
       "coach": "教练",
-      "finder": "找房"
+      "finder": "找房",
+      "reply": "回复"
     },
     "history": "对话历史",
     "historyEmpty": "暂无历史对话。",
@@ -85,7 +113,21 @@
       "training": "培训材料",
       "faq": "常见问题",
       "other": "其他"
-    }
+    },
+    "pillarFilter": {
+      "all": "全部",
+      "coach": "教练",
+      "reply": "回复"
+    },
+    "category": {
+      "label": "类别",
+      "coldProspect": "潜在新客",
+      "objectionHandling": "异议处理",
+      "financing": "融资",
+      "voice": "语气"
+    },
+    "noReplySops": "暂无回复SOP。请在上方添加一个。",
+    "pillarSelectLabel": "使用方"
   },
   "inventory": {
     "title": "库存管理器",
@@ -235,6 +277,18 @@
     "chatHistoryError": "无法加载聊天记录。",
     "roleUser": "学员",
     "roleAssistant": "AI教练",
-    "roleSystem": "系统"
+    "roleSystem": "系统",
+    "replyQuality": {
+      "title": "回复质量",
+      "editRateTitle": "每个SOP的编辑率",
+      "editRateSubtitle": "趋势下降是好事——编辑越少表示草稿越到位。",
+      "topEditedTitle": "编辑最多的SOP",
+      "thumbsDownLabel": "差评率",
+      "escalationRateLabel": "升级率",
+      "draftsPerAgentLabel": "每位代理草稿数",
+      "noData": "暂无回复编辑记录。",
+      "scopeDownline": "您的下线",
+      "scopeOrg": "全机构"
+    }
   }
 }

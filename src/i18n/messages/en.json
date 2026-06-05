@@ -20,13 +20,40 @@
     "emptyState": "Hi! I'm your D2 Agent Assistant. Ask me anything about D2 properties, onboarding steps, or sales SOPs.",
     "citationLabel": "Source",
     "citations": "Sources",
-    "copyReply": "Copy reply",
+    "copyReply": "Copy draft",
     "copied": "Copied!",
     "rateLimit": "You've reached your hourly limit. Please wait a few minutes.",
     "error": "Something went wrong. Please try again.",
+    "replyDraft": {
+      "incomingLabel": "Incoming message",
+      "sourcesLabel": "Sources:",
+      "copiedGoSend": "Copied — go send it from WhatsApp",
+      "copyFailed": "Couldn't copy. Select the text and copy manually.",
+      "refusalLabel": "No reply SOP found",
+      "refusalBody": "I don't have a D2 reply SOP for this — please draft manually, or check with your senior coach.",
+      "category": {
+        "coldProspect": "Cold prospect",
+        "objectionHandling": "Objection handling",
+        "financing": "Financing"
+      },
+      "editAgain": "Edit again",
+      "thumbsDownAria": "Mark this draft as unhelpful.",
+      "thumbsDownToast": "Thanks — feedback noted."
+    },
+    "leadSelector": {
+      "title": "Which lead?",
+      "searchPlaceholder": "Search leads…",
+      "recentGroup": "Recent leads",
+      "recentBadge": "recent",
+      "empty": "No leads yet — add one before drafting a reply.",
+      "loading": "Loading leads…",
+      "confirmRecent": "Use this lead",
+      "pickExplicit": "Pick the lead this reply is for."
+    },
     "disclosure": {
       "title": "This assistant uses AI",
       "body": "D2 Agent Assistant is powered by AI. While it provides answers grounded in D2 training materials, always verify important information with your senior coach. Your conversations may be reviewed to improve the service.",
+      "replyLine": "Drafts are AI suggestions — review before sending from your phone.",
       "ackButton": "I understand, continue"
     },
     "aiBadge": "AI",
@@ -43,7 +70,8 @@
       "label": "Mode:",
       "auto": "Auto",
       "coach": "Coach",
-      "finder": "Finder"
+      "finder": "Finder",
+      "reply": "Reply"
     },
     "history": "Conversation history",
     "historyEmpty": "No past conversations yet.",
@@ -83,7 +111,21 @@
       "training": "Training material",
       "faq": "FAQ",
       "other": "Other"
-    }
+    },
+    "pillarFilter": {
+      "all": "All",
+      "coach": "Coach",
+      "reply": "Reply"
+    },
+    "category": {
+      "label": "Category",
+      "coldProspect": "Cold prospect",
+      "objectionHandling": "Objection handling",
+      "financing": "Financing",
+      "voice": "Voice"
+    },
+    "noReplySops": "No Reply SOPs yet. Add one above.",
+    "pillarSelectLabel": "Used by"
   },
   "inventory": {
     "title": "Inventory Manager",
@@ -233,6 +275,18 @@
     "chatHistoryError": "Could not load chat history.",
     "roleUser": "Agent",
     "roleAssistant": "AI Coach",
-    "roleSystem": "System"
+    "roleSystem": "System",
+    "replyQuality": {
+      "title": "Reply Quality",
+      "editRateTitle": "Edit rate per SOP",
+      "editRateSubtitle": "Trending down is good — fewer edits means the drafts land.",
+      "topEditedTitle": "Most-edited SOPs",
+      "thumbsDownLabel": "Thumbs-down rate",
+      "escalationRateLabel": "Escalation rate",
+      "draftsPerAgentLabel": "Drafts per agent",
+      "noData": "No reply edits captured yet.",
+      "scopeDownline": "Your downline",
+      "scopeOrg": "Org-wide"
+    }
   }
 }

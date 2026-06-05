@@ -19,6 +19,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { ReplyDraftCard } from './reply-draft-card'
+import type { ReplyOutput } from '@/src/agents/reply/schema'
 
 export interface ChatMessage {
   id: string
@@ -26,6 +28,18 @@ export interface ChatMessage {
   content: string
   /** KB chunk IDs cited in this response (grounding mandate — visible proof) */
   citations?: Array<{ chunkId: string; docId?: string; snippet?: string }>
+  /**
+   * Structured Reply output (Plan 05) — present on assistant turns the router
+   * dispatched to the Reply pillar. When set, the turn renders the interactive
+   * copy-only ReplyDraftCard variant (Surface 1) instead of the plain text bubble.
+   */
+  replyOutput?: ReplyOutput
+  /** The de-pseudonymized-for-display incoming WhatsApp paste (Reply turns only). */
+  replyIncoming?: string
+  /** The lead this reply is for (Reply turns only — required, D-07). */
+  replyLeadId?: string
+  /** The agent's language for this Reply turn (carried into the edit-capture write). */
+  replyLang?: 'en' | 'ms' | 'zh'
 }
 
 interface MessageListProps {
@@ -70,6 +84,24 @@ export function MessageList({ messages, isStreaming, className }: MessageListPro
               >
                 {msg.content}
               </div>
+            </div>
+          ) : msg.replyOutput ? (
+            // Assistant Reply turn — the interactive copy-only draft card variant
+            // (Surface 1). Mirrors how Finder output would render MatchList, but the
+            // card is a client island (textarea + clipboard + edit-capture).
+            <div
+              key={msg.id}
+              className="flex justify-start"
+              data-role="assistant"
+            >
+              <ReplyDraftCard
+                output={msg.replyOutput}
+                incoming={msg.replyIncoming ?? ''}
+                leadId={msg.replyLeadId ?? ''}
+                draftId={msg.id}
+                lang={msg.replyLang ?? 'en'}
+                className="max-w-[90%]"
+              />
             </div>
           ) : (
             // Assistant turn — Card with answer + citations footer
