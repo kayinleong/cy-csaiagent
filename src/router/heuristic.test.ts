@@ -208,3 +208,41 @@ describe('heuristicPillar() — content keyword classifier', () => {
     expect(result?.reason.length).toBeGreaterThan(0)
   })
 })
+
+// ─── REPLY-10 (Phase 4) — Reply heuristic patterns + precedence (RED, Wave 0) ──
+//
+// Plan 04-04 adds REPLY_PATTERNS (e.g. /draft (a )?repl/i, /reply to (this|him|her)/i,
+// /what (should|do) i (say|reply)/i, /(lead|client) (said|wrote|sent|asked)/i) AND
+// checks Reply STRUCTURAL signals BEFORE the generic Finder keyword scan (Pitfall C).
+//
+// Today: a "draft a reply" message has no finder/coach keyword → heuristicPillar
+// returns null (route() then defaults to 'coach'); and a paste mentioning "RM" hits
+// FINDER_PATTERNS first → routes to 'finder'. Both assertions below are EXPECTED-FAIL
+// (`it.fails`) so they fail RED against current code while keeping the offline suite
+// green; they flip to passes when 04-04 lands the REPLY_PATTERNS + ordering.
+
+describe('heuristicPillar() — Reply patterns (REPLY-10, RED until Plan 04-04)', () => {
+  it.fails('"draft a reply to this: …" routes to pillar:"reply" (RED until Plan 04-04)', () => {
+    const result = heuristicPillar([
+      { role: 'user', content: 'draft a reply to this: hi, still keen on the unit?' },
+    ])
+    expect(result).not.toBeNull()
+    expect(result?.pillar).toBe('reply')
+  })
+
+  it.fails('"what should I reply" routes to pillar:"reply" (RED until Plan 04-04)', () => {
+    const result = heuristicPillar([
+      { role: 'user', content: 'the lead said they want to think about it — what should I reply?' },
+    ])
+    expect(result?.pillar).toBe('reply')
+  })
+
+  it.fails('precedence (Pitfall C): a pasted inbound with "RM" + "draft a reply" routes to reply, NOT finder (RED until Plan 04-04)', () => {
+    // "RM" matches FINDER_PATTERNS today, so this mis-routes to 'finder'. Plan 04-04
+    // checks Reply structural signals first, so the inbound paste routes to 'reply'.
+    const result = heuristicPillar([
+      { role: 'user', content: 'lead said: "can you do RM 600k?" — draft a reply for me' },
+    ])
+    expect(result?.pillar).toBe('reply')
+  })
+})

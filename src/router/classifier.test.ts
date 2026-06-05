@@ -90,25 +90,41 @@ describe('classifyIntent — activated LLM classifier', () => {
     expect(result.reason).toBe('property matching request')
   })
 
-  it('does not include "reply" pillar in the schema (Phase 4 only)', async () => {
-    // The schema enum is ['coach','finder'] — passing 'reply' should fail Zod validation.
-    // We test this by verifying that generateObject is called with a schema that rejects 'reply'.
-    // We do this indirectly: mocks.mockGenerateObject receives the call args.
+  // ── REPLY-10 (Phase 4): the RouteSchema enum widens to 3 pillars. ──
+  // The Phase-3 schema is ['coach','finder'] and REJECTS 'reply'. Phase-4 (Plan 04-04)
+  // widens it to ['coach','finder','reply'] so the classifier can route the third pillar.
+  // This test asserts the Schema ACCEPTS 'reply' — it is EXPECTED-FAIL (`it.fails`) today
+  // (the schema still rejects 'reply'), keeping the offline suite green; it flips to a
+  // real pass when 04-04 widens the enum, at which point the implementer removes `.fails`.
+  it.fails('accepts "reply" in the RouteSchema enum (RED until Plan 04-04 widens the enum)', async () => {
+    let capturedSchema: { parse?: (v: unknown) => unknown } | undefined
     mocks.mockGenerateObject.mockImplementationOnce(async ({ schema }: { schema: { parse?: (v: unknown) => unknown } }) => {
-      // The schema should reject 'reply'
-      let threw = false
-      try {
-        schema.parse?.({ pillar: 'reply', confidence: 0.9, reason: 'test' })
-      } catch {
-        threw = true
-      }
-      expect(threw).toBe(true)
-
-      return { object: { pillar: 'coach', confidence: 0.8, reason: 'safe default' } }
+      capturedSchema = schema
+      return { object: { pillar: 'reply', confidence: 0.9, reason: 'draft a reply request' } }
     })
 
-    await classifyIntent(makeMessages('ambiguous message'))
-    expect(mocks.mockGenerateObject).toHaveBeenCalledTimes(1)
+    await classifyIntent(makeMessages('draft a reply to this lead message'))
+
+    // The schema passed to generateObject MUST accept a 'reply' pillar without throwing.
+    expect(() => capturedSchema?.parse?.({ pillar: 'reply', confidence: 0.9, reason: 'test' })).not.toThrow()
+  })
+
+  it.fails('the RouteSchema passed to generateObject validates a reply classification (RED until Plan 04-04)', async () => {
+    // Capture the schema the classifier hands to generateObject and assert it
+    // VALIDATES a reply result. RED today: the binary enum rejects 'reply' on parse.
+    // Plan 04-04 widens the enum so the parse succeeds and this flips to a pass.
+    let capturedSchema: { parse?: (v: unknown) => unknown } | undefined
+    mocks.mockGenerateObject.mockImplementationOnce(async ({ schema }: { schema: { parse?: (v: unknown) => unknown } }) => {
+      capturedSchema = schema
+      return { object: { pillar: 'reply', confidence: 0.92, reason: 'inbound WhatsApp paste, draft a reply' } }
+    })
+
+    await classifyIntent(makeMessages('lead said: "still thinking" — what should I reply?'))
+
+    const parsed = capturedSchema?.parse?.({ pillar: 'reply', confidence: 0.92, reason: 'draft a reply' }) as
+      | { pillar?: string }
+      | undefined
+    expect(parsed?.pillar).toBe('reply')
   })
 })
 
