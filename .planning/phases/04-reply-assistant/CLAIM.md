@@ -31,6 +31,7 @@ Continues on branch `phase-kayinleong-01`; not pushed (standing user hold).
 (per-plan detail in each `04-0{1..10}-SUMMARY.md`)
 
 - **04-01 (Wave 0) — DONE** (commits `cb8ba1e`, `c2cd157`, `e34d2a9`): Wave-0 RED/skip-guarded test stubs for all Phase-4 requirements. 7 files created, 8 modified. Every requirement now has an automated verify (Nyquist gate). Security-critical PDPA coverage (IC/email/RM-financial), the ADMIN-06 `captureReplyEdit(thumbsDown:true)` producer, the inverted classifier 'reply' assertion, replyEdits downline rules, pillar retrieval, route dispatch, three EN reply gold sets, and a copy-only e2e — all failing-now/passing-later. See `04-01-SUMMARY.md`.
+- **04-02 (Wave 1) — DONE** (commit `aad4f40`): closed the PDPA false-positive gate (threat T-04-PDPA) — extended `src/audit/pdpa.ts` with IC/email/RM-financial regexes + `replaceIC`/`replaceEmail`/`replaceFinancial` helpers wired into `redactText`; flipped the Wave-0 IC/email/RM-financial `it.fails()` guards to GREEN. `assertRedacted` throw-don't-warn contract preserved; presence-gate semantics kept (Derek/legal decision). `npm run test` exit 0, tsc/lint clean. See `04-02-SUMMARY.md`.
 
 ## Verification
 
