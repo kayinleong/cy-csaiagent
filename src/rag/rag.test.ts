@@ -373,21 +373,20 @@ describe('retrieve — published-only filter (02-02 Pitfall 3 fix)', () => {
   })
 })
 
-// ─── 04-01 Wave 0: pillar-filtered retrieval (REPLY-01) — RED until Plan 04-03 ─
+// ─── 04-01 Wave 0: pillar-filtered retrieval (REPLY-01) — GREEN as of Plan 04-03 ─
 //
 // retrieveReplySop needs the rag facade parameterized with { pillar: 'reply' } so the
 // findNearest pre-filter applies `where('pillar','==','reply')` (RESEARCH Q7 / Pitfall B).
-// Today `firestoreRetrieve` is hard-coded for Coach (lang + status, NO pillar filter) and
-// `kbChunks` has no `pillar` field. These tests are EXPECTED-FAIL (`it.fails`) so they fail
-// RED against current code while keeping the offline suite green; Plan 04-03 threads the
-// opts param + adds the (pillar,lang,status,embedding) index, flipping them to passes.
+// Plan 04-03 threads the opts param through firestoreRetrieve/retrieve, adds the
+// (pillar,lang,status,embedding) composite vector index, and narrows `category` in memory —
+// flipping these Wave-0 RED guards (`it.fails`) to real passing assertions.
 
-describe('retrieve — pillar filter (REPLY-01, RED until Plan 04-03)', () => {
+describe('retrieve — pillar filter (REPLY-01, GREEN as of Plan 04-03)', () => {
   beforeEach(() => {
     vi.resetModules()
   })
 
-  it.fails('firestoreRetrieve(query, "en", { pillar:"reply" }) applies where("pillar","==","reply")', async () => {
+  it('firestoreRetrieve(query, "en", { pillar:"reply" }) applies where("pillar","==","reply")', async () => {
     const whereCalls: Array<[string, string, unknown]> = []
     const mockGetFn = vi.fn(async () => ({ docs: [] }))
     const mockFindNearestFn = vi.fn(() => ({ get: mockGetFn }))
@@ -418,7 +417,7 @@ describe('retrieve — pillar filter (REPLY-01, RED until Plan 04-03)', () => {
     expect(hasPillarFilter).toBe(true)
   })
 
-  it.fails('category is filtered in memory after the pillar-filtered retrieve (REPLY-06 categories)', async () => {
+  it('category is filtered in memory after the pillar-filtered retrieve (REPLY-06 categories)', async () => {
     // Two reply chunks come back with different categories; opts.category narrows in memory
     // (categories are few; top-K small — avoids a second composite index, RESEARCH Q7).
     const mockGetFn = vi.fn(async () => ({

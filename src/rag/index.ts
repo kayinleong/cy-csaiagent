@@ -27,9 +27,9 @@
  * Core/shell rule: this file must NOT import from app/ or next.
  */
 
-import { firestoreRetrieve, type RetrievalResult } from '@/src/rag/search'
+import { firestoreRetrieve, type RetrievalResult, type RetrieveOpts } from '@/src/rag/search'
 import { pineconeRetrieve } from '@/src/rag/pinecone'
-export type { RetrievalResult } from '@/src/rag/search'
+export type { RetrievalResult, RetrieveOpts } from '@/src/rag/search'
 export { buildCitations, isRetrievalMiss } from '@/src/rag/citations'
 export { embedText, normalize } from '@/src/rag/embed'
 
@@ -55,6 +55,10 @@ function activeAdapter(): RagAdapter {
  *
  * @param query      User query text (PDPA-redacted upstream per TSD §5.3).
  * @param userLang   Language of the current turn ('en' | 'ms' | 'zh').
+ * @param opts       Optional pillar/category filters (REPLY-01). `pillar` is an
+ *                   index-backed equality pre-filter; `category` is narrowed in memory.
+ *                   Threaded through to the active adapter so the Reply
+ *                   retrieveReplySop tool can request `{ pillar: 'reply' }` retrieval.
  * @returns          RetrievalResult[] ordered by relevance, or [] on miss.
  *                   An empty return value is the retrieval-miss signal —
  *                   the Coach must emit a handoff/no_sop_match instead of hallucinating.
@@ -62,13 +66,14 @@ function activeAdapter(): RagAdapter {
 export async function retrieve(
   query: string,
   userLang: 'en' | 'ms' | 'zh',
+  opts?: RetrieveOpts,
 ): Promise<RetrievalResult[]> {
   const adapter = activeAdapter()
 
   if (adapter === 'pinecone') {
-    return pineconeRetrieve(query, userLang)
+    return pineconeRetrieve(query, userLang, opts)
   }
 
   // Default: Firestore findNearest (DOT_PRODUCT, lang pre-filter)
-  return firestoreRetrieve(query, userLang)
+  return firestoreRetrieve(query, userLang, opts)
 }

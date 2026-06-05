@@ -33,7 +33,7 @@
  * Core/shell rule: this file must NOT import from app/ or next.
  */
 
-import type { RetrievalResult } from '@/src/rag/search'
+import type { RetrievalResult, RetrieveOpts } from '@/src/rag/search'
 import { embedText } from '@/src/rag/embed'
 
 /**
@@ -44,11 +44,16 @@ import { embedText } from '@/src/rag/embed'
  *
  * @param query      Raw user query text (PDPA-redacted upstream).
  * @param userLang   Language of the current conversation turn.
+ * @param opts       Optional pillar/category filters (REPLY-01). When activated, map
+ *                   `opts.pillar` to a Pinecone metadata equality filter and narrow
+ *                   `opts.category` in memory, mirroring the Firestore adapter contract
+ *                   so a fallback swap preserves the same call sites.
  * @returns          Ordered RetrievalResult[] (most similar first), or [] on miss.
  */
 export async function pineconeRetrieve(
   query: string,
   userLang: 'en' | 'ms' | 'zh',
+  opts?: RetrieveOpts,
 ): Promise<RetrievalResult[]> {
   // ── SEAM: Pinecone retrieval (activated only when SPIKE-RAG selects this fallback) ──
   //
@@ -87,6 +92,7 @@ export async function pineconeRetrieve(
   // Prevent unused-variable linting until this seam is activated
   void (await embedText(query, { inputType: 'query' }))
   void userLang
+  void opts
 
   throw new Error(
     'Pinecone fallback adapter is not yet activated. ' +

@@ -48,6 +48,32 @@ export interface RetrievalResult {
    * Higher = more similar (for normalized unit vectors: range 0–1).
    */
   score: number
+  /**
+   * Pillar the chunk belongs to (denormalized from the parent kbDoc).
+   * Present when the chunk carries a pillar; undefined for legacy chunks not
+   * yet backfilled. Callers may use it for in-memory filtering / display.
+   */
+  pillar?: 'coach' | 'finder' | 'reply'
+  /**
+   * SOP category metadata (denormalized from the parent kbDoc when set).
+   * Used by retrieveReplySop to filter by category IN MEMORY (04-RESEARCH §Q7 —
+   * avoids a second composite index). Undefined when the chunk has no category.
+   */
+  category?: string
+}
+
+/**
+ * Optional retrieval filters for the pillar-aware retrieval path (REPLY-01).
+ *
+ * - `pillar`  — applied as an EQUALITY findNearest pre-filter
+ *   (`where('pillar','==',opts.pillar)`); must be backed by the
+ *   (pillar,lang,status,embedding) composite vector index (firestore.indexes.json).
+ * - `category` — filtered IN MEMORY after retrieval (NOT a pre-filter) so we do
+ *   NOT need a second composite index per category (04-RESEARCH §Q7 / Pitfall F).
+ */
+export interface RetrieveOpts {
+  pillar?: 'coach' | 'finder' | 'reply'
+  category?: string
 }
 
 /** findNearest limit: top-K results per retrieval query. */
@@ -75,11 +101,16 @@ const FIND_NEAREST_LIMIT = 8
  *
  * @param query      Raw user query text (caller must have PDPA-redacted any PII upstream).
  * @param userLang   Language of the current conversation turn.
+ * @param opts       Optional pillar/category filters (REPLY-01). When `opts.pillar`
+ *                   is set, a `where('pillar','==',opts.pillar)` equality pre-filter is
+ *                   added (index-backed). When `opts.category` is set, results are
+ *                   narrowed IN MEMORY (no second index — 04-RESEARCH §Q7).
  * @returns          Ordered RetrievalResult[] (most similar first), or [] on miss.
  */
 export async function firestoreRetrieve(
   query: string,
   userLang: 'en' | 'ms' | 'zh',
+  opts?: RetrieveOpts,
 ): Promise<RetrievalResult[]> {
   // 1. Embed the query
   const q = await embedText(query, { inputType: 'query' })
@@ -88,16 +119,26 @@ export async function firestoreRetrieve(
   //    For userLang='en': ['en', 'en'] is acceptable; Firestore de-dupes it.
   const langFilter = [userLang, 'en'] as const
 
-  // 3. Run findNearest against the kbChunks collection
-  //    Two pre-filters are applied before the vector search:
+  // 3. Run findNearest against the kbChunks collection.
+  //    Pre-filters applied before the vector search (all equality-only — Pitfall 6):
   //      a) lang filter — only chunks in the user's language + EN fallback
   //      b) status='published' filter — Pitfall 3 fix (02-02): superseded/unpublished
-  //         chunks are never served to the Coach; backed by the lang+status+embedding
-  //         composite index added in 02-01 Task 2.
-  const snap = await adminDb
+  //         chunks are never served; backed by the lang+status+embedding composite index.
+  //      c) pillar filter (REPLY-01, optional) — when opts.pillar is set, restrict to that
+  //         pillar so reply drafts never cite Coach chunks; backed by the new
+  //         (pillar,lang,status,embedding) composite vector index (firestore.indexes.json).
+  //    NOTE: category is intentionally NOT a pre-filter — it is narrowed in memory below
+  //    to avoid a second composite index (04-RESEARCH §Q7).
+  let baseQuery = adminDb
     .collection('kbChunks')
     .where('lang', 'in', langFilter)
     .where('status', '==', 'published')
+
+  if (opts?.pillar) {
+    baseQuery = baseQuery.where('pillar', '==', opts.pillar)
+  }
+
+  const snap = await baseQuery
     .findNearest({
       vectorField: 'embedding',
       queryVector: FieldValue.vector(q),
@@ -111,7 +152,7 @@ export async function firestoreRetrieve(
     return [] // retrieval miss
   }
 
-  return snap.docs.map((d) => {
+  const results: RetrievalResult[] = snap.docs.map((d) => {
     const data = d.data()
     return {
       chunkId: d.id,
@@ -121,6 +162,16 @@ export async function firestoreRetrieve(
       // Firestore DOT_PRODUCT distance: lower distance = more similar.
       // We store as-is; buildCitations handles ranking by position.
       score: typeof data._distance === 'number' ? (data._distance as number) : 1,
+      pillar: data.pillar as 'coach' | 'finder' | 'reply' | undefined,
+      category: typeof data.category === 'string' ? (data.category as string) : undefined,
     }
   })
+
+  // 5. In-memory category narrowing (REPLY-06). Categories are few and the top-K
+  //    result set is small, so an in-memory filter is cheaper than a second index.
+  if (opts?.category) {
+    return results.filter((r) => r.category === opts.category)
+  }
+
+  return results
 }

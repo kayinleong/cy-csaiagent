@@ -112,6 +112,31 @@
         { "fieldPath": "seniorCoachId", "order": "ASCENDING" },
         { "fieldPath": "lastSeenAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "kbChunks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pillar", "order": "ASCENDING" },
+        { "fieldPath": "lang", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        {
+          "fieldPath": "embedding",
+          "vectorConfig": {
+            "dimension": "1024",
+            "flat": {}
+          }
+        }
+      ]
+    },
+    {
+      "collectionGroup": "kbDocs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pillar", "order": "ASCENDING" },
+        { "fieldPath": "category", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
