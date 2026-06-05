@@ -159,18 +159,28 @@ describe('Reply agent: ambiguous → clarifyingQuestion (RED until Plan 04-05)',
 
 // ─── Test 4: ReplyOutputSchema XOR invariant ──────────────────────────────────
 
-describe('ReplyOutputSchema (RED until Plan 04-05)', () => {
-  it.fails('parses a valid draft-only output', async () => {
-    // @ts-expect-error - module created in Plan 04-05 (Wave 2); import resolves then
+describe('ReplyOutputSchema (Plan 04-05)', () => {
+  it('parses a valid draft-only output', async () => {
     const { ReplyOutputSchema } = await import('@/src/agents/reply/schema')
     const output = { draft: { text: 'Hi! What is your budget and timeline?', sopDocIds: ['sop-cold-001'] } }
     expect(() => ReplyOutputSchema.parse(output)).not.toThrow()
   })
 
-  it.fails('parses a valid noSopMatch-only output', async () => {
-    // @ts-expect-error - module created in Plan 04-05 (Wave 2); import resolves then
+  it('rejects a draft with an empty sopDocIds array (grounding trail required)', async () => {
+    const { ReplyOutputSchema } = await import('@/src/agents/reply/schema')
+    const output = { draft: { text: 'Hi! What is your budget?', sopDocIds: [] } }
+    expect(() => ReplyOutputSchema.parse(output)).toThrow()
+  })
+
+  it('parses a valid noSopMatch-only output', async () => {
     const { ReplyOutputSchema } = await import('@/src/agents/reply/schema')
     const output = { noSopMatch: { reason: 'no_sop_match', message: 'No D2 reply SOP for this — draft manually.' } }
+    expect(() => ReplyOutputSchema.parse(output)).not.toThrow()
+  })
+
+  it('parses a valid clarifyingQuestion-only output', async () => {
+    const { ReplyOutputSchema } = await import('@/src/agents/reply/schema')
+    const output = { clarifyingQuestion: 'Could you paste the full message from the lead?' }
     expect(() => ReplyOutputSchema.parse(output)).not.toThrow()
   })
 })

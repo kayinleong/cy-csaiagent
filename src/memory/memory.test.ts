@@ -555,6 +555,110 @@ describe('readFinderSlot (returning-client recall FIND-06, 03-06)', () => {
   })
 })
 
+describe('readReplySlot (per-lead reply context recall REPLY-03, 04-05)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('replySlot-read: readReplySlot returns the stored ReplySlot when it exists', async () => {
+    const { readReplySlot } = await import('./leadContext')
+
+    const stored = {
+      classification: 'cold-prospect' as const,
+      latestDraft: 'Hi! What is your budget and timeline?',
+      sopDocIds: ['sop-cold-001'],
+      lastDraftedAt: 1_700_000_000_000,
+    }
+
+    const { leadContextRef: mockedLeadContextRef } = await import('@/src/firebase/collections')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(mockedLeadContextRef as any)().doc.mockReturnValue({
+      get: vi.fn().mockResolvedValue({
+        exists: true,
+        data: () => ({
+          tenantId: 'd2',
+          coachSlot: {},
+          finderSlot: {},
+          replySlot: stored,
+          rollingSummary: '',
+          updatedAt: new Date(),
+        }),
+      }),
+      update: mockLeadContextUpdate,
+    })
+
+    const result = await readReplySlot('lead-reply-001')
+
+    expect(result).not.toBeNull()
+    expect(result?.classification).toBe('cold-prospect')
+    expect(result?.latestDraft).toBe('Hi! What is your budget and timeline?')
+    expect(result?.sopDocIds).toEqual(['sop-cold-001'])
+    expect(result?.lastDraftedAt).toBe(1_700_000_000_000)
+  })
+
+  it('replySlot-read: readReplySlot returns null on first-touch (doc missing)', async () => {
+    const { readReplySlot } = await import('./leadContext')
+
+    const { leadContextRef: mockedLeadContextRef } = await import('@/src/firebase/collections')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(mockedLeadContextRef as any)().doc.mockReturnValue({
+      get: vi.fn().mockResolvedValue({ exists: false, data: () => undefined }),
+      update: mockLeadContextUpdate,
+    })
+
+    const result = await readReplySlot('lead-reply-new')
+
+    expect(result).toBeNull()
+  })
+
+  it('replySlot-read: readReplySlot returns null when replySlot is empty object', async () => {
+    const { readReplySlot } = await import('./leadContext')
+
+    const { leadContextRef: mockedLeadContextRef } = await import('@/src/firebase/collections')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(mockedLeadContextRef as any)().doc.mockReturnValue({
+      get: vi.fn().mockResolvedValue({
+        exists: true,
+        data: () => ({
+          tenantId: 'd2',
+          coachSlot: {},
+          finderSlot: {},
+          replySlot: {}, // empty — Reply hasn't drafted yet
+          rollingSummary: '',
+          updatedAt: new Date(),
+        }),
+      }),
+      update: mockLeadContextUpdate,
+    })
+
+    const result = await readReplySlot('lead-reply-empty')
+
+    expect(result).toBeNull()
+  })
+
+  it('replySlot-isolation: writeLeadSlot replySlot updates ONLY replySlot — coachSlot/finderSlot untouched', async () => {
+    mockLeadContextUpdate.mockResolvedValue(undefined)
+    const replyValue = {
+      classification: 'objection' as const,
+      latestDraft: 'I understand price is a concern. Here is the value...',
+      sopDocIds: ['sop-obj-001'],
+      lastDraftedAt: 2000,
+    }
+
+    await writeLeadSlot('lead-reply-iso', 'replySlot', replyValue)
+
+    expect(mockLeadContextUpdate).toHaveBeenCalledOnce()
+    const updateArg = mockLeadContextUpdate.mock.calls[0][0] as Record<string, unknown>
+
+    expect(updateArg).toHaveProperty('replySlot', replyValue)
+    expect(updateArg).toHaveProperty('updatedAt')
+    // Slot isolation — must NOT touch coachSlot or finderSlot (REPLY-03 / SC2)
+    expect(updateArg).not.toHaveProperty('coachSlot')
+    expect(updateArg).not.toHaveProperty('finderSlot')
+  })
+})
+
 describe('mergeFinderCriteria (re-rank without re-typing FIND-08, 03-06)', () => {
   // mergeFinderCriteria is NOT yet implemented — these will fail RED.
 

@@ -59,6 +59,36 @@ export interface FinderSlot {
   lastRankedAt: number
 }
 
+// ─── ReplySlot typed shape (REPLY-03, D-06) ────────────────────────────────────
+
+/**
+ * Typed shape of the Reply agent's write slot on `leadContext/{leadId}`.
+ *
+ * Stored and read by the Reply agent only. Enables per-lead reply context isolation
+ * (REPLY-03 / SC2) — the slot is keyed by `leadContext/{leadId}`, so cross-lead bleed
+ * is structurally impossible (the same isolation Finder proved). The slot holds:
+ *   - `classification`: the parsed inbound classification for this lead.
+ *   - `latestDraft`: the last model draft (already PDPA-redacted).
+ *   - `sopDocIds`: the SOPs cited by the latest draft (grounding trail).
+ *   - `lastDraftedAt`: epoch milliseconds of the most recent draft (mirror lastRankedAt).
+ *
+ * The slot WRITE happens in the chat route's onFinish (Plan 06), NOT inside a tool —
+ * Reply tools are read-only (Pitfall 23/36). This module only provides the reader.
+ *
+ * `lastDraftedAt` is a plain number (Date.now()) — framework-free for tests, no
+ * Firestore Timestamp dependency in the shape itself (mirror FinderSlot.lastRankedAt).
+ */
+export interface ReplySlot {
+  /** Parsed inbound classification for this lead's most recent reply turn. */
+  classification: 'cold-prospect' | 'objection' | 'financing' | 'other'
+  /** The last model draft for this lead (already PDPA-redacted). */
+  latestDraft: string
+  /** SOP doc IDs cited by the latest draft (grounding trail). */
+  sopDocIds: string[]
+  /** Epoch milliseconds of the most recent draft (Date.now()). */
+  lastDraftedAt: number
+}
+
 /**
  * Update a single agent-scoped slot on `leadContext/{leadId}`.
  *
@@ -119,6 +149,41 @@ export async function readFinderSlot(leadId: string): Promise<FinderSlot | null>
   if (!slot || Object.keys(slot).length === 0) return null
 
   return slot as unknown as FinderSlot
+}
+
+// ─── readReplySlot (REPLY-03 — per-lead reply context recall) ──────────────────
+
+/**
+ * Read the Reply agent's write slot from `leadContext/{leadId}`.
+ *
+ * Returns the stored `ReplySlot` for per-lead reply context recall:
+ *   - Non-null  → Reply has drafted for this lead before; use stored classification.
+ *   - null      → First touch; no stored reply context yet.
+ *
+ * Considers the slot "absent" when the doc is missing OR when `replySlot` is an
+ * empty object (the schema default written by Firestore rules bootstrap). This is
+ * the SAME empty-object→null semantics as readFinderSlot — copied exactly, reading
+ * `data.replySlot` instead of `data.finderSlot`.
+ *
+ * Per-lead isolation (REPLY-03 / SC2): the slot is keyed by leadId, so reading
+ * lead-B never returns lead-A content.
+ *
+ * @param leadId  The lead document ID (owner of this leadContext doc).
+ * @returns       The stored `ReplySlot`, or `null` if absent/empty.
+ */
+export async function readReplySlot(leadId: string): Promise<ReplySlot | null> {
+  const snap = await leadContextRef().doc(leadId).get()
+  if (!snap.exists) return null
+
+  const data = snap.data()
+  if (!data) return null
+
+  const slot = data.replySlot as Record<string, unknown>
+
+  // Empty object = Reply has never written to this slot yet (first-touch)
+  if (!slot || Object.keys(slot).length === 0) return null
+
+  return slot as unknown as ReplySlot
 }
 
 // ─── mergeFinderCriteria (FIND-08 — re-rank without re-typing) ─────────────────
