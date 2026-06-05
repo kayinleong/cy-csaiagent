@@ -27,7 +27,7 @@ These are hard, non-negotiable boundaries carried from PROJECT.md / config. No p
 - [x] **Phase 1: Foundations** - Shared platform core (Firebase, llm/memory/rag/audit/eval/i18n, chat shell, streaming) plus the three de-risking spikes — *complete; gates user-confirmed filled 2026-06-02*
 - [x] **Phase 2: Coach + Admin v1** - Onboarding Coach end-to-end, KB CRUD admin, senior-coach dashboard v1, to a 5–10 agent pilot — *code-complete + verified (0 code gaps); go/no-go SIGNED 2026-06-02; live-stack proofs run during pilot rollout*
 - [x] **Phase 3: Finder + Intent-Routing Activation** - Property Finder pillar and the LLM intent classifier; two pillars share one surface, pilot expands to 15–20 — *code-complete + verified (0 code gaps); 9/9 plans, 13/13 reqs; live finder/router evals + Playwright e2e + FIND-12 pilot provisioning are the live-gated human-action step*
-- [ ] **Phase 4: Reply Assistant + Reply Analytics** - Paste-and-draft WhatsApp replies in D2's voice, never auto-sent, with edit-as-signal analytics
+- [x] **Phase 4: Reply Assistant + Reply Analytics** - Paste-and-draft WhatsApp replies in D2's voice, never auto-sent, with edit-as-signal analytics — *code-complete + verified (0 code gaps) 2026-06-05; 10/10 plans, 16/16 reqs; live index/rules deploy + kbChunks.pillar backfill + emulator rules tests + live Reply evals + browser click-through are the live-gated human-action step*
 - [ ] **Phase 5: Hardening + Scale-Up** - PDPA erasure, cost/perf passes, coach dashboard v2, funnel metrics, load test for ~400 agents
 
 ## Phase Details

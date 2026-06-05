@@ -4,7 +4,7 @@
 - session: claude-code
 - branch: phase-kayinleong-01
 - started: 2026-06-05
-- status: in-progress
+- status: done
 - summary: Execute Phase 4 (Reply Assistant + Reply Analytics) — 10 plans across waves 0-6. Third pillar (Reply) mirrors the Finder shape; 3-pillar router activation; reply SOP KB + admin; edit-as-signal analytics; copy-only paste-and-draft (no auto-send). Grow-don't-fork throughout.
 
 ## What will change
@@ -43,7 +43,28 @@ Continues on branch `phase-kayinleong-01`; not pushed (standing user hold).
 
 ## Verification
 
-(gsd-verifier goal-backward verification → `04-VERIFICATION.md` after all waves)
+**gsd-verifier goal-backward verdict (`04-VERIFICATION.md`):** `human_needed` — **5/5 success criteria, 0 code gaps**, all hard guarantees confirmed. `human_needed` is solely for live-gated deployment/runtime steps (same class as Phase 1–3), NOT code gaps.
+
+**Phase-level quality gates (HEAD `8452117`):**
+- `npx tsc --noEmit` → exit 0 (clean).
+- `npx vitest run` → **525 passed / 107 skipped / 0 failed** (31 test files; +73 Reply tests over the 452 pre-Phase-4 baseline — every Wave-0 RED contract flipped GREEN).
+- `npm run lint` → 0 errors (56 pre-existing warnings, test files; none in new Phase-4 code).
+
+**Hard guarantees confirmed (8/8):** no auto-send (copy-to-clipboard is the only egress; thumbs-down is feedback, never touches clipboard/share); no WhatsApp Business API code anywhere (grep clean; WABA-GATE.md is doc-only); no Cloud Functions / no GCP beyond Firebase (grep clean); no hard-coded model IDs in Reply paths (`modelFor()` throughout); GATE-3 PII pseudonymization runs before `streamText` with lead-name injection (`assertRedacted` still throws 422); grounding mandate (`sopDocIds.min(1)`; `no_sop_match` grounded refusal, never invents); core/shell split clean (no `src/→app/` production import); per-lead isolation + required-`leadId` fail-closed (HTTP 400 before any model spend).
+
+**Three Wave-0 RESEARCH blockers closed in code:** (1) PDPA free-text coverage — IC/email/RM-financial regexes + route lead-name injection; (2) `kbChunks.pillar` migration + pillar-filtered retrieval + idempotent backfill + composite index; (3) required-`leadId` fail-closed.
+
+### Regression report (phase-level)
+- **Regression surface:** Coach + Finder pillars, the shared chat route GATE ordering, the rag/kb pipeline, audit/PDPA, leadContext slots, the admin KB app, and the senior-coach dashboard.
+- **Ruled out:** Coach/Finder dispatch unregressed (route+coach 66/66 green; sync `route()` untouched so the stall-detect caller is unaffected — Pitfall 7/T-03-18). `kbChunks.pillar` is backward-compatible (absent ⇒ `'coach'`); existing 11 Firestore indexes untouched (Phase-4 indexes additive). PDPA changes are additive redaction (existing name/phone behavior preserved; IC/email/financial added). `leadContext` gains `replySlot` alongside the untouched coach/finder slots. `(admin)/kb` grown with a client-side pillar tab (existing CRUD untouched). The dashboard gains one role-conditional panel (existing CDASH panels untouched). i18n catalogs gained additive Phase-4 keys only (all three parse as JSON).
+- **Full prior-phase suite green** at HEAD (525 pass / 0 fail) — no cross-phase regression detected.
+
+### Open human-action gate (live-gated — NOT code gaps, consistent with Phase 1–3)
+1. `firebase deploy --only firestore:indexes,firestore:rules` (additive `kbChunks` pillar vector index + `replyEdits` indexes/rules) before any live Reply query/dashboard read.
+2. One-time `npx tsx scripts/backfill-kb-chunks-pillar.ts` so pre-Phase-4 chunks gain `pillar` (else silently excluded by the pillar pre-filter).
+3. Emulator-gated `replyEdits` rules tests (`npm run test:rules`) — authored, run against a live Firestore emulator.
+4. Live Promptfoo trilingual Reply evals (Anthropic/Gemini keys + Opus judge from Remote Config + seeded SOPs); ≥90% EN tone PASS target.
+5. Browser click-through on a deployed seeded stack: copy-only draft flow + Copied transition, lead-selector gating a leadless Reply, parallel-lead isolation, the Reply Quality dashboard panel (downline vs org), and a Reply SOP created via the admin pillar filter. BM/中文 voice strings await Derek's native sign-off.
 
 ### 04-01 Regression Report (Wave 0)
 

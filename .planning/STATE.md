@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: phase-4-planned
-stopped_at: Phase 4 planned + verified (10 plans, waves 0-6; checker VERIFICATION PASSED iter 2) — next is /gsd-execute-phase 4 (human-gated)
+status: executed-human-gated
+stopped_at: Phase 4 code-complete + verified (10 SUMMARYs; 0 code gaps) — live index/rules deploy + kbChunks.pillar backfill + emulator rules tests + live Reply evals + browser click-through are the live-gated human step
 last_updated: "2026-06-05T00:00:00.000Z"
-last_activity: 2026-06-05 — Phase 4 planned. Research (3 Wave-0 blockers surfaced: PDPA free-text gap, kbChunks.pillar missing, leadId not fail-closed) + UI-SPEC + VALIDATION + PATTERNS, then 10 PLAN.md (waves 0-6), checker found 1 blocker (ADMIN-06 thumbs-down producer) + 1 warning (kb-miss write) → revised → VERIFICATION PASSED. 15/15 REQ-IDs covered. NOT pushed (user hold).
+last_activity: 2026-06-05 — Phase 4 (Reply Assistant + Reply Analytics) executed (all 10 plans, waves 0-6) + verified. tsc clean, 525 vitest pass / 107 skipped / 0 fail, lint 0 err. Verifier=human_needed only for 5 live-gated steps (0 code gaps); 8/8 hard guarantees pass (no auto-send, no WABA code, no GCP-beyond-Firebase, model-from-RC, PDPA boundary w/ free-text coverage closed, grounding, core-shell, per-lead isolation); no regressions. NOT pushed (user hold).
 progress:
   total_phases: 5
   completed_phases: 3
@@ -21,18 +21,25 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-31)
 
 **Core value:** Compress new-agent ramp-up from 60 days to 7–10 days via a D2-grounded multi-pillar AI chat surface (the 11pm-on-a-phone answer).
-**Current focus:** Phase 4 — Reply Assistant + Reply Analytics (next)
+**Current focus:** Phase 5 — Hardening + Scale-Up (next)
 
 ## Current Position
 
-Phase: 3 of 5 complete (Finder + Intent-Routing Activation) — Phase 4 planned + verified, next: /gsd-execute-phase 4
-Plan: Phase 4 = 10 plans (waves 0-6), checker VERIFICATION PASSED (iter 2), 15/15 REQ-IDs covered; Phase 3 = 9/9 code-complete + verified
-Status: Phase 4 ready to execute (human-gated). 3 Wave-0 blockers planned (PDPA free-text coverage, kbChunks.pillar migration, required-leadId fail-closed).
-Last activity: 2026-06-05 — Phase 4 planned + verified (research→ui→validation→patterns→plan→check×2). NOT pushed (user hold).
+Phase: 4 of 5 complete (Reply Assistant + Reply Analytics) — next: Phase 5
+Plan: Phase 4 = 10/10 plans code-complete + verified (waves 0-6); all three pillars (Coach + Finder + Reply) now live in one chat surface
+Status: Phase 4 code-complete + verified (0 code gaps) — live index/rules deploy + kbChunks.pillar backfill + emulator rules tests + live Reply evals + browser click-through are the live-gated human step
+Last activity: 2026-06-05 — Phase 4 executed (10 plans, 7 waves) + verified; tsc clean, 525 vitest pass / 107 skipped / 0 fail; verifier=human_needed for live steps only (0 code gaps); 8/8 hard guarantees pass; no regressions. NOT pushed (user hold).
 
-Progress: [██████░░░░] 60% (3 of 5 phases code-complete + verified; Phase 4 planned + verified, ready to execute)
+Progress: [████████░░] 80% (4 of 5 phases code-complete + verified)
 
-### Phase 3 open human-action gate (live-gated — does NOT block Phase 4 planning)
+### Phase 4 open human-action gate (live-gated — does NOT block Phase 5 planning)
+1. `firebase deploy --only firestore:indexes,firestore:rules` — additive `kbChunks` pillar vector index + `replyEdits` indexes/rules.
+2. One-time `npx tsx scripts/backfill-kb-chunks-pillar.ts` — backfill `pillar` onto pre-Phase-4 chunks.
+3. Emulator-gated `replyEdits` rules tests (`npm run test:rules`).
+4. Live Promptfoo trilingual Reply evals (Anthropic/Gemini + Opus judge from Remote Config + seeded SOPs); ≥90% EN tone PASS.
+5. Browser click-through: copy-only draft flow, lead-selector gating, parallel-lead isolation, Reply Quality dashboard, admin Reply-SOP create. BM/中文 voice strings await Derek's native sign-off.
+
+### Phase 3 open human-action gate (live-gated — carried)
 1. Live Promptfoo finder/router evals — need live Anthropic/Gemini/Firestore + Opus judge (model from Remote Config).
 2. Playwright `e2e/finder-flow.spec.ts` + `e2e/inventory-admin.spec.ts` — skip-guarded scaffolds; remove `test.skip`, run against a deployed seeded stack.
 3. FIND-12 pilot provisioning — `scripts/provision-finder-pilot.ts --apply` to 15–20 real finder-pilot agents (dry-run by default).
