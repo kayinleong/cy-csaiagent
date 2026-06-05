@@ -90,13 +90,13 @@ describe('classifyIntent — activated LLM classifier', () => {
     expect(result.reason).toBe('property matching request')
   })
 
-  // ── REPLY-10 (Phase 4): the RouteSchema enum widens to 3 pillars. ──
-  // The Phase-3 schema is ['coach','finder'] and REJECTS 'reply'. Phase-4 (Plan 04-04)
-  // widens it to ['coach','finder','reply'] so the classifier can route the third pillar.
-  // This test asserts the Schema ACCEPTS 'reply' — it is EXPECTED-FAIL (`it.fails`) today
-  // (the schema still rejects 'reply'), keeping the offline suite green; it flips to a
-  // real pass when 04-04 widens the enum, at which point the implementer removes `.fails`.
-  it.fails('accepts "reply" in the RouteSchema enum (RED until Plan 04-04 widens the enum)', async () => {
+  // ── REPLY-10 (Phase 4): the RouteSchema enum is now ternary. ──
+  // The Phase-3 schema was ['coach','finder'] and REJECTED 'reply'. Plan 04-04 widened
+  // it to ['coach','finder','reply'] so the classifier can route the third pillar.
+  // These assertions (schema ACCEPTS 'reply') were EXPECTED-FAIL (`it.fails`) RED guards
+  // against the binary enum; 04-04 widened the enum, so they are now real passing
+  // assertions (the `.fails` markers have been removed — INVERTED per 04-RESEARCH §Q8).
+  it('accepts "reply" in the RouteSchema enum (GREEN since Plan 04-04 widened the enum)', async () => {
     let capturedSchema: { parse?: (v: unknown) => unknown } | undefined
     mocks.mockGenerateObject.mockImplementationOnce(async ({ schema }: { schema: { parse?: (v: unknown) => unknown } }) => {
       capturedSchema = schema
@@ -109,10 +109,10 @@ describe('classifyIntent — activated LLM classifier', () => {
     expect(() => capturedSchema?.parse?.({ pillar: 'reply', confidence: 0.9, reason: 'test' })).not.toThrow()
   })
 
-  it.fails('the RouteSchema passed to generateObject validates a reply classification (RED until Plan 04-04)', async () => {
+  it('the RouteSchema passed to generateObject validates a reply classification', async () => {
     // Capture the schema the classifier hands to generateObject and assert it
-    // VALIDATES a reply result. RED today: the binary enum rejects 'reply' on parse.
-    // Plan 04-04 widens the enum so the parse succeeds and this flips to a pass.
+    // VALIDATES a reply result. Before 04-04 the binary enum rejected 'reply' on parse;
+    // 04-04 widened the enum so the parse now succeeds and returns pillar:'reply'.
     let capturedSchema: { parse?: (v: unknown) => unknown } | undefined
     mocks.mockGenerateObject.mockImplementationOnce(async ({ schema }: { schema: { parse?: (v: unknown) => unknown } }) => {
       capturedSchema = schema
