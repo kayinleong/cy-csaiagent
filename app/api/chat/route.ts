@@ -43,20 +43,23 @@ import * as audit from '@/src/audit'
 import { routeAsync } from '@/src/router'
 import { coachAgent } from '@/src/agents/coach'
 import { finderAgent } from '@/src/agents/finder'
+import { replyAgent } from '@/src/agents/reply'
 import { modelFor } from '@/src/llm/provider'
 import {
   appendMessage,
   ensurePrimaryThread,
   readFinderSlot,
+  readReplySlot,
   mergeFinderCriteria,
   mergeDiscussed,
   writeLeadSlot,
 } from '@/src/memory'
+import { recordKnowledgeGap } from '@/src/escalation'
 import { detectLang } from '@/src/i18n/detect'
 import type { MessageDoc } from '@/src/firebase/collections'
-import { TENANT_ID } from '@/src/firebase/collections'
+import { TENANT_ID, leadsRef, agentProfilesRef } from '@/src/firebase/collections'
 import type { RetrieveHit } from '@/src/agents/coach/tools'
-import type { FinderSlot } from '@/src/memory'
+import type { FinderSlot, ReplySlot } from '@/src/memory'
 import type { ParsedCriteria } from '@/src/inventory/search'
 
 // ─── Runtime configuration ────────────────────────────────────────────────────
@@ -187,14 +190,14 @@ export async function POST(req: Request): Promise<Response> {
   let messages: Array<{ role: 'user' | 'assistant'; content: string }>
   let cid: string
   let langOverride: 'en' | 'ms' | 'zh' | undefined
-  let override: 'coach' | 'finder' | undefined
+  let override: 'coach' | 'finder' | 'reply' | undefined
   let leadId: string | undefined
   try {
     const body = await req.json() as {
       messages?: Array<{ role: 'user' | 'assistant'; content: string }>
       cid?: string
       langOverride?: 'en' | 'ms' | 'zh'
-      override?: 'coach' | 'finder'
+      override?: 'coach' | 'finder' | 'reply'
       leadId?: string
     }
     messages = body.messages ?? []
@@ -204,9 +207,11 @@ export async function POST(req: Request): Promise<Response> {
       ? (body.langOverride as 'en' | 'ms' | 'zh')
       : undefined
     // override: manual pillar chip from the UI — validated against enum (T-03-28)
-    // Only accept 'coach' or 'finder' — invalid values are ignored for security
-    override = (['coach', 'finder'] as const).includes(body.override as 'coach' | 'finder')
-      ? (body.override as 'coach' | 'finder')
+    // Only accept 'coach', 'finder', or 'reply' — invalid values are ignored for security.
+    // The allow-list widens for the Reply pillar (Plan 04-06); the invalid→undefined
+    // coercion is PRESERVED exactly (an injected 'admin'/garbage override still drops).
+    override = (['coach', 'finder', 'reply'] as const).includes(body.override as 'coach' | 'finder' | 'reply')
+      ? (body.override as 'coach' | 'finder' | 'reply')
       : undefined
     // leadId: the lead this conversation is about — used for finderSlot write
     // Accept as-is; ownership enforced by Firestore rules (T-03-28)
@@ -244,12 +249,33 @@ export async function POST(req: Request): Promise<Response> {
   // Pseudonymize any PII in the message content BEFORE the prompt leaves the server.
   // assertRedacted() THROWS PdpaViolationError if pdpa_redacted !== true.
   // This gate is called immediately before streamText for ALL pillars (T-01-38, T-03-26).
-  // Pasted lead criteria (Finder path) may contain PII — gate applies equally.
+  // Pasted lead criteria (Finder path) and pasted WhatsApp inbounds (Reply path) may
+  // contain PII — the gate applies equally.
+  //
+  // Lead-name injection (Plan 04-06, RESEARCH §Q3 / T-04-PDPA-route): read the lead's
+  // known name from the lead record whenever a leadId is present, and pass it as
+  // knownNames so replaceNames actually fires (closing the previously-empty `names: []`
+  // hook). This is done defensively for ANY pillar with a leadId (so Finder pastes are
+  // covered too), since routeAsync (GATE 4) runs AFTER this gate — the pillar is not yet
+  // known here. Combined with the Wave-1 IC/email/RM-financial regexes, this tokenizes a
+  // pasted lead name before the cross-border model call. Best-effort: a lead-read failure
+  // must NOT crash the request — the gate still runs with whatever names were resolved.
+  const knownNames: string[] = []
+  if (leadId) {
+    try {
+      const leadSnap = await leadsRef().doc(leadId).get()
+      const leadName = leadSnap.data()?.name
+      if (leadName) knownNames.push(leadName)
+    } catch {
+      // Lead-read failure never blocks the gate — knownNames stays as-is (no PII leak;
+      // the request proceeds with phone/IC/email/financial regex coverage still active).
+    }
+  }
   const { redacted, pdpa_redacted } = pseudonymize(
     {
       messages: messages as Array<{ role: string; content: string }>,
     },
-    [], // knownNames — will inject lead names from leadContext when available
+    knownNames,
   )
 
   try {
@@ -275,6 +301,19 @@ export async function POST(req: Request): Promise<Response> {
   const pillar = decision.pillar
   // routeDecision encodes pillar:reason for observability + eval (D-02, T-03-27)
   const routeDecision = `${pillar}:${decision.reason}`
+
+  // ── Required-leadId fail-closed for the Reply pillar (D-07, T-04-BLEED-route) ─
+  // A Reply turn drafts in the context of ONE specific lead. Drafting against the
+  // wrong (or absent) lead is the worst failure mode — a reply could leak one lead's
+  // context into another's thread. The UI prevents a leadless reply, but the server
+  // MUST also fail closed: return 400 BEFORE streamText so no model spend occurs.
+  // Coach/Finder keep leadId optional — this gate is Reply-only.
+  if (pillar === 'reply' && !leadId) {
+    return new Response(JSON.stringify({ error: 'leadId required for reply' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
 
   // ── Dispatch: build agent system prompt + tools based on pillar ──────────────
   // Phase 3 adds the Finder branch alongside the existing Coach branch.

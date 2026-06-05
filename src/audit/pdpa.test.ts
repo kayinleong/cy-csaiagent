@@ -188,16 +188,20 @@ describe('pseudonymize', () => {
     // Wave 1: the route injects known lead names from the lead record so replaceNames
     // fires. This test asserts the token-coverage contract for when names ARE passed
     // (the route-level mitigation), NOT free-text NER (deferred to Phase-5 hardening).
-    it.fails('free-text name: an unknown name is tokenized once the route injects lead names (RED until Wave 1 route injection)', () => {
-      // Today names:[] leaks the name (no NER). Wave 1's route reads leads/{leadId}.name
-      // and passes it as names[]. Here we assert the CONTRACT: when the name IS the
-      // injected known-name, it must be tokenized. This currently fails because the
-      // paste arrives with names:[] — proving the route-injection hook is unfinished.
+    it('free-text name: a pasted lead name is tokenized once the route injects lead names (GREEN as of Plan 04-06 route injection)', () => {
+      // The route (app/api/chat/route.ts GATE 3, Plan 04-06) now reads leads/{leadId}.name
+      // and passes it as names[] — closing the previously-empty `names: []` hook. Here we
+      // assert the CONTRACT the route mitigation produces: when the pasted lead name IS the
+      // injected known-name, replaceNames fires and the raw name does NOT survive to the
+      // model. (This is the route-level mitigation, NOT free-text NER — NER stays deferred
+      // to Phase-5 hardening.)
       const pastedInbound = 'Hi, Siti here, keen on the Cheras unit.'
-      const result = pseudonymize({ messages: [{ role: 'user', content: pastedInbound }] }, [])
+      // Simulate the route injecting the lead's known name (leads/{leadId}.name = 'Siti').
+      const result = pseudonymize({ messages: [{ role: 'user', content: pastedInbound }] }, ['Siti'])
       const out = result.redacted.messages[0].content
-      // Wave-1 expectation: with route-injected names the lead name does not survive.
+      // With route-injected names the lead name does not survive — it becomes <LEAD_ID:…>.
       expect(out).not.toContain('Siti')
+      expect(out).toContain('<LEAD_ID:')
     })
   })
 

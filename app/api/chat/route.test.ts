@@ -52,6 +52,11 @@ const mocks = vi.hoisted(() => {
   const mockReplyMakeTools = vi.fn(() => ({ retrieveReplySop: {}, fetchVoiceSamples: {}, fetchLeadContext: {} }))
   const mockReadReplySlot = vi.fn(async () => null)
   const mockRecordKnowledgeGap = vi.fn(async () => {})
+  // 04-06: lead-record read (GATE-3 name injection) + agent-profile read (kb-miss coach scoping)
+  const mockLeadGet = vi.fn(async () => ({ data: () => ({ name: 'Siti' }) }))
+  const mockLeadsRef = vi.fn(() => ({ doc: vi.fn(() => ({ get: mockLeadGet })) }))
+  const mockAgentProfileGet = vi.fn(async () => ({ data: () => ({ seniorCoachId: 'coach-uid-001' }) }))
+  const mockAgentProfilesRef = vi.fn(() => ({ doc: vi.fn(() => ({ get: mockAgentProfileGet })) }))
 
   return {
     mockRequireUser,
@@ -77,6 +82,10 @@ const mocks = vi.hoisted(() => {
     mockReplyMakeTools,
     mockReadReplySlot,
     mockRecordKnowledgeGap,
+    mockLeadGet,
+    mockLeadsRef,
+    mockAgentProfileGet,
+    mockAgentProfilesRef,
   }
 })
 
@@ -162,6 +171,10 @@ vi.mock('next/server', () => ({
 
 vi.mock('@/src/firebase/collections', () => ({
   TENANT_ID: 'd2',
+  // 04-06: lead-record read for GATE-3 name injection (route reads leads/{leadId}.name)
+  leadsRef: mocks.mockLeadsRef,
+  // 04-06: agent-profile read for kb-miss coach scoping (route reads agentProfiles/{uid}.seniorCoachId)
+  agentProfilesRef: mocks.mockAgentProfilesRef,
 }))
 
 // 04-01 Wave 0: reply agent + kb-miss feed mocks (consumed once Plan 04-05/04-06 wire
@@ -981,7 +994,7 @@ describe('04-01 (REPLY-02): reply dispatch builds reply prompt + tools + modelFo
 })
 
 describe('04-01 (REPLY-04 / D-07): reply turn without leadId fails closed with HTTP 400', () => {
-  it.fails('a reply turn with NO leadId returns HTTP 400 (server fail-closed, RED until Plan 04-06)', async () => {
+  it('a reply turn with NO leadId returns HTTP 400 (server fail-closed — GREEN as of Plan 04-06)', async () => {
     mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'reply', reason: 'heuristic-reply:draft-a-reply' })
 
     const req = buildRequest({
@@ -992,11 +1005,13 @@ describe('04-01 (REPLY-04 / D-07): reply turn without leadId fails closed with H
 
     const response = await POST(req)
     expect(response.status).toBe(400)
+    // Fail-closed BEFORE any model spend — streamText must NOT have been called.
+    expect(mocks.mockStreamText).not.toHaveBeenCalled()
   })
 })
 
 describe('04-01 (PDPA / Q3): reply turn injects known lead names into pseudonymize', () => {
-  it.fails('pseudonymize receives a NON-empty names[] for a reply turn with a leadId (RED until Plan 04-06)', async () => {
+  it('pseudonymize receives a NON-empty names[] for a reply turn with a leadId (GREEN as of Plan 04-06)', async () => {
     mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'reply', reason: 'heuristic-reply:draft-a-reply' })
 
     const req = buildRequest({

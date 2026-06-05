@@ -15,7 +15,7 @@
 export { appendMessage, loadRecent, ensurePrimaryThread, listConversations, searchConversations } from './conversation'
 export type { MessageRecord, ConversationRecord } from './conversation'
 
-export { writeLeadSlot, readFinderSlot, mergeFinderCriteria, mergeDiscussed } from './leadContext'
-export type { LeadSlot, FinderSlot } from './leadContext'
+export { writeLeadSlot, readFinderSlot, readReplySlot, mergeFinderCriteria, mergeDiscussed } from './leadContext'
+export type { LeadSlot, FinderSlot, ReplySlot } from './leadContext'
 
 export { updateJourneyStage, touchLastActive, getAgentProfile } from './agentProfile'
