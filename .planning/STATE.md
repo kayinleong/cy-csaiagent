@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: phase-4-context-gathered
-stopped_at: Phase 4 context gathered (04-CONTEXT.md + 04-DISCUSSION-LOG.md committed) — next is /gsd-plan-phase 4
-last_updated: "2026-06-04T00:00:00.000Z"
-last_activity: 2026-06-04 — Phase 4 (Reply Assistant + Reply Analytics) context gathered via discuss-phase --auto. 23 decisions (D-01..D-23) across 9 categories. Grow-don't-fork discipline: Reply mirrors Finder shape; extends router/dispatch/leadSlot/admin/dashboard in place. NOT pushed (user hold).
+status: phase-4-planned
+stopped_at: Phase 4 planned + verified (10 plans, waves 0-6; checker VERIFICATION PASSED iter 2) — next is /gsd-execute-phase 4 (human-gated)
+last_updated: "2026-06-05T00:00:00.000Z"
+last_activity: 2026-06-05 — Phase 4 planned. Research (3 Wave-0 blockers surfaced: PDPA free-text gap, kbChunks.pillar missing, leadId not fail-closed) + UI-SPEC + VALIDATION + PATTERNS, then 10 PLAN.md (waves 0-6), checker found 1 blocker (ADMIN-06 thumbs-down producer) + 1 warning (kb-miss write) → revised → VERIFICATION PASSED. 15/15 REQ-IDs covered. NOT pushed (user hold).
 progress:
   total_phases: 5
   completed_phases: 3
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 
 ## Current Position
 
-Phase: 3 of 5 complete (Finder + Intent-Routing Activation) — Phase 4 context gathered, next: /gsd-plan-phase 4
-Plan: Phase 4 has 0 plans yet (CONTEXT.md ready); Phase 3 = 9/9 plans w/ SUMMARY (code-complete + verified)
-Status: Phase 4 context gathered (--auto, 23 decisions, 9 categories). Reply mirrors Finder; grow-don't-fork everywhere.
-Last activity: 2026-06-04 — Phase 4 discuss-phase --auto: 04-CONTEXT.md + 04-DISCUSSION-LOG.md created. NOT pushed (user hold).
+Phase: 3 of 5 complete (Finder + Intent-Routing Activation) — Phase 4 planned + verified, next: /gsd-execute-phase 4
+Plan: Phase 4 = 10 plans (waves 0-6), checker VERIFICATION PASSED (iter 2), 15/15 REQ-IDs covered; Phase 3 = 9/9 code-complete + verified
+Status: Phase 4 ready to execute (human-gated). 3 Wave-0 blockers planned (PDPA free-text coverage, kbChunks.pillar migration, required-leadId fail-closed).
+Last activity: 2026-06-05 — Phase 4 planned + verified (research→ui→validation→patterns→plan→check×2). NOT pushed (user hold).
 
-Progress: [██████░░░░] 60% (3 of 5 phases code-complete + verified; Phase 4 context ready)
+Progress: [██████░░░░] 60% (3 of 5 phases code-complete + verified; Phase 4 planned + verified, ready to execute)
 
 ### Phase 3 open human-action gate (live-gated — does NOT block Phase 4 planning)
 1. Live Promptfoo finder/router evals — need live Anthropic/Gemini/Firestore + Opus judge (model from Remote Config).
