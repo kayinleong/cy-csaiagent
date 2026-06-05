@@ -177,6 +177,7 @@ export async function processBatch(jobId: string, limit: number): Promise<Proces
     total,
     docId,
     lang,
+    pillar,
     supersedesId,
   } = jobData
 
@@ -205,12 +206,15 @@ export async function processBatch(jobId: string, limit: number): Promise<Proces
     const tokens = countTokens(text)
 
     // status:'published' — new ingests are published once embedded (Pitfall 3 fix, 02-02).
-    // Denormalized from the parent kbDoc; must stay in sync on publish/supersede/unpublish
+    // pillar — denormalized from the parent job/kbDoc so retrieveReplySop can pre-filter
+    // findNearest by pillar (REPLY-01, 04-03 / 04-RESEARCH §Q7). Both fields are
+    // denormalized from the parent kbDoc and must stay in sync on publish/supersede/unpublish
     // (see src/kb/crud.ts markSuperseded / publishDoc / unpublishDoc).
     await chunksRef.add({
       docId,
       text,
       lang,
+      pillar,
       ownerCollection: 'kbDocs',
       embedding,
       tokens,

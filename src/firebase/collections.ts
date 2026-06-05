@@ -276,6 +276,12 @@ export interface KbDocDoc {
   correctedBy?: string
   lang: 'en' | 'ms' | 'zh'
   pillar: 'coach' | 'finder' | 'reply'
+  /**
+   * SOP category metadata (D-09) — net-new, optional. Existing docs have none.
+   * Canonical Reply values seeded but not hard-coded: 'cold-prospect',
+   * 'objection-handling', 'financing', 'voice'. Free-form open string.
+   */
+  category?: string
   publishedAt: Date | FieldValue
 }
 
@@ -294,6 +300,16 @@ export interface KbChunkDoc {
    * and a backfill that sets 'published' on all existing chunks written without a status.
    */
   status?: 'published' | 'unpublished' | 'superseded'
+  /**
+   * Denormalized from the parent kbDoc.pillar — allows retrieval to pre-filter
+   * findNearest by pillar (e.g. `where('pillar','==','reply')`) without a
+   * parent-doc JOIN (REPLY-01, 04-RESEARCH §Q7 / Pitfall B). Must be kept in
+   * sync with the parent kbDoc.pillar on every ingest.
+   * Optional for backwards-compat with pre-Phase-4 chunks written without it;
+   * the 04-03 backfill (scripts/backfill-kb-chunks-pillar.ts) stamps pillar:'coach'
+   * on all existing chunks that have none (D-08 default).
+   */
+  pillar?: 'coach' | 'finder' | 'reply'
   /** 1024-d normalized vector (Gemini gemini-embedding-001, DOT_PRODUCT) */
   embedding: number[]
   tokens: number
@@ -388,6 +404,15 @@ export interface KnowledgeGapDoc {
   count: number
   /** Timestamp of the most recent miss for this topic (used for gap-feed ordering). */
   lastSeenAt: Date | FieldValue
+  /**
+   * pillar discriminator (D-11) — Reply no_sop_match misses set 'reply';
+   * existing/coach misses omit it (absent ⇒ treat as 'coach' for backward
+   * compatibility with Phase-2 gap rows). OPTIONAL — the existing
+   * recordKnowledgeGap writer keeps compiling without setting it; Plan 06's
+   * Reply route onFinish sets pillar:'reply' so Derek's dashboard can separate
+   * Coach training gaps from Reply SOP gaps.
+   */
+  pillar?: 'coach' | 'reply'
 }
 
 /**

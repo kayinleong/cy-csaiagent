@@ -62,6 +62,12 @@ export interface CreateDocInput {
   content: string
   lang: 'en' | 'ms' | 'zh'
   pillar: 'coach' | 'finder' | 'reply'
+  /**
+   * SOP category metadata (D-09) — optional. Reply canonical values:
+   * 'cold-prospect' | 'objection-handling' | 'financing' | 'voice'.
+   * Free-form open string; persisted on the kbDoc when present.
+   */
+  category?: string
 }
 
 export interface CreateDocFromFileInput {
@@ -81,6 +87,8 @@ export interface UpdateDocInput {
   content?: string
   lang?: 'en' | 'ms' | 'zh'
   pillar?: 'coach' | 'finder' | 'reply'
+  /** SOP category metadata (D-09) — optional; persisted on the new version when present. */
+  category?: string
   /** UID of the actor who created this correction version (CDASH-04 attribution). */
   correctedBy?: string
 }
@@ -128,6 +136,8 @@ export async function createDoc(
     version: 1,
     lang: input.lang,
     pillar: input.pillar,
+    // Persist SOP category metadata only when provided (D-09).
+    ...(input.category !== undefined ? { category: input.category } : {}),
     status: 'published',
     publishedAt: FieldValue.serverTimestamp(),
   }
@@ -280,6 +290,8 @@ export async function updateDoc(
     const newDocRef = kbDocsRef().doc()
     const newDocId = newDocRef.id
 
+    // Carry the category forward: prefer the patch value, else the existing doc's.
+    const nextCategory = patch.category ?? existing.category
     const newDocData: Omit<KbDocDoc, 'tenantId'> = {
       title: patch.title ?? existing.title,
       sourcePath: `kb/${newDocId}`,
@@ -287,6 +299,8 @@ export async function updateDoc(
       supersedesId: docId,
       lang: patch.lang ?? existing.lang,
       pillar: patch.pillar ?? existing.pillar,
+      // Persist SOP category metadata only when present (D-09).
+      ...(nextCategory !== undefined ? { category: nextCategory } : {}),
       status: 'published',
       publishedAt: FieldValue.serverTimestamp(),
       // Attribution: stamp the correcting actor's uid if provided (CDASH-04)
@@ -307,6 +321,7 @@ export async function updateDoc(
     if (patch.title !== undefined) metaPatch.title = patch.title
     if (patch.lang !== undefined) metaPatch.lang = patch.lang
     if (patch.pillar !== undefined) metaPatch.pillar = patch.pillar
+    if (patch.category !== undefined) metaPatch.category = patch.category
 
     if (Object.keys(metaPatch).length > 0) {
       await kbDocsRef().doc(docId).update(metaPatch)
