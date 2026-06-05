@@ -1079,7 +1079,7 @@ describe('04-01 (REPLY-03 / SC2): parallel-lead isolation at the route level', (
 })
 
 describe('04-01 (D-11): no_sop_match reply turn records a kb-miss knowledgeGap tagged reply', () => {
-  it.fails('a reply turn resolving to no_sop_match calls recordKnowledgeGap with pillar:"reply" (RED until Plan 04-06)', async () => {
+  it('a reply turn resolving to no_sop_match calls recordKnowledgeGap with pillar:"reply" (GREEN as of Plan 04-06)', async () => {
     mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'reply', reason: 'heuristic-reply:draft-a-reply' })
 
     let resolveOnFinish: () => void

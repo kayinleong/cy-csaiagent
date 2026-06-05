@@ -52,6 +52,14 @@ export interface RecordKnowledgeGapInput {
   topic: string
   /** Language the question was asked in. */
   lang: 'en' | 'ms' | 'zh'
+  /**
+   * Optional pillar discriminator (D-11). Reply `no_sop_match` misses set 'reply' so
+   * Derek's dashboard can separate Coach training gaps from Reply SOP gaps. Existing
+   * Coach callers (emitHandoffSignal → kb_miss) omit it — when absent it is NOT written
+   * onto the upsert object, so pre-Phase-4 gap rows stay byte-for-byte unchanged (the
+   * dashboard treats an absent pillar as 'coach' for backward compatibility).
+   */
+  pillar?: 'coach' | 'reply'
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -107,7 +115,7 @@ function topicHashOf(normalized: string): string {
  * @param input - { seniorCoachId, agentUid, topic, lang }
  */
 export async function recordKnowledgeGap(input: RecordKnowledgeGapInput): Promise<void> {
-  const { seniorCoachId, agentUid, topic, lang } = input
+  const { seniorCoachId, agentUid, topic, lang, pillar } = input
 
   const normalized = normalizeTopic(topic)
   const topicHash = topicHashOf(normalized)
@@ -116,6 +124,8 @@ export async function recordKnowledgeGap(input: RecordKnowledgeGapInput): Promis
   // Write to knowledgeGaps/{topicHash}
   // merge:true makes this an upsert — count increments, lastSeenAt updates,
   // other fields (seniorCoachId, agentUid, topicLabel, lang) written on first creation.
+  // The pillar discriminator (D-11) is included ONLY when provided — omitting it keeps
+  // existing Coach gap rows unchanged (absent ⇒ treated as 'coach' by the dashboard).
   await knowledgeGapsRef().doc(topicHash).set(
     {
       tenantId: TENANT_ID,
@@ -126,6 +136,7 @@ export async function recordKnowledgeGap(input: RecordKnowledgeGapInput): Promis
       lang,
       count: FieldValue.increment(1),
       lastSeenAt: FieldValue.serverTimestamp(),
+      ...(pillar && { pillar }),
     },
     { merge: true },
   )

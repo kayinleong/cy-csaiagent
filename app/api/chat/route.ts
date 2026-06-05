@@ -188,6 +188,45 @@ export function extractReplySopIds(
   }
 }
 
+// ─── Reply no_sop_match detection helper ──────────────────────────────────────
+
+/**
+ * Detect whether a Reply turn resolved to a `no_sop_match` (D-11 kb-miss).
+ *
+ * Reads the `retrieveReplySop` tool results across all steps: a miss is `found:false`
+ * with `reason:'no_sop_match'`. When the SOP retrieval missed, the Reply agent emits a
+ * grounded refusal (never a fabricated draft) — and the route records a PDPA-safe
+ * knowledgeGaps row so Derek sees the SOP gap on the dashboard.
+ *
+ * Returns true only when at least one retrieveReplySop call missed AND no later call
+ * in the same turn found a SOP (a found hit anywhere means the turn grounded a draft —
+ * not a gap). Never throws — best-effort detection (no PII inspected).
+ *
+ * @param final  The onFinish payload from streamText (StepResult + steps array).
+ * @returns      true if the reply turn resolved to no_sop_match (no grounding hit).
+ */
+export function replyHadNoSopMatch(
+  final: { steps?: Array<{ toolResults?: Array<{ toolName?: string; result?: unknown }> }> },
+): boolean {
+  try {
+    let sawMiss = false
+    let sawHit = false
+    for (const step of final.steps ?? []) {
+      for (const tr of step.toolResults ?? []) {
+        if (tr.toolName === 'retrieveReplySop') {
+          const r = tr.result as { found?: boolean; reason?: string } | null | undefined
+          if (r && r.found === true) sawHit = true
+          if (r && r.found === false && r.reason === 'no_sop_match') sawMiss = true
+        }
+      }
+    }
+    // A hit anywhere in the turn means the draft was grounded — not a gap.
+    return sawMiss && !sawHit
+  } catch {
+    return false
+  }
+}
+
 // ─── POST handler ─────────────────────────────────────────────────────────────
 
 export async function POST(req: Request): Promise<Response> {
@@ -528,6 +567,40 @@ export async function POST(req: Request): Promise<Response> {
           sopDocIds,
           lastDraftedAt: Date.now(),
         })
+
+        // ── Reply no_sop_match → knowledgeGaps kb-miss write (D-11) ─────────
+        // When the Reply turn resolved to no_sop_match, record a PDPA-safe gap row
+        // tagged pillar:'reply' so Derek sees the SOP gap on the dashboard (ADMIN-06
+        // feedback loop). Reuses the existing Coach recordKnowledgeGap primitive — the
+        // Reply pillar has no escalation/handoff step, so the gap feed is the only
+        // target. Written HERE in onFinish, NEVER inside a tool (T-04-TOOLWRITE-route).
+        // PDPA-safe (T-04-GAP-PII): the topic passed is the ALREADY-REDACTED inbound
+        // (GATE-3 pseudonymized — names/IC/email/financial already tokenized), and
+        // recordKnowledgeGap further hashes/truncates it to a topicHash + short label.
+        // The route never hands raw client paste content to the gap feed. Wrapped in
+        // try/catch so a gap-write failure never breaks stream completion (count only).
+        if (replyHadNoSopMatch(final)) {
+          try {
+            // seniorCoachId scopes the gap row to the agent's coach (same lookup the
+            // dashboard / captureReplyEdit use). Fallback to '' on a missing profile —
+            // the gap still counts; no PII is ever logged.
+            const profileSnap = await agentProfilesRef().doc(uid).get()
+            const seniorCoachId = profileSnap.data()?.seniorCoachId ?? ''
+            // Use the REDACTED inbound as the topic descriptor (never the raw paste).
+            const redactedInbound =
+              (redactedMessages.filter((m) => m.role === 'user').at(-1)?.content) ?? ''
+            const topic = redactedInbound.length > 0 ? redactedInbound : `reply ${replyClassification}`
+            await recordKnowledgeGap({
+              seniorCoachId,
+              agentUid: uid,
+              topic,
+              lang: userLang,
+              pillar: 'reply',
+            })
+          } catch {
+            // Gap-write failure must not break the stream — swallow (no PII in logs).
+          }
+        }
       }
 
       // Decrement the rate-limit budget atomically after the turn completes
