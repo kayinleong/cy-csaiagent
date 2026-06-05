@@ -1,38 +1,65 @@
 /**
- * src/reply/reply-edit-actions.test.ts — captureReplyEdit RED tests (Wave 0).
+ * src/reply/reply-edit-actions.test.ts — captureReplyEdit tests (GREEN since Plan 04-07).
  *
- * THE ADMIN-06 PRODUCER TEST. Plan 04-07 adds the Server Action
+ * THE ADMIN-06 PRODUCER TEST. Plan 04-07 added the Server Action
  *   captureReplyEdit({ leadId, draftId, sopDocIds, originalDraft, editedFinal, lang, thumbsDown? })
  * which writes ONE replyEdits row via the Admin SDK (clients can't write — rules deny).
  * The Plan-10 thumbs-down-rate KPI aggregates `count(thumbsDown==true) / count(all)`,
- * so a `thumbsDown:true` write MUST have a guaranteed producer. Without this RED test
- * the KPI is structurally un-deliverable (threat T-04-03).
+ * so a `thumbsDown:true` write MUST have a guaranteed producer (threat T-04-03).
  *
- * STATUS: RED — `@/app/[lang]/chat/reply-edit-actions` does not exist until Plan 04-07.
- * Tests dynamically import the action inside `it.fails` blocks so the module-not-found
- * failure keeps the offline suite GREEN (exit 0) while documenting the contract. When
- * 04-07 lands the action, the imports resolve, the mocked `replyEditsRef().add(...)`
- * assertions pass, and `it.fails` flips — the implementer then removes `.fails` and
- * wires the real session/auth + Admin-SDK mocks (mirror (admin)/kb/actions.ts).
+ * GREEN as of Plan 04-07: `@/app/[lang]/chat/reply-edit-actions` now exists. The
+ * prior RED `it.fails` / `@ts-expect-error` guards have been removed and the auth +
+ * Admin-SDK collaborators are mocked (mirror the (admin)/kb/actions.ts session pattern):
+ *   - `next/headers` cookies() returns a synthetic __session cookie;
+ *   - `@/src/firebase/auth` requireUser() returns a fixed agent user;
+ *   - `@/src/firebase/collections` replyEditsRef().add and agentProfilesRef().doc().get()
+ *     are mocked so the action's write + seniorCoachId denormalization run in isolation.
  *
- * Offline only — a unit-level mock of the ref is sufficient for the RED→GREEN cycle
- * (no Firestore emulator). The replyEdits SECURITY RULES are proven separately in
- * src/firebase/__tests__/rules.test.ts.
+ * Offline only — a unit-level mock is sufficient (no Firestore emulator). The
+ * replyEdits SECURITY RULES are proven separately in src/firebase/__tests__/rules.test.ts.
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-describe('captureReplyEdit (REPLY-09 / ADMIN-06 producer) — RED until Plan 04-07', () => {
+// ─── Hoisted mocks ──────────────────────────────────────────────────────────
+// Spies declared via vi.hoisted so the mock factories (also hoisted) can close
+// over them while still being reset per test.
+const { mockAdd, mockGet } = vi.hoisted(() => ({
+  mockAdd: vi.fn(async (_doc: Record<string, unknown>) => ({ id: 'reply-edit-001' })),
+  mockGet: vi.fn(async () => ({ data: () => ({ seniorCoachId: 'coach-123' }) })),
+}))
+
+vi.mock('next/headers', () => ({
+  cookies: vi.fn(async () => ({
+    get: (_name: string) => ({ value: 'synthetic-session-token' }),
+  })),
+}))
+
+vi.mock('@/src/firebase/auth', () => ({
+  requireUser: vi.fn(async () => ({ uid: 'agent-001', role: 'new-agent', tenantId: 'd2' })),
+  UnauthorizedError: class UnauthorizedError extends Error {},
+}))
+
+vi.mock('@/src/firebase/collections', () => ({
+  replyEditsRef: vi.fn(() => ({ add: mockAdd })),
+  agentProfilesRef: vi.fn(() => ({ doc: vi.fn(() => ({ get: mockGet })) })),
+  TENANT_ID: 'd2',
+}))
+
+vi.mock('firebase-admin/firestore', () => ({
+  FieldValue: { serverTimestamp: vi.fn(() => '__server_timestamp__') },
+}))
+
+import { captureReplyEdit } from '@/app/[lang]/chat/reply-edit-actions'
+
+describe('captureReplyEdit (REPLY-09 / ADMIN-06 producer) — GREEN since Plan 04-07', () => {
+  beforeEach(() => {
+    mockAdd.mockClear()
+    mockGet.mockClear()
+  })
+
   // (a) the denominator row: every Copy writes ONE replyEdits row (editRatio:0 when unchanged)
-  it.fails('writes ONE replyEdits row with editRatio:0 on an unchanged copy (denominator)', async () => {
-    const mockAdd = vi.fn(async (_doc: Record<string, unknown>) => ({ id: 'reply-edit-001' }))
-    vi.doMock('@/src/firebase/collections', () => ({
-      replyEditsRef: vi.fn(() => ({ add: mockAdd })),
-      TENANT_ID: 'd2',
-    }))
-
-    // @ts-expect-error - module created in Plan 04-07 (Wave 4); import resolves then
-    const { captureReplyEdit } = await import('@/app/[lang]/chat/reply-edit-actions')
+  it('writes ONE replyEdits row with editRatio:0 on an unchanged copy (denominator)', async () => {
     const result = await captureReplyEdit({
       leadId: 'lead-001',
       draftId: 'draft-001',
@@ -49,15 +76,7 @@ describe('captureReplyEdit (REPLY-09 / ADMIN-06 producer) — RED until Plan 04-
   })
 
   // (b) THE thumbs-down producer: a thumbsDown:true call writes a row with thumbsDown === true
-  it.fails('a thumbsDown:true call writes a replyEdits row with thumbsDown === true (ADMIN-06 producer)', async () => {
-    const mockAdd = vi.fn(async (_doc: Record<string, unknown>) => ({ id: 'reply-edit-002' }))
-    vi.doMock('@/src/firebase/collections', () => ({
-      replyEditsRef: vi.fn(() => ({ add: mockAdd })),
-      TENANT_ID: 'd2',
-    }))
-
-    // @ts-expect-error - module created in Plan 04-07 (Wave 4); import resolves then
-    const { captureReplyEdit } = await import('@/app/[lang]/chat/reply-edit-actions')
+  it('a thumbsDown:true call writes a replyEdits row with thumbsDown === true (ADMIN-06 producer)', async () => {
     await captureReplyEdit({
       leadId: 'lead-001',
       draftId: 'draft-002',
@@ -75,15 +94,7 @@ describe('captureReplyEdit (REPLY-09 / ADMIN-06 producer) — RED until Plan 04-
   })
 
   // (c) an omitted thumbsDown does NOT write thumbsDown:false (stays absent / optional)
-  it.fails('an omitted thumbsDown does NOT write a thumbsDown:false field (stays absent)', async () => {
-    const mockAdd = vi.fn(async (_doc: Record<string, unknown>) => ({ id: 'reply-edit-003' }))
-    vi.doMock('@/src/firebase/collections', () => ({
-      replyEditsRef: vi.fn(() => ({ add: mockAdd })),
-      TENANT_ID: 'd2',
-    }))
-
-    // @ts-expect-error - module created in Plan 04-07 (Wave 4); import resolves then
-    const { captureReplyEdit } = await import('@/app/[lang]/chat/reply-edit-actions')
+  it('an omitted thumbsDown does NOT write a thumbsDown:false field (stays absent)', async () => {
     await captureReplyEdit({
       leadId: 'lead-001',
       draftId: 'draft-003',
@@ -97,5 +108,23 @@ describe('captureReplyEdit (REPLY-09 / ADMIN-06 producer) — RED until Plan 04-
     const written = mockAdd.mock.calls[0][0] as Record<string, unknown>
     // Optional field stays absent — not written as false.
     expect(written.thumbsDown).toBeUndefined()
+  })
+
+  // (d) seniorCoachId is DENORMALIZED from agentProfiles onto the row (Pitfall D)
+  it('denormalizes seniorCoachId from agentProfiles onto the row (coach downline read)', async () => {
+    await captureReplyEdit({
+      leadId: 'lead-001',
+      draftId: 'draft-004',
+      sopDocIds: ['s1'],
+      originalDraft: 'hello',
+      editedFinal: 'hello there',
+      lang: 'en',
+    })
+
+    expect(mockGet).toHaveBeenCalledTimes(1)
+    const written = mockAdd.mock.calls[0][0] as Record<string, unknown>
+    expect(written.seniorCoachId).toBe('coach-123')
+    // agentUid comes from the verified token, never the args (T-02-31).
+    expect(written.agentUid).toBe('agent-001')
   })
 })

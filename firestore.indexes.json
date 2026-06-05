@@ -137,6 +137,30 @@
         { "fieldPath": "category", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "replyEdits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "seniorCoachId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "replyEdits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "agentUid", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "replyEdits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sopDocIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

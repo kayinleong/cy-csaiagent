@@ -240,6 +240,27 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // ── Collection 17: replyEdits ────────────────────────────────────────────
+    // Reply edit-as-signal records (REPLY-09 / ADMIN-06, D-18/D-19). Append-only,
+    // written EXCLUSIVELY by the captureReplyEdit Server Action via the Admin SDK
+    // (which bypasses rules). Mirrors escalations/knowledgeGaps scoping:
+    //   - agent reads ONLY their own rows (agentUid == auth.uid);
+    //   - senior-coach reads their downline rows — requires the DENORMALIZED
+    //     seniorCoachId on each row so this rule can match (Pitfall D);
+    //   - admin reads all same-tenant rows.
+    // No client-side create/update/delete — clients can never forge or mutate an
+    // edit row (T-04-FORGE mitigation; append-only).
+    match /replyEdits/{eventId} {
+      allow read:
+        if (resource.data.agentUid == request.auth.uid && sameTenant())
+        || (hasRole('senior-coach')
+            && resource.data.seniorCoachId == request.auth.uid
+            && sameTenant())
+        || (hasRole('admin') && sameTenant());
+
+      allow create, update, delete: if false;
+    }
+
     // ── Collection 15: rateBudgets ───────────────────────────────────────────
     // Owner-scoped: each agent reads/writes ONLY their own budget doc.
     // Cross-agent access is explicitly DENIED — a new-agent reading or writing
