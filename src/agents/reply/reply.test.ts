@@ -49,8 +49,7 @@ const baseRunArgs = {
 // ─── Test 1: hit → grounded draft citing SOP IDs (REPLY-02/05) ────────────────
 
 describe('Reply agent: hit → grounded draft (REPLY-02, RED until Plan 04-05)', () => {
-  it.fails('run({ injectedSopResult: <hit> }) returns a draft with non-empty sopDocIds', async () => {
-    // @ts-expect-error - module created in Plan 04-05 (Wave 2); import resolves then
+  it('run({ injectedSopResult: <hit> }) returns a draft with non-empty sopDocIds', async () => {
     const { replyAgent } = await import('@/src/agents/reply')
     const result = await replyAgent.run({
       ...baseRunArgs,
@@ -69,8 +68,7 @@ describe('Reply agent: hit → grounded draft (REPLY-02, RED until Plan 04-05)',
     expect(result.output.noSopMatch).toBeUndefined()
   })
 
-  it.fails('cold-prospect draft uses qualifying questions, never an auto-pitch (REPLY-05)', async () => {
-    // @ts-expect-error - module created in Plan 04-05 (Wave 2); import resolves then
+  it('cold-prospect draft uses qualifying questions, never an auto-pitch (REPLY-05)', async () => {
     const { replyAgent } = await import('@/src/agents/reply')
     const result = await replyAgent.run({
       ...baseRunArgs,
@@ -83,8 +81,7 @@ describe('Reply agent: hit → grounded draft (REPLY-02, RED until Plan 04-05)',
     expect(result.output.draft?.text).toContain('?')
   })
 
-  it.fails('objection-handling draft is produced from an objection inbound (REPLY-06)', async () => {
-    // @ts-expect-error - module created in Plan 04-05 (Wave 2); import resolves then
+  it('objection-handling draft is produced from an objection inbound (REPLY-06)', async () => {
     const { replyAgent } = await import('@/src/agents/reply')
     const result = await replyAgent.run({
       ...baseRunArgs,
@@ -99,8 +96,7 @@ describe('Reply agent: hit → grounded draft (REPLY-02, RED until Plan 04-05)',
     expect(result.output.draft?.sopDocIds).toContain('sop-obj-001')
   })
 
-  it.fails('financing draft is grounded in the financing SOP (REPLY-07)', async () => {
-    // @ts-expect-error - module created in Plan 04-05 (Wave 2); import resolves then
+  it('financing draft is grounded in the financing SOP (REPLY-07)', async () => {
     const { replyAgent } = await import('@/src/agents/reply')
     const result = await replyAgent.run({
       ...baseRunArgs,
@@ -119,8 +115,7 @@ describe('Reply agent: hit → grounded draft (REPLY-02, RED until Plan 04-05)',
 // ─── Test 2: miss → grounded refusal, NEVER a draft (REPLY-02 / D-11) ─────────
 
 describe('Reply agent: miss → no_sop_match grounded refusal (D-11, RED until Plan 04-05)', () => {
-  it.fails('run({ injectedSopResult: <miss> }) returns noSopMatch and NO draft', async () => {
-    // @ts-expect-error - module created in Plan 04-05 (Wave 2); import resolves then
+  it('run({ injectedSopResult: <miss> }) returns noSopMatch and NO draft', async () => {
     const { replyAgent } = await import('@/src/agents/reply')
     const result = await replyAgent.run({
       ...baseRunArgs,
@@ -141,8 +136,7 @@ describe('Reply agent: miss → no_sop_match grounded refusal (D-11, RED until P
 // ─── Test 3: ambiguous → clarifying question ──────────────────────────────────
 
 describe('Reply agent: ambiguous → clarifyingQuestion (RED until Plan 04-05)', () => {
-  it.fails('an ambiguous inbound returns a clarifyingQuestion, not a draft', async () => {
-    // @ts-expect-error - module created in Plan 04-05 (Wave 2); import resolves then
+  it('an ambiguous inbound returns a clarifyingQuestion, not a draft', async () => {
     const { replyAgent } = await import('@/src/agents/reply')
     const result = await replyAgent.run({
       ...baseRunArgs,
@@ -188,8 +182,7 @@ describe('ReplyOutputSchema (Plan 04-05)', () => {
 // ─── Test 5: read-only tools — no Firestore write in any execute() ────────────
 
 describe('Reply tools are read-only (Pitfall 23/36, RED until Plan 04-05)', () => {
-  it.fails('replyAgent.makeTools returns retrieveReplySop / fetchVoiceSamples / fetchLeadContext', async () => {
-    // @ts-expect-error - module created in Plan 04-05 (Wave 2); import resolves then
+  it('replyAgent.makeTools returns retrieveReplySop / fetchVoiceSamples / fetchLeadContext', async () => {
     const { replyAgent } = await import('@/src/agents/reply')
     const tools = replyAgent.makeTools('en', 'uid-reply-test-001', 'lead-reply-001')
     expect('retrieveReplySop' in tools).toBe(true)
@@ -197,8 +190,7 @@ describe('Reply tools are read-only (Pitfall 23/36, RED until Plan 04-05)', () =
     expect('fetchLeadContext' in tools).toBe(true)
   })
 
-  it.fails('no reply tool description mentions a write/update/delete (read-only contract)', async () => {
-    // @ts-expect-error - module created in Plan 04-05 (Wave 2); import resolves then
+  it('no reply tool description mentions a write/update/delete (read-only contract)', async () => {
     const { replyAgent } = await import('@/src/agents/reply')
     const tools = replyAgent.makeTools('en', 'uid-reply-test-001', 'lead-reply-001') as Record<
       string,
@@ -216,8 +208,7 @@ describe('Reply tools are read-only (Pitfall 23/36, RED until Plan 04-05)', () =
 // ─── Test 6: parallel-lead isolation (REPLY-03 / SC2) ─────────────────────────
 
 describe('Reply parallel-lead isolation (REPLY-03 / SC2, RED until Plan 04-05)', () => {
-  it.fails("Lead B's draft never contains Lead A's content (no cross-lead bleed)", async () => {
-    // @ts-expect-error - module created in Plan 04-05 (Wave 2); import resolves then
+  it("Lead B's draft never contains Lead A's content (no cross-lead bleed)", async () => {
     const { replyAgent } = await import('@/src/agents/reply')
 
     const leadA = await replyAgent.run({
