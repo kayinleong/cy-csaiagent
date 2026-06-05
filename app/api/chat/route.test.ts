@@ -47,6 +47,11 @@ const mocks = vi.hoisted(() => {
   const mockMergeFinderCriteria = vi.fn((stored: unknown) => stored)
   const mockMergeDiscussed = vi.fn((prev: string[], next: string[]) => [...prev, ...next])
   const mockWriteLeadSlot = vi.fn(async () => {})
+  // 04-01 Wave 0: reply-dispatch + kb-miss mocks
+  const mockReplyBuildSystemPrompt = vi.fn(() => 'You are the D2 Reply Assistant.')
+  const mockReplyMakeTools = vi.fn(() => ({ retrieveReplySop: {}, fetchVoiceSamples: {}, fetchLeadContext: {} }))
+  const mockReadReplySlot = vi.fn(async () => null)
+  const mockRecordKnowledgeGap = vi.fn(async () => {})
 
   return {
     mockRequireUser,
@@ -68,6 +73,10 @@ const mocks = vi.hoisted(() => {
     mockMergeFinderCriteria,
     mockMergeDiscussed,
     mockWriteLeadSlot,
+    mockReplyBuildSystemPrompt,
+    mockReplyMakeTools,
+    mockReadReplySlot,
+    mockRecordKnowledgeGap,
   }
 })
 
@@ -121,6 +130,8 @@ vi.mock('@/src/memory', () => ({
   mergeFinderCriteria: mocks.mockMergeFinderCriteria,
   mergeDiscussed: mocks.mockMergeDiscussed,
   writeLeadSlot: mocks.mockWriteLeadSlot,
+  // 04-01 Wave 0: reply slot reader (route consumes once Plan 04-06 wires reply dispatch)
+  readReplySlot: mocks.mockReadReplySlot,
 }))
 
 vi.mock('@/src/agents/finder', () => ({
@@ -151,6 +162,21 @@ vi.mock('next/server', () => ({
 
 vi.mock('@/src/firebase/collections', () => ({
   TENANT_ID: 'd2',
+}))
+
+// 04-01 Wave 0: reply agent + kb-miss feed mocks (consumed once Plan 04-05/04-06 wire
+// the reply dispatch + no_sop_match → recordKnowledgeGap path into the route).
+vi.mock('@/src/agents/reply', () => ({
+  replyAgent: {
+    systemPrompt: 'You are the D2 Reply Assistant.',
+    outputSchema: {},
+    buildSystemPrompt: mocks.mockReplyBuildSystemPrompt,
+    makeTools: mocks.mockReplyMakeTools,
+  },
+}))
+
+vi.mock('@/src/escalation', () => ({
+  recordKnowledgeGap: mocks.mockRecordKnowledgeGap,
 }))
 
 // ─── Imports ──────────────────────────────────────────────────────────────────
@@ -923,5 +949,158 @@ describe('Test 11 (02-03): extractCitationChunkIds extracts chunk IDs from tool 
 
     const ids = extractCitationChunkIds(fakeFinish)
     expect(ids).toEqual([])
+  })
+})
+
+// ─── 04-01 Wave 0: Reply dispatch RED tests (REPLY-02/03/04/09, D-07/D-11) ────
+//
+// These document the Phase-4 reply-dispatch contract the chat route must satisfy.
+// Today the route has NO `pillar === 'reply'` branch (reply falls through to the
+// coach/else branch), does NOT enforce a required leadId (no 400), calls
+// pseudonymize(messages, []) with an EMPTY names[] (the unfinished GATE-3 hook at
+// route.ts:252), never writes a replySlot, and never records a kb-miss. Each assertion
+// below is EXPECTED-FAIL (`it.fails`) so it fails RED against current code while keeping
+// the offline suite GREEN (exit 0). Plans 04-06 (dispatch + leadId fail-closed + name
+// injection + replySlot onFinish + no_sop_match→recordKnowledgeGap) flip them to passes.
+
+describe('04-01 (REPLY-02): reply dispatch builds reply prompt + tools + modelFor("reply")', () => {
+  it.fails('a reply turn calls replyAgent.buildSystemPrompt + makeTools + modelFor("reply") (RED until Plan 04-06)', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'reply', reason: 'heuristic-reply:draft-a-reply' })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'draft a reply to this lead' }],
+      cid: 'conv-reply-001',
+      leadId: 'lead-001',
+    })
+
+    await POST(req)
+
+    expect(mocks.mockReplyBuildSystemPrompt).toHaveBeenCalled()
+    expect(mocks.mockModelFor).toHaveBeenCalledWith('reply')
+  })
+})
+
+describe('04-01 (REPLY-04 / D-07): reply turn without leadId fails closed with HTTP 400', () => {
+  it.fails('a reply turn with NO leadId returns HTTP 400 (server fail-closed, RED until Plan 04-06)', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'reply', reason: 'heuristic-reply:draft-a-reply' })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'draft a reply' }],
+      cid: 'conv-reply-002',
+      // NO leadId — the UI prevents this (D-07) but the server MUST also fail closed.
+    })
+
+    const response = await POST(req)
+    expect(response.status).toBe(400)
+  })
+})
+
+describe('04-01 (PDPA / Q3): reply turn injects known lead names into pseudonymize', () => {
+  it.fails('pseudonymize receives a NON-empty names[] for a reply turn with a leadId (RED until Plan 04-06)', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'reply', reason: 'heuristic-reply:draft-a-reply' })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'lead said: "Siti here, still keen" — draft a reply' }],
+      cid: 'conv-reply-003',
+      leadId: 'lead-001',
+    })
+
+    await POST(req)
+
+    // GATE 3 must inject lead names so replaceNames actually fires (closing route.ts:252).
+    const namesArg = mocks.mockPseudonymize.mock.calls.at(-1)?.[1] as string[] | undefined
+    expect(Array.isArray(namesArg)).toBe(true)
+    expect((namesArg ?? []).length).toBeGreaterThan(0)
+  })
+})
+
+describe('04-01 (REPLY-09): replySlot written in onFinish for a reply turn with a leadId', () => {
+  it.fails('onFinish calls writeLeadSlot("replySlot", …) for a reply turn with a leadId (RED until Plan 04-06)', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'reply', reason: 'heuristic-reply:draft-a-reply' })
+
+    let resolveOnFinish: () => void
+    const onFinishDone = new Promise<void>((r) => { resolveOnFinish = r })
+
+    mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
+      void onFinish({ ...mockFinalResult, steps: [] }).then(resolveOnFinish)
+      return {
+        toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
+          new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
+        ),
+      }
+    })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'draft a reply to this' }],
+      cid: 'conv-reply-004',
+      leadId: 'lead-001',
+    })
+
+    await POST(req)
+    await onFinishDone
+
+    const slotNames = (mocks.mockWriteLeadSlot.mock.calls as unknown as unknown[][]).map((c) => c[1])
+    expect(slotNames).toContain('replySlot')
+  })
+})
+
+describe('04-01 (REPLY-03 / SC2): parallel-lead isolation at the route level', () => {
+  it.fails('two reply turns for different leads each pass their own leadId to readReplySlot (RED until Plan 04-06)', async () => {
+    mocks.mockRouteAsync.mockResolvedValue({ pillar: 'reply', reason: 'heuristic-reply:draft-a-reply' })
+
+    await POST(buildRequest({
+      messages: [{ role: 'user', content: 'draft a reply for lead A' }],
+      cid: 'conv-A', leadId: 'lead-A',
+    }))
+    await POST(buildRequest({
+      messages: [{ role: 'user', content: 'draft a reply for lead B' }],
+      cid: 'conv-B', leadId: 'lead-B',
+    }))
+
+    const readLeadIds = (mocks.mockReadReplySlot.mock.calls as unknown as unknown[][]).map((c) => c[0])
+    expect(readLeadIds).toContain('lead-A')
+    expect(readLeadIds).toContain('lead-B')
+  })
+})
+
+describe('04-01 (D-11): no_sop_match reply turn records a kb-miss knowledgeGap tagged reply', () => {
+  it.fails('a reply turn resolving to no_sop_match calls recordKnowledgeGap with pillar:"reply" (RED until Plan 04-06)', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'reply', reason: 'heuristic-reply:draft-a-reply' })
+
+    let resolveOnFinish: () => void
+    const onFinishDone = new Promise<void>((r) => { resolveOnFinish = r })
+
+    // Simulate the reply tool returning a no_sop_match miss in the stream steps.
+    mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
+      const finish = {
+        ...mockFinalResult,
+        steps: [
+          {
+            toolResults: [
+              { toolName: 'retrieveReplySop', result: { found: false, reason: 'no_sop_match' } },
+            ],
+          },
+        ],
+      }
+      void onFinish(finish).then(resolveOnFinish)
+      return {
+        toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
+          new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
+        ),
+      }
+    })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'lead asked something with no SOP — draft a reply' }],
+      cid: 'conv-reply-005',
+      leadId: 'lead-001',
+    })
+
+    await POST(req)
+    await onFinishDone
+
+    expect(mocks.mockRecordKnowledgeGap).toHaveBeenCalled()
+    const arg = (mocks.mockRecordKnowledgeGap.mock.calls as unknown as unknown[][]).at(-1)?.[0] as { pillar?: string } | undefined
+    expect(arg?.pillar).toBe('reply')
   })
 })

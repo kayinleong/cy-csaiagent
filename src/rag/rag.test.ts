@@ -372,3 +372,112 @@ describe('retrieve — published-only filter (02-02 Pitfall 3 fix)', () => {
     expect(results).toEqual([])
   })
 })
+
+// ─── 04-01 Wave 0: pillar-filtered retrieval (REPLY-01) — RED until Plan 04-03 ─
+//
+// retrieveReplySop needs the rag facade parameterized with { pillar: 'reply' } so the
+// findNearest pre-filter applies `where('pillar','==','reply')` (RESEARCH Q7 / Pitfall B).
+// Today `firestoreRetrieve` is hard-coded for Coach (lang + status, NO pillar filter) and
+// `kbChunks` has no `pillar` field. These tests are EXPECTED-FAIL (`it.fails`) so they fail
+// RED against current code while keeping the offline suite green; Plan 04-03 threads the
+// opts param + adds the (pillar,lang,status,embedding) index, flipping them to passes.
+
+describe('retrieve — pillar filter (REPLY-01, RED until Plan 04-03)', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  it.fails('firestoreRetrieve(query, "en", { pillar:"reply" }) applies where("pillar","==","reply")', async () => {
+    const whereCalls: Array<[string, string, unknown]> = []
+    const mockGetFn = vi.fn(async () => ({ docs: [] }))
+    const mockFindNearestFn = vi.fn(() => ({ get: mockGetFn }))
+    const mockWhereFn = vi.fn((...args: [string, string, unknown]) => {
+      whereCalls.push(args)
+      return { where: mockWhereFn, findNearest: mockFindNearestFn }
+    })
+    const mockCollectionFn = vi.fn(() => ({ where: mockWhereFn }))
+
+    vi.doMock('@/src/firebase/admin', () => ({
+      adminDb: { collection: mockCollectionFn },
+    }))
+    vi.doMock('@/src/rag/embed', () => ({
+      embedText: vi.fn(async () => Array.from({ length: 1024 }, () => 0.001)),
+    }))
+
+    const { firestoreRetrieve } = await import('@/src/rag/search')
+    // The third arg (opts) does not exist on the Phase-3 signature yet.
+    await (firestoreRetrieve as unknown as (
+      q: string,
+      lang: 'en' | 'ms' | 'zh',
+      opts?: { pillar?: string; category?: string },
+    ) => Promise<unknown>)('draft a reply to this objection', 'en', { pillar: 'reply' })
+
+    const hasPillarFilter = whereCalls.some(
+      ([field, op, val]) => field === 'pillar' && op === '==' && val === 'reply',
+    )
+    expect(hasPillarFilter).toBe(true)
+  })
+
+  it.fails('category is filtered in memory after the pillar-filtered retrieve (REPLY-06 categories)', async () => {
+    // Two reply chunks come back with different categories; opts.category narrows in memory
+    // (categories are few; top-K small — avoids a second composite index, RESEARCH Q7).
+    const mockGetFn = vi.fn(async () => ({
+      docs: [
+        {
+          id: 'chunk-obj',
+          data: () => ({
+            text: 'objection-handling SOP',
+            lang: 'en',
+            docId: 'sop-obj-001',
+            pillar: 'reply',
+            category: 'objection-handling',
+            tokens: 20,
+            ownerCollection: 'kbChunks',
+            embedding: [],
+            tenantId: 'd2',
+            status: 'published',
+          }),
+        },
+        {
+          id: 'chunk-cold',
+          data: () => ({
+            text: 'cold-prospect SOP',
+            lang: 'en',
+            docId: 'sop-cold-001',
+            pillar: 'reply',
+            category: 'cold-prospect',
+            tokens: 20,
+            ownerCollection: 'kbChunks',
+            embedding: [],
+            tenantId: 'd2',
+            status: 'published',
+          }),
+        },
+      ],
+    }))
+    const mockFindNearestFn = vi.fn(() => ({ get: mockGetFn }))
+    const mockWhereFn = vi.fn(() => ({ where: mockWhereFn, findNearest: mockFindNearestFn }))
+    const mockCollectionFn = vi.fn(() => ({ where: mockWhereFn }))
+
+    vi.doMock('@/src/firebase/admin', () => ({
+      adminDb: { collection: mockCollectionFn },
+    }))
+    vi.doMock('@/src/rag/embed', () => ({
+      embedText: vi.fn(async () => Array.from({ length: 1024 }, () => 0.001)),
+    }))
+
+    const { firestoreRetrieve } = await import('@/src/rag/search')
+    const results = (await (firestoreRetrieve as unknown as (
+      q: string,
+      lang: 'en' | 'ms' | 'zh',
+      opts?: { pillar?: string; category?: string },
+    ) => Promise<Array<{ docId: string }>>)('handle this objection', 'en', {
+      pillar: 'reply',
+      category: 'objection-handling',
+    }))
+
+    // Only the objection-handling chunk survives the in-memory category filter.
+    expect(results).toHaveLength(1)
+    expect(results[0].docId).toBe('sop-obj-001')
+  })
+})

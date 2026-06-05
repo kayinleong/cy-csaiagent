@@ -90,6 +90,7 @@ rulesSuite('Deny-by-default: unauthenticated reads', () => {
     'users', 'agentProfiles', 'conversations', 'leads', 'leadContext',
     'projects', 'collateral', 'kbDocs', 'kbChunks', 'kbIngestionJobs',
     'escalations', 'auditLogs', 'evals', 'rateBudgets', 'knowledgeGaps',
+    'replyEdits',
   ]
 
   for (const col of collections) {
@@ -908,6 +909,132 @@ rulesSuite('knowledgeGaps collection — downline-scoped, server-write-only (T-0
     const ctx = await newAgentCtx()
     const db = ctx.firestore()
     await assertFails(getDoc(doc(db, 'knowledgeGaps', ownGapId)))
+  })
+})
+
+// ─── 14. replyEdits collection — downline-scoped, server-write-only (04-01 Wave 0) ──
+//
+// REPLY-09 / ADMIN-06 (D-19). Mirrors escalations/knowledgeGaps: agent reads OWN row;
+// senior-coach reads downline rows where seniorCoachId == auth.uid; admin reads any
+// same-tenant row; cross-agent / cross-coach / cross-tenant reads DENIED; ANY client
+// create/update/delete DENIED (append-only, Admin-SDK writes only).
+//
+// These are emulator-gated (rulesSuite = describe.skip without FIRESTORE_EMULATOR_HOST),
+// so they do NOT run in the offline `npm run test` (exit 0 preserved). They turn RED
+// against the live emulator until Plan 04-07 adds the `replyEdits` match block to
+// firestore.rules (the seniorCoachId denormalization is proven here — Pitfall D).
+
+rulesSuite('replyEdits collection — downline-scoped, server-write-only (REPLY-09/ADMIN-06, D-19)', () => {
+  const ownEditId = 'reply-edit-own-001'        // agent = syntheticNewAgent, coach = syntheticSeniorCoach
+  const otherEditId = 'reply-edit-other-001'     // agent = stranger, coach = other-coach-uid
+
+  beforeAll(async () => {
+    await seed(`replyEdits/${ownEditId}`, {
+      tenantId: D2_TENANT,
+      leadId: 'lead-001',
+      draftId: 'draft-001',
+      sopDocIds: ['sop-cold-001'],
+      originalDraft: 'synthetic original',
+      editedFinal: 'synthetic edited',
+      editRatio: 0.12,
+      agentUid: syntheticNewAgent.uid,
+      seniorCoachId: syntheticSeniorCoach.uid,
+      lang: 'en',
+      timestamp: new Date(),
+    })
+    await seed(`replyEdits/${otherEditId}`, {
+      tenantId: D2_TENANT,
+      leadId: 'lead-002',
+      draftId: 'draft-002',
+      sopDocIds: ['sop-obj-001'],
+      originalDraft: 'synthetic original 2',
+      editedFinal: 'synthetic edited 2',
+      editRatio: 0,
+      agentUid: STRANGER_UID,
+      seniorCoachId: 'other-coach-uid',
+      lang: 'ms',
+      thumbsDown: true,
+      timestamp: new Date(),
+    })
+  })
+
+  // agent reads OWN row — SUCCEEDS
+  it('agent CAN read their own replyEdits row (agentUid == self)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(getDoc(doc(db, 'replyEdits', ownEditId)))
+  })
+
+  // agent reads ANOTHER agent's row — DENIED
+  it("agent CANNOT read another agent's replyEdits row", async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertFails(getDoc(doc(db, 'replyEdits', otherEditId)))
+  })
+
+  // senior-coach reads a DOWNLINE row (seniorCoachId == coach.uid) — SUCCEEDS
+  it('senior-coach CAN read a downline replyEdits row where seniorCoachId == self', async () => {
+    const ctx = await seniorCoachCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(getDoc(doc(db, 'replyEdits', ownEditId)))
+  })
+
+  // senior-coach reads ANOTHER coach's downline row — DENIED
+  it("senior-coach CANNOT read a different coach's downline replyEdits row (cross-coach denied)", async () => {
+    const ctx = await seniorCoachCtx()
+    const db = ctx.firestore()
+    await assertFails(getDoc(doc(db, 'replyEdits', otherEditId)))
+  })
+
+  // admin reads ANY same-tenant row — SUCCEEDS
+  it('admin CAN read any replyEdits row in the tenant', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(getDoc(doc(db, 'replyEdits', ownEditId)))
+    await assertSucceeds(getDoc(doc(db, 'replyEdits', otherEditId)))
+  })
+
+  // ANY client CREATE — DENIED (server/Admin-SDK writes only, append-only)
+  it('any client CREATE on replyEdits is DENIED (server/Admin-SDK writes only)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertFails(
+      setDoc(doc(db, 'replyEdits', 'client-created-edit'), {
+        tenantId: D2_TENANT,
+        leadId: 'lead-001',
+        draftId: 'draft-x',
+        sopDocIds: ['sop-cold-001'],
+        originalDraft: 'x',
+        editedFinal: 'x',
+        editRatio: 0,
+        agentUid: syntheticNewAgent.uid,
+        seniorCoachId: syntheticSeniorCoach.uid,
+        lang: 'en',
+        timestamp: new Date(),
+      }),
+    )
+  })
+
+  // ANY client UPDATE — DENIED (append-only)
+  it('any client UPDATE on replyEdits is DENIED (append-only)', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertFails(updateDoc(doc(db, 'replyEdits', ownEditId), { editRatio: 0.99 }))
+  })
+
+  // ANY client DELETE — DENIED (append-only)
+  it('any client DELETE on replyEdits is DENIED (append-only)', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertFails(deleteDoc(doc(db, 'replyEdits', ownEditId)))
+  })
+
+  // cross-tenant admin read — DENIED
+  it('admin with the WRONG tenant CANNOT read a replyEdits row (cross-tenant denied)', async () => {
+    const { authedContext } = await import('./rules-helpers')
+    const wrongTenantAdmin = await authedContext('wrong-tenant-admin', { role: 'admin', tenantId: WRONG_TENANT })
+    const db = wrongTenantAdmin.firestore()
+    await assertFails(getDoc(doc(db, 'replyEdits', ownEditId)))
   })
 })
 

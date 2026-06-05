@@ -347,6 +347,23 @@ describe('KB Ingestion Pipeline', () => {
       }
     })
 
+    // ─── 04-01 Wave 0 (REPLY-01) — kbChunks.pillar denormalization, RED until 04-03 ──
+    //
+    // The retrieveReplySop pillar filter (RESEARCH Q7 / Pitfall B) needs `pillar` on
+    // EACH kbChunk, denormalized from the parent job doc (mockJobDocData.pillar:'coach').
+    // Today processBatch omits `pillar` from the chunk write — so this fails RED.
+    // EXPECTED-FAIL (`it.fails`) keeps the offline suite green; Plan 04-03 destructures
+    // `pillar` from jobData and adds it to chunksRef.add({...}), flipping it to a pass.
+    it.fails('Test 5b (04-01): processBatch writes a `pillar` field on each kbChunk, denormalized from the job doc (RED until 04-03)', async () => {
+      await processBatch('test-job-id', 2)
+
+      expect(mockChunksAdd).toHaveBeenCalledTimes(2)
+      for (const call of mockChunksAdd.mock.calls) {
+        // pillar must be present AND match the job doc's pillar ('coach' in this fixture)
+        expect(call[0].pillar).toBe('coach')
+      }
+    })
+
     it('should decrement remaining by the number of chunks processed', async () => {
       const result = await processBatch('test-job-id', 2)
 
