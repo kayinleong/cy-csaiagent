@@ -147,8 +147,8 @@ describe('pseudonymize', () => {
       expect(out).toContain('<PHONE_HASH:')
     })
 
-    // ── IC coverage (FAILS today — no IC regex; Wave-1 closes the gap) ──
-    it.fails('IC: a Malaysian IC \\d{6}-\\d{2}-\\d{4} is tokenized to <IC_HASH:…> (RED until Wave 1)', () => {
+    // ── IC coverage (GREEN — Wave 1 / Plan 04-02 added the IC regex) ──
+    it('IC: a Malaysian IC \\d{6}-\\d{2}-\\d{4} is tokenized to <IC_HASH:…>', () => {
       const input = { messages: [{ role: 'user', content: `my IC is ${SYNTHETIC_IC}` }] }
       const result = pseudonymize(input, [])
       const out = result.redacted.messages[0].content
@@ -158,8 +158,8 @@ describe('pseudonymize', () => {
       expect(out).toContain('<IC_HASH:')
     })
 
-    // ── email coverage (FAILS today — no email regex; Wave-1 closes the gap) ──
-    it.fails('email: a free-text email is tokenized to <EMAIL_HASH:…> (RED until Wave 1)', () => {
+    // ── email coverage (GREEN — Wave 1 / Plan 04-02 added the email regex) ──
+    it('email: a free-text email is tokenized to <EMAIL_HASH:…>', () => {
       const input = { messages: [{ role: 'user', content: `email me at ${SYNTHETIC_EMAIL}` }] }
       const result = pseudonymize(input, [])
       const out = result.redacted.messages[0].content
@@ -167,8 +167,8 @@ describe('pseudonymize', () => {
       expect(out).toContain('<EMAIL_HASH:')
     })
 
-    // ── RM-financial coverage (FAILS today — no financial regex; Wave-1 closes it) ──
-    it.fails('RM-financial: RM6000 is tokenized to <FIN_HASH:…> (RED until Wave 1)', () => {
+    // ── RM-financial coverage (GREEN — Wave 1 / Plan 04-02 added the financial regex) ──
+    it('RM-financial: RM6000 is tokenized to <FIN_HASH:…>', () => {
       const input = { messages: [{ role: 'user', content: `I earn ${SYNTHETIC_FINANCIAL_1} per month` }] }
       const result = pseudonymize(input, [])
       const out = result.redacted.messages[0].content
@@ -176,7 +176,7 @@ describe('pseudonymize', () => {
       expect(out).toContain('<FIN_HASH:')
     })
 
-    it.fails('RM-financial: "RM 6,000/month" (spaced + thousands sep) is tokenized to <FIN_HASH:…> (RED until Wave 1)', () => {
+    it('RM-financial: "RM 6,000/month" (spaced + thousands sep) is tokenized to <FIN_HASH:…>', () => {
       const input = { messages: [{ role: 'user', content: `budget is ${SYNTHETIC_FINANCIAL_2}` }] }
       const result = pseudonymize(input, [])
       const out = result.redacted.messages[0].content
