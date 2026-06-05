@@ -28,7 +28,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { requestHandoff } from '@/app/_actions/chat'
 
 export type LangOverride = 'en' | 'ms' | 'zh'
-export type PillarOverride = 'coach' | 'finder'
+export type PillarOverride = 'coach' | 'finder' | 'reply'
 
 interface ChatHeaderProps {
   /** The active conversation ID — passed into the handoff context bundle. */
@@ -164,6 +164,16 @@ export function ChatHeader({
           aria-label={t('pillarOverride.finder')}
         >
           {t('pillarOverride.finder')}
+        </ToggleGroupItem>
+        {/* Reply pillar (Phase 4, Surface 3). Selecting Reply with no leadId
+            triggers the lead-selector (Surface 2) in chat-shell before dispatch. */}
+        <ToggleGroupItem
+          value="reply"
+          size="sm"
+          className="h-6 px-1.5 text-[0.625rem] font-medium"
+          aria-label={t('pillarOverride.reply')}
+        >
+          {t('pillarOverride.reply')}
         </ToggleGroupItem>
       </ToggleGroup>
 

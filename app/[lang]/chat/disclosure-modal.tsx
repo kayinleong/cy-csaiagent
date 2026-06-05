@@ -89,8 +89,13 @@ export function DisclosureModal({ onAck }: DisclosureModalProps) {
       >
         <DialogHeader>
           <DialogTitle className="text-base">{t('title')}</DialogTitle>
-          <DialogDescription className="text-sm leading-relaxed mt-2">
-            {t('body')}
+          <DialogDescription className="text-sm leading-relaxed mt-2" asChild>
+            <div>
+              <p>{t('body')}</p>
+              {/* Phase 4 (D-17 / Surface 6, option b): one Reply-specific line —
+                  drafts are AI suggestions, copy-only, review before sending. */}
+              <p className="mt-2">{t('replyLine')}</p>
+            </div>
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="mt-2">

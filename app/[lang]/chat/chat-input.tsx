@@ -48,16 +48,23 @@ interface ChatInputProps {
    */
   langOverride?: 'en' | 'ms' | 'zh'
   /**
-   * Pillar override from the chat-header pillar chip (FIND-11).
+   * Pillar override from the chat-header pillar chip (FIND-11 / Phase 4 Surface 3).
    * When set, skips the heuristic/LLM router and forces the named pillar.
-   * Undefined = Auto (router decides).
+   * Undefined = Auto (router decides). Reply added Phase 4 (D-02).
    */
-  pillarOverride?: 'coach' | 'finder'
+  pillarOverride?: 'coach' | 'finder' | 'reply'
   /**
    * The current lead ID — threaded into the POST body for Finder finderSlot
-   * persistence (FIND-05/08). Only required for the Finder path.
+   * persistence (FIND-05/08) and required for the Reply path (D-07).
    */
   leadId?: string
+  /**
+   * Reply lead gate (D-07). Called BEFORE dispatch with the trimmed text. Return
+   * `false` to BLOCK dispatch (e.g. a Reply turn with no leadId → chat-shell opens
+   * the lead-selector). Return `true` (or omit the prop) to proceed. The blocked
+   * text is preserved in the input so dispatch can resume after a lead is picked.
+   */
+  onBeforeSend?: (text: string) => boolean
   /** i18n copy */
   placeholder?: string
   sendLabel?: string
@@ -103,7 +110,8 @@ function useChatStream({
   langOverride,
   pillarOverride,
   leadId,
-}: Pick<ChatInputProps, 'onMessagesChange' | 'initialMessages' | 'conversationId' | 'langOverride' | 'pillarOverride' | 'leadId'>) {
+  onBeforeSend,
+}: Pick<ChatInputProps, 'onMessagesChange' | 'initialMessages' | 'conversationId' | 'langOverride' | 'pillarOverride' | 'leadId' | 'onBeforeSend'>) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [isStreaming, setIsStreaming] = useState(false)
   const [input, setInput] = useState('')
@@ -130,6 +138,14 @@ function useChatStream({
   const sendMessage = useCallback(async () => {
     const text = input.trim()
     if (!text || isStreaming) return
+
+    // Reply lead gate (D-07): give the parent a chance to BLOCK dispatch — e.g. a
+    // Reply turn with no leadId opens the lead-selector instead of sending. The
+    // input text is intentionally NOT cleared here so dispatch can resume after a
+    // lead is picked.
+    if (onBeforeSend && onBeforeSend(text) === false) {
+      return
+    }
 
     // Optimistically add the user message
     const userMsg: ChatMessage = {
@@ -160,7 +176,7 @@ function useChatStream({
         messages: Array<{ role: string; content: string }>
         cid: string
         langOverride?: 'en' | 'ms' | 'zh'
-        override?: 'coach' | 'finder'
+        override?: 'coach' | 'finder' | 'reply'
         leadId?: string
       } = {
         messages: nextMessages.map((m) => ({ role: m.role, content: m.content })),
@@ -268,7 +284,7 @@ function useChatStream({
     } finally {
       setIsStreaming(false)
     }
-  }, [input, isStreaming, messages, langOverride, pillarOverride, leadId])
+  }, [input, isStreaming, messages, langOverride, pillarOverride, leadId, onBeforeSend])
 
   return { messages, isStreaming, input, setInput, sendMessage }
 }
@@ -289,6 +305,7 @@ export function ChatInput({
   langOverride,
   pillarOverride,
   leadId,
+  onBeforeSend,
   placeholder = 'Ask anything about D2 properties, SOPs, or your onboarding journey…',
   sendLabel = 'Send',
 }: ChatInputProps) {
@@ -301,6 +318,7 @@ export function ChatInput({
     langOverride,
     pillarOverride,
     leadId,
+    onBeforeSend,
   })
 
   // Handle keyboard submit: Enter = send (Shift+Enter = new line)

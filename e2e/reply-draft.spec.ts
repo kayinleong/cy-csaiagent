@@ -1,6 +1,7 @@
 /**
- * tests/e2e/reply-draft.spec.ts — Reply copy-only / no-auto-send e2e scaffold
- * (Phase 4, 04-01 Wave 0 — REPLY-04 / QUAL-02 / D-07 / ADMIN-06).
+ * e2e/reply-draft.spec.ts — Reply copy-only / no-auto-send e2e
+ * (Phase 4, 04-01 Wave 0 scaffold → 04-08 Wave 5: relocated + selectors live —
+ *  REPLY-04 / QUAL-02 / D-07 / ADMIN-06).
  *
  * Proves the four non-negotiable Reply UX guarantees on the draft card:
  *   (a) the draft card renders an editable textarea + EXACTLY ONE Copy button
@@ -12,20 +13,20 @@
  *       is present, is separate from the Copy button, and on click marks itself pressed
  *       (feedback, NOT an egress — ADMIN-06 producer surface, RESEARCH Open-Q4).
  *
- * STATUS: SKIPPED (skip-guarded) — mirrors the Phase-3 finder e2e convention
- * (e2e/finder-flow.spec.ts). The reply-draft-card + lead-selector + thumbs-down control
- * land in Plan 04-08 (Wave 5). These are scaffolds: structure + selectors + assertions
- * present, but skipped pending a live deploy (pilot stack). They document the
- * manual/pilot copy-only verification path.
+ * STATUS: SKIP-GUARDED (runs only with E2E_BASE_URL) — mirrors the Phase-3 finder
+ * e2e convention (e2e/finder-flow.spec.ts). The reply-draft-card + lead-selector +
+ * thumbs-down control shipped in Plan 04-08 (Wave 5); the selectors below are now
+ * HONORED by the live UI. The suite stays skipped without a live deploy (it needs a
+ * running stack + seeded reply SOPs to produce a draft), but it is now DISCOVERABLE
+ * on the Playwright test path (relocated tests/e2e/ → e2e/ per the 04-01 note).
  *
- * ⚠️ DEVIATION NOTE (Plan 04-08 must reconcile): playwright.config.ts `testDir` is
- *    `./e2e`, so this `tests/e2e/` file is authored per the 04-01 plan spec but is NOT
- *    yet on the Playwright test path. Plan 04-08 either relocates this to `e2e/` or
- *    extends `testDir` to include `tests/e2e`. The skip-guard keeps it inert until then.
+ * DEVIATION RECONCILED (04-08): playwright.config.ts `testDir` is `./e2e`. This spec
+ * was authored under tests/e2e/ by 04-01 and is now relocated to e2e/ so Playwright
+ * discovers it. No testDir change needed.
  *
  * DO NOT run in CI — requires a live App Hosting deploy + seeded reply SOPs.
  *
- * Selector contract (Plan 04-08 reply-draft-card.tsx must honor these):
+ * Selector contract (honored by app/[lang]/chat/reply-draft-card.tsx + lead-selector.tsx):
  *   - [data-slot="reply-draft-card"]        → the draft card container
  *   - [data-slot="reply-draft-card"][data-state="draft"|"no-sop-match"|"clarifying"]
  *   - [data-testid="reply-draft-textarea"]  → the editable controlled textarea
@@ -39,7 +40,7 @@
  *   E2E_BASE_URL=https://your-app.web.app \
  *     E2E_AGENT_EMAIL=alice.lim.test@example.com \
  *     E2E_AGENT_PASSWORD=TestPassword123! \
- *     npx playwright test tests/e2e/reply-draft.spec.ts
+ *     npx playwright test e2e/reply-draft.spec.ts
  *
  * References: REPLY-04, QUAL-02, D-07/D-16/D-17, ADMIN-06, 04-UI-SPEC §0 HR-1/HR-2 +
  *            §Surface 1/2, 04-VALIDATION Wave-0 list.

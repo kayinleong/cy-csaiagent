@@ -29,6 +29,7 @@ import { ChatInput } from './chat-input'
 import { ChatHeader, type LangOverride, type PillarOverride } from './chat-header'
 import { DisclosureModal } from './disclosure-modal'
 import { ConversationList } from './conversation-list'
+import { LeadSelector } from './lead-selector'
 import type { ChatMessage } from './message-list'
 
 interface ChatShellProps {
@@ -53,9 +54,19 @@ export function ChatShell({ placeholder, sendLabel, emptyStateMessage }: ChatShe
   // 'en' | 'ms' | 'zh' = pinned language from the header chip.
   const [langOverride, setLangOverride] = useState<LangOverride | undefined>(undefined)
 
-  // ── Pillar override (FIND-11) ────────────────────────────────────────────────
-  // undefined = Auto (routeAsync decides). 'coach' | 'finder' = pinned pillar.
+  // ── Pillar override (FIND-11 / Phase 4 Surface 3) ───────────────────────────
+  // undefined = Auto (routeAsync decides). 'coach' | 'finder' | 'reply' = pinned.
   const [pillarOverride, setPillarOverride] = useState<PillarOverride | undefined>(undefined)
+
+  // ── Lead selection (D-07) ────────────────────────────────────────────────────
+  // Reply turns REQUIRE a leadId. undefined = no active lead → the lead-selector
+  // blocks dispatch until the agent picks one (HR-3, no auto-inference).
+  const [leadId, setLeadId] = useState<string | undefined>(undefined)
+  const [leadSelectorOpen, setLeadSelectorOpen] = useState(false)
+  // True while a Reply dispatch is pending a lead pick — once the lead is chosen
+  // we have the leadId in state and the agent re-sends (text is preserved in the
+  // input). We do not auto-fire to avoid racing React state.
+  const [pendingReplySend, setPendingReplySend] = useState(false)
 
   // ── Conversation history drawer (CHAT-07) ────────────────────────────────────
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -77,6 +88,33 @@ export function ChatShell({ placeholder, sendLabel, emptyStateMessage }: ChatShe
     setMessages([])
   }
 
+  // ── Reply lead gate (D-07) ────────────────────────────────────────────────────
+  // Return false to BLOCK dispatch: a Reply turn (override === 'reply') with no
+  // active leadId opens the lead-selector before any send. All other turns proceed.
+  const handleBeforeSend = (): boolean => {
+    if (pillarOverride === 'reply' && !leadId) {
+      setPendingReplySend(true)
+      setLeadSelectorOpen(true)
+      return false // block — dispatch resumes after the agent picks a lead
+    }
+    return true
+  }
+
+  const handleLeadPicked = (picked: string) => {
+    setLeadId(picked)
+    setLeadSelectorOpen(false)
+    setPendingReplySend(false)
+    // The blocked text is still in the ChatInput; the agent presses Send again
+    // (now leadId is set, so handleBeforeSend returns true and dispatch proceeds).
+  }
+
+  const handleLeadSelectorCancel = () => {
+    setLeadSelectorOpen(false)
+    setPendingReplySend(false)
+    // Cancel = no lead picked → no dispatch (the text remains in the input).
+  }
+  void pendingReplySend // reserved for an auto-resume affordance; currently re-send is manual
+
   return (
     <>
       {/* ── First-run AI disclosure modal (CHAT-05) ──────────────────────────── */}
@@ -90,6 +128,15 @@ export function ChatShell({ placeholder, sendLabel, emptyStateMessage }: ChatShe
         onClose={() => setHistoryOpen(false)}
         onSelectConversation={handleSelectConversation}
         onNewConversation={handleNewConversation}
+      />
+
+      {/* ── Reply lead-selector (D-07 / Surface 2) ──────────────────────────────
+          Opens when a Reply dispatch is attempted with no active leadId. Picking
+          a lead sets leadId; dismissing cancels (no dispatch). HR-3: explicit pick. */}
+      <LeadSelector
+        open={leadSelectorOpen}
+        onCancel={handleLeadSelectorCancel}
+        onPick={handleLeadPicked}
       />
 
       {/* ── Sticky chat header (CHAT-05/06/08/FIND-11) ─────────────────────── */}
@@ -123,6 +170,8 @@ export function ChatShell({ placeholder, sendLabel, emptyStateMessage }: ChatShe
         conversationId={activeCid || undefined}
         langOverride={langOverride}
         pillarOverride={pillarOverride}
+        leadId={leadId}
+        onBeforeSend={handleBeforeSend}
         placeholder={placeholder}
         sendLabel={sendLabel}
       />
