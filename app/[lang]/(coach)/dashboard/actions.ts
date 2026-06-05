@@ -24,7 +24,7 @@
 
 import { cookies } from 'next/headers'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
-import { escalationsRef, agentProfilesRef } from '@/src/firebase/collections'
+import { escalationsRef, agentProfilesRef, replyEditsRef } from '@/src/firebase/collections'
 import { correctKbDoc, listDocsForReview } from '@/src/kb/crud'
 import { loadRecent } from '@/src/memory/conversation'
 import { auditDrilldown } from '@/src/audit/log'
@@ -273,4 +273,201 @@ export async function getAgentChatHistory(agentUid: string): Promise<ChatHistory
     const msg = err instanceof Error ? err.message : 'Failed to load chat history'
     return { ok: false, error: msg }
   }
+}
+
+// ─── getReplyQualityMetrics ─────────────────────────────────────────────────────
+
+/** A single point on the per-SOP edit-rate chart (REPLY-11 / D-21). */
+export interface SopEditRate {
+  /** The cited SOP doc ID (group key). */
+  sopDocId: string
+  /** edits / total copies citing this SOP, in [0,1]. 0 = nobody edited (good). */
+  editRate: number
+  /** Total copies citing this SOP — the Pitfall-E row-on-every-copy denominator. */
+  total: number
+}
+
+export interface ReplyQualityMetrics {
+  /** Per-SOP edit-rate, ordered by editRate DESC (top-edited first). */
+  perSop: SopEditRate[]
+  /** count(thumbsDown==true) / count(all) in [0,1] (ADMIN-06 KPI). */
+  thumbsDownRate: number
+  /** The single most-edited SOP doc ID, or null when there is no data. */
+  topEditedSop: string | null
+  /** open escalations / total escalations in [0,1] (downline-scoped). */
+  escalationRate: number
+  /** total drafts / distinct drafting agents (drafts-per-agent KPI). */
+  draftsPerAgent: number
+  /** total replyEdits rows in scope (the universal denominator). */
+  totalDrafts: number
+  /** 'downline' (coach) or 'org' (admin) — drives the panel subtitle scope copy. */
+  scope: 'downline' | 'org'
+}
+
+export interface ReplyQualityResult {
+  ok: boolean
+  metrics?: ReplyQualityMetrics
+  error?: string
+}
+
+/**
+ * Read-time Reply Quality aggregation for the senior-coach dashboard panel
+ * (REPLY-11 / ADMIN-06, D-20/D-21/D-22).
+ *
+ * Computed entirely with Firestore `count()` aggregation — NEVER fetch-all-then-count
+ * (Pitfall 9 / threat T-04-DASH-COST). The only non-aggregate read is a projection
+ * over `sopDocIds` (a counts/ids-only field — NO draft content, no PII) to discover
+ * which SOPs appear, so the per-SOP edit-rate can be aggregated group-by-group.
+ *
+ * Scope (D-22, single component / role-conditional query):
+ *   - senior-coach → every query is filtered by `seniorCoachId == user.uid` (AUTH-06
+ *     gate 1; firestore.rules is gate 2). Only their downline's rows are counted.
+ *   - admin → unfiltered within the tenant (org-wide).
+ *
+ * Edit-rate denominator (Pitfall E / A2): a `replyEdits` row is written on EVERY Copy,
+ * including unchanged copies (editRatio:0), so per-SOP editRate =
+ *   count(sopDocIds array-contains X AND editRatio > 0) / count(sopDocIds array-contains X).
+ *
+ * PDPA / no-PII-in-logs: this function reads + returns COUNTS ONLY. originalDraft /
+ * editedFinal are never read here and never logged (CLAUDE.md).
+ */
+export async function getReplyQualityMetrics(): Promise<ReplyQualityResult> {
+  let user: Awaited<ReturnType<typeof requireUser>>
+  try {
+    user = await getSessionUser()
+  } catch {
+    return { ok: false, error: 'Unauthorized' }
+  }
+
+  // Same role gate as the rest of the dashboard (T-02-31 — role from verified token).
+  if (user.role !== 'senior-coach' && user.role !== 'admin') {
+    return { ok: false, error: 'Forbidden: senior-coach or admin role required' }
+  }
+
+  const adminAll = user.role === 'admin'
+  const scope: 'downline' | 'org' = adminAll ? 'org' : 'downline'
+
+  // The base scope predicate — coach is downline-locked (AUTH-06), admin is org-wide.
+  // replyEditsRef() / escalationsRef() return Admin-SDK queries with .where()/.count().
+  type CountableQuery = {
+    where: (field: string, op: string, value: unknown) => CountableQuery
+    count: () => { get: () => Promise<{ data: () => { count: number } }> }
+    select: (field: string) => {
+      get: () => Promise<{ docs: Array<{ data: () => { sopDocIds?: string[]; agentUid?: string } }> }>
+    }
+  }
+
+  const scopedReplyEdits = (): CountableQuery => {
+    const base = replyEditsRef() as unknown as CountableQuery
+    return adminAll ? base : base.where('seniorCoachId', '==', user.uid)
+  }
+
+  const countOf = async (q: CountableQuery): Promise<number> => {
+    const snap = await q.count().get()
+    return snap.data().count
+  }
+
+  try {
+    // PDPA: audit the aggregation read (counts-only, but it is a downline drilldown).
+    await auditDrilldown(user.uid, 'replyEdits')
+
+    // ── Universal denominator: total in-scope rows ──────────────────────────────
+    const totalDrafts = await countOf(scopedReplyEdits())
+
+    if (totalDrafts === 0) {
+      // Empty state — every chart renders replyQuality.noData. Still return escalation
+      // rate (it has its own collection) but short-circuit the replyEdits-derived KPIs.
+      const escalationRate = await computeEscalationRate(user.uid, adminAll)
+      return {
+        ok: true,
+        metrics: {
+          perSop: [],
+          thumbsDownRate: 0,
+          topEditedSop: null,
+          escalationRate,
+          draftsPerAgent: 0,
+          totalDrafts: 0,
+          scope,
+        },
+      }
+    }
+
+    // ── Thumbs-down rate (ADMIN-06): count(thumbsDown==true) / count(all) ────────
+    const thumbsDownCount = await countOf(scopedReplyEdits().where('thumbsDown', '==', true))
+    const thumbsDownRate = thumbsDownCount / totalDrafts
+
+    // ── Discover the SOP id set + distinct agents (projection only — no draft text)
+    // sopDocIds + agentUid are counts/ids fields, never PII. This is the one
+    // non-aggregate read; it pulls a tiny projection so per-SOP counts can be grouped.
+    const projSnap = await scopedReplyEdits().select('sopDocIds').get()
+    const sopIds = new Set<string>()
+    for (const doc of projSnap.docs) {
+      const ids = doc.data().sopDocIds ?? []
+      for (const id of ids) sopIds.add(id)
+    }
+
+    // distinct drafting agents — projection over agentUid (an id, not PII content).
+    const agentProjSnap = await scopedReplyEdits().select('agentUid').get()
+    const agentSet = new Set<string>()
+    for (const doc of agentProjSnap.docs) {
+      const a = doc.data().agentUid
+      if (a) agentSet.add(a)
+    }
+    const draftsPerAgent = agentSet.size > 0 ? totalDrafts / agentSet.size : 0
+
+    // ── Per-SOP edit-rate via count() aggregation (no fetch-all-then-count) ───────
+    const perSop: SopEditRate[] = []
+    for (const sopDocId of sopIds) {
+      const citing = await countOf(
+        scopedReplyEdits().where('sopDocIds', 'array-contains', sopDocId),
+      )
+      if (citing === 0) continue
+      const edited = await countOf(
+        scopedReplyEdits()
+          .where('sopDocIds', 'array-contains', sopDocId)
+          .where('editRatio', '>', 0),
+      )
+      perSop.push({ sopDocId, editRate: edited / citing, total: citing })
+    }
+    perSop.sort((a, b) => b.editRate - a.editRate)
+    const topEditedSop = perSop.length > 0 ? perSop[0]!.sopDocId : null
+
+    const escalationRate = await computeEscalationRate(user.uid, adminAll)
+
+    return {
+      ok: true,
+      metrics: {
+        perSop,
+        thumbsDownRate,
+        topEditedSop,
+        escalationRate,
+        draftsPerAgent,
+        totalDrafts,
+        scope,
+      },
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to load reply quality'
+    return { ok: false, error: msg }
+  }
+}
+
+/**
+ * Escalation rate = open escalations / total escalations, scoped the same way as
+ * the reply-edit aggregation (downline for a coach, org-wide for admin). Uses
+ * Firestore count() aggregation (no fetch-all). Returns 0 when there are none.
+ */
+async function computeEscalationRate(coachUid: string, adminAll: boolean): Promise<number> {
+  type CountableQuery = {
+    where: (field: string, op: string, value: unknown) => CountableQuery
+    count: () => { get: () => Promise<{ data: () => { count: number } }> }
+  }
+  const scoped = (): CountableQuery => {
+    const base = escalationsRef() as unknown as CountableQuery
+    return adminAll ? base : base.where('seniorCoachId', '==', coachUid)
+  }
+  const total = (await scoped().count().get()).data().count
+  if (total === 0) return 0
+  const open = (await scoped().where('status', '==', 'open').count().get()).data().count
+  return open / total
 }

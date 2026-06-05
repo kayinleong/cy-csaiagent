@@ -38,6 +38,8 @@ import { StallInbox } from '../_components/stall-inbox'
 import { KnowledgeGapFeed } from '../_components/knowledge-gap-feed'
 import { MetricsPanel } from '../_components/metrics-panel'
 import { KbDocExplorer } from '../_components/kb-doc-explorer'
+import { ReplyQualityPanel } from '../_components/reply-quality-panel'
+import { getReplyQualityMetrics } from './actions'
 
 interface PageProps {
   params: Promise<{ lang: string }>
@@ -130,6 +132,11 @@ export default async function CoachDashboardPage({ params }: PageProps) {
     })),
   )
 
+  // ── Reply Quality aggregation (REPLY-11 / ADMIN-06, D-20/D-21/D-22) ──────────
+  // Read-time count() aggregation over replyEdits, role-scoped server-side
+  // (downline for a coach, org-wide for admin) — counts only, no draft content.
+  const replyQuality = await getReplyQualityMetrics()
+
   const t = await getTranslations('dashboard')
 
   return (
@@ -195,6 +202,19 @@ export default async function CoachDashboardPage({ params }: PageProps) {
           <MetricsPanel
             funnel={funnel}
             agentRows={agentRows}
+          />
+        </section>
+
+        {/* REPLY-11 / ADMIN-06: Reply Quality panel (recharts client island) */}
+        <section>
+          <h2 className="mb-4 text-lg font-semibold">{t('replyQuality.title')}</h2>
+          <ReplyQualityPanel
+            perSop={replyQuality.metrics?.perSop ?? []}
+            thumbsDownRate={replyQuality.metrics?.thumbsDownRate ?? 0}
+            escalationRate={replyQuality.metrics?.escalationRate ?? 0}
+            draftsPerAgent={replyQuality.metrics?.draftsPerAgent ?? 0}
+            topEditedSop={replyQuality.metrics?.topEditedSop ?? null}
+            scope={replyQuality.metrics?.scope ?? (adminAll ? 'org' : 'downline')}
           />
         </section>
       </div>
