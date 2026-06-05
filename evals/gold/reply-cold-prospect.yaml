@@ -9,8 +9,10 @@
 # reply SOPs (pillar:'reply', category:'cold-prospect') in a live Firestore. DO NOT run
 # offline — the grounding + voice assertions only pass against a seeded live stack.
 #
-# Judge rubric domains referenced (Wave 5 adds them to src/eval/judge.ts):
-#   voiceMatch · qualifyingQuestions · noAutoPitch · languageMatch · grounded ([SOP:)
+# Judge rubric domains referenced (src/eval/judge.ts — combinedReplyJudgeRubric, 04-09):
+#   voiceMatch · qualifyingQuestions · noAutoPitch · languageMatch · groundedSop ([SOP:)
+# The structural `assert` rows below run offline; the llm-rubric (combinedReplyJudgeRubric)
+# scores tone/voice/grounding live when JUDGE_MODEL is set (Remote Config).
 #
 # All prompts are SYNTHETIC — no real names, phones, IC, or emails (Pitfall #32; T-04-01).
 #

@@ -20,6 +20,8 @@ import { join } from 'path'
 import {
   judgeRubric,
   combinedJudgeRubric,
+  replyJudgeRubric,
+  combinedReplyJudgeRubric,
   judgeModelEnvKey,
   JUDGE_MODEL_RC_KEY,
 } from './judge'
@@ -103,6 +105,86 @@ describe('judge.ts — rubric domain structure', () => {
     expect(combinedJudgeRubric).not.toMatch(/claude-[a-z]/)
     expect(combinedJudgeRubric).not.toMatch(/anthropic:[a-z]/)
     expect(combinedJudgeRubric).not.toMatch(/opus-\d/)
+  })
+})
+
+// ─── Reply rubric structure (Phase 4 — D-13, REPLY-05/06/07/08) ─────────────────
+
+describe('judge.ts — Reply rubric domain structure', () => {
+  it('has a groundedSop domain referencing [SOP:doc-id]', () => {
+    expect(replyJudgeRubric.groundedSop).toBeTruthy()
+    expect(replyJudgeRubric.groundedSop).toContain('[SOP:')
+  })
+
+  it('has a voiceMatch domain', () => {
+    expect(replyJudgeRubric.voiceMatch).toBeTruthy()
+    expect(replyJudgeRubric.voiceMatch).toContain('VOICE-MATCH CHECK')
+  })
+
+  it('has a qualifyingQuestions domain (REPLY-05)', () => {
+    expect(replyJudgeRubric.qualifyingQuestions).toBeTruthy()
+    expect(replyJudgeRubric.qualifyingQuestions).toContain('QUALIFYING-QUESTIONS CHECK')
+  })
+
+  it('has a noAutoPitch domain', () => {
+    expect(replyJudgeRubric.noAutoPitch).toBeTruthy()
+    expect(replyJudgeRubric.noAutoPitch).toContain('NO-AUTO-PITCH CHECK')
+  })
+
+  it('combinedReplyJudgeRubric reuses the Coach voice / toneDrift / language domains', () => {
+    expect(combinedReplyJudgeRubric).toContain('VOICE CHECK')
+    expect(combinedReplyJudgeRubric).toContain('TONE-DRIFT CHECK')
+    expect(combinedReplyJudgeRubric).toContain('LANGUAGE CHECK')
+  })
+
+  it('combinedReplyJudgeRubric references all Reply-specific domains', () => {
+    expect(combinedReplyJudgeRubric).toContain('[SOP:')
+    expect(combinedReplyJudgeRubric).toContain('VOICE-MATCH CHECK')
+    expect(combinedReplyJudgeRubric).toContain('QUALIFYING-QUESTIONS CHECK')
+    expect(combinedReplyJudgeRubric).toContain('NO-AUTO-PITCH CHECK')
+  })
+
+  it('combinedReplyJudgeRubric does NOT hard-code any model ID', () => {
+    expect(combinedReplyJudgeRubric).not.toMatch(/claude-[a-z]/)
+    expect(combinedReplyJudgeRubric).not.toMatch(/anthropic:[a-z]/)
+    expect(combinedReplyJudgeRubric).not.toMatch(/opus-\d/)
+  })
+})
+
+// ─── Reply gold-set structural validation (Phase 4) ─────────────────────────────
+// EN-first per D-14 (BM / 中文 land when Derek supplies voice samples). Each Reply
+// gold file must parse, carry EN cases, assert a [SOP:doc-id] grounding citation,
+// and contain NO real MY phone / IC PII (synthetic-only — T-04-GOLDPII).
+
+describe.each([
+  'reply-cold-prospect.yaml',
+  'reply-objection.yaml',
+  'reply-financing.yaml',
+])('evals/gold/%s — structural validation', (filename) => {
+  let content: string
+
+  it('file is readable', () => {
+    content = readGoldFile(filename)
+    expect(content.length).toBeGreaterThan(100)
+  })
+
+  it('contains at least one EN case (lang: en)', () => {
+    const langs = extractYamlLines(content, 'lang')
+    expect(langs.some((l) => l === 'en')).toBe(true)
+  })
+
+  it('has [SOP: grounding citation assertions', () => {
+    expect(content).toContain('[SOP:')
+  })
+
+  it('has no real MY phone numbers (+60xxxxxxxxx)', () => {
+    const MY_PHONE = /\+?60\d{9,10}/
+    expect(MY_PHONE.test(content)).toBe(false)
+  })
+
+  it('has no real MY IC numbers (xxxxxx-xx-xxxx)', () => {
+    const IC = /\d{6}-\d{2}-\d{4}/
+    expect(IC.test(content)).toBe(false)
   })
 })
 

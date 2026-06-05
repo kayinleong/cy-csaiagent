@@ -112,8 +112,10 @@ tests:
   # LIVE-GATED: require ANTHROPIC_API_KEY + JUDGE_MODEL (from Remote Config) + seeded
   # reply SOPs (pillar:'reply', categories cold-prospect / objection-handling / financing)
   # plus the curated org-voice doc (pillar:'reply', category:'voice'). DO NOT run offline.
-  # The Reply judge rubric (voiceMatch / qualifyingQuestions / noAutoPitch) is added to
-  # src/eval/judge.ts in a later Phase-4 wave (D-13). All prompts are SYNTHETIC (no PII).
+  # The Reply judge rubric (voiceMatch / qualifyingQuestions / noAutoPitch) lives in
+  # src/eval/judge.ts as combinedReplyJudgeRubric (D-13, 04-09). All prompts are
+  # SYNTHETIC (no PII). The structural assert rows run offline; the llm-rubric scores
+  # tone/voice/grounding live when JUDGE_MODEL (Remote Config) + a seeded stack exist.
   #
   # To run ONLY the Reply suites:
   #   JUDGE_MODEL=$(firebase remoteconfig:get --key model.grader.default) \

@@ -8,7 +8,8 @@
 # reply SOPs (pillar:'reply', category:'objection-handling') in a live Firestore. DO NOT
 # run offline — grounding + voice assertions need the seeded live stack.
 #
-# Judge rubric domains referenced (Wave 5): voiceMatch · noAutoPitch · languageMatch · grounded.
+# Judge rubric domains referenced (src/eval/judge.ts — combinedReplyJudgeRubric, 04-09):
+#   voiceMatch · noAutoPitch · languageMatch · groundedSop ([SOP:).
 #
 # All prompts are SYNTHETIC — no real names, phones, IC, or emails (Pitfall #32; T-04-01).
 # EN-first (D-14); BM / 中文 land later.

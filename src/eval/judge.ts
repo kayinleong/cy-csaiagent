@@ -10,7 +10,7 @@
  * Config access — it is labeled accordingly and must not be referenced directly
  * in any provider configuration.
  *
- * Rubric domains (Phase 2 — five domains):
+ * Rubric domains (Phase 2 — Coach, six domains):
  *   1. Grounded    — cites a real chunk ID from the D2 KB (format [KB:chunk-id])
  *   2. Scoped      — refuses generic real-estate advice not in D2-specific KB
  *   3. Language    — responds in the same language as the prompt (EN/MS/ZH)
@@ -18,8 +18,13 @@
  *   5. Hallucination — does NOT assert facts absent from cited KB chunks
  *   6. ToneDrift   — no AI-tell filler, no non-D2 persona bleed (extends Voice)
  *
+ * Reply rubric (Phase 4 — D-13, REPLY-05/06/07/08): see `replyJudgeRubric` +
+ * `combinedReplyJudgeRubric` below. It REUSES the Coach voice/toneDrift/language
+ * domains and adds Reply-specific domains (groundedSop [SOP:doc-id], voiceMatch,
+ * qualifyingQuestions, noAutoPitch) for the Reply gold sets (evals/gold/reply-*.yaml).
+ *
  * Usage:
- *   import { judgeRubric, judgeModelEnvKey } from '@/src/eval/judge'
+ *   import { judgeRubric, combinedReplyJudgeRubric, judgeModelEnvKey } from '@/src/eval/judge'
  *   // In promptfoo config: model ID = process.env[judgeModelEnvKey]
  *
  * Core/shell rule: this file must NOT import from app/ or next.
@@ -140,6 +145,121 @@ failure indicators: em-dash overuse (—), phrases like "I'd be happy to help",
 a formal-report register instead of an agent-to-agent voice. Respond with PASS or
 FAIL and a one-sentence rationale.`,
 } as const
+
+// ─── Reply rubric (Phase 4 — D-13, REPLY-05/06/07/08) ──────────────────────────
+
+/**
+ * The Reply pillar drafts WhatsApp replies in D2's curated voice (paste-and-draft,
+ * copy-only — never auto-sent). Its rubric REUSES the Coach `voice`, `toneDrift`,
+ * and `languageMatch` domains verbatim (the anti-AI-tell + language baseline) and
+ * adds three Reply-specific domains plus a SOP-grounding domain. The combined Reply
+ * rubric (`combinedReplyJudgeRubric`) is what the Reply gold sets in
+ * evals/gold/reply-*.yaml score against.
+ *
+ * Reply-specific domains:
+ *   - groundedSop          — cites a real reply SOP via [SOP:doc-id] (Reply's
+ *                            analog of the Coach `grounded` [KB:chunk-id] check)
+ *   - voiceMatch           — matches the curated D2 voice doc; no generic-AI filler
+ *   - qualifyingQuestions  — a cold-prospect inbound is answered with qualifying
+ *                            QUESTIONS, not a pitch (REPLY-05)
+ *   - noAutoPitch          — no unsolicited project hard-pitch (REPLY-05/06)
+ *
+ * Judge model: still resolved via JUDGE_MODEL from Remote Config (no hard-coded ID).
+ */
+export const replyJudgeRubric = {
+  /**
+   * Reply grounding — maps the Coach `grounded` [KB:chunk-id] check to Reply's
+   * [SOP:doc-id] citation. A draft that answers without citing a D2 reply SOP
+   * (or that invents an SOP) FAILS. A grounded `no_sop_match` refusal is the
+   * correct behavior when no SOP covers the inbound — it is NOT a grounding failure.
+   */
+  groundedSop: `\
+GROUNDING CHECK (SOP): Does the drafted reply cite at least one D2 reply SOP using
+the format [SOP:<doc-id>]? A draft that answers from general sales knowledge without
+citing a specific D2 reply SOP FAILS this check. A grounded "I don't have a D2 reply
+SOP for this" refusal (no [SOP:] but explicitly declining) PASSES — that is the
+expected grounding-mandate behavior, not a failure. Respond with PASS or FAIL and a
+one-sentence rationale.`,
+
+  /**
+   * Voice match — the draft should read like the curated D2 senior-agent voice
+   * (the org-voice doc), not a generic AI assistant. This is the Reply analog of
+   * the Coach `voice` domain, anchored to the curated voice samples (D-12).
+   */
+  voiceMatch: `\
+VOICE-MATCH CHECK: Does the drafted reply match the curated D2 senior-agent voice —
+direct, warm, practical, the way a real D2 agent texts a lead on WhatsApp? A draft
+that uses generic-AI filler ("Certainly!", "Great question!", "I'd be happy to help"),
+corporate-brochure register, or an obviously-AI tell FAILS this check. Respond with
+PASS or FAIL and a one-sentence rationale.`,
+
+  /**
+   * Qualifying questions (REPLY-05) — a cold-prospect inbound ("saw your ad, tell
+   * me more") must be met with qualifying QUESTIONS (budget / timeline / own-stay
+   * vs investment / area), NOT an immediate feature dump or unit pitch.
+   */
+  qualifyingQuestions: `\
+QUALIFYING-QUESTIONS CHECK (cold-prospect): For a cold-prospect inbound, does the
+drafted reply ask qualifying QUESTIONS (budget, timeline, own-stay vs investment,
+preferred area) to understand the lead BEFORE pitching anything? A draft that dumps a
+feature list or pitches a specific unit without first qualifying FAILS this check.
+(Applies to cold-prospect inbounds only.) Respond with PASS or FAIL and a one-sentence
+rationale.`,
+
+  /**
+   * No auto-pitch (REPLY-05/06) — the draft must not open with a premature hard
+   * sell (book now / pay deposit / sign today / limited units) on a cold or
+   * objection inbound. The agent qualifies and reframes; they do not auto-pitch.
+   */
+  noAutoPitch: `\
+NO-AUTO-PITCH CHECK: Does the drafted reply avoid a premature hard-sell — phrases like
+"book now", "pay the deposit", "sign today", "limited units left" — before the lead is
+qualified or the objection is addressed? A draft that jumps straight to a high-pressure
+close FAILS this check. Respond with PASS or FAIL and a one-sentence rationale.`,
+} as const
+
+/**
+ * The combined multi-domain Reply rubric string — the Reply analog of
+ * `combinedJudgeRubric`. Concatenates the reused Coach domains
+ * (voice + toneDrift + languageMatch) with the Reply-specific domains
+ * (groundedSop + voiceMatch + qualifyingQuestions + noAutoPitch) and a fixed
+ * PASS/FAIL output format. OVERALL is PASS only if ALL domains pass.
+ *
+ * Used as the `value` in a Promptfoo `llm-rubric` assertion for the Reply gold
+ * sets (evals/gold/reply-*.yaml). The judge model stays resolved via JUDGE_MODEL
+ * from Remote Config — no hard-coded model ID here (TSD §2.3, QUAL-01).
+ */
+export const combinedReplyJudgeRubric = `\
+You are an expert evaluator for the D2 Reply Assistant, which drafts WhatsApp replies
+in D2's curated voice (copy-only — the agent sends from their own phone, never
+auto-sent). Score the drafted reply on all domains below. Each domain must receive a
+PASS or FAIL verdict with a one-sentence rationale. The overall result is PASS only if
+ALL domains pass.
+
+${replyJudgeRubric.groundedSop}
+
+${judgeRubric.languageMatch}
+
+${judgeRubric.voice}
+
+${replyJudgeRubric.voiceMatch}
+
+${judgeRubric.toneDrift}
+
+${replyJudgeRubric.qualifyingQuestions}
+
+${replyJudgeRubric.noAutoPitch}
+
+Format your response as:
+GROUNDING-SOP: [PASS/FAIL] — <rationale>
+LANGUAGE: [PASS/FAIL] — <rationale>
+VOICE: [PASS/FAIL] — <rationale>
+VOICE-MATCH: [PASS/FAIL] — <rationale>
+TONE-DRIFT: [PASS/FAIL] — <rationale>
+QUALIFYING-QUESTIONS: [PASS/FAIL] — <rationale>
+NO-AUTO-PITCH: [PASS/FAIL] — <rationale>
+OVERALL: [PASS/FAIL]
+`
 
 /**
  * The combined multi-domain rubric string.
