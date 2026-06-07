@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: phase-5-executing
-stopped_at: Phase 5 Plan 06 (admin conversation viewer + role matrix) COMPLETE — 3 tasks, 6 files created, 1 modified, 2 commits. Next: 05-07-PLAN.md.
-last_updated: "2026-06-07T09:15:51Z"
-last_activity: 2026-06-07 — 05-06-PLAN.md executed. Conversations viewer (audited drilldown, read-only, pillar Badge, auditNotice) + roles matrix (setUserClaims, role-assign audit, demotion AlertDialog). 9 tests GREEN. tsc clean. NOT pushed (user hold).
+stopped_at: Phase 5 Plan 07 (org usage/cost dashboard + coach dashboard v2) COMPLETE — 2 code tasks + 1 auto-approved checkpoint, 5 files created, 2 modified, 2 commits. Next: 05-08-PLAN.md.
+last_updated: "2026-06-07T09:30:00Z"
+last_activity: 2026-06-07 — 05-07-PLAN.md executed. Admin usage+cost dashboard (reads usageRollups only, ADMIN-08+QUAL-08, HR-7) + coach dashboard v2 (3 panels appended — funnel+ramp, gap-agg, correction-eval; CDASH-08). 541 tests PASS. tsc clean. NOT pushed (user hold).
 progress:
   total_phases: 5
   completed_phases: 3
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 ## Current Position
 
 Phase: 5 of 5 executing (Hardening + Scale-Up)
-Plan: Phase 5 Plan 06/08 COMPLETE (admin conversation viewer + role matrix). 2 plans remaining. Next: 05-07-PLAN.md.
-Status: Phase 5 executing. Plans 01-06 done. FINAL v1 phase.
-Last activity: 2026-06-07 — 05-06-PLAN.md: conversations viewer (auditDrilldown-before-read, read-only, Dialog+ScrollArea, pillar Badge, auditNotice) + roles matrix (setUserClaims, role-assign audit, demotion AlertDialog, 3-layer gate). 2 commits (3d50543, ba7e3b7). NOT pushed (user hold).
+Plan: Phase 5 Plan 07/08 COMPLETE (org usage/cost dashboard + coach dashboard v2). 1 plan remaining. Next: 05-08-PLAN.md.
+Status: Phase 5 executing. Plans 01-07 done. FINAL v1 phase.
+Last activity: 2026-06-07 — 05-07-PLAN.md: admin usage+cost dashboard (usageRollups only, ADMIN-08+QUAL-08) + coach dashboard v2 (3 panels: funnel+ramp KPI, knowledge-gap agg by pillar, correction→eval feedback; CDASH-08). 2 commits (b7785e4, fe41d3f). NOT pushed (user hold).
 
-Progress: [████████░░] 85% (4 of 5 phases code-complete + verified; Phase 5 Plan 05/08 complete)
+Progress: [█████████░] 88% (4 of 5 phases code-complete + verified; Phase 5 Plan 07/08 complete)
 
 ### Phase 4 open human-action gate (live-gated — does NOT block Phase 5 planning)
 1. `firebase deploy --only firestore:indexes,firestore:rules` — additive `kbChunks` pillar vector index + `replyEdits` indexes/rules.
@@ -95,6 +95,11 @@ Recent decisions affecting current work:
 - [05-06]: conversations/actions.test.ts test imports getConversationForReview (the Wave-0 stub named it that); actions.ts exports under the same name — no alias needed.
 - [05-06]: searchConversations uses orderBy __name__ + startAt/endAt for prefix search — bounded at 50; listUsersWithRoles bounded at 200 (pilot org ≤ 200 agents).
 - [05-06]: roles/actions.test.ts TypeScript fix — added type cast (result as AssignRoleError) on InvalidRoleError assertion; vitest expect() does not narrow union discriminants for TypeScript.
+- [05-07]: usageRollups read with where('day','>=',windowStart).orderBy('day','asc'); window from searchParams (7 or 30 days, default 7). No AggregateField sum needed — rollups are already aggregated docs.
+- [05-07]: stale watchdog threshold 25h (1h buffer on daily window) to avoid spurious staleness alerts.
+- [05-07]: getKnowledgeGapAggregation uses select() projection + JS bucket aggregation (same pattern as getReplyQualityMetrics :402-407) — acceptable at pilot scale.
+- [05-07]: getCorrectionEvalFeedback orders evals by score DESC (EvalDoc has no runAt timestamp); chronological trend deferred to when EvalDoc gets a runAt field.
+- [05-07]: Task 3 checkpoint:human-verify auto-approved per auto_advance=true — building dashboards is not an auth gate.
 
 ### Pending Todos
 
@@ -123,8 +128,8 @@ Items acknowledged and carried forward (v2 / post-pilot):
 ## Session Continuity
 
 Last session: 2026-06-07
-Stopped at: Phase 5 Plan 06 (admin conversation viewer + role matrix) COMPLETE — 3 tasks, 6 files created, 1 modified, 2 commits (3d50543, ba7e3b7). Next: 05-07-PLAN.md.
-Resume file: .planning/phases/05-hardening-scale/05-07-PLAN.md
+Stopped at: Phase 5 Plan 07 (org usage/cost dashboard + coach dashboard v2) COMPLETE — 2 code tasks + 1 auto-approved checkpoint, 5 files created, 2 modified, 2 commits (b7785e4, fe41d3f). Next: 05-08-PLAN.md.
+Resume file: .planning/phases/05-hardening-scale/05-08-PLAN.md
 Phase 3: code-complete + verified; live finder/router Promptfoo evals + Playwright e2e (skip-guarded scaffolds) + FIND-12 pilot provisioning (`scripts/provision-finder-pilot.ts --apply`, dry-run by default) are the live-gated human step — run during pilot rollout, do NOT block Phase 4 planning.
 Phase 4 (Reply Assistant + Reply Analytics): NOT yet started. Reqs REPLY-01..12, ADMIN-05/06, QUAL-02. Paste-and-draft WhatsApp replies in D2's voice (never auto-sent), per-lead isolation, edit-as-signal analytics, reachable via the activated intent router alongside Coach + Finder.
 Next step: /gsd-discuss-phase 4 (then plan → execute). User standing instruction: do NOT push to any remote without explicit confirmation.

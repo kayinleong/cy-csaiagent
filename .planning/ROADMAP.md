@@ -82,7 +82,7 @@ Plans:
 - [ ] 05-04-PLAN.md — ONE usage/cost pipeline: route onFinish capture (final.totalUsage) -> usage-rollup lazy-cron -> usageRollups + resolveStall.resolvedAt
 - [x] 05-05-PLAN.md — Nav + trilingual i18n foundation + PDPA erasure UI (type-to-confirm destructive flow) + admin-gated Server Action
 - [x] 05-06-PLAN.md — Admin conversation-log viewer (read-only, audited) + role/permission matrix + setUserClaims assignment
-- [ ] 05-07-PLAN.md — Admin usage+cost dashboard (usageRollups) + coach dashboard v2 panels (funnel/ramp/knowledge-gap/correction-eval)
+- [x] 05-07-PLAN.md — Admin usage+cost dashboard (usageRollups) + coach dashboard v2 panels (funnel/ramp/knowledge-gap/correction-eval)
 - [ ] 05-08-PLAN.md — Artifacts: PERF-COST.md, HARDENING.md, PDPA-SIGNOFF.md (Derek gate), docs/operations/ handover, TIA update
 **UI hint**: yes
 
