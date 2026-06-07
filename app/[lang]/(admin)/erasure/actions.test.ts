@@ -42,6 +42,33 @@ vi.mock('next/headers', () => ({
   }),
 }))
 
+// Mock Firestore collections — the action creates an erasureRequests doc which requires
+// a live Firestore connection. The mocked doc/ref/set chain lets the happy-path test run
+// without an emulator (all dependencies mocked — unit test, per file comment above).
+vi.mock('@/src/firebase/collections', () => ({
+  erasureRequestsRef: vi.fn().mockReturnValue({
+    doc: vi.fn().mockReturnValue({
+      id: 'mock-req-id',
+      set: vi.fn().mockResolvedValue(undefined),
+      update: vi.fn().mockResolvedValue(undefined),
+    }),
+    orderBy: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnValue({
+      get: vi.fn().mockResolvedValue({ docs: [] }),
+    }),
+  }),
+  TENANT_ID: 'd2',
+  manifestCollections: vi.fn().mockReturnValue(['conversations', 'users']),
+}))
+
+vi.mock('@/src/pdpa/coverage', () => ({
+  manifestCollections: vi.fn().mockReturnValue(['conversations', 'users']),
+}))
+
+vi.mock('@/src/audit/log', () => ({
+  auditDrilldown: vi.fn().mockResolvedValue(undefined),
+}))
+
 // This import will FAIL until the action module is created (Wave 0 red-bar intent):
 // The module under test: app/[lang]/(admin)/erasure/actions.ts
 // Using relative path (this test co-locates with the action file):
