@@ -16,7 +16,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import { LayoutDashboard, MessageSquare, BookOpen, Building2 } from 'lucide-react'
+import { LayoutDashboard, MessageSquare, BookOpen, Building2, MessagesSquare, ShieldCheck, BarChart3, Trash2 } from 'lucide-react'
 import type { Role } from '@/src/firebase/auth'
 import {
   Sidebar,
@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/sidebar'
 
 interface NavItem {
-  key: 'dashboard' | 'kb' | 'inventory' | 'chat'
+  key: 'dashboard' | 'kb' | 'inventory' | 'chat' | 'conversations' | 'roles' | 'usage' | 'erasure'
   href: string
   icon: typeof LayoutDashboard
   roles: Role[]
@@ -53,6 +53,10 @@ export function AppSidebar({ role, lang }: AppSidebarProps) {
     { key: 'kb', href: `/${lang}/kb`, icon: BookOpen, roles: ['admin'] },
     { key: 'inventory', href: `/${lang}/inventory`, icon: Building2, roles: ['admin'] },
     { key: 'chat', href: `/${lang}/chat`, icon: MessageSquare, roles: ['new-agent', 'senior-coach', 'admin'] },
+    { key: 'conversations', href: `/${lang}/conversations`, icon: MessagesSquare, roles: ['admin'] },
+    { key: 'roles', href: `/${lang}/roles`, icon: ShieldCheck, roles: ['admin'] },
+    { key: 'usage', href: `/${lang}/usage`, icon: BarChart3, roles: ['admin'] },
+    { key: 'erasure', href: `/${lang}/erasure`, icon: Trash2, roles: ['admin'] },
   ]
 
   const visible = items.filter((item) => item.roles.includes(role))
