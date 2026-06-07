@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: phase-5-executing
-stopped_at: Phase 5 Plan 03 (PDPA erasure core) COMPLETE — 3 tasks, 3 files created, 1 modified, 3 commits. Next: 05-04-PLAN.md (usage/cost pipeline).
-last_updated: "2026-06-07T07:59:00Z"
-last_activity: 2026-06-07 — 05-03-PLAN.md executed. PII_ERASURE_MANIFEST + eraseDataSubject + erasureSweep + erasure-sweep JOB_REGISTRY entry. tsc clean. NOT pushed (user hold).
+stopped_at: Phase 5 Plan 04 (usage/cost pipeline) COMPLETE — 3 tasks, 3 files created, 3 modified, 3 commits. Next: 05-05-PLAN.md (admin surfaces).
+last_updated: "2026-06-07T08:10:00Z"
+last_activity: 2026-06-07 — 05-04-PLAN.md executed. recordUsageEvent + rollupUsage (AggregateField) + resolvedAt in resolveStall. record.test.ts GREEN. tsc clean. NOT pushed (user hold).
 progress:
   total_phases: 5
   completed_phases: 3
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 ## Current Position
 
 Phase: 5 of 5 executing (Hardening + Scale-Up)
-Plan: Phase 5 Plan 03/08 COMPLETE (PDPA erasure core). 5 plans remaining. Next: 05-04-PLAN.md (usage/cost pipeline).
-Status: Phase 5 executing. Plans 01-03 done. FINAL v1 phase.
-Last activity: 2026-06-07 — 05-03-PLAN.md: PII_ERASURE_MANIFEST + eraseDataSubject + erasureSweep + erasure-sweep job. 3 commits (f8ee5a8, 6522fb2, 21d4540). NOT pushed (user hold).
+Plan: Phase 5 Plan 04/08 COMPLETE (usage/cost pipeline). 4 plans remaining. Next: 05-05-PLAN.md (admin surfaces).
+Status: Phase 5 executing. Plans 01-04 done. FINAL v1 phase.
+Last activity: 2026-06-07 — 05-04-PLAN.md: recordUsageEvent (types+record), rollupUsage (AggregateField), usage-rollup JOB stub filled, resolvedAt in resolveStall. 3 commits (ebed5dd, f69bba1, 3d3c5b1). NOT pushed (user hold).
 
 Progress: [████████░░] 83% (4 of 5 phases code-complete + verified; Phase 5 Plan 03/08 executing)
 
@@ -86,6 +86,9 @@ Recent decisions affecting current work:
 - [05-03]: rawSubjectId stored as server-side field on ErasureRequestDoc (not in TypeScript interface) — sweep re-queries Firestore using this field for idempotent resumability.
 - [05-03]: collectionsHit includes all manifest collections (even empty ones) to satisfy coverage test contract (coverage proof = executor visited every collection).
 - [05-03]: STORAGE manifest entry is a no-op code path (A1 — voice samples are Firestore strings today); must be wired before sign-off if voice moves to Storage.
+- [05-04]: final.totalUsage used in usageEvents capture only; rate-limit/messages.tokens left at final.usage.totalTokens (pre-Phase-5 undercount documented in PERF-COST.md as separate claim).
+- [05-04]: resolvedAt written via FieldValue.serverTimestamp() in resolveStall — minimal field add for D-05 resolution-time analytics.
+- [05-04]: Resolution-time in rollup is per-uid (not per-pillar) — EscalationDoc has no pillar field.
 
 ### Pending Todos
 
@@ -114,8 +117,8 @@ Items acknowledged and carried forward (v2 / post-pilot):
 ## Session Continuity
 
 Last session: 2026-06-07
-Stopped at: Phase 5 Plan 03 (PDPA erasure core) COMPLETE — 3 tasks, 3 files created, 1 modified, 3 commits. Next: 05-04-PLAN.md.
-Resume file: .planning/phases/05-hardening-scale/05-04-PLAN.md
+Stopped at: Phase 5 Plan 04 (usage/cost pipeline) COMPLETE — 3 tasks, 3 files created, 3 modified, 3 commits. Next: 05-05-PLAN.md.
+Resume file: .planning/phases/05-hardening-scale/05-05-PLAN.md
 Phase 3: code-complete + verified; live finder/router Promptfoo evals + Playwright e2e (skip-guarded scaffolds) + FIND-12 pilot provisioning (`scripts/provision-finder-pilot.ts --apply`, dry-run by default) are the live-gated human step — run during pilot rollout, do NOT block Phase 4 planning.
 Phase 4 (Reply Assistant + Reply Analytics): NOT yet started. Reqs REPLY-01..12, ADMIN-05/06, QUAL-02. Paste-and-draft WhatsApp replies in D2's voice (never auto-sent), per-lead isolation, edit-as-signal analytics, reachable via the activated intent router alongside Coach + Finder.
 Next step: /gsd-discuss-phase 4 (then plan → execute). User standing instruction: do NOT push to any remote without explicit confirmation.

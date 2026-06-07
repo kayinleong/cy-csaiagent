@@ -146,4 +146,4 @@ Phases execute in numeric order: 1 → 2 → [week-4 go/no-go gate] → 3 → 4 
 | 2. Coach + Admin v1 | 0/TBD | Not started | - |
 | 3. Finder + Intent-Routing | 0/TBD | Not started | - |
 | 4. Reply Assistant + Analytics | 0/10 | Planned | - |
-| 5. Hardening + Scale-Up | 3/8 | Executing | - |
+| 5. Hardening + Scale-Up | 4/8 | Executing | - |
