@@ -515,19 +515,21 @@ export async function assignRole(targetUid: string, role: 'new-agent'|'senior-co
 | A5 | `usageEvents` retention/TTL is a propose-during-planning item (CONTEXT.md discretion); default proposal = 90d (rollups are durable) | Pitfall 4 | Too-short TTL loses re-aggregation ability; too-long inflates read cost at 400 agents. |
 | A6 | Managed Firestore export/import is acceptable as a documented operational runbook (not app code), within "no external scheduler" if invoked on-demand | Pitfall 7 / D-12 | If Derek/constraint reading is stricter ("no GCP Admin API at all"), backup must be re-scoped to a manual data-export Server Action — heavier. Flag for confirmation. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Does the existing rate-limit decrement (`route.ts:607`) and `messages.tokens` (`:522`) intentionally undercount multi-step Finder/Reply turns?**
+> All three resolved during planning (2026-06-07) and threaded into the Phase-5 plans. Kept here for provenance.
+
+1. **RESOLVED — Does the existing rate-limit decrement (`route.ts:607`) and `messages.tokens` (`:522`) intentionally undercount multi-step Finder/Reply turns?** → Phase 5 captures `final.totalUsage` in `usageEvents` ONLY (Plan 04); the rate-limit/`messages.tokens` undercount is documented in `PERF-COST.md` (Plan 08), NOT changed (separate claim + Derek sign-off).
    - What we know: both read `final.usage.totalTokens` (last step only) while finder/reply run `stepCountIs(5)`.
    - What's unclear: whether to retroactively fix rate-limiting (behavioral change) or only fix the NEW `usageEvents` capture.
    - Recommendation: For Phase 5, capture `final.totalUsage` in `usageEvents` (correct cost). Treat the rate-limit/messages.tokens undercount as a SEPARATE, flagged finding in `PERF-COST.md` — changing rate-limit budget consumption mid-hardening is a regression-surface change requiring its own claim + Derek sign-off (TOKEN_CAP=50_000, `ratelimit/window.ts:28`).
 
-2. **Lead erasure when a lead's `conversations` are keyed by `leadId` vs the agent's primary `coach-${uid}` thread (keyed by `ownerUid`).**
+2. **RESOLVED — Lead erasure when a lead's `conversations` are keyed by `leadId` vs the agent's primary `coach-${uid}` thread (keyed by `ownerUid`).** → A Finder/Reply conversation maps to exactly one lead; delete `conversations where leadId == X`. Validated in the coverage test (Plan 01) with a synthetic multi-lead agent; manifest keys it by `leadId` (Plan 03).
    - What we know: `ConversationDoc` has both `ownerUid` (always) and `leadId?` (Finder/Reply). Coach threads have no leadId.
    - What's unclear: whether lead erasure should delete the whole Finder/Reply conversation (it may interleave multiple leads? No — `route.ts` required-leadId fail-closed for reply, and Finder slots are per-lead) or just lead-scoped messages.
    - Recommendation: Confirm a Finder/Reply conversation maps to exactly one lead. Current code keys `leadContext` and slots per-lead, and the route passes one `leadId` per turn — so deleting `conversations where leadId == X` is correct. Validate in the coverage test with a synthetic multi-lead agent.
 
-3. **Resolution-time + escalation-rate definitions for the rollup (D-05/ADMIN-08).**
+3. **RESOLVED — Resolution-time + escalation-rate definitions for the rollup (D-05/ADMIN-08).** → Reuse `computeEscalationRate`; add `resolvedAt` to `EscalationDoc` (Plan 02) + set it in `resolveStall` (Plan 04); resolution-time = `openedAt`→`resolvedAt` delta; message volume = `usageEvents` count.
    - What we know: escalation rate = open/total is already computed (`computeEscalationRate`, `dashboard/actions.ts:460`). "Resolution time" and "message volume" are new.
    - Recommendation: Reuse `computeEscalationRate` shape. Define "resolution time" = escalation `openedAt` → status `resolved` delta (requires a `resolvedAt` field on `EscalationDoc` — currently absent; `resolveStall` only sets `status:'resolved'`, `actions.ts:84`). Flag: adding `resolvedAt` is a small schema add needed for resolution-time analytics. "Message volume" = `usageEvents` count (msgCount) per rollup.
 

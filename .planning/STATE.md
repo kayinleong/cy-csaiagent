@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: phase-5-context-gathered
-stopped_at: Phase 5 context gathered (05-CONTEXT.md + 05-DISCUSSION-LOG.md committed) — next is /gsd-plan-phase 5. (Phase 4 firestore rules+indexes DEPLOYED to cy-csaiagent 2026-06-07 via quick-004; kbChunks.pillar backfill still parked — needs personal-account ADC.)
+status: phase-5-planned
+stopped_at: Phase 5 planned + verified (8 plans, 6 waves; checker VERIFICATION PASSED) — next is /gsd-execute-phase 5 (human-gated). (Phase 4 firestore rules+indexes DEPLOYED to cy-csaiagent 2026-06-07; kbChunks.pillar backfill still parked — needs personal-account ADC.)
 last_updated: "2026-06-07T00:00:00.000Z"
-last_activity: 2026-06-07 — Firebase rules+indexes deployed live to cy-csaiagent (asia-southeast1) incl. all 5 Phase-4 indexes (quick-004 fixed vectorConfig dimension string→number + removed invalid agentProfiles single-field composite). Then Phase 5 (Hardening + Scale-Up) context gathered via discuss --auto: 13 decisions (D-01..D-13). NOT pushed (user hold).
+last_activity: 2026-06-07 — Phase 5 planned. Research + UI-SPEC + VALIDATION + PATTERNS, then 8 PLAN.md (waves 0-6), checker VERIFICATION PASSED (1 non-blocking doc-marker warning, fixed). 7/7 REQ-IDs covered. Erasure safety architecture verified (single manifest→executor+sweep+coverage test, audit-exempt, type-to-confirm); 3 new collections ship with rules in-plan; no BigQuery/scheduler. NOT pushed (user hold).
 progress:
   total_phases: 5
   completed_phases: 3
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-31)
 
 **Core value:** Compress new-agent ramp-up from 60 days to 7–10 days via a D2-grounded multi-pillar AI chat surface (the 11pm-on-a-phone answer).
-**Current focus:** Phase 5 — Hardening + Scale-Up (context gathered, next: /gsd-plan-phase 5)
+**Current focus:** Phase 5 — Hardening + Scale-Up (planned + verified, next: /gsd-execute-phase 5)
 
 ## Current Position
 
-Phase: 4 of 5 complete (Reply Assistant + Reply Analytics) — Phase 5 context gathered, next: /gsd-plan-phase 5
-Plan: Phase 5 has 0 plans yet (05-CONTEXT.md ready, 13 decisions, 7 reqs); Phase 4 = 10/10 code-complete + verified; all three pillars live in one chat surface
-Status: Phase 5 context gathered (--auto). FINAL v1 phase — PDPA erasure, cost/perf pass, dashboard v2, usage analytics, ~400-agent load test, handover docs. Grow-don't-fork; no GCP beyond Firebase (usage = Firestore rollups, NOT BigQuery).
-Last activity: 2026-06-07 — Firebase rules+indexes deployed live (quick-004); Phase 5 discuss --auto → 05-CONTEXT.md + 05-DISCUSSION-LOG.md. NOT pushed (user hold).
+Phase: 4 of 5 complete (Reply Assistant + Reply Analytics) — Phase 5 planned + verified, next: /gsd-execute-phase 5
+Plan: Phase 5 = 8 plans (waves 0-6), checker VERIFICATION PASSED, 7/7 REQ-IDs covered; Phase 4 = 10/10 code-complete + verified; all three pillars live
+Status: Phase 5 ready to execute (human-gated). FINAL v1 phase. Plans 05-05/06/07/08 are autonomous:no checkpoints (destructive erasure UI + Derek PDPA sign-off gate).
+Last activity: 2026-06-07 — Phase 5 planned + verified (research→ui→validation→patterns→plan→check). NOT pushed (user hold).
 
-Progress: [████████░░] 80% (4 of 5 phases code-complete + verified; Phase 5 context ready)
+Progress: [████████░░] 80% (4 of 5 phases code-complete + verified; Phase 5 planned + verified, ready to execute)
 
 ### Phase 4 open human-action gate (live-gated — does NOT block Phase 5 planning)
 1. `firebase deploy --only firestore:indexes,firestore:rules` — additive `kbChunks` pillar vector index + `replyEdits` indexes/rules.
