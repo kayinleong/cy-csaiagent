@@ -21,6 +21,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { AuthenticatedUser } from '@/src/firebase/auth'
 
 // ─── Mock the action's dependencies BEFORE importing the action module ─────────
 // These mocks intercept the module-level imports inside the action file.
@@ -92,7 +93,7 @@ describe('QUAL-09 erasure Server Action — auth → admin → zod gate order', 
     const { cookies } = await import('next/headers')
     vi.mocked(cookies).mockResolvedValueOnce({
       get: vi.fn().mockReturnValue(undefined), // no session cookie
-    } as any)
+    } as unknown as Awaited<ReturnType<typeof cookies>>)
 
     const result = await eraseDataSubjectAction({ subjectType: 'agent', id: 'test-uid' })
 
@@ -109,7 +110,7 @@ describe('QUAL-09 erasure Server Action — auth → admin → zod gate order', 
       uid: 'coach-uid',
       role: 'senior-coach',
       tenantId: 'd2',
-    } as any)
+    } as AuthenticatedUser)
 
     const result = await eraseDataSubjectAction({ subjectType: 'agent', id: 'test-uid' })
 
@@ -126,7 +127,7 @@ describe('QUAL-09 erasure Server Action — auth → admin → zod gate order', 
       uid: 'admin-uid',
       role: 'admin',
       tenantId: 'd2',
-    } as any)
+    } as AuthenticatedUser)
 
     // Invalid subjectType (not in the zod enum)
     const result = await eraseDataSubjectAction({ subjectType: 'invalid-type', id: 'test-uid' })
@@ -149,7 +150,7 @@ describe('QUAL-09 erasure Server Action — auth → admin → zod gate order', 
       uid: 'admin-uid',
       role: 'admin',
       tenantId: 'd2',
-    } as any)
+    } as AuthenticatedUser)
 
     const result = await eraseDataSubjectAction({ subjectType: 'agent', id: 'agent-test-001' })
 

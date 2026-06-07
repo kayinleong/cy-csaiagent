@@ -21,6 +21,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { AuthenticatedUser } from '@/src/firebase/auth'
 
 // ─── Mock dependencies BEFORE importing the action module ─────────────────────
 
@@ -71,7 +72,7 @@ describe('ADMIN-02 getConversationForReview — admin-only + audit-before-read (
       uid: 'coach-uid',
       role: 'senior-coach',
       tenantId: 'd2',
-    } as any)
+    } as AuthenticatedUser)
 
     const result = await getConversationForReview('conv-test-001')
 
@@ -90,7 +91,7 @@ describe('ADMIN-02 getConversationForReview — admin-only + audit-before-read (
       uid: 'admin-uid',
       role: 'admin',
       tenantId: 'd2',
-    } as any)
+    } as AuthenticatedUser)
 
     const { auditDrilldown } = await import('@/src/audit/log')
     const { loadRecent } = await import('@/src/memory/conversation')
@@ -113,7 +114,7 @@ describe('ADMIN-02 getConversationForReview — admin-only + audit-before-read (
       uid: 'admin-uid',
       role: 'admin',
       tenantId: 'd2',
-    } as any)
+    } as AuthenticatedUser)
 
     const result = await getConversationForReview('conv-test-001')
 

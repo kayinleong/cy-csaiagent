@@ -141,8 +141,8 @@ export default async function UsagePage({ params, searchParams }: PageProps) {
   let totalCachedInputTokens = 0
   let totalReads = 0
   let totalWrites = 0
-  let resolutionTimeSamples: number[] = []
-  let escalationRateSamples: number[] = []
+  const resolutionTimeSamples: number[] = []
+  const escalationRateSamples: number[] = []
 
   for (const doc of rollupDocs) {
     activeAgentUids.add(doc.uid)
@@ -232,10 +232,11 @@ export default async function UsagePage({ params, searchParams }: PageProps) {
     }))
 
   // ── Stale watchdog: latest rollup older than window end? ─────────────────
+  const now = new Date()
   let staleWatchdog = false
   let latestRollupRelative: string | null = null
   if (latestUpdatedAt) {
-    const msSince = Date.now() - (latestUpdatedAt as Date).getTime()
+    const msSince = now.getTime() - (latestUpdatedAt as Date).getTime()
     const hoursSince = msSince / (1000 * 60 * 60)
     // Flag stale if no rollup in the last 25h (1h buffer on the daily window)
     if (hoursSince > 25) {

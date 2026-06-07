@@ -177,7 +177,7 @@ export async function searchConversations(
     const { adminDb } = await import('@/src/firebase/admin')
 
     // Bounded query: limit to 50 most-recent conversations (never fetch-all).
-    let q = adminDb.collection('conversations').limit(50)
+    const q = adminDb.collection('conversations').limit(50)
 
     // If a query was provided that looks like a doc ID, order and bound by it.
     const snapshot = await (query

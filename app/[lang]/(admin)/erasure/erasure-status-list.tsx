@@ -21,7 +21,7 @@
  *   - _components/stall-inbox.tsx:199-211 (formatRelativeTime)
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import { CheckCircle2 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -56,10 +56,26 @@ interface ErasureRequestCardProps {
 
 function ErasureRequestCard({ req, t }: ErasureRequestCardProps) {
   const slaDeadlineMs = req.slaDeadline
-  const remainingMs = slaDeadlineMs - Date.now()
-  const remainingHours = Math.ceil(remainingMs / (1000 * 60 * 60))
+  // slaMet compares two fixed stored timestamps — safe during render.
   const slaMet = req.completedAt !== undefined && req.completedAt <= slaDeadlineMs
-  const slaBreached = remainingMs <= 0 && !req.completedAt
+  // remainingMs/remainingHours/slaBreached depend on Date.now() — compute after mount
+  // via a single batched state object to avoid hydration mismatch.
+  const [slaLive, setSlaLive] = useState<{ remainingMs: number; remainingHours: number; slaBreached: boolean }>({
+    remainingMs: 0,
+    remainingHours: 0,
+    slaBreached: false,
+  })
+  useEffect(() => {
+    const ms = slaDeadlineMs - Date.now()
+    // One-shot clock sync on mount — reading an external time source, not cascading.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSlaLive({
+      remainingMs: ms,
+      remainingHours: Math.ceil(ms / (1000 * 60 * 60)),
+      slaBreached: ms <= 0 && !req.completedAt,
+    })
+  }, [slaDeadlineMs, req.completedAt])
+  const { remainingMs, remainingHours, slaBreached } = slaLive
 
   return (
     <Card>

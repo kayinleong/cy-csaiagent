@@ -22,6 +22,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import type { AuthenticatedUser, Role } from '@/src/firebase/auth'
 
 // ─── Mock dependencies BEFORE importing the action module ─────────────────────
 
@@ -68,7 +69,7 @@ describe('ADMIN-07 assignRole — admin-gate + setUserClaims + audit', () => {
       uid: 'coach-uid',
       role: 'senior-coach',
       tenantId: 'd2',
-    } as any)
+    } as AuthenticatedUser)
 
     const result = await assignRole('target-uid', 'new-agent')
 
@@ -85,7 +86,7 @@ describe('ADMIN-07 assignRole — admin-gate + setUserClaims + audit', () => {
       uid: 'admin-uid',
       role: 'admin',
       tenantId: 'd2',
-    } as any)
+    } as AuthenticatedUser)
 
     await assignRole('target-agent-uid', 'senior-coach')
 
@@ -102,7 +103,7 @@ describe('ADMIN-07 assignRole — admin-gate + setUserClaims + audit', () => {
       uid: 'admin-uid',
       role: 'admin',
       tenantId: 'd2',
-    } as any)
+    } as AuthenticatedUser)
 
     const { log } = await import('@/src/audit')
 
@@ -123,10 +124,10 @@ describe('ADMIN-07 assignRole — admin-gate + setUserClaims + audit', () => {
       uid: 'admin-uid',
       role: 'admin',
       tenantId: 'd2',
-    } as any)
+    } as AuthenticatedUser)
     vi.mocked(setUserClaims).mockRejectedValueOnce(new InvalidRoleError('Invalid role: super-admin'))
 
-    const result = await assignRole('target-uid', 'super-admin' as any)
+    const result = await assignRole('target-uid', 'super-admin' as Role)
 
     expect(result.ok).toBe(false)
     // The error should convey the InvalidRoleError, not Unauthorized/Forbidden
@@ -143,7 +144,7 @@ describe('ADMIN-07 assignRole — admin-gate + setUserClaims + audit', () => {
       uid: 'admin-uid',
       role: 'admin',
       tenantId: 'd2',
-    } as any)
+    } as AuthenticatedUser)
 
     const result = await assignRole('target-agent-uid', 'new-agent')
 
