@@ -93,7 +93,7 @@ Requirements for the initial release covering the three pillars + admin + senior
 - [ ] **CDASH-05**: Funnel metrics: training → first lead → first close
 - [ ] **CDASH-06**: Escalation alerts within working hours
 - [ ] **CDASH-07**: Reporting tied to the 60-day → 7-10 day compression target
-- [ ] **CDASH-08**: Coach dashboard v2 — full funnel metrics (Phase 4)
+- [x] **CDASH-08**: Coach dashboard v2 — full funnel metrics (Phase 4)
 
 ### Admin Web App (ADMIN)
 
@@ -104,7 +104,7 @@ Requirements for the initial release covering the three pillars + admin + senior
 - [ ] **ADMIN-05**: Reply SOP management
 - [ ] **ADMIN-06**: Feedback-loop visibility — thumbs-down responses, coach rewrites, escalation rate
 - [x] **ADMIN-07**: Role and permission controls (coach sees downline, admin sees all)
-- [ ] **ADMIN-08**: Usage analytics — active agents, message volume, resolution time, escalation rate
+- [x] **ADMIN-08**: Usage analytics — active agents, message volume, resolution time, escalation rate
 
 ### Cross-cutting Quality, Privacy & Ops (QUAL)
 
@@ -115,7 +115,7 @@ Requirements for the initial release covering the three pillars + admin + senior
 - [ ] **QUAL-05**: Audit logging on all client-related conversations
 - [ ] **QUAL-06**: Prompt regression suite catches tone drift, hallucinations, and language-quality regressions
 - [ ] **QUAL-07**: Token-usage tracking + per-agent rate limiting
-- [ ] **QUAL-08**: Performance + cost optimization pass before production rollout
+- [x] **QUAL-08**: Performance + cost optimization pass before production rollout
 - [ ] **QUAL-09**: PDPA audit + sign-off before production rollout
 - [ ] **QUAL-10**: Internal documentation for D2's team (handover)
 
@@ -230,7 +230,7 @@ Phase 1 = Foundations · Phase 2 = Coach + Admin v1 · Phase 3 = Finder + Intent
 | CDASH-05 | Phase 2 | Pending |
 | CDASH-06 | Phase 2 | Pending |
 | CDASH-07 | Phase 2 | Pending |
-| CDASH-08 | Phase 5 | Pending |
+| CDASH-08 | Phase 5 | Complete |
 | ADMIN-01 | Phase 2 | Pending |
 | ADMIN-02 | Phase 5 | Complete |
 | ADMIN-03 | Phase 2 | Pending |
@@ -238,7 +238,7 @@ Phase 1 = Foundations · Phase 2 = Coach + Admin v1 · Phase 3 = Finder + Intent
 | ADMIN-05 | Phase 4 | Pending |
 | ADMIN-06 | Phase 4 | Pending |
 | ADMIN-07 | Phase 5 | Complete |
-| ADMIN-08 | Phase 5 | Pending |
+| ADMIN-08 | Phase 5 | Complete |
 | QUAL-01 | Phase 1 | Pending |
 | QUAL-02 | Phase 4 | Pending |
 | QUAL-03 | Phase 1 | Pending |
@@ -246,7 +246,7 @@ Phase 1 = Foundations · Phase 2 = Coach + Admin v1 · Phase 3 = Finder + Intent
 | QUAL-05 | Phase 1 | Pending |
 | QUAL-06 | Phase 2 | Pending |
 | QUAL-07 | Phase 1 | Pending |
-| QUAL-08 | Phase 5 | Pending |
+| QUAL-08 | Phase 5 | Complete |
 | QUAL-09 | Phase 5 | Pending |
 | QUAL-10 | Phase 5 | Pending |
 
