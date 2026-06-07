@@ -38,7 +38,8 @@ findings:
   warning: 6
   info: 6
   total: 13
-status: issues_found
+status: resolved
+resolved: 2026-06-07T00:00:00Z
 ---
 
 # Phase 5: Code Review Report
@@ -98,6 +99,14 @@ await (reqRef as any).set({
 })
 ```
 
+**Resolution (CR-01):** Applied transient-retain + clear-on-complete pattern.
+- `app/[lang]/(admin)/erasure/actions.ts`: kept `rawSubjectId: id` on the initial write; in the completion branch (`coreResult.complete === true`) added `rawSubjectId: FieldValue.delete()` to clear it.
+- `src/pdpa/sweep.ts`: in the `result.complete` branch, added `rawSubjectId: FieldValue.delete()` to the update. Updated the LIMITATION note to describe the transient-retain + clear-on-complete design accurately.
+- `app/[lang]/(admin)/erasure/actions.ts` comments: updated `hashId` docblock and the T-05-RAWID comments to describe transient retention and clear-on-complete, not "never persisted".
+- `src/firebase/collections.ts`: updated ErasureRequestDoc docblock to disclose transient `rawSubjectId` field and its clear-on-complete behaviour.
+- `.planning/phases/05-hardening-scale/PDPA-SIGNOFF.md`: corrected the `erasureRequests` EXEMPT table entry; added a "TRANSIENT RAWSUBJECTID DESIGN" block flagging the design for Derek's review at sign-off with the v2 encrypt-at-rest option.
+- Confirmed: `firestore.rules` denies all client reads on `erasureRequests` (`allow read: if hasRole('admin') && sameTenant()` — admin-only read).
+
 ## Warnings
 
 ### WR-01: Load-test sends the wrong request body shape — chat path is never exercised
@@ -114,11 +123,15 @@ const SAMPLE_CHAT_BODY = JSON.stringify({
 ```
 Also consider tightening the k6 check to require `status === 200` (or at least asserting the SSE body contains `data:` markers) so a future regression to the 400 path is caught rather than masked.
 
+**Resolution (WR-01):** Changed `SAMPLE_CHAT_BODY` from a bare JSON array to `JSON.stringify({ messages: [{ role: 'user', content: '...' }] })` matching the `body.messages` shape expected by `app/api/chat/route.ts`. Tightened k6 checks: replaced `'status is 200 or 400 (not 500)'` with `'status is 200'` and replaced `'body is non-empty'` with `'body contains SSE data marker'` (checks for `'data:'`) so a regression to the 400 path is caught rather than masked.
+
 ### WR-02: `getBlastRadius` returns whole-collection counts, not subject-scoped counts
 
 **File:** `app/[lang]/(admin)/erasure/actions.ts:243-264`
 **Issue:** The blast-radius preview is meant to show the admin "how many docs belong to this subject" before they confirm an irreversible erasure (HR-8, the safety-critical preview). But the implementation runs `adminDb.collection(col).count()` with **no `where` filter on the subject id** — it counts every document in each collection tenant-wide. For example, erasing one lead will preview `conversations: <all conversations in the system>` rather than `conversations: 1`. This is dangerously misleading on the most safety-critical screen: it inflates the apparent blast radius and undermines the admin's ability to sanity-check the target before confirming. The `subjectType`/`id` are parsed and the read is audited, but the id is never actually used in the count query.
 **Fix:** Iterate `PII_ERASURE_MANIFEST[subjectType]` entries (not just collection names) and apply the same key strategy the executor uses — `where(keyField,'==',id).count()` for `keyField`/`keyVia` entries, and an existence check (`ref.doc(id).get()` → 0/1) for `docId` entries. Skip `STORAGE`/`auditLogs` as today. This reuses the manifest's per-entry shape so the preview matches what the cascade will actually delete.
+
+**Resolution (WR-02):** Rewrote `getBlastRadius` in `app/[lang]/(admin)/erasure/actions.ts` to iterate `PII_ERASURE_MANIFEST[subjectType]` entries (not just collection names) and apply the same per-entry key strategy as the executor: `where(keyField,'==',id).count()` for `keyField` entries; `ref.doc(id).get()` → 0/1 for `docId` entries; two-step intermediate resolve for `keyVia` entries; STORAGE/auditLogs skipped. Also removed the now-unused `AggregateField` import.
 
 ### WR-03: Conversation viewer `lastMessageAt` is always null/`—`
 
@@ -126,11 +139,15 @@ Also consider tightening the k6 check to require `status === 200` (or at least a
 **Issue:** `searchConversations` reads `data.lastMessageAt`, but `ConversationDoc` (`collections.ts:82-92`) has no `lastMessageAt` field and nothing in the codebase ever writes it (grep confirms it appears only in these two files plus the type/comment). The cast `(data.lastMessageAt as { toDate?: () => Date } | null)?.toDate?.()` therefore always yields `null`, so the "Last message" column renders "—" for every row. The viewer's primary sort/recency signal is dead.
 **Fix:** Either (a) populate a `lastMessageAt` (or reuse the existing message subcollection's latest `ts`) when appending messages and read that, or (b) fall back to the conversation `createdAt` field that does exist, or (c) remove the column. If keeping it, also note the `orderBy('__name__')` query on line 186 orders by doc id, which is unrelated to recency.
 
+**Resolution (WR-03):** In `app/[lang]/(admin)/conversations/actions.ts`, added a fallback from `data.lastMessageAt` to `data.createdAt` (which exists on `ConversationDoc`) when constructing `lastMessageAt` in the row mapper. Updated the column i18n key `colLastMessage` in all three locale files (en/ms/zh) to "Created at" / "Dicipta pada" / "创建时间" — truthfully reflecting that the value is `createdAt`, not a last-message timestamp.
+
 ### WR-04: Usage dashboard window boundary computed in UTC, but rollup keys are Asia/Kuala_Lumpur
 
 **File:** `app/[lang]/(admin)/usage/page.tsx:44-48,81,104-107`
 **Issue:** `nDaysAgo()` builds the window-start day via `d.getUTCDate()` and `toISOString().slice(0,10)` — a **UTC** calendar date. But rollup `day` keys are written via `dayKey()` which formats in **Asia/Kuala_Lumpur** (UTC+8) (`src/usage/types.ts:77-86`). For up to 8 hours each day (00:00–08:00 MYT = the prior UTC day), the UTC-derived `windowStart` is one day behind the MYT-derived rollup keys, so the `where('day','>=',windowStart)` filter can include/exclude an extra boundary day inconsistently with how the data was bucketed. The dashboard header also claims "last 7 days" but the boundary day drifts.
 **Fix:** Compute `windowStart` in the same timezone as the keys, e.g. reuse `dayKey()` against a shifted date: `dayKey(new Date(Date.now() - windowDays * 86400000))`. Standardizing on the existing `dayKey` helper removes the divergence and keeps a single source of truth for day-key formatting.
+
+**Resolution (WR-04):** In `app/[lang]/(admin)/usage/page.tsx`, imported `dayKey` from `@/src/usage/types` and replaced the `nDaysAgo` implementation (`setUTCDate` + `toISOString().slice(0,10)`) with `dayKey(new Date(Date.now() - n * 86400000))`. Single source of truth for day-key formatting; window boundary now matches rollup key timezone.
 
 ### WR-05: `getCorrectionEvalFeedback` orders eval trend by score, not time — "trend" is misleading
 
@@ -138,11 +155,15 @@ Also consider tightening the k6 check to require `status === 200` (or at least a
 **Issue:** The eval-score "trend" LineChart is fed by a query that does `orderBy('score', 'desc').limit(20)` — it returns the 20 highest-scoring eval runs, sorted by score, not the most recent runs over time. The LineChart then plots them along the x-axis by `suite`, producing a monotonically-decreasing line that looks like a declining trend but is actually just "scores sorted high→low." `EvalDoc` (`collections.ts:374-381`) has no timestamp field to order by, so a true time trend is not currently expressible. As-is, the chart misrepresents eval health to coaches.
 **Fix:** Add a `ranAt`/`createdAt` timestamp to `EvalDoc` and order by it descending (then reverse for display), or relabel the panel as "recent eval scores by suite" (a bar/categorical view) rather than a temporal trend. At minimum, do not sort by `score` for something presented as a time trend.
 
+**Resolution (WR-05):** In `app/[lang]/(coach)/dashboard/actions.ts`, changed `orderBy('score', 'desc')` to `orderBy('suite', 'asc')` so the data is ordered by stable categorical key, not score. Updated `evalTrendTitle` i18n key in all three locale files to "Eval scores by suite" / "Skor penilaian mengikut suite" / "按测试套件的评分" — removing the misleading "trend" label. No schema change required.
+
 ### WR-06: `recordUsageEvent` swallows all errors silently with no observability hook
 
 **File:** `src/usage/record.ts:77-83`
 **Issue:** The fire-and-forget catch swallows every error (by design, mirroring `audit/log.ts`), and the comment says "A separate monitoring alert on usageEvents write failure rates handles observability." No such alert/metric exists in this phase's code. Combined with the usage pipeline being the sole input to the ADMIN-08 cost dashboard and QUAL-08 cost pass, a systematic write failure (e.g., a `usageEvents` rule regression, an index issue, or a converter change) would silently zero out all cost/usage reporting with no signal until someone notices the dashboard is empty — which the `staleWatchdog` only partially covers (it watches rollups, and a rollup of zero events still "ran"). Not a hot-path bug, but a silent-failure surface on a compliance/cost-critical pipeline.
 **Fix:** Emit a counter/metric (or a single non-PII error-rate log without token/uid context) on the catch path, or wire the promised monitoring alert. Even a process-level error counter that the watchdog can read would close the gap. Document where the alert is configured if it lives outside this repo.
+
+**Resolution (WR-06):** In `src/usage/record.ts`, replaced the silent empty catch with `console.warn('[usage] recordUsageEvent write failed — usageEvents Firestore write error')`. No token, uid, or content is included — only the module identifier. Removed the false claim that "a separate monitoring alert" handles observability.
 
 ## Info
 
@@ -152,11 +173,15 @@ Also consider tightening the k6 check to require `status === 200` (or at least a
 **Issue:** `const now = new Date()` is declared, never used (the rollup writes `FieldValue.serverTimestamp()` for `updatedAt`), and is suppressed with `void now // suppress unused variable warning`. Dead code that signals an abandoned intent.
 **Fix:** Remove both the `const now` declaration and the `void now` line.
 
+**Resolution (IN-01):** Removed `const now = new Date()` (line 86) and `void now // suppress unused variable warning` (line 138) from `src/usage/rollup.ts`.
+
 ### IN-02: `computeResolutionTimeMs` day-filter uses UTC `toISOString().slice(0,10)`, inconsistent with MYT day keys
 
 **File:** `src/usage/rollup.ts:203`
 **Issue:** Inside the rollup, resolved-escalation deltas are filtered to "this day" via `new Date(resolvedMs).toISOString().slice(0,10)` (UTC) and compared against `day` (which is an Asia/Kuala_Lumpur key from `dayKey`). Same timezone-mismatch class as WR-04 but lower impact (resolution time is an optional rollup field, and the comment already flags the day correlation as "approximate"). Worth aligning for correctness.
 **Fix:** Format `resolvedMs` with the same Asia/Kuala_Lumpur formatter (`dayKey(new Date(resolvedMs))`) before comparing to `day`.
+
+**Resolution (IN-02):** In `src/usage/rollup.ts`, imported `dayKey` from `@/src/usage/types` and replaced `new Date(resolvedMs).toISOString().slice(0, 10)` with `dayKey(new Date(resolvedMs))` in `computeResolutionTimeMs`. Day key now formatted in Asia/Kuala_Lumpur consistently with rollup grouping.
 
 ### IN-03: `computeResolutionTimeMs` fetches all resolved escalations per agent without a `limit`
 
@@ -184,6 +209,16 @@ Also consider tightening the k6 check to require `status === 200` (or at least a
 
 ---
 
+## Resolution Summary (2026-06-07)
+
+All critical + warning findings (CR-01, WR-01..06) and info findings IN-01/IN-02 have been resolved.
+IN-03, IN-04, IN-05, IN-06 are consciously deferred — no behavior bugs, out of v1 scope.
+
+**Verification:** `npm run lint` 0 errors; `npx tsc --noEmit` 0 errors; `npx vitest run` 541 passed / 141 skipped (matches baseline).
+
+---
+
 _Reviewed: 2026-06-07_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+_Resolved: 2026-06-07_
