@@ -18,7 +18,7 @@
  * Threat mitigations proven:
  *  T-01-06: cross-tenant / cross-agent reads denied
  *  T-01-07: auditLogs client mutation denied
- *  T-01-09: no unruled collection (all 16 enumerated here)
+ *  T-01-09: no unruled collection (all 19 enumerated here)
  *  T-01-10: rateBudgets cross-agent access denied
  *  T-02-01: cross-coach downline read denied (agentProfiles, knowledgeGaps)
  *  T-02-03: knowledgeGaps client writes denied (server/Admin-SDK only)
@@ -86,11 +86,14 @@ async function seed(path: string, data: Record<string, unknown>): Promise<void> 
 // ─── 1. DENY-BY-DEFAULT: Unauthenticated reads are denied on every collection ──
 
 rulesSuite('Deny-by-default: unauthenticated reads', () => {
+  // no unruled collection (all 19 enumerated here — T-01-09 / T-05-UNRULED guard)
   const collections = [
     'users', 'agentProfiles', 'conversations', 'leads', 'leadContext',
     'projects', 'collateral', 'kbDocs', 'kbChunks', 'kbIngestionJobs',
     'escalations', 'auditLogs', 'evals', 'rateBudgets', 'knowledgeGaps',
     'replyEdits',
+    // Phase-5 collections 18-20 (T-05-UNRULED / T-05-TAMPER mitigate)
+    'usageEvents', 'usageRollups', 'erasureRequests',
   ]
 
   for (const col of collections) {
@@ -1035,6 +1038,231 @@ rulesSuite('replyEdits collection — downline-scoped, server-write-only (REPLY-
     const wrongTenantAdmin = await authedContext('wrong-tenant-admin', { role: 'admin', tenantId: WRONG_TENANT })
     const db = wrongTenantAdmin.firestore()
     await assertFails(getDoc(doc(db, 'replyEdits', ownEditId)))
+  })
+})
+
+// ─── 15. usageEvents collection — server-write-only, admin-read (T-05-UNRULED/T-05-TAMPER) ──
+
+rulesSuite('usageEvents collection — server-write-only, admin-read (QUAL-08/D-04, T-05-UNRULED/T-05-TAMPER)', () => {
+  const usageEventDocId = 'usage-event-001'
+
+  beforeAll(async () => {
+    await seed(`usageEvents/${usageEventDocId}`, {
+      tenantId: D2_TENANT,
+      uid: syntheticNewAgent.uid,
+      pillar: 'coach',
+      inputTokens: 150,
+      outputTokens: 80,
+      cachedInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      day: '2026-06-07',
+      createdAt: new Date(),
+    })
+  })
+
+  // admin CAN read — org-wide cost/usage view
+  it('admin CAN read usageEvents (org-wide cost view)', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(getDoc(doc(db, 'usageEvents', usageEventDocId)))
+  })
+
+  // new-agent CANNOT read — Information Disclosure guard (T-05-UNRULED)
+  it('new-agent CANNOT read usageEvents (Information Disclosure guard)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertFails(getDoc(doc(db, 'usageEvents', usageEventDocId)))
+  })
+
+  // any client CREATE DENIED — Tampering guard (T-05-TAMPER)
+  it('any client CREATE on usageEvents is DENIED (Admin-SDK only)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertFails(
+      setDoc(doc(db, 'usageEvents', 'client-created-event'), {
+        tenantId: D2_TENANT,
+        uid: syntheticNewAgent.uid,
+        pillar: 'coach',
+        inputTokens: 9999,
+        outputTokens: 9999,
+        cachedInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        day: '2026-06-07',
+        createdAt: new Date(),
+      })
+    )
+  })
+
+  // any client UPDATE DENIED — Tampering guard
+  it('any client UPDATE on usageEvents is DENIED', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertFails(updateDoc(doc(db, 'usageEvents', usageEventDocId), { inputTokens: 99999 }))
+  })
+
+  // any client DELETE DENIED — Tampering guard
+  it('any client DELETE on usageEvents is DENIED', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertFails(deleteDoc(doc(db, 'usageEvents', usageEventDocId)))
+  })
+
+  // cross-tenant admin CANNOT read — sameTenant() guard (T-05-CROSS)
+  it('admin with wrong tenant CANNOT read usageEvents (cross-tenant denied, T-05-CROSS)', async () => {
+    const { authedContext } = await import('./rules-helpers')
+    const wrongTenantAdmin = await authedContext('wrong-tenant-admin-ue', { role: 'admin', tenantId: WRONG_TENANT })
+    const db = wrongTenantAdmin.firestore()
+    await assertFails(getDoc(doc(db, 'usageEvents', usageEventDocId)))
+  })
+})
+
+// ─── 16. usageRollups collection — server-write-only, admin-read (T-05-UNRULED/T-05-TAMPER) ──
+
+rulesSuite('usageRollups collection — server-write-only, admin-read (QUAL-08/ADMIN-08/D-05, T-05-UNRULED/T-05-TAMPER)', () => {
+  const rollupDocId = '2026-06-07__agent-test-001__coach'
+
+  beforeAll(async () => {
+    await seed(`usageRollups/${rollupDocId}`, {
+      tenantId: D2_TENANT,
+      day: '2026-06-07',
+      uid: syntheticNewAgent.uid,
+      pillar: 'coach',
+      msgCount: 5,
+      inputTokens: 750,
+      outputTokens: 400,
+      cachedInputTokens: 150,
+      cacheCreationInputTokens: 0,
+      updatedAt: new Date(),
+    })
+  })
+
+  // admin CAN read usageRollups — ADMIN-08 dashboard data source
+  it('admin CAN read usageRollups (ADMIN-08 dashboard, admin CAN read usageRollups)', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(getDoc(doc(db, 'usageRollups', rollupDocId)))
+  })
+
+  // new-agent CANNOT read — Information Disclosure guard
+  it('new-agent CANNOT read usageRollups (Information Disclosure guard)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertFails(getDoc(doc(db, 'usageRollups', rollupDocId)))
+  })
+
+  // any client CREATE DENIED — Tampering guard
+  it('any client CREATE on usageRollups is DENIED (Admin-SDK only)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertFails(
+      setDoc(doc(db, 'usageRollups', 'client-created-rollup'), {
+        tenantId: D2_TENANT,
+        day: '2026-06-07',
+        uid: syntheticNewAgent.uid,
+        pillar: 'coach',
+        msgCount: 999,
+        inputTokens: 999,
+        outputTokens: 999,
+        cachedInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        updatedAt: new Date(),
+      })
+    )
+  })
+
+  // any client UPDATE DENIED
+  it('any client UPDATE on usageRollups is DENIED', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertFails(updateDoc(doc(db, 'usageRollups', rollupDocId), { msgCount: 9999 }))
+  })
+
+  // any client DELETE DENIED
+  it('any client DELETE on usageRollups is DENIED', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertFails(deleteDoc(doc(db, 'usageRollups', rollupDocId)))
+  })
+
+  // cross-tenant admin CANNOT read — sameTenant() guard (T-05-CROSS)
+  it('admin with wrong tenant CANNOT read usageRollups (cross-tenant denied, T-05-CROSS)', async () => {
+    const { authedContext } = await import('./rules-helpers')
+    const wrongTenantAdmin = await authedContext('wrong-tenant-admin-ur', { role: 'admin', tenantId: WRONG_TENANT })
+    const db = wrongTenantAdmin.firestore()
+    await assertFails(getDoc(doc(db, 'usageRollups', rollupDocId)))
+  })
+})
+
+// ─── 17. erasureRequests collection — server-write-only, admin-read (T-05-UNRULED/T-05-TAMPER) ──
+
+rulesSuite('erasureRequests collection — server-write-only, admin-read (QUAL-09/D-02, T-05-UNRULED/T-05-TAMPER)', () => {
+  const erasureDocId = 'erasure-req-001'
+
+  beforeAll(async () => {
+    await seed(`erasureRequests/${erasureDocId}`, {
+      tenantId: D2_TENANT,
+      subjectType: 'agent',
+      subjectIdHash: 'abc123hash456def',
+      status: 'pending',
+      requestedBy: syntheticAdmin.uid,
+      requestedAt: new Date(),
+      slaDeadline: Date.now() + 72 * 60 * 60 * 1000,
+      collectionsRemaining: ['conversations', 'leads'],
+    })
+  })
+
+  // admin CAN read — erasure monitoring
+  it('admin CAN read erasureRequests (erasure monitoring)', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(getDoc(doc(db, 'erasureRequests', erasureDocId)))
+  })
+
+  // new-agent CANNOT read — Information Disclosure guard
+  it('new-agent CANNOT read erasureRequests (Information Disclosure guard)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertFails(getDoc(doc(db, 'erasureRequests', erasureDocId)))
+  })
+
+  // any client CREATE DENIED — Tampering guard (client cannot forge erasure requests)
+  it('any client CREATE on erasureRequests is DENIED (Admin-SDK only)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertFails(
+      setDoc(doc(db, 'erasureRequests', 'client-created-erasure'), {
+        tenantId: D2_TENANT,
+        subjectType: 'agent',
+        subjectIdHash: 'fakehash',
+        status: 'pending',
+        requestedBy: syntheticNewAgent.uid,
+        requestedAt: new Date(),
+        slaDeadline: Date.now() + 72 * 60 * 60 * 1000,
+        collectionsRemaining: [],
+      })
+    )
+  })
+
+  // any client UPDATE DENIED
+  it('any client UPDATE on erasureRequests is DENIED', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertFails(updateDoc(doc(db, 'erasureRequests', erasureDocId), { status: 'complete' }))
+  })
+
+  // any client DELETE DENIED
+  it('any client DELETE on erasureRequests is DENIED', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertFails(deleteDoc(doc(db, 'erasureRequests', erasureDocId)))
+  })
+
+  // cross-tenant admin CANNOT read — sameTenant() guard (T-05-CROSS)
+  it('admin with wrong tenant CANNOT read erasureRequests (cross-tenant denied, T-05-CROSS)', async () => {
+    const { authedContext } = await import('./rules-helpers')
+    const wrongTenantAdmin = await authedContext('wrong-tenant-admin-er', { role: 'admin', tenantId: WRONG_TENANT })
+    const db = wrongTenantAdmin.firestore()
+    await assertFails(getDoc(doc(db, 'erasureRequests', erasureDocId)))
   })
 })
 
