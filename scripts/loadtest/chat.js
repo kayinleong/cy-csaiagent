@@ -84,13 +84,19 @@ export const options = {
 /**
  * A single synthetic chat turn.
  * Uses a hardcoded safe question (no real lead data, no PII — T-05-02).
+ *
+ * WR-01 fix: app/api/chat/route.ts parses body.messages (not a bare array).
+ * The previous bare-array body caused every request to 400 at the body-parse gate
+ * before any auth/ratelimit/model logic ran, making the load test a silent no-op.
  */
-const SAMPLE_CHAT_BODY = JSON.stringify([
-  {
-    role: 'user',
-    content: 'What is the D2 onboarding process for new agents?',
-  },
-])
+const SAMPLE_CHAT_BODY = JSON.stringify({
+  messages: [
+    {
+      role: 'user',
+      content: 'What is the D2 onboarding process for new agents?',
+    },
+  ],
+})
 
 /**
  * Default function: executed by each VU on each iteration.
@@ -119,13 +125,15 @@ export default function () {
 
   const res = http.post(url, SAMPLE_CHAT_BODY, params)
 
-  // Checks: non-5xx response and body contains AI SDK stream markers
+  // Checks: 200 response and body contains AI SDK SSE stream markers.
+  // WR-01 fix: require status === 200 so a regression back to the 400 body-parse
+  // gate is caught rather than masked.  The SSE body check ('data:' present)
+  // further confirms the streaming path was actually exercised.
   check(res, {
-    'status is not 5xx': (r) => r.status < 500,
-    'status is 200 or 400 (not 500)': (r) => r.status === 200 || r.status === 400,
-    // AI SDK SSE stream: the body should contain 'data:' lines (the SSE format)
-    // A 200 with empty body indicates a streaming error in the route
-    'body is non-empty': (r) => r.body !== null && (r.body as string).length > 0,
+    'status is 200': (r) => r.status === 200,
+    // AI SDK SSE stream: the body should contain 'data:' lines (the SSE format).
+    // A 200 with empty body indicates a streaming error in the route.
+    'body contains SSE data marker': (r) => r.body !== null && (r.body as string).includes('data:'),
   })
 
   // Small think-time between turns to simulate realistic agent usage

@@ -26,6 +26,7 @@ import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
 import { usageRollupsRef } from '@/src/firebase/collections'
+import { dayKey } from '@/src/usage/types'
 import { UsageDashboard } from './usage-dashboard'
 import type { UsageDashboardProps } from './usage-dashboard'
 
@@ -40,11 +41,13 @@ export async function generateMetadata() {
   }
 }
 
-/** Compute ISO date string N days ago (Asia/KL for consistency with rollup keys). */
+/**
+ * Compute the Asia/Kuala_Lumpur day-key string N days ago.
+ * WR-04 fix: reuse dayKey() (which formats in Asia/KL) rather than UTC toISOString(),
+ * so the window boundary matches the timezone used by the rollup keys.
+ */
 function nDaysAgo(n: number): string {
-  const d = new Date()
-  d.setUTCDate(d.getUTCDate() - n)
-  return d.toISOString().slice(0, 10)
+  return dayKey(new Date(Date.now() - n * 86400000))
 }
 
 export default async function UsagePage({ params, searchParams }: PageProps) {

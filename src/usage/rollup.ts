@@ -32,6 +32,7 @@ import {
   escalationsRef,
   TENANT_ID,
 } from '@/src/firebase/collections'
+import { dayKey } from '@/src/usage/types'
 import type { Pillar } from '@/src/usage/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -83,8 +84,6 @@ export async function rollupUsage(day: string): Promise<void> {
   // ── Step 2: For each group, aggregate tokens + msg count ─────────────────────
   // RESEARCH Pattern 2: ONE aggregation query per group = 1 read-unit each.
   // The (day, uid, pillar) composite index (05-02) makes this efficient at 400 agents.
-  const now = new Date()
-
   for (const [, { uid, pillar }] of groupMap) {
     // -- Aggregation query --
     const aggSnap = await usageEventsRef()
@@ -134,8 +133,6 @@ export async function rollupUsage(day: string): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await usageRollupsRef().doc(rollupKey).set(rollupData as any, { merge: true })
   }
-
-  void now // suppress unused variable warning (used conceptually for timestamp ref)
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
@@ -199,8 +196,11 @@ async function computeResolutionTimeMs(
           ? (resolvedAt as { toMillis: () => number }).toMillis()
           : (resolvedAt as Date).getTime?.() ?? 0
 
-      // Filter to escalations resolved on this day
-      const resolvedDate = new Date(resolvedMs).toISOString().slice(0, 10)
+      // Filter to escalations resolved on this day.
+      // IN-02 fix: format resolvedMs with dayKey() (Asia/Kuala_Lumpur) to match the
+      // MYT day key used for rollup grouping — UTC toISOString() would diverge by up
+      // to 8 hours from the MYT bucket boundary.
+      const resolvedDate = dayKey(new Date(resolvedMs))
       if (resolvedDate !== dayPrefix) continue
 
       const delta = resolvedMs - openedMs

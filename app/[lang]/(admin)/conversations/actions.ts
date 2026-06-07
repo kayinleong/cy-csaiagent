@@ -197,7 +197,13 @@ export async function searchConversations(
         pillar: (data.pillar as string | null) ?? (data.routeDecision as string | null) ?? null,
         agentRef: (data.ownerUid as string | null) ?? null,
         leadRef: (data.leadId as string | null) ?? null,
-        lastMessageAt: (data.lastMessageAt as { toDate?: () => Date } | null)?.toDate?.()?.toISOString() ?? null,
+        // WR-03 fix: ConversationDoc has no `lastMessageAt` field — nothing writes it.
+        // Fall back to `createdAt` (which does exist) so the column shows meaningful data
+        // rather than always "—".  The column header reflects this (see conversation-viewer.tsx).
+        lastMessageAt:
+          (data.lastMessageAt as { toDate?: () => Date } | null)?.toDate?.()?.toISOString() ??
+          (data.createdAt as { toDate?: () => Date } | null)?.toDate?.()?.toISOString() ??
+          null,
       }
     })
 

@@ -308,7 +308,7 @@
       "correctionColDoc": "Dokumen",
       "correctionColBy": "Dibetulkan oleh",
       "correctionColStatus": "Status indeks semula",
-      "evalTrendTitle": "Trend skor penilaian selepas pembetulan",
+      "evalTrendTitle": "Skor penilaian mengikut suite",
       "noData": "Belum ada data."
     }
   },
@@ -327,7 +327,7 @@
     "colAgent": "Ejen",
     "colLead": "Lead",
     "colPillar": "Tiang",
-    "colLastMessage": "Mesej terakhir",
+    "colLastMessage": "Dicipta pada",
     "close": "Tutup"
   },
   "adminRoles": {

@@ -62,7 +62,7 @@ The `PII_ERASURE_MANIFEST` at `src/pdpa/coverage.ts` is the single source of tru
 | `auditLogs` | Legal compliance record (D-01) | SHA256 hashes of actorUid, targetRef, raw values — no raw PII | `action:'erasure'` event APPENDED (the legal record that erasure occurred) |
 | `usageEvents` | Counts-only, no subject PII | inputTokens/outputTokens counts, no content | Not in scope for PDPA erasure |
 | `usageRollups` | Counts-only, no subject PII | Aggregated token/message counts, no content | Not in scope for PDPA erasure |
-| `erasureRequests` | Erasure ledger doc | subjectIdHash only (no raw ID), status, slaDeadline | Survives as the process record |
+| `erasureRequests` | Erasure ledger doc | subjectIdHash + **transient** rawSubjectId (see note below), status, slaDeadline | Survives as the process record; rawSubjectId CLEARED on completion |
 | `kbDocs`, `kbChunks`, `evals`, `collateral` | KB content, no subject PII | D2 knowledge base articles, property data | Not in scope |
 
 ---
@@ -81,6 +81,17 @@ The test:
 5. **Asserts: auditLogs SURVIVES** — the pre-seed row count is unchanged (Pitfall 2 guard)
 6. **Asserts: an `action:'erasure'` event was appended to auditLogs**
 7. Repeats for lead subject
+
+**IMPORTANT — rawSubjectId transient retention (T-05-RAWID, CR-01):**
+The `erasureRequests` Firestore doc stores a transient server-only `rawSubjectId` field
+(not in the TypeScript interface; admin-read-only; never returned to clients) so the
+chunked sweep can re-query Firestore for this subject.  This field is **CLEARED**
+(`FieldValue.delete()`) when the request transitions to `complete`, within the <72h SLA.
+In-flight (`pending`/`sweeping`) requests retain it; `failed` requests retain it for
+potential retry.  Firestore rules deny all client reads on `erasureRequests`.
+**Derek: please review this transient-retain + clear-on-complete design at sign-off.**
+v2 hardening option: encrypt `rawSubjectId` at rest with a Secret-Manager key before
+storing it, and decrypt only inside the sweep — eliminating plaintext retention entirely.
 
 **Result on emulator:** GREEN (all assertions pass as of Phase 5 Plan 03, 2026-06-07)
 

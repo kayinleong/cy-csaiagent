@@ -582,8 +582,14 @@ export interface UsageRollupDoc {
  * resumability for the chunked sweep (D-02). Written when an admin initiates
  * erasure via the erasure Server Action; updated as the sweep progresses.
  *
- * PDPA: `subjectIdHash` only — NEVER the raw subject id. The hash is the
- * dedup key used by the sweep to re-query each collection.
+ * PDPA: the public TypeScript interface below exposes `subjectIdHash` only (never
+ * the raw subject id).  However, a transient server-only `rawSubjectId` field (not
+ * part of this interface) IS written to the Firestore doc by the erasure Server
+ * Action so the chunked sweep can re-query collections for this subject.  That field
+ * is CLEARED (`FieldValue.delete()`) when the request transitions to `complete`,
+ * within the <72h SLA.  It is admin-read-only (Firestore rules) and is never returned
+ * to clients by any Server Action.  v2 hardening option: encrypt-at-rest with a
+ * Secret-Manager key.
  *
  * Client writes are denied by Firestore rules (create, update, delete: if false).
  */

@@ -23,16 +23,24 @@
  *      The rawSubjectId must be passed down from the original Server Action call;
  *      the sweep CANNOT reconstruct it from the hash. See the LIMITATION note below.
  *
- * LIMITATION (intentional — matches the D-02 design):
- *   The ErasureRequestDoc stores only subjectIdHash (PDPA — no raw id on disk).
- *   The sweep therefore cannot independently re-derive the raw id from the hash.
- *   Resolution: the Server Action (05-05) writes the request doc and immediately
- *   calls eraseDataSubject; if anything remains it marks the doc 'sweeping' and
- *   the sweep picks it up. For the sweep to be able to re-delete, the request doc
- *   needs a field the sweep can use to query Firestore. We store a per-collection
- *   rawSubjectId on the request doc (server-side only, admin-read-only, never
- *   returned to clients) — set by the Server Action. If absent (older requests),
- *   the sweep marks the request 'failed' with an explanatory message.
+ * TRANSIENT RAWSUBJECTID DESIGN (matches D-02 / CR-01 resolution):
+ *   The TypeScript ErasureRequestDoc interface (collections.ts) does NOT include
+ *   rawSubjectId — it is a server-only field not surfaced to clients.  In practice:
+ *
+ *   - The Server Action (actions.ts) writes rawSubjectId onto the initial 'pending'
+ *     doc so the sweep can re-query Firestore for this subject.
+ *   - The sweep reads rawSubjectId from the raw Firestore data (not the typed shape).
+ *   - When the request reaches 'complete' — EITHER in the Server Action OR here in
+ *     the sweep — rawSubjectId is CLEARED via FieldValue.delete().  A completed
+ *     request never retains the raw subject id.
+ *   - 'failed' and in-progress 'sweeping' requests retain rawSubjectId (still needed
+ *     for retry or continued sweep passes).
+ *   - Firestore rules deny all client reads on erasureRequests (admin-only read via
+ *     Admin SDK).  rawSubjectId is never returned to clients by any action.
+ *   - v2 hardening option: encrypt rawSubjectId at rest with a Secret-Manager key.
+ *
+ *   If rawSubjectId is absent on a pending/sweeping request (e.g. older requests
+ *   created before this design), the sweep marks the request 'failed'.
  *
  * Framework-free: no app/ imports. Admin SDK + collections.ts + erasure.ts only.
  */
@@ -109,10 +117,14 @@ export async function erasureSweep(): Promise<void> {
       if (result.complete) {
         // All collections cleared — mark the request complete with a timestamp.
         // completedAt is the <72h SLA marker (D-02).
+        // CR-01 fix: also CLEAR rawSubjectId so the raw subject id is not retained
+        // beyond the erasure lifecycle.  FieldValue.delete() removes the field from
+        // the doc — a completed request no longer needs it for sweep re-queries.
         await doc.ref.update({
           status: 'complete',
           collectionsRemaining: [],
           completedAt: FieldValue.serverTimestamp(),
+          rawSubjectId: FieldValue.delete(),
         })
       } else {
         // Some collections still have docs — keep sweeping in the next window.

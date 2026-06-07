@@ -77,8 +77,9 @@ export async function recordUsageEvent(input: UsageEventInput): Promise<void> {
   } catch {
     // Fire-and-forget: swallow the error silently.
     // The caller (running inside after()) must NOT be affected by usageEvents write failures.
-    // Do NOT log the error here — the catch block itself could expose token/uid context.
-    // A separate monitoring alert on usageEvents write failure rates handles observability.
-    // (Mirrors src/audit/log.ts:91-96 swallow contract exactly.)
+    // WR-06 fix: emit a lightweight non-PII warning so write failures are not invisible.
+    // No token, uid, or content is logged here — only the module identifier.
+    // (The original comment claimed "a separate monitoring alert" that does not exist.)
+    console.warn('[usage] recordUsageEvent write failed — usageEvents Firestore write error')
   }
 }

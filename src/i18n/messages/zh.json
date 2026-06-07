@@ -308,7 +308,7 @@
       "correctionColDoc": "文档",
       "correctionColBy": "纠正者",
       "correctionColStatus": "重新索引状态",
-      "evalTrendTitle": "纠正后的评分趋势",
+      "evalTrendTitle": "按测试套件的评分",
       "noData": "暂无数据。"
     }
   },
@@ -327,7 +327,7 @@
     "colAgent": "代理",
     "colLead": "客户",
     "colPillar": "支柱",
-    "colLastMessage": "最后消息",
+    "colLastMessage": "创建时间",
     "close": "关闭"
   },
   "adminRoles": {

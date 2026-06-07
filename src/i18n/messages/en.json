@@ -306,7 +306,7 @@
       "correctionColDoc": "Document",
       "correctionColBy": "Corrected by",
       "correctionColStatus": "Re-index status",
-      "evalTrendTitle": "Eval score trend after corrections",
+      "evalTrendTitle": "Eval scores by suite",
       "noData": "No data yet."
     }
   },
@@ -325,7 +325,7 @@
     "colAgent": "Agent",
     "colLead": "Lead",
     "colPillar": "Pillar",
-    "colLastMessage": "Last message",
+    "colLastMessage": "Created at",
     "close": "Close"
   },
   "adminRoles": {

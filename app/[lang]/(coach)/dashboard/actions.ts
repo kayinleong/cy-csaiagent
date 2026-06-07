@@ -802,8 +802,14 @@ export async function getCorrectionEvalFeedback(): Promise<CorrectionEvalResult>
       }
     }
 
+    // WR-05 fix: EvalDoc has no timestamp field, so true time-trend ordering is not
+    // expressible without a schema change (out of scope).  Ordering by 'score desc'
+    // for a "trend" display was misleading — it produced a monotonically-decreasing
+    // line that looked like a decline but was just a score-sorted ranking.
+    // Order by 'suite' (stable categorical key) instead; the panel is relabelled
+    // "eval scores by suite" (see i18n keys) to reflect the categorical nature.
     const evalSnap = await (evalsRef() as unknown as EvalQuery)
-      .orderBy('score', 'desc')
+      .orderBy('suite', 'asc')
       .limit(20)
       .select('suite', 'score')
       .get()

@@ -32,11 +32,11 @@
 import { createHash } from 'crypto'
 import { cookies } from 'next/headers'
 import { FieldValue } from 'firebase-admin/firestore'
-import { AggregateField } from 'firebase-admin/firestore'
 import { z } from 'zod'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
 import { erasureRequestsRef, TENANT_ID } from '@/src/firebase/collections'
-import { manifestCollections } from '@/src/pdpa/coverage'
+import { manifestCollections, PII_ERASURE_MANIFEST } from '@/src/pdpa/coverage'
+import type { ManifestEntry } from '@/src/pdpa/coverage'
 import { eraseDataSubject as eraseCore } from '@/src/pdpa/erasure'
 import { auditDrilldown } from '@/src/audit/log'
 
@@ -82,8 +82,13 @@ async function getSessionUser(): Promise<Awaited<ReturnType<typeof requireUser>>
 
 /**
  * sha256 hex hash of a raw subject id.
- * Used for subjectIdHash stored on the request doc — NEVER the raw id.
- * T-05-RAWID: raw subject id is NEVER persisted; only the hash is stored.
+ * Used for subjectIdHash stored on the request doc.
+ * T-05-RAWID: the raw subject id is retained TRANSIENTLY on the admin-only
+ * `erasureRequests` ledger (admin-read-only via Firestore rules; never returned
+ * to clients — the row mapper omits it) solely so the chunked erasure-sweep
+ * can resume querying Firestore for this subject.  It is CLEARED
+ * (`FieldValue.delete()`) the moment the request reaches `complete`, within
+ * the <72h SLA.  v2 hardening option: encrypt-at-rest with a Secret-Manager key.
  */
 function hashId(id: string): string {
   return createHash('sha256').update(id).digest('hex')
@@ -139,9 +144,12 @@ export async function eraseDataSubjectAction(raw: unknown): Promise<EraseDataSub
 
   const { subjectType, id } = parsed
 
-  // Create the erasureRequests ledger doc
-  // T-05-RAWID: store subjectIdHash only — never the raw id in the TypeScript interface.
-  // The raw id is passed as a server-side field to enable sweep re-query (05-03 decision).
+  // Create the erasureRequests ledger doc.
+  // T-05-RAWID: rawSubjectId is retained TRANSIENTLY on the server-only ledger so the
+  // chunked erasure-sweep can resume querying Firestore for this subject.  It is NEVER
+  // returned to clients (the row mapper in listErasureRequests omits it).  It is CLEARED
+  // (`FieldValue.delete()`) when the request reaches `complete` — see the completion
+  // branch below.  v2 hardening option: encrypt-at-rest with a Secret-Manager key.
   const reqRef = erasureRequestsRef().doc()
   const slaDeadline = Date.now() + 72 * 60 * 60 * 1000 // <72h SLA (D-02)
   const collectionsRemaining = manifestCollections(subjectType)
@@ -151,9 +159,9 @@ export async function eraseDataSubjectAction(raw: unknown): Promise<EraseDataSub
     tenantId: TENANT_ID,
     subjectType,
     subjectIdHash: hashId(id),
-    // rawSubjectId is stored as a server-side field (not in the TypeScript interface)
-    // so the erasure-sweep can re-query Firestore using the raw id (05-03 decision).
-    // It is never returned to clients.
+    // rawSubjectId: transient server-only field — retained so the chunked sweep can
+    // re-query Firestore for this subject.  Cleared (FieldValue.delete()) when the
+    // request reaches 'complete'.  Never returned to clients (row mapper omits it).
     rawSubjectId: id,
     status: 'pending',
     requestedBy: user.uid,
@@ -178,7 +186,10 @@ export async function eraseDataSubjectAction(raw: unknown): Promise<EraseDataSub
     return { ok: false, error: message }
   }
 
-  // Update the request doc to reflect the core's result
+  // Update the request doc to reflect the core's result.
+  // CR-01 fix: when the request is complete, CLEAR rawSubjectId via FieldValue.delete()
+  // so the raw subject id is not retained beyond the erasure lifecycle.  In-flight
+  // ('sweeping') requests retain rawSubjectId because the sweep still needs it.
   const newStatus = coreResult.complete ? 'complete' : 'sweeping'
   const updateData: Record<string, unknown> = {
     status: newStatus,
@@ -186,6 +197,8 @@ export async function eraseDataSubjectAction(raw: unknown): Promise<EraseDataSub
   }
   if (coreResult.complete) {
     updateData.completedAt = FieldValue.serverTimestamp()
+    // Clear the transient rawSubjectId — no longer needed once erasure is complete.
+    updateData.rawSubjectId = FieldValue.delete()
   }
   await reqRef.update(updateData)
 
@@ -239,25 +252,52 @@ export async function getBlastRadius(raw: unknown): Promise<BlastRadiusResult> {
   // Audit this read (PDPA: admin read of subject data must be audited — T-05-BLAST)
   await auditDrilldown(user.uid, `erasure/blast-radius/${subjectType}/${hashId(id)}`)
 
-  // Return per-collection counts (AggregateField.count) — NO deletion, NO doc content
+  // Return per-collection counts scoped to THIS subject — NO deletion, NO doc content.
+  // WR-02 fix: iterate manifest ENTRIES (not just collection names) and apply the same
+  // key strategy the executor uses so the count reflects docs that WILL be deleted for
+  // this subject, not the whole collection.
+  //   - keyField entry: where(keyField, '==', id).count() — direct equality filter
+  //   - keyVia entry:   two-step (resolve via source collection first), same strategy
+  //   - docId entry:    existence check on collection/{id} → 0 or 1
+  //   - STORAGE / auditLogs: skipped (EXEMPT or outside Firestore count scope)
   const counts: Record<string, number> = {}
+  const { adminDb } = await import('@/src/firebase/admin')
 
-  // Build the counts using AggregateField to avoid fetching documents (Pitfall 4/9)
-  // For simplicity, use the manifest to know which collections to count
-  const collections = manifestCollections(subjectType)
-  for (const col of collections) {
-    if (col === 'STORAGE' || col === 'auditLogs') continue
+  const entries: ManifestEntry[] = PII_ERASURE_MANIFEST[subjectType] as ManifestEntry[]
+  for (const entry of entries) {
+    // Skip non-Firestore entries and EXEMPT collections
+    if (entry.collection === 'STORAGE' || entry.collection === 'auditLogs') continue
+
     try {
-      // We use a simple count query — for collections without a known key field here,
-      // we fall back to a conservative estimate via the Firebase admin SDK
-      const { adminDb } = await import('@/src/firebase/admin')
-      const snap = await adminDb
-        .collection(col)
-        .count()
-        .get()
-      counts[col] = snap.data().count
+      if ('docId' in entry && entry.docId) {
+        // docId strategy: the subject id IS the document id — existence check → 0 or 1
+        const ref = adminDb.collection(entry.collection).doc(id)
+        const snap = await ref.get()
+        counts[entry.collection] = snap.exists ? 1 : 0
+      } else if ('keyVia' in entry && entry.keyVia) {
+        // keyVia strategy: two-step — first resolve intermediate ids from source collection,
+        // then count docs in target collection keyed by those intermediate ids.
+        // Format: 'sourceCollection.sourceField' where sourceField == subject id.
+        const [sourceCollection, sourceField] = entry.keyVia.split('.')
+        const intermediateSnap = await adminDb
+          .collection(sourceCollection)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .where(sourceField as any, '==', id)
+          .select() // projection — no fields needed, just doc ids
+          .get()
+        counts[entry.collection] = intermediateSnap.size
+      } else if ('keyField' in entry && entry.keyField) {
+        // keyField strategy: where(keyField, '==', id).count()
+        const aggSnap = await adminDb
+          .collection(entry.collection)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          .where(entry.keyField as any, '==', id)
+          .count()
+          .get()
+        counts[entry.collection] = aggSnap.data().count
+      }
     } catch {
-      counts[col] = 0
+      counts[entry.collection] = 0
     }
   }
 
