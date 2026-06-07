@@ -23,6 +23,7 @@
  */
 
 import { cookies } from 'next/headers'
+import { FieldValue } from 'firebase-admin/firestore'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
 import { escalationsRef, agentProfilesRef, replyEditsRef } from '@/src/firebase/collections'
 import { correctKbDoc, listDocsForReview } from '@/src/kb/crud'
@@ -81,7 +82,14 @@ export async function resolveStall(eid: string): Promise<ResolveStallResult> {
   }
 
   try {
-    await escalationsRef().doc(eid).update({ status: 'resolved' })
+    // D-05 / 05-04 Task 3: also set resolvedAt so rollupUsage can compute resolution time.
+    // resolvedAt was added to EscalationDoc in 05-02. This is the MINIMAL field add
+    // (regression surface: the existing resolve flow is otherwise unchanged).
+    // FieldValue.serverTimestamp() ensures consistent server-side clock for the delta.
+    await escalationsRef().doc(eid).update({
+      status: 'resolved',
+      resolvedAt: FieldValue.serverTimestamp(),
+    })
     return { ok: true }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Failed to resolve stall'
