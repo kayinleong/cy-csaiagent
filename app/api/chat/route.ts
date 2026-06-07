@@ -61,6 +61,8 @@ import { TENANT_ID, leadsRef, agentProfilesRef } from '@/src/firebase/collection
 import type { RetrieveHit } from '@/src/agents/coach/tools'
 import type { FinderSlot, ReplySlot } from '@/src/memory'
 import type { ParsedCriteria } from '@/src/inventory/search'
+import { recordUsageEvent } from '@/src/usage/record'
+import { dayKey } from '@/src/usage/types'
 
 // ─── Runtime configuration ────────────────────────────────────────────────────
 
@@ -603,7 +605,12 @@ export async function POST(req: Request): Promise<Response> {
         }
       }
 
-      // Decrement the rate-limit budget atomically after the turn completes
+      // REGRESSION-NOTE: pre-Phase-5 :607/:522 undercount multi-step turns;
+      // documented in PERF-COST.md (05-06/05-08), NOT changed here.
+      // final.usage.totalTokens at :522 (messages.tokens) and here (rate-limit decrement)
+      // is the LAST step only — Finder/Reply run stepCountIs(5) so multi-step turns are
+      // undercounted. Changing this is a SEPARATE behavioral change (TOKEN_CAP=50_000)
+      // requiring its own claim + Derek sign-off.
       await ratelimit.decrement(uid, final.usage.totalTokens ?? 0)
 
       // Append-only audit write — fire-and-forget via after()
@@ -623,6 +630,31 @@ export async function POST(req: Request): Promise<Response> {
           },
         }),
       )
+
+      // D-04: usage capture — fire-and-forget, counts only, ZERO PII.
+      // Rides the SAME after() path as audit.log (the single choke point).
+      // Uses final.totalUsage (sum across ALL steps) — Finder/Reply run stepCountIs(5),
+      // so final.usage (last step only) would undercount. final.totalUsage is correct.
+      // (RESEARCH Pattern 1, Anti-Pattern: "Two usage pipelines" — this is the ONE site.)
+      after(() => {
+        const u = final.totalUsage // LanguageModelV2Usage: sum across all steps (ai@5)
+        const cacheWrite =
+          (
+            final.providerMetadata?.anthropic as
+              | { cacheCreationInputTokens?: number | null }
+              | undefined
+          )?.cacheCreationInputTokens ?? 0
+        return recordUsageEvent({
+          tenantId: TENANT_ID,
+          uid,                                        // GATE 1: already verified
+          pillar: pillar as 'coach' | 'finder' | 'reply', // GATE 4: already routed
+          inputTokens: u?.inputTokens ?? 0,
+          outputTokens: u?.outputTokens ?? 0,
+          cachedInputTokens: u?.cachedInputTokens ?? 0,   // prompt-cache READ hit
+          cacheCreationInputTokens: cacheWrite,           // prompt-cache WRITE cost
+          day: dayKey(new Date()),                         // 'YYYY-MM-DD' (Asia/Kuala_Lumpur)
+        })
+      })
     },
   })
 
