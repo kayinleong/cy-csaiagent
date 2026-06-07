@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: phase-5-planned
-stopped_at: Phase 5 planned + verified (8 plans, 6 waves; checker VERIFICATION PASSED) — next is /gsd-execute-phase 5 (human-gated). (Phase 4 firestore rules+indexes DEPLOYED to cy-csaiagent 2026-06-07; kbChunks.pillar backfill still parked — needs personal-account ADC.)
-last_updated: "2026-06-07T00:00:00.000Z"
-last_activity: 2026-06-07 — Phase 5 planned. Research + UI-SPEC + VALIDATION + PATTERNS, then 8 PLAN.md (waves 0-6), checker VERIFICATION PASSED (1 non-blocking doc-marker warning, fixed). 7/7 REQ-IDs covered. Erasure safety architecture verified (single manifest→executor+sweep+coverage test, audit-exempt, type-to-confirm); 3 new collections ship with rules in-plan; no BigQuery/scheduler. NOT pushed (user hold).
+status: phase-5-executing
+stopped_at: Phase 5 Plan 01 (Wave-0 test scaffold) COMPLETE — 3 tasks, 9 files, 3 commits. Next: 05-02-PLAN.md (new collections + deny-by-default rules + rules-test 16→19).
+last_updated: "2026-06-07T07:40:29Z"
+last_activity: 2026-06-07 — 05-01-PLAN.md executed. Wave-0 TDD red bar: 8 failing test stubs (QUAL-09 erasure coverage/audit-exemption/sweep, QUAL-08/ADMIN-08 usage/rollup, admin erasure/conversations/roles actions) + k6 SSE harness. All fail on absent implementation modules (correct red bar). NOT pushed (user hold).
 progress:
   total_phases: 5
   completed_phases: 3
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 
 ## Current Position
 
-Phase: 4 of 5 complete (Reply Assistant + Reply Analytics) — Phase 5 planned + verified, next: /gsd-execute-phase 5
-Plan: Phase 5 = 8 plans (waves 0-6), checker VERIFICATION PASSED, 7/7 REQ-IDs covered; Phase 4 = 10/10 code-complete + verified; all three pillars live
-Status: Phase 5 ready to execute (human-gated). FINAL v1 phase. Plans 05-05/06/07/08 are autonomous:no checkpoints (destructive erasure UI + Derek PDPA sign-off gate).
-Last activity: 2026-06-07 — Phase 5 planned + verified (research→ui→validation→patterns→plan→check). NOT pushed (user hold).
+Phase: 5 of 5 executing (Hardening + Scale-Up)
+Plan: Phase 5 Plan 01/08 COMPLETE (Wave-0 test scaffold). 7 plans remaining. Next: 05-02-PLAN.md (collections + rules).
+Status: Phase 5 executing. Plan 01 done. FINAL v1 phase.
+Last activity: 2026-06-07 — 05-01-PLAN.md: Wave-0 TDD red bar complete. 8 failing test stubs + k6 harness. 3 commits (52e166d, fde93fb, 7e61b7f). NOT pushed (user hold).
 
-Progress: [████████░░] 80% (4 of 5 phases code-complete + verified; Phase 5 planned + verified, ready to execute)
+Progress: [████████░░] 81% (4 of 5 phases code-complete + verified; Phase 5 Plan 01/08 executing)
 
 ### Phase 4 open human-action gate (live-gated — does NOT block Phase 5 planning)
 1. `firebase deploy --only firestore:indexes,firestore:rules` — additive `kbChunks` pillar vector index + `replyEdits` indexes/rules.
@@ -105,9 +105,9 @@ Items acknowledged and carried forward (v2 / post-pilot):
 
 ## Session Continuity
 
-Last session: 2026-06-03
-Stopped at: Phase 3 (Finder + Intent-Routing Activation) EXECUTED + VERIFIED — all 9 plans built across 5 waves [1:{01,05} 2:{02} 3:{03,04,06} 4:{07,08} 5:{09}]; tsc clean, 452 vitest pass / 97 skipped / 0 fail, lint 0 errors. Verifier=goal_achieved:true (human_needed for the 3 live-gated runs only; 0 code gaps); 8/8 hard guarantees pass (active-only two-stage grounding, citation/grounded-refusal, eligibility filter, two-pillar routeAsync dispatch, read-only auth-as-user tools, PDPA boundary on Finder path, model-agnostic Remote Config, no-GCP overrides); no regressions (Coach/audit/ratelimit/KB untouched, 28/28 coach tests pass). Built against real Firebase (Gemini 1024-d, on-visit lazy-cron). NOT pushed — user hold.
-Resume file: .planning/ROADMAP.md → Phase 4 (Reply Assistant + Reply Analytics)
+Last session: 2026-06-07
+Stopped at: Phase 5 Plan 01 (Wave-0 test scaffold) COMPLETE — 3 tasks, 8 failing test stubs + k6 harness, 3 commits. Next: 05-02-PLAN.md.
+Resume file: .planning/phases/05-hardening-scale/05-02-PLAN.md
 Phase 3: code-complete + verified; live finder/router Promptfoo evals + Playwright e2e (skip-guarded scaffolds) + FIND-12 pilot provisioning (`scripts/provision-finder-pilot.ts --apply`, dry-run by default) are the live-gated human step — run during pilot rollout, do NOT block Phase 4 planning.
 Phase 4 (Reply Assistant + Reply Analytics): NOT yet started. Reqs REPLY-01..12, ADMIN-05/06, QUAL-02. Paste-and-draft WhatsApp replies in D2's voice (never auto-sent), per-lead isolation, edit-as-signal analytics, reachable via the activated intent router alongside Coach + Finder.
 Next step: /gsd-discuss-phase 4 (then plan → execute). User standing instruction: do NOT push to any remote without explicit confirmation.

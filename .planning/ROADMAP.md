@@ -76,7 +76,7 @@ These are hard, non-negotiable boundaries carried from PROJECT.md / config. No p
   5. A senior coach signs in, sees only their own downline's onboarding stage and questions-being-asked, and can correct the AI inline.
 **Plans**: 8 plans
 Plans:
-- [ ] 05-01-PLAN.md — Wave-0 failing-test scaffold (erasure coverage/audit-exemption/sweep, usage capture/rollup, admin actions) + k6 load-test harness
+- [x] 05-01-PLAN.md — Wave-0 failing-test scaffold (erasure coverage/audit-exemption/sweep, usage capture/rollup, admin actions) + k6 load-test harness
 - [ ] 05-02-PLAN.md — 3 new collections (usageEvents/usageRollups/erasureRequests) + deny-by-default rules + index + rules-test 16->19 + EscalationDoc.resolvedAt
 - [ ] 05-03-PLAN.md — PDPA erasure spine: PII_ERASURE_MANIFEST + eraseDataSubject (recursiveDelete, audit-exempt) + idempotent erasure-sweep lazy-cron
 - [ ] 05-04-PLAN.md — ONE usage/cost pipeline: route onFinish capture (final.totalUsage) -> usage-rollup lazy-cron -> usageRollups + resolveStall.resolvedAt
@@ -146,4 +146,4 @@ Phases execute in numeric order: 1 → 2 → [week-4 go/no-go gate] → 3 → 4 
 | 2. Coach + Admin v1 | 0/TBD | Not started | - |
 | 3. Finder + Intent-Routing | 0/TBD | Not started | - |
 | 4. Reply Assistant + Analytics | 0/10 | Planned | - |
-| 5. Hardening + Scale-Up | 0/8 | Planned | - |
+| 5. Hardening + Scale-Up | 1/8 | Executing | - |
