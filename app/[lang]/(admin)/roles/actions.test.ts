@@ -130,9 +130,11 @@ describe('ADMIN-07 assignRole — admin-gate + setUserClaims + audit', () => {
 
     expect(result.ok).toBe(false)
     // The error should convey the InvalidRoleError, not Unauthorized/Forbidden
-    expect(result.error).toBeDefined()
-    expect(result.error).not.toBe('Unauthorized')
-    expect(result.error).not.toBe('Forbidden')
+    // Narrow the union type so TypeScript can resolve .error
+    const errResult = result as { ok: false; error: string }
+    expect(errResult.error).toBeDefined()
+    expect(errResult.error).not.toBe('Unauthorized')
+    expect(errResult.error).not.toBe('Forbidden')
   })
 
   it('returns {ok:true} on successful role assignment', async () => {
