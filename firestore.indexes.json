@@ -154,6 +154,15 @@
         { "fieldPath": "sopDocIds", "arrayConfig": "CONTAINS" },
         { "fieldPath": "timestamp", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "usageEvents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "day", "order": "ASCENDING" },
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "pillar", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

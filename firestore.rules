@@ -275,5 +275,32 @@ service cloud.firestore {
         if hasRole('admin') && sameTenant();
     }
 
+    // ── Collection 18: usageEvents ───────────────────────────────────────────
+    // Per-turn usage counts (QUAL-08 / D-04). Written EXCLUSIVELY by the server
+    // via Admin SDK (recordUsageEvent inside after()). Counts only — no content.
+    // Admin-read for org-wide cost auditing (T-05-UNRULED / T-05-TAMPER mitigate).
+    match /usageEvents/{id} {
+      allow create, update, delete: if false;          // Admin-SDK only
+      allow read: if hasRole('admin') && sameTenant(); // org-wide cost view
+    }
+
+    // ── Collection 19: usageRollups ──────────────────────────────────────────
+    // Daily per-(uid, pillar) rollup (QUAL-08/ADMIN-08 / D-05). Written by the
+    // usage-rollup lazy-cron job via Admin SDK. Admin-read for ADMIN-08 dashboard.
+    // (T-05-UNRULED / T-05-TAMPER mitigate).
+    match /usageRollups/{id} {
+      allow create, update, delete: if false;          // Admin-SDK only
+      allow read: if hasRole('admin') && sameTenant();
+    }
+
+    // ── Collection 20: erasureRequests ───────────────────────────────────────
+    // PDPA erasure request ledger (QUAL-09 / D-02). Written EXCLUSIVELY by the
+    // erasure Server Action and sweep job via Admin SDK. Admin-read for monitoring.
+    // (T-05-UNRULED / T-05-TAMPER mitigate).
+    match /erasureRequests/{id} {
+      allow create, update, delete: if false;          // Admin-SDK only
+      allow read: if hasRole('admin') && sameTenant();
+    }
+
   }
 }
