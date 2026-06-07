@@ -74,7 +74,16 @@ These are hard, non-negotiable boundaries carried from PROJECT.md / config. No p
   3. When an agent falls 2+ days behind, a proactive nudge fires; after 48h of no response it auto-escalates — visible as a stall alert on the senior-coach dashboard.
   4. Derek can create, edit, and version knowledge-base documents in plain language through the admin app, with no engineer involved, and the change is retrievable by the Coach.
   5. A senior coach signs in, sees only their own downline's onboarding stage and questions-being-asked, and can correct the AI inline.
-**Plans**: TBD
+**Plans**: 8 plans
+Plans:
+- [ ] 05-01-PLAN.md — Wave-0 failing-test scaffold (erasure coverage/audit-exemption/sweep, usage capture/rollup, admin actions) + k6 load-test harness
+- [ ] 05-02-PLAN.md — 3 new collections (usageEvents/usageRollups/erasureRequests) + deny-by-default rules + index + rules-test 16->19 + EscalationDoc.resolvedAt
+- [ ] 05-03-PLAN.md — PDPA erasure spine: PII_ERASURE_MANIFEST + eraseDataSubject (recursiveDelete, audit-exempt) + idempotent erasure-sweep lazy-cron
+- [ ] 05-04-PLAN.md — ONE usage/cost pipeline: route onFinish capture (final.totalUsage) -> usage-rollup lazy-cron -> usageRollups + resolveStall.resolvedAt
+- [ ] 05-05-PLAN.md — Nav + trilingual i18n foundation + PDPA erasure UI (type-to-confirm destructive flow) + admin-gated Server Action
+- [ ] 05-06-PLAN.md — Admin conversation-log viewer (read-only, audited) + role/permission matrix + setUserClaims assignment
+- [ ] 05-07-PLAN.md — Admin usage+cost dashboard (usageRollups) + coach dashboard v2 panels (funnel/ramp/knowledge-gap/correction-eval)
+- [ ] 05-08-PLAN.md — Artifacts: PERF-COST.md, HARDENING.md, PDPA-SIGNOFF.md (Derek gate), docs/operations/ handover, TIA update
 **UI hint**: yes
 
 ### Phase 3: Finder + Intent-Routing Activation
@@ -137,4 +146,4 @@ Phases execute in numeric order: 1 → 2 → [week-4 go/no-go gate] → 3 → 4 
 | 2. Coach + Admin v1 | 0/TBD | Not started | - |
 | 3. Finder + Intent-Routing | 0/TBD | Not started | - |
 | 4. Reply Assistant + Analytics | 0/10 | Planned | - |
-| 5. Hardening + Scale-Up | 0/TBD | Not started | - |
+| 5. Hardening + Scale-Up | 0/8 | Planned | - |
