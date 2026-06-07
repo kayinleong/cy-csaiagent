@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: phase-5-executing
-stopped_at: Phase 5 Plan 07 (org usage/cost dashboard + coach dashboard v2) COMPLETE — 2 code tasks + 1 auto-approved checkpoint, 5 files created, 2 modified, 2 commits. Next: 05-08-PLAN.md.
-last_updated: "2026-06-07T09:30:00Z"
-last_activity: 2026-06-07 — 05-07-PLAN.md executed. Admin usage+cost dashboard (reads usageRollups only, ADMIN-08+QUAL-08, HR-7) + coach dashboard v2 (3 panels appended — funnel+ramp, gap-agg, correction-eval; CDASH-08). 541 tests PASS. tsc clean. NOT pushed (user hold).
+status: phase-5-complete
+stopped_at: Phase 5 Plan 08 (hardening checklist + cost/perf pass + PDPA sign-off + ops handover) COMPLETE — 3 tasks, 12 files created, 1 modified, 3 commits (59d4d2b, f7ca414, 070e708). v1 Phase 5 ALL PLANS DONE. Live-gated items (load test, PDPA drill, Derek sign-off, backup drill) execute during rollout prep. NOT pushed (user hold).
+last_updated: "2026-06-07T09:47:00Z"
+last_activity: 2026-06-07 — 05-08-PLAN.md executed. PERF-COST.md (QUAL-08, single pipeline + undercount flag + PROPOSED p95) + HARDENING.md (SC4, evidence-linked checklist, gcloud firestore export backup, code-ready/live-gated) + PDPA-SIGNOFF.md (QUAL-09, coverage proof + signoff-ready) + 8-file docs/operations/ handover (QUAL-10) + PDPA-TIA Phase-5 update (D-03). 541 tests PASS. tsc clean. NOT pushed.
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 5
   total_plans: 30
   completed_plans: 30
-  percent: 60
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 
 ## Current Position
 
-Phase: 5 of 5 executing (Hardening + Scale-Up)
-Plan: Phase 5 Plan 07/08 COMPLETE (org usage/cost dashboard + coach dashboard v2). 1 plan remaining. Next: 05-08-PLAN.md.
-Status: Phase 5 executing. Plans 01-07 done. FINAL v1 phase.
-Last activity: 2026-06-07 — 05-07-PLAN.md: admin usage+cost dashboard (usageRollups only, ADMIN-08+QUAL-08) + coach dashboard v2 (3 panels: funnel+ramp KPI, knowledge-gap agg by pillar, correction→eval feedback; CDASH-08). 2 commits (b7785e4, fe41d3f). NOT pushed (user hold).
+Phase: 5 of 5 COMPLETE — ALL v1 phases done
+Plan: Phase 5 Plan 08/08 COMPLETE (hardening checklist + cost/perf pass + PDPA sign-off + operator handover). ALL 30 plans complete.
+Status: v1 milestone code-complete. Live-gated items (load test, PDPA drill, backup drill, Derek sign-off) execute during rollout prep.
+Last activity: 2026-06-07 — 05-08-PLAN.md: PERF-COST.md (QUAL-08 single pipeline + undercount flag + PROPOSED p95) + HARDENING.md (SC4 evidence-linked checklist) + PDPA-SIGNOFF.md (QUAL-09 coverage proof, signoff-ready) + 8-file docs/operations/ handover (QUAL-10) + PDPA-TIA Phase-5 update (D-03). 3 commits (59d4d2b, f7ca414, 070e708). NOT pushed (user hold). v1 ALL PLANS DONE.
 
-Progress: [█████████░] 88% (4 of 5 phases code-complete + verified; Phase 5 Plan 07/08 complete)
+Progress: [██████████] 100% (5 of 5 phases code-complete + verified; Phase 5 ALL 8 plans done)
 
 ### Phase 4 open human-action gate (live-gated — does NOT block Phase 5 planning)
 1. `firebase deploy --only firestore:indexes,firestore:rules` — additive `kbChunks` pillar vector index + `replyEdits` indexes/rules.
@@ -100,6 +100,10 @@ Recent decisions affecting current work:
 - [05-07]: getKnowledgeGapAggregation uses select() projection + JS bucket aggregation (same pattern as getReplyQualityMetrics :402-407) — acceptable at pilot scale.
 - [05-07]: getCorrectionEvalFeedback orders evals by score DESC (EvalDoc has no runAt timestamp); chronological trend deferred to when EvalDoc gets a runAt field.
 - [05-07]: Task 3 checkpoint:human-verify auto-approved per auto_advance=true — building dashboards is not an auth gate.
+- [05-08]: signoff-ready auto-selected for Task 3 checkpoint:decision (auto_advance=true) — coverage test GREEN + manifest complete; live drill + A1/A6 + Derek signature are LIVE-GATED.
+- [05-08]: pre-Phase-5 token undercount (route.ts:607/:522/:620) documented in PERF-COST.md as a separate claim + Derek sign-off required (behavioral change to TOKEN_CAP).
+- [05-08]: backup posture = managed gcloud firestore export on-demand + lazy-cron reminder (NOT automated; confirm-with-Derek A6 note in HARDENING.md + backup-restore-runbook.md).
+- [05-08]: v1 milestone code-complete — all 5 phases, 8 Phase-5 plans done; live-gated items execute during rollout prep.
 
 ### Pending Todos
 
@@ -128,8 +132,15 @@ Items acknowledged and carried forward (v2 / post-pilot):
 ## Session Continuity
 
 Last session: 2026-06-07
-Stopped at: Phase 5 Plan 07 (org usage/cost dashboard + coach dashboard v2) COMPLETE — 2 code tasks + 1 auto-approved checkpoint, 5 files created, 2 modified, 2 commits (b7785e4, fe41d3f). Next: 05-08-PLAN.md.
-Resume file: .planning/phases/05-hardening-scale/05-08-PLAN.md
-Phase 3: code-complete + verified; live finder/router Promptfoo evals + Playwright e2e (skip-guarded scaffolds) + FIND-12 pilot provisioning (`scripts/provision-finder-pilot.ts --apply`, dry-run by default) are the live-gated human step — run during pilot rollout, do NOT block Phase 4 planning.
-Phase 4 (Reply Assistant + Reply Analytics): NOT yet started. Reqs REPLY-01..12, ADMIN-05/06, QUAL-02. Paste-and-draft WhatsApp replies in D2's voice (never auto-sent), per-lead isolation, edit-as-signal analytics, reachable via the activated intent router alongside Coach + Finder.
-Next step: /gsd-discuss-phase 4 (then plan → execute). User standing instruction: do NOT push to any remote without explicit confirmation.
+Stopped at: Phase 5 Plan 08 (hardening checklist + cost/perf pass + PDPA sign-off + ops handover) COMPLETE — 3 tasks, 12 files created, 1 modified, 3 commits (59d4d2b, f7ca414, 070e708). ALL 30 v1 plans done. v1 milestone code-complete.
+Resume file: None (all plans complete). Next: rollout prep (live-gated items) + Derek sign-off.
+v1 milestone status: CODE-COMPLETE. Live-gated items to execute during rollout prep:
+  1. firebase deploy --only firestore:rules,firestore:indexes (Phase 4/5 rules + indexes)
+  2. k6 run scripts/loadtest/chat.js (load test vs deployed stack)
+  3. PDPA live erasure drill (<72h end-to-end) + Derek sign-off on PDPA-SIGNOFF.md
+  4. Backup/restore drill (gcloud firestore export + restore to test project)
+  5. SLO finalization (Derek reviews PROPOSED p95 numbers in PERF-COST.md)
+  6. Derek A1 (voice in Storage?) + A6 (gcloud export OK?) confirmations
+  7. Phase 3: live finder/router Promptfoo evals + Playwright e2e + FIND-12 provisioning
+  8. Phase 4: live browser verification (all Reply + admin surfaces)
+User standing instruction: do NOT push to any remote without explicit confirmation.

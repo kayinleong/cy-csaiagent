@@ -116,8 +116,8 @@ Requirements for the initial release covering the three pillars + admin + senior
 - [ ] **QUAL-06**: Prompt regression suite catches tone drift, hallucinations, and language-quality regressions
 - [ ] **QUAL-07**: Token-usage tracking + per-agent rate limiting
 - [x] **QUAL-08**: Performance + cost optimization pass before production rollout
-- [ ] **QUAL-09**: PDPA audit + sign-off before production rollout
-- [ ] **QUAL-10**: Internal documentation for D2's team (handover)
+- [x] **QUAL-09**: PDPA audit + sign-off before production rollout
+- [x] **QUAL-10**: Internal documentation for D2's team (handover)
 
 ## v2 Requirements
 
@@ -247,8 +247,8 @@ Phase 1 = Foundations · Phase 2 = Coach + Admin v1 · Phase 3 = Finder + Intent
 | QUAL-06 | Phase 2 | Pending |
 | QUAL-07 | Phase 1 | Pending |
 | QUAL-08 | Phase 5 | Complete |
-| QUAL-09 | Phase 5 | Pending |
-| QUAL-10 | Phase 5 | Pending |
+| QUAL-09 | Phase 5 | Complete (code-ready; live drill + Derek sign-off live-gated) |
+| QUAL-10 | Phase 5 | Complete |
 
 **Coverage:**
 - v1 requirements: 85 enumerated REQ-IDs (FND 11, AUTH 6, CHAT 8, COACH 10, FIND 12, REPLY 12, CDASH 8, ADMIN 8, QUAL 10). (Prior header said "86 total"; the actual enumerated REQ-ID count is 85 — discrepancy noted and reconciled by the roadmapper.)

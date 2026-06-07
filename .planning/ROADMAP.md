@@ -28,7 +28,7 @@ These are hard, non-negotiable boundaries carried from PROJECT.md / config. No p
 - [x] **Phase 2: Coach + Admin v1** - Onboarding Coach end-to-end, KB CRUD admin, senior-coach dashboard v1, to a 5–10 agent pilot — *code-complete + verified (0 code gaps); go/no-go SIGNED 2026-06-02; live-stack proofs run during pilot rollout*
 - [x] **Phase 3: Finder + Intent-Routing Activation** - Property Finder pillar and the LLM intent classifier; two pillars share one surface, pilot expands to 15–20 — *code-complete + verified (0 code gaps); 9/9 plans, 13/13 reqs; live finder/router evals + Playwright e2e + FIND-12 pilot provisioning are the live-gated human-action step*
 - [x] **Phase 4: Reply Assistant + Reply Analytics** - Paste-and-draft WhatsApp replies in D2's voice, never auto-sent, with edit-as-signal analytics — *code-complete + verified (0 code gaps) 2026-06-05; 10/10 plans, 16/16 reqs; live index/rules deploy + kbChunks.pillar backfill + emulator rules tests + live Reply evals + browser click-through are the live-gated human-action step*
-- [ ] **Phase 5: Hardening + Scale-Up** - PDPA erasure, cost/perf passes, coach dashboard v2, funnel metrics, load test for ~400 agents
+- [x] **Phase 5: Hardening + Scale-Up** - PDPA erasure, cost/perf passes, coach dashboard v2, funnel metrics, load test for ~400 agents — *code-complete + documented (0 code gaps) 2026-06-07; 8/8 plans; v1 MILESTONE CODE-COMPLETE; live-gated: load test run, PDPA drill + Derek sign-off, backup drill, SLO finalization execute during rollout prep*
 
 ## Phase Details
 
@@ -78,12 +78,12 @@ These are hard, non-negotiable boundaries carried from PROJECT.md / config. No p
 Plans:
 - [x] 05-01-PLAN.md — Wave-0 failing-test scaffold (erasure coverage/audit-exemption/sweep, usage capture/rollup, admin actions) + k6 load-test harness
 - [x] 05-02-PLAN.md — 3 new collections (usageEvents/usageRollups/erasureRequests) + deny-by-default rules + index + rules-test 16->19 + EscalationDoc.resolvedAt
-- [ ] 05-03-PLAN.md — PDPA erasure spine: PII_ERASURE_MANIFEST + eraseDataSubject (recursiveDelete, audit-exempt) + idempotent erasure-sweep lazy-cron
-- [ ] 05-04-PLAN.md — ONE usage/cost pipeline: route onFinish capture (final.totalUsage) -> usage-rollup lazy-cron -> usageRollups + resolveStall.resolvedAt
+- [x] 05-03-PLAN.md — PDPA erasure spine: PII_ERASURE_MANIFEST + eraseDataSubject (recursiveDelete, audit-exempt) + idempotent erasure-sweep lazy-cron
+- [x] 05-04-PLAN.md — ONE usage/cost pipeline: route onFinish capture (final.totalUsage) -> usage-rollup lazy-cron -> usageRollups + resolveStall.resolvedAt
 - [x] 05-05-PLAN.md — Nav + trilingual i18n foundation + PDPA erasure UI (type-to-confirm destructive flow) + admin-gated Server Action
 - [x] 05-06-PLAN.md — Admin conversation-log viewer (read-only, audited) + role/permission matrix + setUserClaims assignment
 - [x] 05-07-PLAN.md — Admin usage+cost dashboard (usageRollups) + coach dashboard v2 panels (funnel/ramp/knowledge-gap/correction-eval)
-- [ ] 05-08-PLAN.md — Artifacts: PERF-COST.md, HARDENING.md, PDPA-SIGNOFF.md (Derek gate), docs/operations/ handover, TIA update
+- [x] 05-08-PLAN.md — PERF-COST.md (QUAL-08), HARDENING.md (SC4), PDPA-SIGNOFF.md (QUAL-09, signoff-ready), 8-file docs/operations/ handover (QUAL-10), PDPA-TIA Phase-5 update (D-03) — v1 MILESTONE COMPLETE
 **UI hint**: yes
 
 ### Phase 3: Finder + Intent-Routing Activation
@@ -142,8 +142,8 @@ Phases execute in numeric order: 1 → 2 → [week-4 go/no-go gate] → 3 → 4 
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundations | 0/13 | Not started | - |
-| 2. Coach + Admin v1 | 0/TBD | Not started | - |
-| 3. Finder + Intent-Routing | 0/TBD | Not started | - |
-| 4. Reply Assistant + Analytics | 0/10 | Planned | - |
-| 5. Hardening + Scale-Up | 5/8 | Executing | - |
+| 1. Foundations | 13/13 | Code-complete | 2026-06-02 |
+| 2. Coach + Admin v1 | 11/11 | Code-complete | 2026-06-02 |
+| 3. Finder + Intent-Routing | 9/9 | Code-complete | 2026-06-04 |
+| 4. Reply Assistant + Analytics | 10/10 | Code-complete | 2026-06-05 |
+| 5. Hardening + Scale-Up | 8/8 | Code-complete | 2026-06-07 |
