@@ -39,7 +39,15 @@ import { KnowledgeGapFeed } from '../_components/knowledge-gap-feed'
 import { MetricsPanel } from '../_components/metrics-panel'
 import { KbDocExplorer } from '../_components/kb-doc-explorer'
 import { ReplyQualityPanel } from '../_components/reply-quality-panel'
-import { getReplyQualityMetrics } from './actions'
+import { FunnelV2Panel } from '../_components/funnel-v2-panel'
+import { KnowledgeGapAggPanel } from '../_components/knowledge-gap-agg-panel'
+import { CorrectionEvalPanel } from '../_components/correction-eval-panel'
+import {
+  getReplyQualityMetrics,
+  getFunnelV2Metrics,
+  getKnowledgeGapAggregation,
+  getCorrectionEvalFeedback,
+} from './actions'
 
 interface PageProps {
   params: Promise<{ lang: string }>
@@ -137,6 +145,14 @@ export default async function CoachDashboardPage({ params }: PageProps) {
   // (downline for a coach, org-wide for admin) — counts only, no draft content.
   const replyQuality = await getReplyQualityMetrics()
 
+  // ── CDASH-08: Dashboard v2 data fetches (role-scoped server-side, HR-4) ────
+  // All three use count()/select() aggregation (no fetch-all). Run in parallel.
+  const [funnelV2, gapAgg, correctionEval] = await Promise.all([
+    getFunnelV2Metrics(),
+    getKnowledgeGapAggregation(),
+    getCorrectionEvalFeedback(),
+  ])
+
   const t = await getTranslations('dashboard')
 
   return (
@@ -215,6 +231,36 @@ export default async function CoachDashboardPage({ params }: PageProps) {
             draftsPerAgent={replyQuality.metrics?.draftsPerAgent ?? 0}
             topEditedSop={replyQuality.metrics?.topEditedSop ?? null}
             scope={replyQuality.metrics?.scope ?? (adminAll ? 'org' : 'downline')}
+          />
+        </section>
+
+        {/* CDASH-08: Full funnel + ramp KPI panel (v2 — grow, don't fork D-07) */}
+        <section>
+          <h2 className="mb-4 text-lg font-semibold">{t('v2.funnelTitle')}</h2>
+          <FunnelV2Panel
+            stages={funnelV2.metrics?.stages ?? []}
+            activeAgents={funnelV2.metrics?.activeAgents ?? 0}
+            totalAgents={funnelV2.metrics?.totalAgents ?? 0}
+            avgDaysToProductive={funnelV2.metrics?.avgDaysToProductive ?? null}
+            scope={funnelV2.metrics?.scope ?? (adminAll ? 'org' : 'downline')}
+          />
+        </section>
+
+        {/* CDASH-08: Knowledge-gap aggregation by pillar (v2 — grow, don't fork) */}
+        <section>
+          <h2 className="mb-4 text-lg font-semibold">{t('v2.gapAggTitle')}</h2>
+          <KnowledgeGapAggPanel
+            gapsByTopic={gapAgg.gapsByTopic ?? []}
+            scope={gapAgg.scope ?? (adminAll ? 'org' : 'downline')}
+          />
+        </section>
+
+        {/* CDASH-08: Correction → eval feedback (v2 — grow, don't fork) */}
+        <section>
+          <h2 className="mb-4 text-lg font-semibold">{t('v2.correctionEvalTitle')}</h2>
+          <CorrectionEvalPanel
+            corrections={correctionEval.corrections ?? []}
+            evalTrend={correctionEval.evalTrend ?? []}
           />
         </section>
       </div>

@@ -25,7 +25,14 @@
 import { cookies } from 'next/headers'
 import { FieldValue } from 'firebase-admin/firestore'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
-import { escalationsRef, agentProfilesRef, replyEditsRef } from '@/src/firebase/collections'
+import {
+  escalationsRef,
+  agentProfilesRef,
+  replyEditsRef,
+  knowledgeGapsRef,
+  kbDocsRef,
+  evalsRef,
+} from '@/src/firebase/collections'
 import { correctKbDoc, listDocsForReview } from '@/src/kb/crud'
 import { loadRecent } from '@/src/memory/conversation'
 import { auditDrilldown } from '@/src/audit/log'
@@ -479,3 +486,340 @@ async function computeEscalationRate(coachUid: string, adminAll: boolean): Promi
   const open = (await scoped().where('status', '==', 'open').count().get()).data().count
   return open / total
 }
+
+// ─── CDASH-08: Dashboard v2 data actions ────────────────────────────────────
+// All three mirror getReplyQualityMetrics: role-scoped via adminAll/seniorCoachId,
+// count()/AggregateField aggregation only (never fetch-all), serializable result.
+// These ONLY ADD new exported actions — resolveStall (05-04) is unchanged.
+
+// ── getFunnelV2Metrics ───────────────────────────────────────────────────────
+
+/** A stage bucket for the full funnel (training → lead → close). */
+export interface FunnelV2Stage {
+  stage: string
+  count: number
+}
+
+export interface FunnelV2Metrics {
+  /** Count of agents per journey stage (training, lead, close). */
+  stages: FunnelV2Stage[]
+  /** Count of agents with currentCheckpoint !== 'start' (active). */
+  activeAgents: number
+  /** Total agents in scope. */
+  totalAgents: number
+  /**
+   * Average days in journey for agents not at 'start'.
+   * Proxy for ramp time (CDASH-07). null when no agents have lastActiveAt data.
+   */
+  avgDaysToProductive: number | null
+  /** Scope: 'downline' for coach, 'org' for admin (HR-4). */
+  scope: 'downline' | 'org'
+}
+
+export interface FunnelV2Result {
+  ok: boolean
+  metrics?: FunnelV2Metrics
+  error?: string
+}
+
+/**
+ * Full training→lead→close funnel data for the CDASH-08 funnel-v2 panel.
+ *
+ * Fetches agentProfiles with a projection-only read (select — no full docs),
+ * role-scoped (coach = downline via seniorCoachId filter, admin = org-wide).
+ * Returns stage counts + ramp-time KPI (avgDaysToProductive).
+ *
+ * PDPA: agentProfiles hold uid-keyed journey stages only — no PII content.
+ * Audited as a downline drilldown (counts, no raw content).
+ */
+export async function getFunnelV2Metrics(): Promise<FunnelV2Result> {
+  let user: Awaited<ReturnType<typeof requireUser>>
+  try {
+    user = await getSessionUser()
+  } catch {
+    return { ok: false, error: 'Unauthorized' }
+  }
+
+  if (user.role !== 'senior-coach' && user.role !== 'admin') {
+    return { ok: false, error: 'Forbidden: senior-coach or admin role required' }
+  }
+
+  const adminAll = user.role === 'admin'
+  const scope: 'downline' | 'org' = adminAll ? 'org' : 'downline'
+
+  try {
+    await auditDrilldown(user.uid, 'agentProfiles')
+
+    // Projection — only fields needed for funnel + ramp KPI, never fetch full docs.
+    type ProfileDoc = { journeyStage?: string; lastActiveAt?: Date }
+    type ProjQuery = {
+      where: (f: string, op: string, v: unknown) => ProjQuery
+      select: (...fields: string[]) => { get: () => Promise<{ docs: Array<{ data: () => ProfileDoc }> }> }
+    }
+
+    const base = agentProfilesRef() as unknown as ProjQuery
+    const scoped = adminAll
+      ? base
+      : base.where('seniorCoachId', '==', user.uid)
+
+    const snap = await scoped.select('journeyStage', 'lastActiveAt').get()
+    const profiles = snap.docs.map((d) => d.data())
+
+    if (profiles.length === 0) {
+      return {
+        ok: true,
+        metrics: {
+          stages: [],
+          activeAgents: 0,
+          totalAgents: 0,
+          avgDaysToProductive: null,
+          scope,
+        },
+      }
+    }
+
+    // Stage counts
+    const stageMap = new Map<string, number>()
+    let activeCount = 0
+    const now = Date.now()
+    const daysSamples: number[] = []
+
+    for (const profile of profiles) {
+      const stage = profile.journeyStage ?? 'onboarding'
+      stageMap.set(stage, (stageMap.get(stage) ?? 0) + 1)
+      if (profile.lastActiveAt) {
+        const lastActiveAt = profile.lastActiveAt instanceof Date
+          ? profile.lastActiveAt
+          : new Date(profile.lastActiveAt as unknown as string)
+        const daysDiff = Math.floor((now - lastActiveAt.getTime()) / (1000 * 60 * 60 * 24))
+        if (daysDiff >= 0) {
+          daysSamples.push(daysDiff)
+          activeCount++
+        }
+      }
+    }
+
+    const stages = Array.from(stageMap.entries()).map(([stage, count]) => ({ stage, count }))
+    const avgDaysToProductive =
+      daysSamples.length > 0
+        ? daysSamples.reduce((a, b) => a + b, 0) / daysSamples.length
+        : null
+
+    return {
+      ok: true,
+      metrics: {
+        stages,
+        activeAgents: activeCount,
+        totalAgents: profiles.length,
+        avgDaysToProductive,
+        scope,
+      },
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to load funnel metrics'
+    return { ok: false, error: msg }
+  }
+}
+
+// ── getKnowledgeGapAggregation ───────────────────────────────────────────────
+
+/** Aggregated gap count for a topic+pillar bucket. */
+export interface GapAggPoint {
+  topicLabel: string
+  pillar: string
+  count: number
+}
+
+export interface KnowledgeGapAggResult {
+  ok: boolean
+  gapsByTopic?: GapAggPoint[]
+  scope?: 'downline' | 'org'
+  error?: string
+}
+
+/**
+ * Knowledge-gap aggregation by topic + pillar (CDASH-08).
+ *
+ * Uses AggregateField.count() via select() projection — never fetch-all
+ * (Pitfall 9 / count-aggregation pattern from getReplyQualityMetrics).
+ *
+ * Scope: coach = seniorCoachId-filtered, admin = org-wide (HR-4).
+ * PDPA: topicLabel is pseudonymized on write (CLAUDE.md); pillar is an enum.
+ * Counts only — no agentUid in the result (no PII in the panel props).
+ */
+export async function getKnowledgeGapAggregation(): Promise<KnowledgeGapAggResult> {
+  let user: Awaited<ReturnType<typeof requireUser>>
+  try {
+    user = await getSessionUser()
+  } catch {
+    return { ok: false, error: 'Unauthorized' }
+  }
+
+  if (user.role !== 'senior-coach' && user.role !== 'admin') {
+    return { ok: false, error: 'Forbidden: senior-coach or admin role required' }
+  }
+
+  const adminAll = user.role === 'admin'
+  const scope: 'downline' | 'org' = adminAll ? 'org' : 'downline'
+
+  type GapQuery = {
+    where: (f: string, op: string, v: unknown) => GapQuery
+    select: (...fields: string[]) => {
+      get: () => Promise<{ docs: Array<{ data: () => { topicLabel?: string; pillar?: string; count?: number } }> }>
+    }
+  }
+
+  try {
+    await auditDrilldown(user.uid, 'knowledgeGaps')
+
+    const base = knowledgeGapsRef() as unknown as GapQuery
+    const scoped = adminAll ? base : base.where('seniorCoachId', '==', user.uid)
+
+    // Projection — topicLabel (pseudonymized on write), pillar, count.
+    const snap = await scoped.select('topicLabel', 'pillar', 'count').get()
+
+    // Aggregate by topicLabel+pillar bucket (sum the pre-aggregated counts from the doc)
+    const bucketMap = new Map<string, GapAggPoint>()
+    for (const doc of snap.docs) {
+      const data = doc.data()
+      const topicLabel = data.topicLabel ?? 'unknown'
+      const pillar = data.pillar ?? 'coach'
+      const count = data.count ?? 1
+      const key = `${topicLabel}__${pillar}`
+      const existing = bucketMap.get(key)
+      if (existing) {
+        existing.count += count
+      } else {
+        bucketMap.set(key, { topicLabel, pillar, count })
+      }
+    }
+
+    const gapsByTopic = Array.from(bucketMap.values()).sort((a, b) => b.count - a.count)
+
+    return { ok: true, gapsByTopic, scope }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to load gap aggregation'
+    return { ok: false, error: msg }
+  }
+}
+
+// ── getCorrectionEvalFeedback ────────────────────────────────────────────────
+
+/** A recent inline-correction row for the table. */
+export interface CorrectionRow {
+  docId: string
+  shortDocId: string
+  correctedBy: string
+  shortCorrectedBy: string
+  /** Re-ingest status from the KB doc (superseded = done, published = done). */
+  status: string
+  pillar: string
+}
+
+/** An eval score sample for the trend chart. */
+export interface EvalTrendPoint {
+  suite: string
+  score: number
+}
+
+export interface CorrectionEvalResult {
+  ok: boolean
+  corrections?: CorrectionRow[]
+  evalTrend?: EvalTrendPoint[]
+  error?: string
+}
+
+/**
+ * Correction-to-eval feedback for the CDASH-08 correction-eval panel.
+ *
+ * Reads two sources:
+ *   1. kbDocs where correctedBy is set (recent corrections, ≤20 rows,
+ *      select-projection only — no content/embedding fields).
+ *   2. evals collection — recent scores for the eval-score trend chart (≤20 rows,
+ *      select-projection only). No role scoping needed for evals (they are org-wide
+ *      run results, not per-agent data — read-only display).
+ *
+ * Admin gate mirrors dashboard (senior-coach or admin). Audited as a drilldown.
+ * PDPA: correctedBy is a uid (not a name/email). title is a document label, not PII.
+ * Read-only — no new correction control in this action.
+ */
+export async function getCorrectionEvalFeedback(): Promise<CorrectionEvalResult> {
+  let user: Awaited<ReturnType<typeof requireUser>>
+  try {
+    user = await getSessionUser()
+  } catch {
+    return { ok: false, error: 'Unauthorized' }
+  }
+
+  if (user.role !== 'senior-coach' && user.role !== 'admin') {
+    return { ok: false, error: 'Forbidden: senior-coach or admin role required' }
+  }
+
+  try {
+    await auditDrilldown(user.uid, 'kbDocs')
+
+    // ── Recent corrections (kbDocs.correctedBy set) ───────────────────────
+    type KbQuery = {
+      where: (f: string, op: string, v: unknown) => KbQuery
+      orderBy: (f: string, dir?: string) => KbQuery
+      limit: (n: number) => KbQuery
+      select: (...fields: string[]) => {
+        get: () => Promise<{
+          docs: Array<{ id: string; data: () => { correctedBy?: string; status?: string; pillar?: string } }>
+        }>
+      }
+    }
+
+    const corrSnap = await (kbDocsRef() as unknown as KbQuery)
+      .where('correctedBy', '!=', null)
+      .orderBy('correctedBy', 'asc')
+      .limit(20)
+      .select('correctedBy', 'status', 'pillar')
+      .get()
+
+    const corrections: CorrectionRow[] = corrSnap.docs.map((d) => {
+      const data = d.data()
+      const correctedBy = data.correctedBy ?? ''
+      const shortBy = correctedBy.length > 8 ? `…${correctedBy.slice(-8)}` : correctedBy
+      return {
+        docId: d.id,
+        shortDocId: d.id.length > 8 ? `…${d.id.slice(-8)}` : d.id,
+        correctedBy,
+        shortCorrectedBy: shortBy,
+        status: data.status ?? 'published',
+        pillar: data.pillar ?? 'coach',
+      }
+    })
+
+    // ── Eval score trend (recent eval runs) ──────────────────────────────
+    type EvalQuery = {
+      orderBy: (f: string, dir?: string) => EvalQuery
+      limit: (n: number) => EvalQuery
+      select: (...fields: string[]) => {
+        get: () => Promise<{
+          docs: Array<{ data: () => { suite?: string; score?: number } }>
+        }>
+      }
+    }
+
+    const evalSnap = await (evalsRef() as unknown as EvalQuery)
+      .orderBy('score', 'desc')
+      .limit(20)
+      .select('suite', 'score')
+      .get()
+
+    const evalTrend: EvalTrendPoint[] = evalSnap.docs.map((d) => {
+      const data = d.data()
+      return {
+        suite: data.suite ?? 'unknown',
+        score: data.score ?? 0,
+      }
+    })
+
+    return { ok: true, corrections, evalTrend }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to load correction feedback'
+    return { ok: false, error: msg }
+  }
+}
+
