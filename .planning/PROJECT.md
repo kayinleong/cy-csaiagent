@@ -126,4 +126,7 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-31 after initialization*
+
+**v1 milestone status (2026-06-07):** CODE-COMPLETE + verified — all 5 phases done (Foundations → Coach+Admin → Finder+Routing → Reply → Hardening). Phase 5 delivered PDPA data-erasure (single-manifest cascade, audit-exempt, idempotent sweep, type-to-confirm UI), the single usage/cost pipeline + rollup, three admin surfaces (erasure / conversation drill-down / role matrix) + org usage-cost dashboard, coach dashboard v2 (funnel/ramp/knowledge-gap/correction-eval), the k6 load harness, and the operator handover doc set + PDPA sign-off memo. Verifier: 0 code gaps; code review: 1 critical + 6 warnings, all resolved. Remaining work is live-gated rollout prep (deploy, k6 run, live PDPA drill, Derek sign-off + SLO finalization, backup drill, trilingual browser smoke-test) — tracked in 05-HUMAN-UAT.md. NOT pushed (standing user hold).
+
+*Last updated: 2026-06-07 after Phase 5 (v1 milestone code-complete)*

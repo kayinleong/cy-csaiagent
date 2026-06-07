@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: phase-5-complete
-stopped_at: Phase 5 Plan 08 (hardening checklist + cost/perf pass + PDPA sign-off + ops handover) COMPLETE — 3 tasks, 12 files created, 1 modified, 3 commits (59d4d2b, f7ca414, 070e708). v1 Phase 5 ALL PLANS DONE. Live-gated items (load test, PDPA drill, Derek sign-off, backup drill) execute during rollout prep. NOT pushed (user hold).
-last_updated: "2026-06-07T09:47:00Z"
-last_activity: 2026-06-07 — 05-08-PLAN.md executed. PERF-COST.md (QUAL-08, single pipeline + undercount flag + PROPOSED p95) + HARDENING.md (SC4, evidence-linked checklist, gcloud firestore export backup, code-ready/live-gated) + PDPA-SIGNOFF.md (QUAL-09, coverage proof + signoff-ready) + 8-file docs/operations/ handover (QUAL-10) + PDPA-TIA Phase-5 update (D-03). 541 tests PASS. tsc clean. NOT pushed.
+stopped_at: Phase 5 EXECUTED + REVIEWED + VERIFIED — all 8 plans (waves 0-6) done. Code review (05-REVIEW.md): 1 Critical (CR-01 raw-PII-at-rest on erasureRequests) + 6 warnings + 6 info → ALL resolved (status: resolved; CR-01 fixed via transient-retain + FieldValue.delete on completion + honest PDPA-SIGNOFF disclosure). Verifier (05-VERIFICATION.md): human_needed, 5/5 must-haves, 0 code gaps. v1 MILESTONE CODE-COMPLETE. 7 live-gated items in 05-HUMAN-UAT.md (deploy, k6 run, PDPA drill, Derek sign-off + SLO finalize, backup drill, trilingual smoke-test) execute during rollout prep. NOT pushed (user hold).
+last_updated: "2026-06-07T10:30:00Z"
+last_activity: 2026-06-07 — Phase 5 executed sequentially on phase-kayinleong-01 (no-worktree per global CLAUDE.md): 8 plans + a lint-regression fix + a code-review-fix. Gates at HEAD — tsc 0 errors, vitest 541 pass/141 skip/0 fail, eslint 0 errors. Hard guarantees confirmed: single PII_ERASURE_MANIFEST (auditLogs EXEMPT), idempotent erasure+sweep lazy-cron (no scheduler/no Cloud Functions), single counts-only usage pipeline (final.totalUsage), three-layer admin gate, audit-before-data drill-down (read-only), setUserClaims-only role assignment, usageRollups-only dashboard, 3 new deny-by-default collections, core/shell split, trilingual parity. NOT pushed.
 progress:
   total_phases: 5
   completed_phases: 5
