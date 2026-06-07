@@ -24,6 +24,9 @@
  *   15. rateBudgets/{uid}  ← de-facto 15th (TSD §9 ratelimit; ruled + consumed by 01-07)
  *   16. knowledgeGaps/{gapId} ← Phase-2 knowledge-gap store (CDASH-03; server/Admin-SDK writes only)
  *   17. replyEdits/{eventId}  ← Phase-4 reply edit-as-signal store (REPLY-09/ADMIN-06; append-only, server-only writes)
+ *   18. usageEvents/{eventId} ← Phase-5 per-turn usage counts (QUAL-08; server/Admin-SDK writes; 90d TTL proposed)
+ *   19. usageRollups/{key}    ← Phase-5 idempotent daily rollup (QUAL-08/ADMIN-08; server/Admin-SDK writes)
+ *   20. erasureRequests/{reqId} ← Phase-5 PDPA erasure ledger (QUAL-09/D-02; server/Admin-SDK writes)
  *
  * Import pattern (always use the @/ alias):
  *   import { usersRef, rateBudgetsRef } from '@/src/firebase/collections'
@@ -349,6 +352,13 @@ export interface EscalationDoc {
   contextBundle: Record<string, unknown>
   status: 'open' | 'resolved' | 'escalated'
   openedAt: Date | FieldValue
+  /**
+   * Set when status transitions to 'resolved'. Used for resolution-time analytics
+   * (D-05 rollup metric). OPTIONAL — only present on resolved escalations.
+   * REGRESSION NOTE: resolveStall (dashboard/actions.ts:84) must ALSO set this
+   * field when it transitions status to 'resolved' (05-PATTERNS.md flagged regression).
+   */
+  resolvedAt?: Date | FieldValue
 }
 
 export interface AuditLogDoc {
@@ -488,6 +498,120 @@ export interface RateBudgetDoc {
   windowStart: Date | FieldValue
 }
 
+/**
+ * Usage event record (collection 18, Phase-5 QUAL-08 / D-04).
+ *
+ * Server-only write (Admin SDK). Counts only — NEVER message/draft content
+ * (PDPA, mirrors auditLogs no-PII posture). One document per chat turn, written
+ * via recordUsageEvent() inside after() in app/api/chat/route.ts.
+ *
+ * // RETENTION: 90d TTL (rollups are the durable record) — confirm with Derek (Pitfall 4 / A5)
+ *
+ * PDPA: NO content fields on this doc — only token counts and metadata.
+ * Client writes are denied by Firestore rules (create, update, delete: if false).
+ */
+export interface UsageEventDoc {
+  tenantId: TenantId
+  /** UID of the agent who sent the message. */
+  uid: string
+  /** Which agent pillar handled the turn. */
+  pillar: 'coach' | 'finder' | 'reply'
+  /** Input tokens for this turn (from final.totalUsage). */
+  inputTokens: number
+  /** Output tokens for this turn (from final.totalUsage). */
+  outputTokens: number
+  /** Prompt cache read tokens (Anthropic cache hit). */
+  cachedInputTokens: number
+  /** Prompt cache write tokens (Anthropic cache creation). */
+  cacheCreationInputTokens: number
+  /** Firestore read units consumed (optional — captured if available). */
+  reads?: number
+  /** Firestore write units consumed (optional — captured if available). */
+  writes?: number
+  /** Calendar date in Asia/Kuala_Lumpur timezone, format 'YYYY-MM-DD'. The rollup group key. */
+  day: string
+  /** Server timestamp of the turn (FieldValue.serverTimestamp() on write). */
+  createdAt: Date | FieldValue
+}
+
+/**
+ * Daily per-(uid, pillar) usage rollup (collection 19, Phase-5 QUAL-08/ADMIN-08 / D-05).
+ *
+ * Server-only write; admin-read. The single source for the ADMIN-08 cost/usage
+ * dashboard and the QUAL-08 cost pass (no second pipeline).
+ *
+ * Doc key is `${day}__${uid}__${pillar}` — idempotent: written with { merge: true }
+ * so a re-run overwrites rather than accumulating (Pitfall-3 double-count guard).
+ *
+ * Client writes are denied by Firestore rules (create, update, delete: if false).
+ */
+export interface UsageRollupDoc {
+  tenantId: TenantId
+  /** Calendar date, format 'YYYY-MM-DD' (Asia/Kuala_Lumpur). */
+  day: string
+  /** UID of the agent this rollup covers. */
+  uid: string
+  /** Pillar for this rollup bucket. */
+  pillar: 'coach' | 'finder' | 'reply'
+  /** Number of chat turns rolled up. */
+  msgCount: number
+  /** Sum of inputTokens across all turns in this bucket. */
+  inputTokens: number
+  /** Sum of outputTokens across all turns in this bucket. */
+  outputTokens: number
+  /** Sum of cachedInputTokens (Anthropic cache hits). */
+  cachedInputTokens: number
+  /** Sum of cacheCreationInputTokens (Anthropic cache writes). */
+  cacheCreationInputTokens: number
+  /** Sum of Firestore read units (optional). */
+  reads?: number
+  /** Sum of Firestore write units (optional). */
+  writes?: number
+  /** Average escalation resolution time in ms for this bucket (D-05, optional). */
+  resolutionTimeMs?: number
+  /** Escalation rate for this bucket (D-05, optional). */
+  escalationRate?: number
+  /** Last time this rollup doc was written / merged. */
+  updatedAt: Date | FieldValue
+}
+
+/**
+ * PDPA erasure request ledger entry (collection 20, Phase-5 QUAL-09 / D-02).
+ *
+ * Server-only write; admin-read. The erasure ledger provides idempotency and
+ * resumability for the chunked sweep (D-02). Written when an admin initiates
+ * erasure via the erasure Server Action; updated as the sweep progresses.
+ *
+ * PDPA: `subjectIdHash` only — NEVER the raw subject id. The hash is the
+ * dedup key used by the sweep to re-query each collection.
+ *
+ * Client writes are denied by Firestore rules (create, update, delete: if false).
+ */
+export interface ErasureRequestDoc {
+  tenantId: TenantId
+  /** Whether the subject is an agent (uid) or a lead (leadId). */
+  subjectType: 'lead' | 'agent'
+  /**
+   * SHA-256 hex of the subject's id (uid or leadId). NEVER the raw id.
+   * Used as the dedup key for idempotent re-runs of the sweep.
+   */
+  subjectIdHash: string
+  /** Current processing status. */
+  status: 'pending' | 'sweeping' | 'complete' | 'failed'
+  /** UID of the admin who triggered this request. */
+  requestedBy: string
+  /** When the request was created. */
+  requestedAt: Date | FieldValue
+  /** Epoch ms deadline (requestedAt + 72h) for PDPA 72-hour SLA. */
+  slaDeadline: number
+  /** Collections still to be swept (for resumability — updated as sweep progresses). */
+  collectionsRemaining: string[]
+  /** Set when status transitions to 'complete'. */
+  completedAt?: Date | FieldValue
+  /** Error message if status is 'failed'. */
+  error?: string
+}
+
 // ─── Converter factory ───────────────────────────────────────────────────────
 
 /**
@@ -535,6 +659,9 @@ export const evalConverter = makeConverter<EvalDoc>()
 export const rateBudgetConverter = makeConverter<RateBudgetDoc>()
 export const knowledgeGapConverter = makeConverter<KnowledgeGapDoc>()
 export const replyEditConverter = makeConverter<ReplyEditDoc>()
+export const usageEventConverter = makeConverter<UsageEventDoc>()
+export const usageRollupConverter = makeConverter<UsageRollupDoc>()
+export const erasureRequestConverter = makeConverter<ErasureRequestDoc>()
 
 // ─── Ref factories ───────────────────────────────────────────────────────────
 // Export one named factory per collection.
@@ -675,4 +802,45 @@ export function knowledgeGapsRef(): CollectionReference<KnowledgeGapDoc> {
  */
 export function replyEditsRef(): CollectionReference<ReplyEditDoc> {
   return adminDb.collection('replyEdits').withConverter(replyEditConverter)
+}
+
+/**
+ * Collection 18: usageEvents/{eventId}
+ *
+ * Phase-5 per-turn usage counts (QUAL-08 / D-04). Server / Admin-SDK writes ONLY —
+ * create, update, delete disabled for clients. Admin-read for cost auditing.
+ *
+ * Written via recordUsageEvent() inside after() in app/api/chat/route.ts.
+ * COUNTS ONLY — NEVER message/draft content (PDPA posture mirrors auditLogs).
+ * // RETENTION: 90d TTL (rollups are the durable record) — confirm with Derek (Pitfall 4 / A5)
+ */
+export function usageEventsRef(): CollectionReference<UsageEventDoc> {
+  return adminDb.collection('usageEvents').withConverter(usageEventConverter)
+}
+
+/**
+ * Collection 19: usageRollups/{key}
+ *
+ * Phase-5 idempotent daily per-(uid, pillar) rollup (QUAL-08/ADMIN-08 / D-05).
+ * Server / Admin-SDK writes ONLY — create, update, delete disabled for clients.
+ * Admin-read for the ADMIN-08 usage dashboard and QUAL-08 cost pass.
+ *
+ * Doc key pattern: `${day}__${uid}__${pillar}` — written with { merge: true }
+ * for idempotency (Pitfall-3 double-count guard).
+ */
+export function usageRollupsRef(): CollectionReference<UsageRollupDoc> {
+  return adminDb.collection('usageRollups').withConverter(usageRollupConverter)
+}
+
+/**
+ * Collection 20: erasureRequests/{reqId}
+ *
+ * Phase-5 PDPA erasure ledger (QUAL-09 / D-02). Server / Admin-SDK writes ONLY —
+ * create, update, delete disabled for clients. Admin-read for erasure audit/monitoring.
+ *
+ * Provides idempotency and resumability for the chunked sweep (D-02).
+ * PDPA: stores subjectIdHash ONLY — never the raw subject id.
+ */
+export function erasureRequestsRef(): CollectionReference<ErasureRequestDoc> {
+  return adminDb.collection('erasureRequests').withConverter(erasureRequestConverter)
 }
