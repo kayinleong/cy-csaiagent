@@ -45,6 +45,8 @@ import { appendMessage, loadRecent } from '@/src/memory/conversation'
 import { runNightlyEval } from '@/src/eval/runNightly'
 import { TENANT_ID } from '@/src/firebase/collections'
 import { erasureSweep } from '@/src/pdpa/sweep'
+import { rollupUsage } from '@/src/usage/rollup'
+import { dayKey } from '@/src/usage/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -205,11 +207,27 @@ const JOB_REGISTRY: Record<string, JobDefinition> = {
     },
   },
 
-  // ── Phase-3 stubs ──────────────────────────────────────────────────────────
+  /**
+   * usage-rollup — QUAL-08 / ADMIN-08 / D-05
+   *
+   * Runs daily. Aggregates usageEvents for the current day into per-(uid, pillar)
+   * usageRollups documents using AggregateField.sum()/count() — NEVER fetch-all.
+   *
+   * Idempotent: each rollup doc is keyed `${day}__${uid}__${pillar}` and written
+   * with set(merge:true) — re-running overwrites, never accumulates (Pitfall 3).
+   *
+   * DUE-gate (runJob txn, lines 229+): exactly-once-per-window under concurrent
+   * visitors. Body-level idempotency handles edge cases (Pitfall 3 double-count).
+   *
+   * windowMs: ONE_DAY_MS — rollup covers the calendar day in Asia/Kuala_Lumpur.
+   * dayKey(now) converts to 'YYYY-MM-DD' in MYT so the rollup aligns with D2's day.
+   */
   'usage-rollup': {
     windowMs: ONE_DAY_MS,
-    // TODO(Phase-5 05-04): fill with rollupUsage(dayKey(now)) + writeHeartbeat
-    run: async (_now: Date) => {},
+    run: async (now: Date) => {
+      await rollupUsage(dayKey(now))
+      await writeHeartbeat('usage-rollup')
+    },
   },
 
   /**
