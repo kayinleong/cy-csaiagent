@@ -9,13 +9,6 @@
       ]
     },
     {
-      "collectionGroup": "agentProfiles",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "lastActiveAt", "order": "DESCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "escalations",
       "queryScope": "COLLECTION",
       "fields": [
@@ -47,7 +40,7 @@
         {
           "fieldPath": "embedding",
           "vectorConfig": {
-            "dimension": "1024",
+            "dimension": 1024,
             "flat": {}
           }
         }
@@ -61,7 +54,7 @@
         {
           "fieldPath": "embedding",
           "vectorConfig": {
-            "dimension": "1024",
+            "dimension": 1024,
             "flat": {}
           }
         }
@@ -76,7 +69,7 @@
         {
           "fieldPath": "embedding",
           "vectorConfig": {
-            "dimension": "1024",
+            "dimension": 1024,
             "flat": {}
           }
         }
@@ -99,7 +92,7 @@
         {
           "fieldPath": "embedding",
           "vectorConfig": {
-            "dimension": "1024",
+            "dimension": 1024,
             "flat": {}
           }
         }
@@ -123,7 +116,7 @@
         {
           "fieldPath": "embedding",
           "vectorConfig": {
-            "dimension": "1024",
+            "dimension": 1024,
             "flat": {}
           }
         }
