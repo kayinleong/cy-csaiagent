@@ -148,6 +148,85 @@ The v1 cross-border transfer path (direct Anthropic API + TIA + boundary pseudon
 | Date | Change | Author |
 |------|--------|--------|
 | 2026-05-31 | Initial TIA drafted | AI engineering + product engineering |
+| 2026-06-07 | Phase 5 update: live data flow, erasure coverage proof, lazy-cron catalog, cross-border note | AI engineering (Phase 5 execution) |
+
+---
+
+## Phase 5 Update — Live Data Flow + Erasure (2026-06-07)
+
+> This section APPENDS Phase-5 findings to the existing TIA. Prior content is unchanged.
+> Prepared by: AI engineering lead | Review cycle: at Phase 5 sign-off
+
+### P5-1. Live Data Flow (17+ Collections at Pilot)
+
+The platform's Firestore data model now comprises **20 collections**. PII-bearing collections and their erasure status:
+
+| Collection | PII content | Subject key | Erasure mechanism |
+|-----------|------------|------------|-------------------|
+| `users/{uid}` | Agent identity (email, display name, role) | docId = agent uid | `deleteByDocId` in erasure cascade |
+| `agentProfiles/{uid}` | Journey stage, checkpoints, voice calibration | docId = agent uid | `deleteByDocId` |
+| `rateBudgets/{uid}` | Token budget counts (no content PII) | docId = agent uid | `deleteByDocId` |
+| `conversations/{cid}` + `messages` subcoll | Conversation content (may contain names/context) | `ownerUid` (agent) or `leadId` (Finder/Reply) | `recursiveDelete` (deletes subcollection automatically) |
+| `leads/{leadId}` | Lead metadata (pseudonymized name, phone hash) | `ownerUid` (agent) or docId (lead) | `deleteByKeyField` / `deleteByDocId` |
+| `leadContext/{leadId}` | Cross-pillar state; `replySlot.latestDraft` (redacted draft) | leadId (docId) | `deleteByDocId` (lead) or `deleteViaKeyVia` (agent) |
+| `replyEdits` | Original draft + edited reply text; lead + agent keyed | `agentUid` (agent) or `leadId` (lead) | `deleteByKeyField` |
+| `escalations` | Stall records; agent-keyed | `agentUid` | `deleteByKeyField` |
+| `knowledgeGaps` | Knowledge gap records; agent-keyed | `agentUid` | `deleteByKeyField` |
+| `auditLogs` | **EXEMPT** — hashes only, the legal record | SHA256 hash of actorUid | NOT deleted; `action:'erasure'` event APPENDED |
+
+**Non-PII collections (not in erasure scope):**
+- `usageEvents`, `usageRollups`: counts-only, no content, no raw agent IDs
+- `erasureRequests`: stores `subjectIdHash` only (no raw ID)
+- `kbDocs`, `kbChunks`, `evals`, `collateral`: KB content, no subject PII
+- `jobRuns`, `heartbeats`: system operational records
+
+### P5-2. Right-to-Erasure Implementation (QUAL-09)
+
+The right-to-erasure remedy described in TIA §4.2 is now implemented:
+
+| Component | Status | Evidence |
+|-----------|--------|----------|
+| `PII_ERASURE_MANIFEST` (single source of truth) | Implemented | `src/pdpa/coverage.ts` (commit f8ee5a8, 05-03) |
+| `eraseDataSubject()` admin-gated Server Action | Implemented | `src/pdpa/erasure.ts` + `app/[lang]/(admin)/erasure/actions.ts` (05-03/05-05) |
+| `erasureSweep()` lazy-cron completer | Implemented | `src/pdpa/sweep.ts` (commit 21d4540, 05-03) |
+| Type-to-confirm admin UI | Implemented | `app/[lang]/(admin)/erasure/` (05-05) |
+| <72h SLA tracking | Implemented | `ErasureRequestDoc.slaDeadline` + `completedAt` (05-02/05-03) |
+| Coverage proof (seeded-subject test) | Implemented | `src/pdpa/coverage.test.ts` (emulator-gated GREEN — 05-01/05-03) |
+| auditLogs exemption (hashes survive, erasure event written) | Implemented | EXEMPT guard in `src/pdpa/erasure.ts`; proven by coverage.test.ts |
+| Live <72h end-to-end drill | **LIVE-GATED** | Execute on deployed stack during rollout; record date in PDPA-SIGNOFF.md |
+| Derek sign-off | **LIVE-GATED** | PDPA-SIGNOFF.md (produced in Phase 5 Plan 08); signature at rollout |
+
+### P5-3. On-Visit Lazy-Cron (Periodic Work)
+
+Background jobs (stall-detect, escalate, eval-nightly, usage-rollup, erasure-sweep) run via the **on-visit lazy-cron** (`src/jobs/runDueJobs.ts`). There is no OS-registered cron, no external scheduler, no Cloud Scheduler. The cron fires when an authorized user loads any platform page, gated by a Firestore transaction (exactly-once-per-window).
+
+PDPA relevance: the `erasure-sweep` job runs on a 1-hour window, ensuring erasure requests are completed within 2 hours of the next authorized visit — well inside the 72h SLA.
+
+### P5-4. Anthropic Cross-Border Retention Note (Unchanged Posture)
+
+The Anthropic ~30-day API retention (TIA §3 / §4.3) remains unchanged:
+
+- Conversation prompts are pseudonymized before sending (`assertRedacted()` gate — enforced in code).
+- Erasure of the canonical Firestore record (via `eraseDataSubject`) is the PDPA remedy.
+- The pseudonymized tokens retained by Anthropic (~30 days) do not contain raw PII — they contain opaque tokens (`<LEAD_ID:n>`, `<PHONE_HASH:hex>`) that have negligible re-identification value without the server-side mapping.
+- This cross-border retention is OUT OF SCOPE for the Firestore erasure cascade. It is documented here as the known residual.
+- Mitigation: Anthropic's API model-training opt-out must be activated before the pilot (TIA §5.1 contractual safeguard).
+
+### P5-5. Storage Note (A1 — Confirm Before Sign-Off)
+
+Per-agent voice samples (`users.voiceSamples[]`) are currently stored as Firestore strings (NOT Cloud Storage objects) at pilot time. The `STORAGE` manifest entry in `src/pdpa/coverage.ts` is a near-no-op code path.
+
+**If voice samples move to Cloud Storage before sign-off:** the Storage erasure path (`bucket().deleteFiles({ prefix: 'voice/{uid}/' })`) must be wired before Derek signs off on PDPA-SIGNOFF.md. Confirm with Derek.
+
+### P5-6. Sign-Off Status
+
+| Gate | Status |
+|------|--------|
+| TIA updated with Phase-5 data flow | COMPLETE (this section) |
+| Erasure coverage proof | COMPLETE (coverage.test.ts GREEN on emulator) |
+| PDPA-SIGNOFF.md memo authored | COMPLETE (Phase 5 Plan 08) |
+| Live <72h erasure drill on deployed stack | LIVE-GATED (during rollout prep) |
+| Derek signature on PDPA-SIGNOFF.md | LIVE-GATED (at rollout) |
 
 ---
 
