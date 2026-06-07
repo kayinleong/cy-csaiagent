@@ -44,6 +44,7 @@ import { isWithinWorkingHours } from '@/src/jobs/workingHours'
 import { appendMessage, loadRecent } from '@/src/memory/conversation'
 import { runNightlyEval } from '@/src/eval/runNightly'
 import { TENANT_ID } from '@/src/firebase/collections'
+import { erasureSweep } from '@/src/pdpa/sweep'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -207,8 +208,31 @@ const JOB_REGISTRY: Record<string, JobDefinition> = {
   // ── Phase-3 stubs ──────────────────────────────────────────────────────────
   'usage-rollup': {
     windowMs: ONE_DAY_MS,
-    // TODO(Phase-3): roll up per-agent token/request counts into billing summary
+    // TODO(Phase-5 05-04): fill with rollupUsage(dayKey(now)) + writeHeartbeat
     run: async (_now: Date) => {},
+  },
+
+  /**
+   * erasure-sweep — QUAL-09 / D-02
+   *
+   * Runs every hour. Finishes any pending/sweeping erasureRequests in bounded
+   * batches (RESEARCH Pattern 3 / Pitfall 10 — never a mega-delete). Each call
+   * processes up to BATCH_SIZE docs per collection per request and marks the
+   * request 'complete' once nothing remains.
+   *
+   * windowMs: 1h — well inside the 72h PDPA SLA (D-02 / T-05-MEGADELETE).
+   *
+   * The runJob txn DUE-gate (line 229-265) gives exactly-once-per-window semantics
+   * under concurrency — two concurrent visitors racing this window: only one wins
+   * the transaction write and runs the sweep body (T-05-DOUBLESWEEP mitigated).
+   * Even if both ran, erasureSweep is idempotent (Pitfall 3 guard).
+   */
+  'erasure-sweep': {
+    windowMs: 60 * 60 * 1000, // 1h — well inside the 72h SLA (D-02)
+    run: async (_now: Date) => {
+      await erasureSweep()
+      await writeHeartbeat('erasure-sweep')
+    },
   },
 }
 
