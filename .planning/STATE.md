@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: phase-5-executing
-stopped_at: Phase 5 Plan 01 (Wave-0 test scaffold) COMPLETE — 3 tasks, 9 files, 3 commits. Next: 05-02-PLAN.md (new collections + deny-by-default rules + rules-test 16→19).
-last_updated: "2026-06-07T07:40:29Z"
-last_activity: 2026-06-07 — 05-01-PLAN.md executed. Wave-0 TDD red bar: 8 failing test stubs (QUAL-09 erasure coverage/audit-exemption/sweep, QUAL-08/ADMIN-08 usage/rollup, admin erasure/conversations/roles actions) + k6 SSE harness. All fail on absent implementation modules (correct red bar). NOT pushed (user hold).
+stopped_at: Phase 5 Plan 02 (Wave-1 data-layer foundation) COMPLETE — 3 tasks, 4 files modified, 3 commits. Next: 05-03-PLAN.md (PDPA erasure pipeline).
+last_updated: "2026-06-07T07:49:02Z"
+last_activity: 2026-06-07 — 05-02-PLAN.md executed. Collections 18-20 (usageEvents/usageRollups/erasureRequests) typed + converters + refs; deny-by-default rules; usageEvents composite index; rules test 16→19. tsc clean. NOT pushed (user hold).
 progress:
   total_phases: 5
   completed_phases: 3
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 ## Current Position
 
 Phase: 5 of 5 executing (Hardening + Scale-Up)
-Plan: Phase 5 Plan 01/08 COMPLETE (Wave-0 test scaffold). 7 plans remaining. Next: 05-02-PLAN.md (collections + rules).
-Status: Phase 5 executing. Plan 01 done. FINAL v1 phase.
-Last activity: 2026-06-07 — 05-01-PLAN.md: Wave-0 TDD red bar complete. 8 failing test stubs + k6 harness. 3 commits (52e166d, fde93fb, 7e61b7f). NOT pushed (user hold).
+Plan: Phase 5 Plan 02/08 COMPLETE (Wave-1 data-layer foundation). 6 plans remaining. Next: 05-03-PLAN.md (PDPA erasure pipeline).
+Status: Phase 5 executing. Plans 01-02 done. FINAL v1 phase.
+Last activity: 2026-06-07 — 05-02-PLAN.md: Wave-1 collections+rules+index+test. 3 commits (e2cff04, b5c6046, d5d8237). NOT pushed (user hold).
 
 Progress: [████████░░] 81% (4 of 5 phases code-complete + verified; Phase 5 Plan 01/08 executing)
 
@@ -78,6 +78,11 @@ Recent decisions affecting current work:
 - [Roadmap]: 5-phase structure adopted from research Build Order (Foundations → Coach+Admin → Finder+Routing → Reply → Hardening); risk gradient Coach→Finder→Reply drives pillar order.
 - [Roadmap]: Multilingual + audit logging baked into Phase 1 (retrofitting forces index rebuild / PDPA-vulnerable backfill).
 - [Phase 1]: Three required spikes (SPIKE-RAG, SPIKE-DEPLOY, SPIKE-CRON) gate all downstream work — must resolve before Phase 2.
+- [05-02]: ErasureRequestDoc stores subjectIdHash only (never raw id) — PDPA T-05-PII mitigation enforced by schema.
+- [05-02]: UsageEventDoc is counts-only by interface — no content fields; mirrors auditLogs no-PII posture.
+- [05-02]: resolvedAt? added to EscalationDoc; resolveStall (dashboard/actions.ts:84) must also set it (regression surface flagged).
+- [05-02]: Rules + CI tests shipped in same plan as collections — Pitfall 6 (unruled-collection leak) mitigated in CI.
+- [05-02]: Deploy is live-gated: firebase deploy --only firestore:rules,firestore:indexes (consistent with quick-004).
 
 ### Pending Todos
 
@@ -106,8 +111,8 @@ Items acknowledged and carried forward (v2 / post-pilot):
 ## Session Continuity
 
 Last session: 2026-06-07
-Stopped at: Phase 5 Plan 01 (Wave-0 test scaffold) COMPLETE — 3 tasks, 8 failing test stubs + k6 harness, 3 commits. Next: 05-02-PLAN.md.
-Resume file: .planning/phases/05-hardening-scale/05-02-PLAN.md
+Stopped at: Phase 5 Plan 02 (Wave-1 data-layer foundation) COMPLETE — 3 tasks, 4 files modified, 3 commits. Next: 05-03-PLAN.md.
+Resume file: .planning/phases/05-hardening-scale/05-03-PLAN.md
 Phase 3: code-complete + verified; live finder/router Promptfoo evals + Playwright e2e (skip-guarded scaffolds) + FIND-12 pilot provisioning (`scripts/provision-finder-pilot.ts --apply`, dry-run by default) are the live-gated human step — run during pilot rollout, do NOT block Phase 4 planning.
 Phase 4 (Reply Assistant + Reply Analytics): NOT yet started. Reqs REPLY-01..12, ADMIN-05/06, QUAL-02. Paste-and-draft WhatsApp replies in D2's voice (never auto-sent), per-lead isolation, edit-as-signal analytics, reachable via the activated intent router alongside Coach + Finder.
 Next step: /gsd-discuss-phase 4 (then plan → execute). User standing instruction: do NOT push to any remote without explicit confirmation.
