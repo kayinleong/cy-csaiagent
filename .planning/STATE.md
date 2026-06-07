@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: phase-5-executing
-stopped_at: Phase 5 Plan 04 (usage/cost pipeline) COMPLETE — 3 tasks, 3 files created, 3 modified, 3 commits. Next: 05-05-PLAN.md (admin surfaces).
-last_updated: "2026-06-07T08:10:00Z"
-last_activity: 2026-06-07 — 05-04-PLAN.md executed. recordUsageEvent + rollupUsage (AggregateField) + resolvedAt in resolveStall. record.test.ts GREEN. tsc clean. NOT pushed (user hold).
+stopped_at: Phase 5 Plan 05 (PDPA erasure admin surface) COMPLETE — 3 tasks, 4 files created, 5 modified, 3 commits. Next: 05-06-PLAN.md (admin conversation-log viewer + roles).
+last_updated: "2026-06-07T08:32:00Z"
+last_activity: 2026-06-07 — 05-05-PLAN.md executed. Sidebar NavItems (4 admin) + Phase-5 i18n (EN/BM/中文, 5 namespaces) + eraseDataSubjectAction (admin-gated, zod, 72h SLA) + erasure UI (type-to-confirm, status list). 4 tests GREEN. tsc clean. NOT pushed (user hold).
 progress:
   total_phases: 5
   completed_phases: 3
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 ## Current Position
 
 Phase: 5 of 5 executing (Hardening + Scale-Up)
-Plan: Phase 5 Plan 04/08 COMPLETE (usage/cost pipeline). 4 plans remaining. Next: 05-05-PLAN.md (admin surfaces).
-Status: Phase 5 executing. Plans 01-04 done. FINAL v1 phase.
-Last activity: 2026-06-07 — 05-04-PLAN.md: recordUsageEvent (types+record), rollupUsage (AggregateField), usage-rollup JOB stub filled, resolvedAt in resolveStall. 3 commits (ebed5dd, f69bba1, 3d3c5b1). NOT pushed (user hold).
+Plan: Phase 5 Plan 05/08 COMPLETE (PDPA erasure admin surface). 3 plans remaining. Next: 05-06-PLAN.md (admin conversation-log viewer + roles).
+Status: Phase 5 executing. Plans 01-05 done. FINAL v1 phase.
+Last activity: 2026-06-07 — 05-05-PLAN.md: 4 admin NavItems + Phase-5 i18n (EN/BM/中文) + eraseDataSubjectAction (admin-gated, zod, 72h SLA) + erasure page/form/status-list UI. 3 commits (a9b95cf, 05671e1, 400a997). NOT pushed (user hold).
 
-Progress: [████████░░] 83% (4 of 5 phases code-complete + verified; Phase 5 Plan 03/08 executing)
+Progress: [████████░░] 85% (4 of 5 phases code-complete + verified; Phase 5 Plan 05/08 complete)
 
 ### Phase 4 open human-action gate (live-gated — does NOT block Phase 5 planning)
 1. `firebase deploy --only firestore:indexes,firestore:rules` — additive `kbChunks` pillar vector index + `replyEdits` indexes/rules.
@@ -89,6 +89,9 @@ Recent decisions affecting current work:
 - [05-04]: final.totalUsage used in usageEvents capture only; rate-limit/messages.tokens left at final.usage.totalTokens (pre-Phase-5 undercount documented in PERF-COST.md as separate claim).
 - [05-04]: resolvedAt written via FieldValue.serverTimestamp() in resolveStall — minimal field add for D-05 resolution-time analytics.
 - [05-04]: Resolution-time in rollup is per-uid (not per-pillar) — EscalationDoc has no pillar field.
+- [05-05]: eraseDataSubjectAction is the exported name the test imports; eraseDataSubject is re-exported as an alias for callers.
+- [05-05]: Wave-0 test stub was incomplete (missing @/src/firebase/collections mock); Rule 1 fix applied — added 3 missing mocks so happy-path test can pass without an emulator.
+- [05-05]: getBlastRadius returns org-wide collection counts (not subject-filtered) — AggregateField.count per manifest collection; subject-specific counts deferred (acceptable tradeoff for blast-radius preview).
 
 ### Pending Todos
 
@@ -117,8 +120,8 @@ Items acknowledged and carried forward (v2 / post-pilot):
 ## Session Continuity
 
 Last session: 2026-06-07
-Stopped at: Phase 5 Plan 04 (usage/cost pipeline) COMPLETE — 3 tasks, 3 files created, 3 modified, 3 commits. Next: 05-05-PLAN.md.
-Resume file: .planning/phases/05-hardening-scale/05-05-PLAN.md
+Stopped at: Phase 5 Plan 05 (PDPA erasure admin surface) COMPLETE — 3 tasks, 4 files created, 5 modified, 3 commits (a9b95cf, 05671e1, 400a997). Next: 05-06-PLAN.md.
+Resume file: .planning/phases/05-hardening-scale/05-06-PLAN.md
 Phase 3: code-complete + verified; live finder/router Promptfoo evals + Playwright e2e (skip-guarded scaffolds) + FIND-12 pilot provisioning (`scripts/provision-finder-pilot.ts --apply`, dry-run by default) are the live-gated human step — run during pilot rollout, do NOT block Phase 4 planning.
 Phase 4 (Reply Assistant + Reply Analytics): NOT yet started. Reqs REPLY-01..12, ADMIN-05/06, QUAL-02. Paste-and-draft WhatsApp replies in D2's voice (never auto-sent), per-lead isolation, edit-as-signal analytics, reachable via the activated intent router alongside Coach + Finder.
 Next step: /gsd-discuss-phase 4 (then plan → execute). User standing instruction: do NOT push to any remote without explicit confirmation.
