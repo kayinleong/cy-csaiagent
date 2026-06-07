@@ -98,12 +98,12 @@ Requirements for the initial release covering the three pillars + admin + senior
 ### Admin Web App (ADMIN)
 
 - [ ] **ADMIN-01**: Separate web app for knowledge management in plain language (no engineering involvement)
-- [ ] **ADMIN-02**: Conversation log viewer
+- [x] **ADMIN-02**: Conversation log viewer
 - [ ] **ADMIN-03**: Knowledge-base CRUD: create / read / update / delete documents and chunks
 - [ ] **ADMIN-04**: Project inventory management — add / edit / hide projects, attach collateral
 - [ ] **ADMIN-05**: Reply SOP management
 - [ ] **ADMIN-06**: Feedback-loop visibility — thumbs-down responses, coach rewrites, escalation rate
-- [ ] **ADMIN-07**: Role and permission controls (coach sees downline, admin sees all)
+- [x] **ADMIN-07**: Role and permission controls (coach sees downline, admin sees all)
 - [ ] **ADMIN-08**: Usage analytics — active agents, message volume, resolution time, escalation rate
 
 ### Cross-cutting Quality, Privacy & Ops (QUAL)
@@ -232,12 +232,12 @@ Phase 1 = Foundations · Phase 2 = Coach + Admin v1 · Phase 3 = Finder + Intent
 | CDASH-07 | Phase 2 | Pending |
 | CDASH-08 | Phase 5 | Pending |
 | ADMIN-01 | Phase 2 | Pending |
-| ADMIN-02 | Phase 5 | Pending |
+| ADMIN-02 | Phase 5 | Complete |
 | ADMIN-03 | Phase 2 | Pending |
 | ADMIN-04 | Phase 3 | Pending |
 | ADMIN-05 | Phase 4 | Pending |
 | ADMIN-06 | Phase 4 | Pending |
-| ADMIN-07 | Phase 5 | Pending |
+| ADMIN-07 | Phase 5 | Complete |
 | ADMIN-08 | Phase 5 | Pending |
 | QUAL-01 | Phase 1 | Pending |
 | QUAL-02 | Phase 4 | Pending |
