@@ -15,17 +15,17 @@
 
 ## 1. Service Level Objectives (SLOs)
 
-> **PROPOSED — Derek to finalize before rollout. Numbers below are the Phase 5 researcher-proposed starting points (A4).**
+> **APPROVED 2026-06-08 (per project authorization, A4 finalized).** The researcher-proposed starting points are accepted as the v1 SLO TARGETS. The actual MEASURED values remain LIVE-GATED — a `k6 run` at ~400 VUs against the deployed stack must confirm the targets are met (live-gate #3); record measured p95/p50/error-rate in `LOADTEST.md` and tick the "Met?" column.
 
-| SLO | PROPOSED Target | Status | Evidence |
+| SLO | Target (APPROVED) | Measurement | Evidence |
 |-----|----------------|--------|----------|
-| SSE first-token p95 | < 3,000 ms | PROPOSED | `scripts/loadtest/chat.js` threshold (7e61b7f, 05-01) |
-| SSE first-token p50 | < 1,500 ms | PROPOSED | `scripts/loadtest/chat.js` threshold (7e61b7f, 05-01) |
-| Error rate under load (400 VUs) | < 1% | PROPOSED | `scripts/loadtest/chat.js` threshold (7e61b7f, 05-01) |
+| SSE first-token p95 | < 3,000 ms | LIVE-GATED (k6 at 400 VUs) | `scripts/loadtest/chat.js` threshold (7e61b7f, 05-01) |
+| SSE first-token p50 | < 1,500 ms | LIVE-GATED (k6 at 400 VUs) | `scripts/loadtest/chat.js` threshold (7e61b7f, 05-01) |
+| Error rate under load (400 VUs) | < 1% | LIVE-GATED (k6 at 400 VUs) | `scripts/loadtest/chat.js` threshold (7e61b7f, 05-01) |
 | PDPA erasure completion | < 72 hours | CODE-READY | `ErasureRequestDoc.slaDeadline = now+72h` (05-02, e2cff04); erasure-sweep 1h window (05-03, 21d4540) |
-| Admin page load p95 | < 2,000 ms | PROPOSED | Reads `usageRollups` only (pre-aggregated) — b7785e4 (05-07) |
+| Admin page load p95 | < 2,000 ms | LIVE-GATED | Reads `usageRollups` only (pre-aggregated) — b7785e4 (05-07) |
 
-**See also:** `PERF-COST.md §4` for the full p95 budget rationale.
+**Targets finalized 2026-06-08; measurement confirmation is live-gated. See also:** `PERF-COST.md §4` for the full p95 budget rationale.
 
 ---
 

@@ -134,9 +134,9 @@ At 400 agents × 3 pillars × N active per day, the rollup issues:
 
 ---
 
-## 4. PROPOSED p95 Latency Budget
+## 4. p95 Latency Budget (TARGETS APPROVED 2026-06-08)
 
-> **PROPOSED — final numbers are Derek's call (Decision A4). All values below are researcher-proposed starting points based on the v1 architecture. Derek finalizes the SLOs before rollout.**
+> **APPROVED 2026-06-08 (per project authorization, Decision A4 finalized).** The values below are accepted as the v1 latency-budget TARGETS. They still require live measurement to CONFIRM (k6 at 400 VUs against the deployed stack — live-gate #3); record actuals in `LOADTEST.md` and HARDENING.md §1.
 
 ### SSE chat endpoint (`/api/chat`)
 
