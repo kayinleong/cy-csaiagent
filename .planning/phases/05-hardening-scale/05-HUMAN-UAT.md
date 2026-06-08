@@ -26,7 +26,7 @@ result: [pending]
 
 ### 4. Firestore rules + indexes deploy
 expected: `firebase deploy --only firestore:rules,firestore:indexes` deploys the 3 new deny-by-default collection rules (usageEvents/usageRollups/erasureRequests) + the `usageEvents (day,uid,pillar)` composite index (additive; no existing rule widened).
-result: [pending]
+result: PASS — 2026-06-08, deployed to `cy-csaiagent` (authed as sosleong365@gmail.com, --non-interactive). Rules compiled successfully and released to cloud.firestore; indexes deployed from firestore.indexes.json. 1 pre-existing project index NOT in the file was left intact (no --force). NOTE: the new composite index builds asynchronously server-side — allow a few minutes before queries relying on it succeed. Verify build state in the Firebase console (Firestore → Indexes).
 
 ### 5. Backup/restore drill
 expected: A managed `gcloud firestore export` to a bucket, then import to a scratch project, verifies the backup/restore runbook (docs/operations/backup-restore-runbook.md); outcome recorded in HARDENING.md §3. (This managed export is the only sanctioned gcloud use — no Cloud Function / no scheduler.)
@@ -43,10 +43,19 @@ result: [pending]
 ## Summary
 
 total: 7
-passed: 0
+passed: 1
 issues: 0
-pending: 7
+pending: 6
 skipped: 0
 blocked: 0
+
+## Notes (2026-06-08 live-gate run attempt)
+
+Item 4 (rules+indexes deploy) executed successfully. The other 6 are blocked in this environment:
+- **#3 load test** — k6 not installed AND no deployed App Hosting URL AND no valid admin ID token (script reads `__ENV.TOKEN`). Also unclear the App Hosting app is deployed yet. Needs: deployed URL + a real admin session token (+ accepted ~400-VU model spend).
+- **#5 backup/restore** — gcloud's active context is an unrelated project (`oa-apmena-spacecds-ap-pd`, accenture account), not cy-csaiagent. Needs: a destination GCS bucket + a scratch project for the restore + permission to run gcloud as sosleong365@gmail.com against cy-csaiagent (without disturbing the user's active gcloud config).
+- **#1 PDPA erasure drill** — destructive/irreversible against live data; needs a deployed stack, an admin session, and a clearly SYNTHETIC seeded subject to erase. Will not run against real data autonomously.
+- **#7 trilingual UI smoke-test** — needs a deployed stack + admin creds; BM/中文 copy still awaits Derek's native sign-off. Local `npm run dev` needs Firebase web config + Anthropic/Gemini keys + a real admin session (not available here).
+- **#2 Derek sign-off** and **#6 SLO finalization** — human decisions; cannot be automated.
 
 ## Gaps
