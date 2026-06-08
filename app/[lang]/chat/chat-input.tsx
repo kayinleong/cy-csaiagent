@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
 import type { ChatMessage } from './message-list'
+import { decodeReplyOutput, decodeFinderOutput } from './decode-structured-output'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -234,6 +235,9 @@ function useChatStream({
       const decoder = new TextDecoder()
       let handoffDetected = false
       let buffer = ''
+      // Accumulate the full assistant text so we can decode a Reply/Finder turn's
+      // structured-output JSON on completion (the card-variant decode bridge).
+      let assistantContent = ''
 
       while (true) {
         const { done, value } = await reader.read()
@@ -260,6 +264,7 @@ function useChatStream({
           // Extract text delta
           const delta = parseTextDelta(dataLine)
           if (delta) {
+            assistantContent += delta
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMsgId
@@ -268,6 +273,41 @@ function useChatStream({
               ),
             )
           }
+        }
+      }
+
+      // ── Decode structured pillar output → card variant (gap-closure) ─────────
+      // Reply/Finder agents emit their output as a JSON object in the final text
+      // (src/agents/*/prompt.ts "Output Format"); the route streams it as text. On
+      // completion, decode the accumulated text and attach the structured output so
+      // message-list renders the interactive card (ReplyDraftCard / MatchList) instead
+      // of a raw-JSON bubble. Gated by pillarOverride — the UI reaches Reply/Finder only
+      // via the header chip — so the shared clarifyingQuestion field never cross-renders.
+      if (pillarOverride === 'reply') {
+        const replyOutput = decodeReplyOutput(assistantContent)
+        if (replyOutput) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId
+                ? {
+                    ...m,
+                    replyOutput,
+                    replyIncoming: text,
+                    replyLeadId: leadId ?? '',
+                    replyLang: langOverride ?? 'en',
+                  }
+                : m,
+            ),
+          )
+        }
+      } else if (pillarOverride === 'finder') {
+        const finderOutput = decodeFinderOutput(assistantContent)
+        if (finderOutput) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsgId ? { ...m, finderOutput } : m,
+            ),
+          )
         }
       }
 

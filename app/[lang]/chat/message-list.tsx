@@ -20,7 +20,9 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { ReplyDraftCard } from './reply-draft-card'
+import { MatchList } from './match-list'
 import type { ReplyOutput } from '@/src/agents/reply/schema'
+import type { FinderOutput } from '@/src/agents/finder/schema'
 
 export interface ChatMessage {
   id: string
@@ -40,6 +42,12 @@ export interface ChatMessage {
   replyLeadId?: string
   /** The agent's language for this Reply turn (carried into the edit-capture write). */
   replyLang?: 'en' | 'ms' | 'zh'
+  /**
+   * Structured Finder output (Plan 03) — present on assistant turns the router
+   * dispatched to the Finder pillar. When set, the turn renders the ranked
+   * MatchList variant instead of the plain text bubble (FIND-01/03).
+   */
+  finderOutput?: FinderOutput
 }
 
 interface MessageListProps {
@@ -102,6 +110,16 @@ export function MessageList({ messages, isStreaming, className }: MessageListPro
                 lang={msg.replyLang ?? 'en'}
                 className="max-w-[90%]"
               />
+            </div>
+          ) : msg.finderOutput ? (
+            // Assistant Finder turn — the ranked project MatchList variant
+            // (FIND-01/03). Render-only card; mirrors the Reply branch above.
+            <div
+              key={msg.id}
+              className="flex justify-start"
+              data-role="assistant"
+            >
+              <MatchList output={msg.finderOutput} className="max-w-[90%]" />
             </div>
           ) : (
             // Assistant turn — Card with answer + citations footer
