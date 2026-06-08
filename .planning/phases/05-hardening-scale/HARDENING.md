@@ -65,7 +65,7 @@ This is the native Firestore backup mechanism, invoked as a documented operation
 | Backup runbook authored | CODE-READY | `docs/operations/backup-restore-runbook.md` (incl. §0 no-gcloud SDK path) |
 | Lazy-cron reminder (stale export warning) | CODE-READY (UI watchdog) | `docs/operations/lazy-cron-catalog.md` §Backup Reminder |
 | **Live backup (export) drill** | **DONE 2026-06-08** | Managed export, operationState **SUCCESSFUL**, → `gs://cy-csaiagent-backups/firestore-backups/2026-06-08T11-07-18/` (dedicated backups bucket created in asia-southeast1, same region as Firestore). Verified: `overall_export_metadata` + `all_namespaces/all_kinds/output-0` present. Ran via `gcloud firestore export` as the owner (`sosleong365@gmail.com`) after Blaze was enabled. |
-| Restore drill | LIVE-GATED | Import the above prefix into a SCRATCH project via `gcloud firestore import` / `FirestoreAdminClient.importDocuments` — NEVER onto prod. Record restore time here. |
+| Restore drill | SKIPPED (user 2026-06-08) | The successful export is the v1 backup safety net; restore-validation (import the above prefix into a SCRATCH project — never prod — via `gcloud firestore import` / `FirestoreAdminClient.importDocuments`) is optional and can be done at rollout prep. |
 
 > **Note (2026-06-08):** The no-gcloud SDK export (`scripts/firestore-export.ts`) is also wired, but its service account (`firebase-adminsdk-fbsvc@cy-csaiagent.iam.gserviceaccount.com`) still needs `roles/datastore.importExportAdmin` before it can run; the successful export above used the owner's gcloud creds. Grant that role to make the SDK path usable too.
 

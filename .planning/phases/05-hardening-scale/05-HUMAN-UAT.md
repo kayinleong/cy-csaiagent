@@ -8,7 +8,7 @@ updated: 2026-06-08T00:00:00Z
 
 ## Current Test
 
-[2026-06-08 live-gate run: #1/#2/#4/#5(export)/#6/#7 DONE; #3 descoped to a human test. The live PDPA drill (#1) found + fixed a real leadContext-orphan erasure bug; the #7 local smoke found + fixed a ship-blocking 500. Residual rollout-prep follow-ups: #5 restore-half (needs a scratch project + your go-ahead), #3 human k6 run, Derek's written PDPA confirmation + BM/中文 review.]
+[2026-06-08 live-gate run: #1/#2/#4/#5(export)/#6/#7 DONE; #3 descoped to a human test. The live PDPA drill (#1) found + fixed a real leadContext-orphan erasure bug; the #7 local smoke found + fixed a ship-blocking 500. #5 restore-half SKIPPED by user (export backup is the safety net). Residual rollout-prep follow-ups: #3 human k6 run, Derek's written PDPA confirmation + BM/中文 review.]
 
 ## Tests
 
@@ -30,7 +30,7 @@ result: PASS — 2026-06-08, deployed to `cy-csaiagent` (authed as sosleong365@g
 
 ### 5. Backup/restore drill
 expected: A managed `gcloud firestore export` to a bucket, then import to a scratch project, verifies the backup/restore runbook (docs/operations/backup-restore-runbook.md); outcome recorded in HARDENING.md §3. (This managed export is the only sanctioned gcloud use — no Cloud Function / no scheduler.)
-result: EXPORT DONE 2026-06-08 (restore-half deferred). Progression: (1) BILLING_DISABLED → user enabled Blaze; (2) SDK path PERMISSION_DENIED (SA lacks the export role — `scripts/firestore-export.ts` remains wired for once `roles/datastore.importExportAdmin` is granted to firebase-adminsdk-fbsvc@cy-csaiagent.iam.gserviceaccount.com); (3) user pointed gcloud at the owner `sosleong365@gmail.com` and authorized a retry — managed export ran as the owner. The default `cy-csaiagent.appspot.com` bucket did not exist (no Storage provisioned), so a dedicated backups bucket `gs://cy-csaiagent-backups` was created in asia-southeast1 (same region as Firestore). Export operationState=**SUCCESSFUL**; artifacts verified at `gs://cy-csaiagent-backups/firestore-backups/2026-06-08T11-07-18/` (`overall_export_metadata` + `all_namespaces/all_kinds/output-0`). RESTORE half intentionally NOT run — it must import into a SCRATCH project, never prod; do during rollout prep. NOTE: used gcloud CLI here per the user's explicit re-setup + retry instruction (the earlier no-gcloud constraint was situational).
+result: EXPORT DONE 2026-06-08; RESTORE half SKIPPED per user 2026-06-08. Progression: (1) BILLING_DISABLED → user enabled Blaze; (2) SDK path PERMISSION_DENIED (SA lacks the export role — `scripts/firestore-export.ts` remains wired for once `roles/datastore.importExportAdmin` is granted to firebase-adminsdk-fbsvc@cy-csaiagent.iam.gserviceaccount.com); (3) user pointed gcloud at the owner `sosleong365@gmail.com` and authorized a retry — managed export ran as the owner. The default `cy-csaiagent.appspot.com` bucket did not exist (no Storage provisioned), so a dedicated backups bucket `gs://cy-csaiagent-backups` was created in asia-southeast1 (same region as Firestore). Export operationState=**SUCCESSFUL**; artifacts verified at `gs://cy-csaiagent-backups/firestore-backups/2026-06-08T11-07-18/` (`overall_export_metadata` + `all_namespaces/all_kinds/output-0`). RESTORE half SKIPPED per user 2026-06-08 — the successful export is the v1 backup safety net; restore-validation (import into a SCRATCH project, never prod) is optional and can be done at rollout prep if desired. NOTE: used gcloud CLI for the export per the user's explicit re-setup + retry instruction (the earlier no-gcloud constraint was situational).
 
 ### 6. SLO finalization
 expected: Derek approves or adjusts the PROPOSED p95/p50/error-rate numbers in PERF-COST.md / HARDENING.md §1, converting them from PROPOSED to finalized. Separately, the flagged pre-Phase-5 multi-step token undercount (route.ts rate-limit path) is triaged as its own claim.
@@ -51,7 +51,8 @@ blocked: 0
 
 > passed: #1 (live synthetic erasure drill — found+fixed the leadContext orphan bug), #2 (PDPA sign-off approved), #4 (rules+indexes deployed), #5 (backup EXPORT successful), #6 (SLO targets approved), #7 (local smoke done + ship-blocking 500 fixed; accepted by user)
 > skipped: #3 (load test — DESCOPED to a human-run test)
-> residual follow-ups (rollout prep, not blocking): #5 RESTORE half (needs explicit authorization + a scratch project per runbook — a named-DB-in-prod attempt was correctly blocked by the auto-mode guardrail); #3 human k6 run; Derek's written PDPA confirmation + native BM/中文 review; SA `roles/datastore.importExportAdmin` grant if the no-gcloud export path is wanted.
+> residual follow-ups (rollout prep, not blocking): #3 human k6 run; Derek's written PDPA confirmation + native BM/中文 review; SA `roles/datastore.importExportAdmin` grant if the no-gcloud export path is wanted.
+> closed by user decision: #5 RESTORE-half SKIPPED 2026-06-08 (export backup is the v1 safety net; restore-validation optional at rollout prep).
 
 ## Notes (2026-06-08 live-gate run)
 
