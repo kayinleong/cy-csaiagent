@@ -18,13 +18,25 @@
  *               Pitfall 3 (idempotent — addressed in rollup.test.ts)
  */
 
-import { describe, it, expect, vi } from 'vitest'
-// This import will FAIL until the implementation is created (Wave 0 red-bar intent):
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// ─── Hermetic Firestore mock (the Wave-1+ "mock/spy to intercept add()" this file describes) ──
+// recordUsageEvent does `await usageEventsRef().add(doc)`. Without this mock the test makes a
+// REAL Firestore write when credentials are present in the environment (e.g. a local .env.local),
+// which both hangs the test on the network AND pollutes the live usageEvents collection with
+// junk test docs. We intercept `usageEventsRef().add()` so the test is fully offline + hermetic
+// and can assert the exact written payload (counts only, no PII).
+const { addMock } = vi.hoisted(() => ({ addMock: vi.fn() }))
+vi.mock('@/src/firebase/collections', () => ({
+  usageEventsRef: () => ({ add: addMock }),
+}))
+
 import { recordUsageEvent } from '@/src/usage/record'
 
-// ─── No emulator gate: record.test.ts is a unit test (shape assertion, no live write) ────
-// If recordUsageEvent is implemented to always write to Firestore, apply the emulator gate.
-// For now, the test is offline-safe by design (the module import itself is the red bar).
+beforeEach(() => {
+  addMock.mockReset()
+  addMock.mockResolvedValue({ id: 'usage-evt-test' })
+})
 
 const SAMPLE_EVENT = {
   tenantId: 'd2' as const,
@@ -52,26 +64,22 @@ describe('QUAL-08 recordUsageEvent — counts only, no PII', () => {
     //
     // Wave 0: unreachable — module import fails first.
 
-    // Call with a sample event — in Wave 1+ this either returns the row or undefined
-    // (fire-and-forget contract). We inspect the payload before it's written.
+    // Call with a sample event; the mocked add() captures the exact written payload.
     await recordUsageEvent(SAMPLE_EVENT)
 
-    // If recordUsageEvent returns the payload (for testability), assert its shape:
-    // The following keys must NOT be present:
-    const FORBIDDEN_KEYS = ['content', 'text', 'originalDraft', 'routeDecision']
-    // (Wave 1+ implementation may expose the payload via a returned value or a test spy)
+    expect(addMock).toHaveBeenCalledTimes(1)
+    const writtenDoc = addMock.mock.calls[0][0] as Record<string, unknown>
 
-    // Assert the event shape only contains count/metric fields (no content, no PII):
-    // In Wave 1+: if the function returns the event object, assert directly.
-    // For now, assert via a structural check that SAMPLE_EVENT has no forbidden keys.
+    // The persisted doc must NOT contain any content/PII field:
+    const FORBIDDEN_KEYS = ['content', 'text', 'originalDraft', 'routeDecision']
     for (const key of FORBIDDEN_KEYS) {
-      expect(SAMPLE_EVENT).not.toHaveProperty(key)
+      expect(writtenDoc).not.toHaveProperty(key)
     }
 
-    // Allowed keys must be present in the input shape:
+    // Allowed count/metric keys must be present in the written doc:
     const REQUIRED_KEYS = ['tenantId', 'uid', 'pillar', 'inputTokens', 'outputTokens', 'cachedInputTokens', 'cacheCreationInputTokens', 'day']
     for (const key of REQUIRED_KEYS) {
-      expect(SAMPLE_EVENT).toHaveProperty(key)
+      expect(writtenDoc).toHaveProperty(key)
     }
   })
 
@@ -94,13 +102,15 @@ describe('QUAL-08 recordUsageEvent — counts only, no PII', () => {
       text: 'some content',
     }
 
-    // When recordUsageEvent strips forbidden fields, the written doc must not contain them.
-    // In Wave 1+: use a mock/spy to intercept the Firestore add() call.
+    // recordUsageEvent destructures only the allowed keys, so the forbidden fields
+    // must never reach the written doc. The mocked add() lets us assert this directly.
     await recordUsageEvent(SAMPLE_WITH_FORBIDDEN as unknown as typeof SAMPLE_EVENT)
 
-    // Assert that content/text/originalDraft/routeDecision are stripped from the written doc
-    // (Wave 1+ implementation: the function only writes the allowed keys)
-    expect(true).toBe(true) // placeholder — Wave 1+ uses Firestore mock to assert payload
+    expect(addMock).toHaveBeenCalledTimes(1)
+    const writtenDoc = addMock.mock.calls[0][0] as Record<string, unknown>
+    for (const key of ['content', 'originalDraft', 'routeDecision', 'text']) {
+      expect(writtenDoc).not.toHaveProperty(key)
+    }
   })
 
   it('fire-and-forget: a write failure does not throw', async () => {
@@ -113,10 +123,9 @@ describe('QUAL-08 recordUsageEvent — counts only, no PII', () => {
     //
     // Wave 0: unreachable — module import fails first.
 
-    // In Wave 1+: mock Firestore add() to throw, then assert recordUsageEvent does not rethrow.
-    // This test verifies the swallow contract from PATTERNS.md §src/usage/record.ts.
-    await expect(
-      recordUsageEvent(SAMPLE_EVENT)
-    ).resolves.not.toThrow()
+    // Make the Firestore write reject, then assert recordUsageEvent still resolves
+    // (swallow contract — the after() caller must never see the error).
+    addMock.mockRejectedValueOnce(new Error('simulated Firestore write failure'))
+    await expect(recordUsageEvent(SAMPLE_EVENT)).resolves.toBeUndefined()
   })
 })

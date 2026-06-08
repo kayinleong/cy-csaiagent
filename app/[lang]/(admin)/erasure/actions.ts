@@ -205,9 +205,11 @@ export async function eraseDataSubjectAction(raw: unknown): Promise<EraseDataSub
   return { ok: true, reqId: reqRef.id, status: newStatus }
 }
 
-// Re-export under the conventional public name so both names work
-// (the test imports eraseDataSubjectAction; callers may use eraseDataSubject)
-export { eraseDataSubjectAction as eraseDataSubject }
+// NOTE: do NOT add an `export { eraseDataSubjectAction as eraseDataSubject }` alias here.
+// This is a 'use server' module — Turbopack's Server Actions transform collapses a
+// dual-export of the same function to ONE client-proxy name, which made the client
+// import of `eraseDataSubjectAction` fail at runtime (erasure page 500). The action
+// has exactly one exported name: eraseDataSubjectAction. Tests + the form both use it.
 
 // ─── getBlastRadius ───────────────────────────────────────────────────────────
 
