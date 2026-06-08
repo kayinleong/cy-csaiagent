@@ -73,3 +73,14 @@ Continues on branch `phase-kayinleong-01`; not pushed (standing user hold).
 - **What passed:** all pre-existing tests stay green; the 2 new green baselines in pdpa (known-name + MY-phone) act as regression guards; the 37 expected-fail markers genuinely capture unmet contracts (no false-green `it.fails`).
 - **Ruled out (regression surface):** these are TEST-ONLY changes — no `src/` runtime, no `app/` runtime, no `firestore.rules`, no config behavior changed. The only non-test edits are `evals/promptfooconfig.yaml` (added 3 `tests:` entries; existing suites untouched) and `src/firebase/__tests__/rules.test.ts` (added a `replyEdits` describe + one entry to the deny-by-default list; existing collection blocks untouched). No production code path can break from this plan.
 - **Deviations:** 3 auto-fixed (all Rule 3 blocking — mock typing for tsc, classifier RED-test correctness, e2e path note); documented in `04-01-SUMMARY.md`. The `tests/e2e/` vs playwright `testDir: ./e2e` mismatch is flagged for Plan 04-08 to reconcile.
+
+## Resolution — Reply draft-card SSE bridge (2026-06-08, quick-kayinleong-005)
+
+The one item deferred at the end of this phase (04-08-SUMMARY: "parsing SSE into replyOutput …
+outside this UI plan's file set") — and surfaced as the **v1.0 milestone critical gap** — is now
+resolved. `quick-kayinleong-005` wired the client-side SSE→structured-output decode in
+`app/[lang]/chat/chat-input.tsx` (gated by `pillarOverride`): Reply turns now decode `ReplyOutput`
+and render `ReplyDraftCard`; Finder turns decode `FinderOutput` and render the previously-orphaned
+`MatchList`. Unblocks REPLY-02/04/05/06/07/09 + ADMIN-06 (and FIND-01/03). See commit `d01fce4`
+and `.planning/quick/quick-kayinleong-005/CLAIM.md`. Live browser click-through (gate item #5 above)
+still applies.

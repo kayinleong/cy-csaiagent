@@ -4,7 +4,7 @@
 - session: claude-code
 - branch: phase-kayinleong-01
 - started: 2026-05-31
-- status: in-progress
+- status: done
 - summary: Execute Phase 1 (Foundations) — 13 plans across 7 waves building the shared platform core (Firebase, llm/memory/rag/audit/eval/i18n, chat shell, streaming) plus the three de-risking spikes.
 
 ## What will change
@@ -89,3 +89,14 @@ behind the `rag/embed` adapter and the `src/jobs` module; rag/kb and jobs/escala
 full suite green; no residual Voyage/QStash references in `src/`+`app/` except dated migration-note
 comments. Still NOT exercised live: `next build`/`next dev` + any live Gemini/Firebase/Anthropic
 path (part of the live-stack gate, needs user `.env`).
+
+## Closeout (2026-06-08)
+
+Status flipped `in-progress` → **done** as part of the v1.0 phase closeout (administrative close
+of all 5 phases). Code execution is complete + verified with 0 code-level gaps; the three lifecycle
+sections above are filled. The remaining open items are **live-gated, not code blockers** and are
+carried forward to rollout prep (tracked in STATE.md): `01-01` live Firebase/App-Hosting/Secret-
+Manager provisioning + Derek's `asia-southeast1` region & TIA sign-off, the live spike runs
+(SPIKE-RAG/DEPLOY/INGEST; SPIKE-CRON retired with the lazy-cron refactor), and the live-stack
+Playwright + Promptfoo trilingual proofs. Closing the claim does not waive those gates — it records
+that the buildable scope is finished and verified.

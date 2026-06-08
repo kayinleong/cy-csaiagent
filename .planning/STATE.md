@@ -2,9 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: phase-5-complete
+status: v1.0-code-complete-gaps-closed
+gap_closure: "2026-06-08 — v1.0 milestone critical gap CLOSED by quick-kayinleong-005 (commit d01fce4): SSE→structured-output decode bridge wired for Reply (ReplyDraftCard) + Finder (MatchList). Milestone audit now gaps_closed; integration 14/14; flows 6/6. ALL 5 phase CLAIMs flipped to done (Phase 1 administrative close — live spike/provisioning gates carried to rollout, not code blockers)."
 stopped_at: Phase 5 EXECUTED + REVIEWED + VERIFIED — all 8 plans (waves 0-6) done. Code review (05-REVIEW.md): 1 Critical (CR-01 raw-PII-at-rest on erasureRequests) + 6 warnings + 6 info → ALL resolved (status: resolved; CR-01 fixed via transient-retain + FieldValue.delete on completion + honest PDPA-SIGNOFF disclosure). Verifier (05-VERIFICATION.md): human_needed, 5/5 must-haves, 0 code gaps. v1 MILESTONE CODE-COMPLETE. 7 live-gated items in 05-HUMAN-UAT.md (deploy, k6 run, PDPA drill, Derek sign-off + SLO finalize, backup drill, trilingual smoke-test) execute during rollout prep. NOT pushed (user hold).
-last_updated: "2026-06-07T10:30:00Z"
+last_updated: "2026-06-08T12:10:00Z"
 last_activity: 2026-06-07 — Phase 5 executed sequentially on phase-kayinleong-01 (no-worktree per global CLAUDE.md): 8 plans + a lint-regression fix + a code-review-fix. Gates at HEAD — tsc 0 errors, vitest 541 pass/141 skip/0 fail, eslint 0 errors. Hard guarantees confirmed: single PII_ERASURE_MANIFEST (auditLogs EXEMPT), idempotent erasure+sweep lazy-cron (no scheduler/no Cloud Functions), single counts-only usage pipeline (final.totalUsage), three-layer admin gate, audit-before-data drill-down (read-only), setUserClaims-only role assignment, usageRollups-only dashboard, 3 new deny-by-default collections, core/shell split, trilingual parity. NOT pushed.
 progress:
   total_phases: 5
@@ -25,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 
 ## Current Position
 
-Phase: 5 of 5 COMPLETE — ALL v1 phases done
+Phase: 5 of 5 COMPLETE — ALL v1 phases done; ALL 5 phase CLAIMs CLOSED (done)
 Plan: Phase 5 Plan 08/08 COMPLETE (hardening checklist + cost/perf pass + PDPA sign-off + operator handover). ALL 30 plans complete.
-Status: v1 milestone code-complete. Live-gated items (load test, PDPA drill, backup drill, Derek sign-off) execute during rollout prep.
+Status: v1 milestone code-complete + milestone-audit critical gap CLOSED (quick-kayinleong-005). Live-gated items (load test, PDPA drill, backup drill, Derek sign-off, browser click-through) execute during rollout prep.
 Last activity: 2026-06-07 — 05-08-PLAN.md: PERF-COST.md (QUAL-08 single pipeline + undercount flag + PROPOSED p95) + HARDENING.md (SC4 evidence-linked checklist) + PDPA-SIGNOFF.md (QUAL-09 coverage proof, signoff-ready) + 8-file docs/operations/ handover (QUAL-10) + PDPA-TIA Phase-5 update (D-03). 3 commits (59d4d2b, f7ca414, 070e708). NOT pushed (user hold). v1 ALL PLANS DONE.
 
 Progress: [██████████] 100% (5 of 5 phases code-complete + verified; Phase 5 ALL 8 plans done)
