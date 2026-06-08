@@ -183,17 +183,20 @@ The code-ready erasure system must be exercised on the deployed stack before Der
 6. Confirm `auditLogs` shows the `action:'erasure'` event
 7. Record the `completedAt` timestamp
 
-**Record here during rollout prep:**
+**Drill executed 2026-06-08** via `scripts/pdpa-erasure-drill.ts` (synthetic subject, against live Firestore, after a fresh backup):
 
 | Drill item | Result | Date |
 |-----------|--------|------|
-| Synthetic agent UID used | | |
-| Erasure request created at | | |
-| Status reached `complete` at | | |
-| SLA elapsed (completedAt - requestedAt) | | < 72 hours |
-| auditLogs erasure event confirmed | | |
-| A1 Storage confirmation | | |
-| A6 backup confirmation | | |
+| Synthetic agent UID used | `DRILL-agent-*` (hard `DRILL-` id guard; cleaned up after) | 2026-06-08 |
+| Status reached `complete` | YES — 1 erase pass, ~1s | 2026-06-08 |
+| SLA elapsed | ~1s — **well under 72 hours** | 2026-06-08 |
+| All PII collections → 0 | **PASS** (conversations, leads, leadContext, replyEdits, escalations, knowledgeGaps, agentProfiles, rateBudgets, users + messages subcollection) | 2026-06-08 |
+| auditLogs SURVIVED (exempt) | **PASS** | 2026-06-08 |
+| `action:'erasure'` event appended | **PASS** | 2026-06-08 |
+| A1 Storage confirmation | NO Storage objects (voice = Firestore strings) — §4 A1 | 2026-06-08 |
+| A6 backup confirmation | YES — managed export verified (§4 A6, HARDENING §3) | 2026-06-08 |
+
+> **Bug found + fixed by this drill:** `leadContext` (resolved via keyVia `leads.ownerUid`) was being ORPHANED because `leads` was deleted before it. `eraseDataSubject` now processes keyVia (indirect) entries before the collections they resolve through. Re-run after the fix: PASS. The skip-gated emulator coverage test never exercised this — the live drill did.
 
 ---
 
