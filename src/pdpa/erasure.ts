@@ -311,7 +311,19 @@ export async function eraseDataSubject({
   // Iterate the manifest for this subject type. NEVER hard-code collection names.
   const entries: ManifestEntry[] = PII_ERASURE_MANIFEST[subjectType]
 
-  for (const entry of entries) {
+  // ORDERING (Pitfall — found by the live erasure drill 2026-06-08):
+  // `keyVia` entries resolve the subject's ids THROUGH another collection
+  // (e.g. leadContext via `leads.ownerUid`). If the source collection (leads) is
+  // deleted first, that resolution returns 0 rows and the dependent docs
+  // (leadContext) are ORPHANED — residual PII survives erasure. So process all
+  // indirect (keyVia) entries BEFORE the direct keyField/docId entries they depend on.
+  const isKeyVia = (e: ManifestEntry): boolean => 'keyVia' in e && typeof e.keyVia === 'string'
+  const orderedEntries: ManifestEntry[] = [
+    ...entries.filter(isKeyVia),
+    ...entries.filter((e) => !isKeyVia(e)),
+  ]
+
+  for (const entry of orderedEntries) {
     // EXEMPT check: skip any collection in the exempt list (auditLogs guard — Pitfall 2)
     if (exemptSet.has(entry.collection)) {
       continue
