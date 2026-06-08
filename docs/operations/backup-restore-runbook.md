@@ -3,7 +3,34 @@
 
 **Mechanism:** Managed `gcloud firestore export` and `gcloud firestore import` — the native Firestore backup tool. This is an operational procedure (human-run), NOT app code and NOT an automated scheduled export.
 
-> **Confirm with Derek (A6):** That the managed `gcloud firestore export/import` operational approach is acceptable for the project. If a stricter "no GCP Admin API at all" reading applies, the backup mechanism must be reconsidered before rollout. Document Derek's decision before the first production export.
+> **Confirm with Derek (A6):** That the managed `gcloud firestore export/import` operational approach is acceptable for the project. If a stricter "no GCP Admin API at all" reading applies, the backup mechanism must be reconsidered before rollout. Document Derek's decision before the first production export. **A6 answered YES, 2026-06-08** (see `../../.planning/phases/05-hardening-scale/PDPA-SIGNOFF.md §4`).
+
+---
+
+## 0. No-gcloud path (preferred) — `scripts/firestore-export.ts`
+
+The same managed export, invoked via the Firebase Admin SDK (`@google-cloud/firestore`
+`FirestoreAdminClient.exportDocuments`) instead of the gcloud CLI — keeps backup within the
+Firebase SDK surface and needs no gcloud install/auth:
+
+```bash
+npx tsx scripts/firestore-export.ts                 # all collections → gs://<bucket>/firestore-backups/<ts>
+npx tsx scripts/firestore-export.ts gs://bucket/x   # explicit destination prefix
+```
+
+- **Auth:** the service account in `GOOGLE_APPLICATION_CREDENTIALS` (.env.local).
+- **Required IAM role (one-time):** the service account
+  `firebase-adminsdk-fbsvc@cy-csaiagent.iam.gserviceaccount.com` must hold
+  **Cloud Datastore Import Export Admin** (`roles/datastore.importExportAdmin`).
+  Grant it in the Firebase/GCP console (IAM & Admin → the SA → Add role) — the default
+  Firebase Admin SDK SA role does NOT include export. Without it the script returns
+  `7 PERMISSION_DENIED` (observed 2026-06-08).
+- **Billing:** the project must be on Blaze (managed export is not available on Spark;
+  `BILLING_DISABLED` otherwise). Enabled 2026-06-08.
+- **Restore (drill):** import the exported prefix into a SCRATCH project via
+  `FirestoreAdminClient.importDocuments` — NEVER import onto production.
+
+The gcloud CLI procedure below remains valid as an alternative for operators who prefer it.
 
 ---
 
