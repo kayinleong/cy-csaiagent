@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 Phase: 5 of 5 COMPLETE — ALL v1 phases done; ALL 5 phase CLAIMs CLOSED (done)
 Plan: Phase 5 Plan 08/08 COMPLETE (hardening checklist + cost/perf pass + PDPA sign-off + operator handover). ALL 30 plans complete.
 Status: v1 milestone code-complete + milestone-audit critical gap CLOSED (quick-kayinleong-005). Live-gated items (load test, PDPA drill, backup drill, Derek sign-off, browser click-through) execute during rollout prep.
-Last activity: 2026-06-07 — 05-08-PLAN.md: PERF-COST.md (QUAL-08 single pipeline + undercount flag + PROPOSED p95) + HARDENING.md (SC4 evidence-linked checklist) + PDPA-SIGNOFF.md (QUAL-09 coverage proof, signoff-ready) + 8-file docs/operations/ handover (QUAL-10) + PDPA-TIA Phase-5 update (D-03). 3 commits (59d4d2b, f7ca414, 070e708). NOT pushed (user hold). v1 ALL PLANS DONE.
+Last activity: 2026-06-09 — Completed quick task quick-kayinleong-006: added docs/ARCHITECTURE.md (6 Mermaid diagrams, as-built, commit 2f43bc8). Docs-only, zero regression surface. NOT pushed (user hold). [Prior: 2026-06-07 — 05-08-PLAN.md PERF-COST/HARDENING/PDPA-SIGNOFF + docs/operations handover, commits 59d4d2b/f7ca414/070e708.]
 
 Progress: [██████████] 100% (5 of 5 phases code-complete + verified; Phase 5 ALL 8 plans done)
 
@@ -118,6 +118,12 @@ Carried from research — must be held during Phase 1 planning:
 - Anthropic has no Asian residency (May 2026); TIA + pseudonymization is the v1 path, Bedrock-Singapore the fallback — decide in Phase 1.
 - Voyage BM/Mandarin embedding quality unverified — gated by SPIKE-RAG.
 - Standardize embedding dimension on 1024-d in Phase 1; pin one model per collection.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| quick-kayinleong-006 | Create an architecture diagram explaining how the project works | 2026-06-09 | 2f43bc8 | [quick-kayinleong-006](./quick/quick-kayinleong-006/) |
 
 ## Deferred Items
 
