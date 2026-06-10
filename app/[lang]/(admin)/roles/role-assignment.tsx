@@ -64,10 +64,15 @@ interface Capability {
   roles: AssignableRole[]
 }
 
+// RO-01: read-only is analytics-READ only. It appears in `capViewAnalytics`
+// (the analytics-read capability, shared with admin) and in NO write/manage/
+// conversations/erasure/assign capability. The acceptance gate asserts read-only
+// never co-occurs with capManageKb / capRunErasure / capAssignRoles.
 const CAPABILITIES: Capability[] = [
   { key: 'capChat',               roles: ['new-agent', 'senior-coach', 'admin'] },
   { key: 'capDownline',          roles: ['senior-coach', 'admin'] },
   { key: 'capOrg',               roles: ['admin'] },
+  { key: 'capViewAnalytics',     roles: ['admin', 'read-only'] },
   { key: 'capManageKb',          roles: ['admin'] },
   { key: 'capManageInventory',   roles: ['admin'] },
   { key: 'capViewConversations', roles: ['admin'] },
@@ -75,7 +80,7 @@ const CAPABILITIES: Capability[] = [
   { key: 'capAssignRoles',       roles: ['admin'] },
 ]
 
-const ALL_ROLES: AssignableRole[] = ['new-agent', 'senior-coach', 'admin']
+const ALL_ROLES: AssignableRole[] = ['new-agent', 'senior-coach', 'admin', 'read-only']
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -158,6 +163,8 @@ export function RoleAssignment({ initialUsers, lang: _lang }: RoleAssignmentProp
   function roleBadgeVariant(role: UserWithRole['role']): 'default' | 'secondary' | 'outline' {
     if (role === 'admin') return 'default'
     if (role === 'senior-coach') return 'secondary'
+    // RO-01: read-only (and new-agent) render with the muted 'outline' badge.
+    if (role === 'read-only') return 'outline'
     return 'outline'
   }
 
@@ -173,6 +180,7 @@ export function RoleAssignment({ initialUsers, lang: _lang }: RoleAssignmentProp
               <TableHead className="text-center">{t('roleNewAgent')}</TableHead>
               <TableHead className="text-center">{t('roleSeniorCoach')}</TableHead>
               <TableHead className="text-center">{t('roleAdmin')}</TableHead>
+              <TableHead className="text-center">{t('roleReadOnly')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -235,6 +243,7 @@ export function RoleAssignment({ initialUsers, lang: _lang }: RoleAssignmentProp
                 <SelectItem value="new-agent">{t('roleNewAgent')}</SelectItem>
                 <SelectItem value="senior-coach">{t('roleSeniorCoach')}</SelectItem>
                 <SelectItem value="admin">{t('roleAdmin')}</SelectItem>
+                <SelectItem value="read-only">{t('roleReadOnly')}</SelectItem>
               </SelectContent>
             </Select>
           </div>

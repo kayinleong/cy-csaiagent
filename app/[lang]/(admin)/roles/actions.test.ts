@@ -49,7 +49,7 @@ vi.mock('next/headers', () => ({
 
 // This import will FAIL until the action module is created (Wave 0 red-bar intent):
 // The module under test: app/[lang]/(admin)/roles/actions.ts
-import { assignRole } from './actions'
+import { assignRole, listUsersWithRoles } from './actions'
 
 // ─── Test suite ───────────────────────────────────────────────────────────────
 
@@ -90,6 +90,22 @@ describe('ADMIN-07 assignRole — admin-gate + setUserClaims + audit', () => {
     } as unknown as AuthenticatedUser)
 
     const result = await assignRole('target-uid', 'new-agent')
+
+    expect(result).toEqual({ ok: false, error: 'Forbidden' })
+  })
+
+  it("listUsersWithRoles returns {ok:false, error:'Forbidden'} for a read-only caller (RO-01)", async () => {
+    // RO-01: read-only must NOT be able to enumerate users + roles — that is an
+    // escalation-recon surface. The listUsersWithRoles gate stays admin-only
+    // (T-06-13: no read-only self-escalation via the assignment surface).
+    const { requireUser } = await import('@/src/firebase/auth')
+    vi.mocked(requireUser).mockResolvedValueOnce({
+      uid: 'readonly-uid',
+      role: 'read-only',
+      tenantId: 'd2',
+    } as unknown as AuthenticatedUser)
+
+    const result = await listUsersWithRoles()
 
     expect(result).toEqual({ ok: false, error: 'Forbidden' })
   })
