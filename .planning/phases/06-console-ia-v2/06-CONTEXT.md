@@ -55,6 +55,15 @@ reply SOPs, training content, conversation viewer, stuck-agent detection, funnel
 ### Read-only role (Phase 6)
 - 4th role added to `Role` union + `VALID_ROLES` (`src/firebase/auth.ts`). Custom-claim driven (same path as existing roles via `setUserClaims`). Reporting/analytics read access only; all write/admin Server Actions and routes denied server-side; Firestore rules updated + rules-tested (extend the existing per-collection rules-unit-tests — every collection covered in CI).
 
+### Resolved during research (2026-06-10) — LOCKED (least-privilege default; user may widen later)
+- **Read-only collection allow-list (narrowest):** read-only MAY read `usageRollups`, `usageEvents`, `evals` (analytics aggregates, counts-only) + the KB read collections it already shares as a signed-in tenant user (`projects`, `collateral`, `kbDocs`, `kbChunks`). It is **DENIED** read on every PII/owner-scoped collection — `conversations`, `messages`, `leads`, `leadContext`, `auditLogs`, `erasureRequests`, `rateBudgets`, `users`, `agentProfiles` — and **DENIED** read on `knowledgeGaps`/`escalations` (they carry `agentUid`). **DENIED write everywhere.** Rationale: least-privilege for a new role touching PDPA data; matches the research rules matrix. (Open Q1 → default-narrowest; widening any of these requires an explicit user/Derek decision.)
+- **Read-only does NOT see the coach dashboard** (funnel/ramp/knowledge-gap panels carry downline agent PII). Read-only sees Home + the org usage/cost analytics + the read-only KB version-history viewer only.
+- **Read-only landing:** lands on **Home** post-login (not chat). (Open Q3 resolved.)
+- **Fix the latent broken KB deep-link bug** (`/${lang}/admin/kb/...` → should be `/${lang}/kb/...`; `(admin)` is a route group and never appears in the URL) whenever KB is touched — `kb-doc-list.tsx:188`, `kb/[docId]/page.tsx:138,178`.
+- **Add an i18n parity CI test** (en/ms/zh key-set equality) — CONTEXT mandates trilingual parity in CI and none exists today. In scope for Phase 6.
+- **Nav restructure = regroup the sidebar into 6 sections OVER the existing routes; do NOT physically move route folders** (avoids URL/deep-link breakage + layout-gate mismatch). Existing `href`s unchanged.
+- **Role-gate de-duplication (Open Q2):** planner's discretion — either extend each of the ~24 role-branch sites in place using the research checklist, OR introduce a `requireRole(allowed: Role[])` helper as its **own dedicated task with regression coverage** before layering the IA change. Either way the research checklist (06-RESEARCH.md "Role-branch sites") is the acceptance gate so no site is missed.
+
 ### Claude's Discretion
 - Exact nav component shape (collapsible groups vs sections) within shadcn `sidebar.tsx` patterns — match existing `app-sidebar.tsx` conventions.
 - Home surface layout/widget composition (as long as it reads existing data only).
