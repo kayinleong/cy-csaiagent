@@ -39,7 +39,7 @@ async function getSessionUser() {
   }
 
   // Build a minimal Request with a Bearer token for requireUser()
-  const syntheticReq = new Request('https://d2.app/admin/kb', {
+  const syntheticReq = new Request('https://d2.app/kb', {
     headers: {
       Authorization: `Bearer ${sessionCookie.value}`,
     },

@@ -51,7 +51,7 @@ export default async function KbAdminPage({ params }: PageProps) {
   // Verify the token and check the admin role
   let user: Awaited<ReturnType<typeof requireUser>>
   try {
-    const syntheticReq = new Request('https://d2.app/admin/kb', {
+    const syntheticReq = new Request('https://d2.app/kb', {
       headers: { Authorization: `Bearer ${sessionCookie.value}` },
     })
     user = await requireUser(syntheticReq)

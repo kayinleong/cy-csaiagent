@@ -84,7 +84,7 @@ export default async function KbDocDetailPage({ params }: PageProps) {
 
   let user: Awaited<ReturnType<typeof requireUser>>
   try {
-    const syntheticReq = new Request('https://d2.app/admin/kb', {
+    const syntheticReq = new Request('https://d2.app/kb', {
       headers: { Authorization: `Bearer ${sessionCookie.value}` },
     })
     user = await requireUser(syntheticReq)
@@ -95,7 +95,13 @@ export default async function KbDocDetailPage({ params }: PageProps) {
     throw err
   }
 
-  if (user.role !== 'admin') {
+  // Gate: admin gets the full page (timeline + edit form); read-only gets the
+  // version-history VIEWER only (timeline, no edit affordance — KM-01). Every
+  // other role (new-agent / unauthenticated) is denied. This is a UX/route gate;
+  // the KB WRITE authz (assertAdmin/assertAdminOrCoach in src/kb/crud.ts) is the
+  // real boundary and is NOT widened for read-only (T-06-21).
+  const isAdmin = user.role === 'admin'
+  if (user.role !== 'admin' && user.role !== 'read-only') {
     redirect(`/${lang}/chat`)
   }
 
@@ -135,7 +141,7 @@ export default async function KbDocDetailPage({ params }: PageProps) {
       {/* Back link */}
       <div className="mb-6">
         <Link
-          href={`/${lang}/admin/kb`}
+          href={`/${lang}/kb`}
           className="text-sm text-muted-foreground underline-offset-2 hover:underline"
         >
           ← {t('title')}
@@ -175,7 +181,7 @@ export default async function KbDocDetailPage({ params }: PageProps) {
                       data.title
                     ) : (
                       <Link
-                        href={`/${lang}/admin/kb/${id}`}
+                        href={`/${lang}/kb/${id}`}
                         className="underline-offset-2 hover:underline"
                       >
                         {data.title}
@@ -205,23 +211,30 @@ export default async function KbDocDetailPage({ params }: PageProps) {
         </section>
       )}
 
-      {/* Edit form — only available for non-superseded docs */}
-      <section>
-        <h2 className="mb-4 text-lg font-semibold">{t('editDocument')}</h2>
-        {target.data.status === 'superseded' && (
-          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
-            {t('supersededNotice')}
-          </p>
-        )}
-        <KbDocForm
-          docId={docId}
-          initialValues={{
-            title: target.data.title,
-            lang: target.data.lang,
-            pillar: target.data.pillar,
-          }}
-        />
-      </section>
+      {/* Edit form — admin only. Read-only (and any future viewer) sees the
+          version-history timeline above with NO mutating affordance (T-06-21). */}
+      {isAdmin ? (
+        <section>
+          <h2 className="mb-4 text-lg font-semibold">{t('editDocument')}</h2>
+          {target.data.status === 'superseded' && (
+            <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
+              {t('supersededNotice')}
+            </p>
+          )}
+          <KbDocForm
+            docId={docId}
+            initialValues={{
+              title: target.data.title,
+              lang: target.data.lang,
+              pillar: target.data.pillar,
+            }}
+          />
+        </section>
+      ) : (
+        <p className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+          {t('readOnlyNotice')}
+        </p>
+      )}
     </div>
   )
 }
