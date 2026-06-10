@@ -22,16 +22,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-31)
 
 **Core value:** Compress new-agent ramp-up from 60 days to 7–10 days via a D2-grounded multi-pillar AI chat surface (the 11pm-on-a-phone answer).
-**Current focus:** Phase 5 — Hardening + Scale-Up (planned + verified, next: /gsd-execute-phase 5)
+**Current focus:** Phase 6 — Console IA v2 (Restructure + Read-only Role) — PLANNED + VERIFIED (8 plans, waves 0-4), ready to execute. Next: /gsd-execute-phase 6.
 
 ## Current Position
 
-Phase: 5 of 5 COMPLETE — ALL v1 phases done; ALL 5 phase CLAIMs CLOSED (done)
-Plan: Phase 5 Plan 08/08 COMPLETE (hardening checklist + cost/perf pass + PDPA sign-off + operator handover). ALL 30 plans complete.
-Status: v1 milestone code-complete + milestone-audit critical gap CLOSED (quick-kayinleong-005). Live-gated items (load test, PDPA drill, backup drill, Derek sign-off, browser click-through) execute during rollout prep.
-Last activity: 2026-06-09 — Completed quick task quick-kayinleong-006: added docs/ARCHITECTURE.md (6 Mermaid diagrams, as-built, commit 2f43bc8). Docs-only, zero regression surface. NOT pushed (user hold). [Prior: 2026-06-07 — 05-08-PLAN.md PERF-COST/HARDENING/PDPA-SIGNOFF + docs/operations handover, commits 59d4d2b/f7ca414/070e708.]
+Phase: 6 of (now) 8 — PLANNED + VERIFIED, ready to execute (v1 Phases 1-5 all COMPLETE; claim phase-kayinleong-06 in-progress)
+Plan: Phase 6 = 8 plans across 5 waves (W0 RED scaffold → W1 role union + requireRole() helper → W2 Firestore analytics rules → W3 gate widening + role-assignment UI → W4 parallel: IA sidebar+links+i18n / Home / KB viewer+Integrations shell / per-coach pivot+KB-contribution). plan-checker VERIFICATION PASSED (12/12 dimensions, 13/13 REQ-IDs).
+Status: Phase 6 planned + verified. Scope split (2026-06-10): Phase 6 = IA restructure + read-only role + consolidation; Phase 7 (new) = net-new surfaces; Phase 8 (new) = WhatsApp Business API (graduation-gated). v1 milestone code-complete; v1 live-gated items still pending rollout prep.
+Last activity: 2026-06-10 — Planned Phase 6 (claim phase-kayinleong-06): CONTEXT/RESEARCH/UI-SPEC/PATTERNS/VALIDATION + 8 PLANs; split ROADMAP into 6/7/8; appended 13 Phase-6 REQ-IDs to REQUIREMENTS.md. Invoked via /gsd-plan-phase 6 --auto → auto-advancing to execute. NOT pushed (user hold). [Prior: 2026-06-09 — quick-kayinleong-006 docs/ARCHITECTURE.md, commit 2f43bc8.]
 
-Progress: [██████████] 100% (5 of 5 phases code-complete + verified; Phase 5 ALL 8 plans done)
+Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 6 planned (0/8 plans executed).
 
 ### Phase 4 open human-action gate (live-gated — does NOT block Phase 5 planning)
 1. `firebase deploy --only firestore:indexes,firestore:rules` — additive `kbChunks` pillar vector index + `replyEdits` indexes/rules.
@@ -70,6 +70,11 @@ Progress: [██████████] 100% (5 of 5 phases code-complete + v
 *Updated after each plan completion*
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 6 added (2026-06-10): **Console IA v2** — restructure the admin/coach console into the business-requested 6-section IA (Home · Knowledge Management · Agents & Cohorts · Conversations & Escalations · Analytics & Performance · System & Compliance), add a read-only stakeholder role, and close the post-v1 gap-audit surfaces. Source: Derek stakeholder feedback + full codebase gap audit. Scope detail: `.planning/phases/06-console-ia-v2/SCOPE.md`.
+- Phase 6 SPLIT (2026-06-10, during /gsd-plan-phase 6 --auto): the milestone-sized scope was split per stakeholder decision into **Phase 6** (IA restructure + read-only role + consolidation + version-history viewer + senior-coach KB-contribution + per-coach pivot + Integrations *shell*), **Phase 7** (net-new surfaces: cohorts +data model, agent profiles, coach-assignment, flagged queue, audit-log viewer, model-config UI, PDPA-settings read-only display, days-to-first-close), and **Phase 8** (WhatsApp Business API — consciously overrides the v1 "no WABA / no auto-send" constraints, graduation-gated). v1 "no WABA / no auto-send" stays in force for Phases 6/7. Phase 6 now PLANNED + VERIFIED (8 plans). See `.planning/phases/06-console-ia-v2/06-CONTEXT.md`.
 
 ### Decisions
 
