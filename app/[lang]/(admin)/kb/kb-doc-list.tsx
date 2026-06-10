@@ -9,7 +9,10 @@
  *   - Table of all KB docs showing title, lang, pillar, version, status badge.
  *   - Status badge: published (default/green) | unpublished (outline) | superseded (secondary).
  *   - Superseded docs hidden by default; toggle to show.
- *   - Each row links to /${lang}/admin/kb/${id} (per-doc detail).
+ *   - Each row links to /${lang}/kb/${id} (per-doc detail). `(admin)` is a Next.js
+ *     route GROUP — it never appears in the URL, so the href must NOT include it
+ *     (Pitfall 1 / T-06-16). The two sibling links in kb/[docId]/page.tsx:138,178
+ *     are fixed in plan 06-07 which owns that file.
  *   - Publish/unpublish toggle via PublishToggle wired to Server Actions.
  *   - Delete action via deleteKbDocAction with a window.confirm guard.
  *
@@ -185,7 +188,7 @@ export function KbDocList({ docs, lang }: KbDocListProps) {
               {/* Title → link to detail page */}
               <TableCell className="max-w-[240px] truncate font-medium">
                 <Link
-                  href={`/${lang}/admin/kb/${id}`}
+                  href={`/${lang}/kb/${id}`}
                   className="underline-offset-2 hover:underline"
                 >
                   {data.title}

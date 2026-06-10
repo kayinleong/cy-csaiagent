@@ -127,7 +127,9 @@
       "voice": "语气"
     },
     "noReplySops": "暂无回复SOP。请在上方添加一个。",
-    "pillarSelectLabel": "使用方"
+    "pillarSelectLabel": "使用方",
+    "versionViewerTitle": "版本历史",
+    "readOnlyNotice": "正在查看版本历史（只读）。"
   },
   "inventory": {
     "title": "库存管理器",
@@ -208,7 +210,37 @@
     "conversations": "对话记录",
     "roles": "权限角色",
     "usage": "使用情况",
-    "erasure": "数据删除"
+    "erasure": "数据删除",
+    "sectionHome": "主页",
+    "sectionKnowledge": "知识管理",
+    "sectionAgents": "代理与团队",
+    "sectionConversations": "会话与升级",
+    "sectionAnalytics": "分析与绩效",
+    "sectionSystem": "系统与合规",
+    "home": "主页",
+    "agents": "代理",
+    "escalations": "升级",
+    "coachAnalytics": "教练分析",
+    "integrations": "集成"
+  },
+  "home": {
+    "title": "主页",
+    "subtitleAdmin": "机构概览",
+    "subtitleCoach": "您的下线",
+    "subtitleReadOnly": "报表概览",
+    "keyMetricsTitle": "关键指标",
+    "alertsTitle": "警报",
+    "recentActivityTitle": "近期动态",
+    "quickActionsTitle": "快捷操作",
+    "empty": "暂无数据。首次使用量汇总运行后，指标将显示在此处。",
+    "stale": "正在显示{relative}的数据。最新的汇总可能尚未运行。"
+  },
+  "integrations": {
+    "title": "集成",
+    "subtitle": "D2的托管集成。当前未配置任何集成。",
+    "emptyHeading": "未配置任何集成",
+    "emptyBody": "集成是一项托管的未来功能。WhatsApp Business API 受毕业门槛限制，目前尚不可用。回复始终为复制到剪贴板——平台绝不会代您发送消息。",
+    "comingSoonBadge": "敬请期待"
   },
   "errors": {
     "notFound": "页面未找到。",
@@ -387,7 +419,9 @@
     "noRollups": "暂无使用量汇总数据——首次使用量汇总窗口运行后将填充分析数据。",
     "staleWatchdog": "使用量数据可能已过期（最后汇总时间：{relative}）。",
     "tabUsage": "使用量",
-    "tabCost": "成本"
+    "tabCost": "成本",
+    "coachSelectorLabel": "教练",
+    "coachSelectorAll": "所有教练"
   },
   "adminErasure": {
     "navLabel": "数据删除",

@@ -127,7 +127,9 @@
       "voice": "Suara"
     },
     "noReplySops": "Belum ada SOP Balas. Tambah satu di atas.",
-    "pillarSelectLabel": "Digunakan oleh"
+    "pillarSelectLabel": "Digunakan oleh",
+    "versionViewerTitle": "Sejarah versi",
+    "readOnlyNotice": "Melihat sejarah versi (baca sahaja)."
   },
   "inventory": {
     "title": "Pengurus Inventori",
@@ -208,7 +210,37 @@
     "conversations": "Perbualan",
     "roles": "Peranan",
     "usage": "Penggunaan",
-    "erasure": "Pemadaman"
+    "erasure": "Pemadaman",
+    "sectionHome": "Laman Utama",
+    "sectionKnowledge": "Pengurusan Pengetahuan",
+    "sectionAgents": "Ejen & Kohort",
+    "sectionConversations": "Perbualan & Eskalasi",
+    "sectionAnalytics": "Analitik & Prestasi",
+    "sectionSystem": "Sistem & Pematuhan",
+    "home": "Laman Utama",
+    "agents": "Ejen",
+    "escalations": "Eskalasi",
+    "coachAnalytics": "Analitik Jurulatih",
+    "integrations": "Integrasi"
+  },
+  "home": {
+    "title": "Laman Utama",
+    "subtitleAdmin": "Gambaran keseluruhan organisasi",
+    "subtitleCoach": "Downline anda",
+    "subtitleReadOnly": "Gambaran keseluruhan pelaporan",
+    "keyMetricsTitle": "Metrik Utama",
+    "alertsTitle": "Amaran",
+    "recentActivityTitle": "Aktiviti Terkini",
+    "quickActionsTitle": "Tindakan Pantas",
+    "empty": "Belum ada data. Metrik akan muncul di sini selepas usage-rollup pertama dijalankan.",
+    "stale": "Memaparkan data dari {relative}. Rollup terkini mungkin belum dijalankan."
+  },
+  "integrations": {
+    "title": "Integrasi",
+    "subtitle": "Integrasi terurus untuk D2. Tiada yang dikonfigurasikan.",
+    "emptyHeading": "Tiada integrasi dikonfigurasikan",
+    "emptyBody": "Integrasi ialah keupayaan terurus pada masa hadapan. WhatsApp Business API tertakluk kepada gerbang graduasi dan belum tersedia. Balasan sentiasa salin-ke-papan-keratan — platform tidak pernah menghantar mesej bagi pihak anda.",
+    "comingSoonBadge": "Akan datang"
   },
   "errors": {
     "notFound": "Halaman tidak dijumpai.",
@@ -387,7 +419,9 @@
     "noRollups": "Belum ada penggunaan digulung — analitik akan diisi selepas tetingkap usage-rollup pertama.",
     "staleWatchdog": "Data penggunaan mungkin lapuk (digulung terakhir {relative}).",
     "tabUsage": "Penggunaan",
-    "tabCost": "Kos"
+    "tabCost": "Kos",
+    "coachSelectorLabel": "Jurulatih",
+    "coachSelectorAll": "Semua jurulatih"
   },
   "adminErasure": {
     "navLabel": "Pemadaman",

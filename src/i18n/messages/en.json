@@ -125,7 +125,9 @@
       "voice": "Voice"
     },
     "noReplySops": "No Reply SOPs yet. Add one above.",
-    "pillarSelectLabel": "Used by"
+    "pillarSelectLabel": "Used by",
+    "versionViewerTitle": "Version history",
+    "readOnlyNotice": "Viewing version history (read-only)."
   },
   "inventory": {
     "title": "Inventory Manager",
@@ -206,7 +208,37 @@
     "conversations": "Conversations",
     "roles": "Roles",
     "usage": "Usage",
-    "erasure": "Erasure"
+    "erasure": "Erasure",
+    "sectionHome": "Home",
+    "sectionKnowledge": "Knowledge Management",
+    "sectionAgents": "Agents & Cohorts",
+    "sectionConversations": "Conversations & Escalations",
+    "sectionAnalytics": "Analytics & Performance",
+    "sectionSystem": "System & Compliance",
+    "home": "Home",
+    "agents": "Agents",
+    "escalations": "Escalations",
+    "coachAnalytics": "Coach Analytics",
+    "integrations": "Integrations"
+  },
+  "home": {
+    "title": "Home",
+    "subtitleAdmin": "Org overview",
+    "subtitleCoach": "Your downline",
+    "subtitleReadOnly": "Reporting overview",
+    "keyMetricsTitle": "Key Metrics",
+    "alertsTitle": "Alerts",
+    "recentActivityTitle": "Recent Activity",
+    "quickActionsTitle": "Quick Actions",
+    "empty": "No data yet. Metrics appear here after the first usage rollup runs.",
+    "stale": "Showing data from {relative}. The latest rollup may not have run yet."
+  },
+  "integrations": {
+    "title": "Integrations",
+    "subtitle": "Managed integrations for D2. None are configured.",
+    "emptyHeading": "No integrations configured",
+    "emptyBody": "Integrations are a managed, future capability. WhatsApp Business API is graduation-gated and not available yet. Replies are always copy-to-clipboard — the platform never sends messages on your behalf.",
+    "comingSoonBadge": "Coming soon"
   },
   "errors": {
     "notFound": "Page not found.",
@@ -385,7 +417,9 @@
     "noRollups": "No usage rolled up yet — analytics populate after the first usage-rollup window.",
     "staleWatchdog": "Usage data may be stale (last rolled up {relative}).",
     "tabUsage": "Usage",
-    "tabCost": "Cost"
+    "tabCost": "Cost",
+    "coachSelectorLabel": "Coach",
+    "coachSelectorAll": "All coaches"
   },
   "adminErasure": {
     "navLabel": "Erasure",
