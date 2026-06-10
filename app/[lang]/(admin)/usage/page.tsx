@@ -4,20 +4,28 @@
  * Admin usage+cost analytics dashboard (ADMIN-08 + QUAL-08, HR-7).
  *
  * RSC shell that:
- *   1. Three-layer admin gate (layout → page → Server Action) — (HR-12).
+ *   1. Role gate: admin + read-only (analytics). Both the page gate AND this
+ *      backing read path are widened together (06-RESEARCH Pitfall 3) — read-only
+ *      sees the ORG usage/cost view, NOT empty/Forbidden. Reads run server-side
+ *      after the gate, so widening the gate widens the read path (there is no
+ *      separate Server Action here — the RSC reads usageRollups via Admin SDK).
  *   2. Reads usageRollups ONLY — NEVER raw usageEvents (HR-7).
  *   3. Computes org KPIs server-side; passes plain serializable props to the island.
  *   4. Window filter: default last-7-days (URL searchParam ?window=7|30).
  *
  * Security:
- *   - Role gate: admin only. Non-admins redirected to chat.
+ *   - Role gate: admin + read-only (RO-01). Other roles redirected (admin/coach
+ *     fall through the layout; a verified-but-disallowed role lands on Home).
  *   - usageRollupsRef() is Admin-SDK only (client write: if false in rules).
- *   - No PII — rollups are counts-only by schema (05-02).
+ *   - No PII — rollups are counts-only by schema (05-02). The per-AGENT breakdown
+ *     (which surfaces agent UIDs) is HIDDEN from read-only (CONTEXT: read-only sees
+ *     org usage/cost only — no per-agent, no PII); the role is passed to the island.
  *
  * References:
  *   - ADMIN-08 (usage analytics), QUAL-08 (cost view)
  *   - 05-UI-SPEC.md Surface 4 (states: Empty / Populated / staleWatchdog)
  *   - 05-PATTERNS.md section usage/page.tsx
+ *   - 06-UI-SPEC.md §2 (read-only sees org usage/cost only) · 06-RESEARCH Pitfall 3
  *   - HR-7 (rollups only, never raw events)
  */
 
@@ -54,7 +62,9 @@ export default async function UsagePage({ params, searchParams }: PageProps) {
   const { lang } = await params
   const { window: windowParam } = await searchParams
 
-  // ── Admin gate (layer 2 of 3; layout.tsx is layer 1) ─────────────────────
+  // ── Analytics gate (layer 2; layout.tsx is layer 1) ──────────────────────
+  // RO-01 / Pitfall 3: admit admin + read-only. This single gate covers BOTH the
+  // page render AND the usageRollups read below (the RSC reads after the gate).
   const cookieStore = await cookies()
   const sessionCookie = cookieStore.get('__session')
 
@@ -75,8 +85,8 @@ export default async function UsagePage({ params, searchParams }: PageProps) {
     throw err
   }
 
-  if (user.role !== 'admin') {
-    redirect(`/${lang}/chat`)
+  if (user.role !== 'admin' && user.role !== 'read-only') {
+    redirect(`/${lang}`)
   }
 
   // ── Window selection (default 7 days) ────────────────────────────────────
@@ -262,10 +272,14 @@ export default async function UsagePage({ params, searchParams }: PageProps) {
     totalWrites,
     volumeTrend,
     tokenByPillar,
-    perAgentRows,
+    // RO-01 / CONTEXT: read-only sees ORG usage/cost only — never the per-agent
+    // breakdown (it surfaces agent UIDs). Suppress the rows server-side so they
+    // are never serialized to a read-only client; the org aggregates still render.
+    perAgentRows: user.role === 'read-only' ? [] : perAgentRows,
     staleWatchdog,
     latestRollupRelative,
     lang,
+    role: user.role,
   }
 
   const t = await getTranslations('adminUsage')

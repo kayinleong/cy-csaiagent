@@ -1,11 +1,19 @@
 // app/[lang]/page.tsx — locale-scoped landing.
 //
 // Role-aware entry point: if a valid session exists, route by verified role
-// (new-agent → chat; senior-coach | admin → dashboard). Otherwise → sign-in.
+// (new-agent → chat; senior-coach | admin → dashboard; read-only → usage
+// analytics). Otherwise → sign-in.
 //
 // Note: params is a Promise in Next.js 16 — always await. cookies() is async.
 // redirect() throws NEXT_REDIRECT, so resolve the role inside try/catch but call
 // redirect() OUTSIDE it (a redirect thrown inside the catch would be swallowed).
+//
+// RO-01 / Wave 3 (06-04): the read-only stakeholder lands on its analytics surface.
+// CONTEXT locks the read-only landing as Home, but `/${lang}` is still a pure
+// redirect in this wave — Home (HOME-01) renders here only after Wave 4. Until
+// then read-only is routed to `/${lang}/usage` (the org usage/cost analytics page
+// its gate now admits) so it never falls through to chat. Wave 4 HOME-01 changes
+// this branch to RENDER Home for read-only/senior-coach/admin.
 
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -33,6 +41,11 @@ export default async function LangPage({
     }
   }
 
+  if (role === 'read-only') {
+    // RO-01: read-only lands on its analytics surface (usage), NOT chat or
+    // dashboard. Becomes a Home render in Wave 4 (HOME-01).
+    redirect(`/${lang}/usage`)
+  }
   if (role === 'senior-coach' || role === 'admin') {
     redirect(`/${lang}/dashboard`)
   }

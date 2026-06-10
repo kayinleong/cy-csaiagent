@@ -10,6 +10,13 @@
  * decided server-side (admin = org-wide, HR-4). This component ONLY displays;
  * it never re-queries Firestore or calls any action.
  *
+ * RO-01 (Wave 3 / 06-04): a `read-only` analytics stakeholder also reaches this
+ * surface. It sees the ORG usage/cost view (KPIs, volume trend, pillar spend) but
+ * NOT the per-AGENT breakdown table — that surfaces agent UIDs (CONTEXT: read-only
+ * sees org usage/cost only, no per-agent, no PII). The RSC already empties
+ * perAgentRows for read-only; this component additionally hides the whole section
+ * so no empty-state placeholder hints at per-agent data.
+ *
  * Charts follow the VERBATIM metrics-panel.tsx recharts conventions (HR-3):
  *   - ResponsiveContainer width="100%" height={220}
  *   - margin={{ top: 4, right: 8, left: -16, bottom: 4 }}
@@ -29,6 +36,7 @@
 
 import { useTranslations } from 'next-intl'
 import { useRouter } from 'next/navigation'
+import type { Role } from '@/src/firebase/auth'
 import {
   BarChart,
   Bar,
@@ -98,6 +106,11 @@ export interface UsageDashboardProps {
   staleWatchdog: boolean
   latestRollupRelative: string | null
   lang: string
+  /**
+   * Verified role of the viewer (RO-01). Drives the read-only variant: a
+   * `read-only` viewer sees org aggregates but NOT the per-agent breakdown.
+   */
+  role: Role
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -138,11 +151,14 @@ export function UsageDashboard({
   staleWatchdog,
   latestRollupRelative,
   lang,
+  role,
 }: UsageDashboardProps) {
   const t = useTranslations('adminUsage')
   const router = useRouter()
 
   const hasData = totalMsgCount > 0
+  // RO-01: the per-agent breakdown surfaces agent UIDs — hidden from read-only.
+  const showPerAgent = role !== 'read-only'
 
   // Window switch re-navigates so RSC re-fetches the correct window
   function handleWindowChange(value: string) {
@@ -307,44 +323,46 @@ export function UsageDashboard({
         </div>
       </section>
 
-      {/* ── Per-agent breakdown Table ─────────────────────────────────────── */}
-      <section>
-        <h2 className="mb-4 text-lg font-semibold">{t('byAgentTitle')}</h2>
-        <Card>
-          <CardContent className="pt-4">
-            {!hasData ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                {t('noRollups')}
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t('colAgent')}</TableHead>
-                      <TableHead className="text-right">{t('colTokensIn')}</TableHead>
-                      <TableHead className="text-right">{t('colTokensOut')}</TableHead>
-                      <TableHead className="text-right">{t('colReads')}</TableHead>
-                      <TableHead className="text-right">{t('colWrites')}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {perAgentRows.map((row) => (
-                      <TableRow key={row.uid}>
-                        <TableCell className="font-mono text-xs">{row.shortUid}</TableCell>
-                        <TableCell className="text-right">{kNum(row.inputTokens)}</TableCell>
-                        <TableCell className="text-right">{kNum(row.outputTokens)}</TableCell>
-                        <TableCell className="text-right">{kNum(row.reads)}</TableCell>
-                        <TableCell className="text-right">{kNum(row.writes)}</TableCell>
+      {/* ── Per-agent breakdown Table (admin only — surfaces agent UIDs; RO-01) ── */}
+      {showPerAgent && (
+        <section>
+          <h2 className="mb-4 text-lg font-semibold">{t('byAgentTitle')}</h2>
+          <Card>
+            <CardContent className="pt-4">
+              {!hasData ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  {t('noRollups')}
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{t('colAgent')}</TableHead>
+                        <TableHead className="text-right">{t('colTokensIn')}</TableHead>
+                        <TableHead className="text-right">{t('colTokensOut')}</TableHead>
+                        <TableHead className="text-right">{t('colReads')}</TableHead>
+                        <TableHead className="text-right">{t('colWrites')}</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </section>
+                    </TableHeader>
+                    <TableBody>
+                      {perAgentRows.map((row) => (
+                        <TableRow key={row.uid}>
+                          <TableCell className="font-mono text-xs">{row.shortUid}</TableCell>
+                          <TableCell className="text-right">{kNum(row.inputTokens)}</TableCell>
+                          <TableCell className="text-right">{kNum(row.outputTokens)}</TableCell>
+                          <TableCell className="text-right">{kNum(row.reads)}</TableCell>
+                          <TableCell className="text-right">{kNum(row.writes)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+      )}
     </div>
   )
 }

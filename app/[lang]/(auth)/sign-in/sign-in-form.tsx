@@ -85,10 +85,15 @@ export function SignInForm() {
       const { role } = (await res.json()) as { ok: boolean; role?: string }
 
       // Route by role (access matrix):
+      //   read-only    → /[lang]/usage     (analytics landing — RO-01; Home in Wave 4)
       //   senior-coach → /[lang]/dashboard
       //   admin        → /[lang]/dashboard (lands on dashboard; KB/Inventory via sidebar)
       //   new-agent    → /[lang]/chat      (default)
-      if (role === 'senior-coach' || role === 'admin') {
+      // SECURITY: this is UX-only routing — the server-side layout/page gates are the
+      // real boundary. Read-only must never fall into chat (it is not a chat role).
+      if (role === 'read-only') {
+        router.push(`/${lang}/usage`)
+      } else if (role === 'senior-coach' || role === 'admin') {
         router.push(`/${lang}/dashboard`)
       } else {
         router.push(`/${lang}/chat`)
