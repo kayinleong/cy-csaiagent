@@ -37,7 +37,6 @@ import {
   adminRoleCtx,
   readOnlyCtx,
   unauthContext,
-  adminContext,
   cleanup,
   syntheticNewAgent,
   syntheticSeniorCoach,
@@ -80,9 +79,15 @@ if (RUN_RULES) {
 // ─── Helper: seed a doc via admin (bypasses rules for test setup) ─────────────
 
 async function seed(path: string, data: Record<string, unknown>): Promise<void> {
-  const ctx = await adminContext()
-  const db = ctx.firestore()
-  await setDoc(doc(db, path), data)
+  // @firebase/rules-unit-testing v5 invalidates the RulesTestContext once the
+  // withSecurityRulesDisabled() callback resolves, so the seed write MUST happen
+  // INSIDE the callback (returning the ctx and calling .firestore() afterwards
+  // throws "This RulesTestContext is no longer valid"). Use the env directly.
+  const env = await getTestEnv()
+  await env.withSecurityRulesDisabled(async (adminCtx) => {
+    const db = adminCtx.firestore()
+    await setDoc(doc(db, path), data)
+  })
 }
 
 // ─── 1. DENY-BY-DEFAULT: Unauthenticated reads are denied on every collection ──
