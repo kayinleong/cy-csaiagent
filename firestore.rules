@@ -37,6 +37,32 @@ service cloud.firestore {
     }
 
     /**
+     * Analytics-read role: admin OR the read-only stakeholder (RO-01).
+     * Least-privilege — admits a read of ANALYTICS-AGGREGATE collections only
+     * (usageRollups / usageEvents / evals). NEVER applied to a PII/owner-scoped
+     * collection (Pitfall 2 — read-only must not read conversations, messages,
+     * leads, leadContext, auditLogs, erasureRequests, rateBudgets, knowledgeGaps,
+     * escalations, users, agentProfiles). read-only never writes anything.
+     */
+    function isAnalyticsReader() {
+      return (hasRole('admin') || hasRole('read-only')) && sameTenant();
+    }
+
+    /**
+     * True if the caller is the read-only analytics stakeholder (RO-01).
+     * Used to EXCLUDE read-only from the broad signed-in / isSelf grants on
+     * PII/owner-scoped collections (users, leadContext). read-only is, by
+     * construction, NOT an agent and NOT a coach — it must be denied every
+     * PII/owner read+write so the only path it ever has is the analytics-reader
+     * helper on the 3 analytics aggregates + the signed-in-tenant KB read (PDPA
+     * least-privilege; the LOCKED 06-VALIDATION matrix). Does NOT affect the
+     * new-agent / senior-coach / admin paths.
+     */
+    function isReadOnlyRole() {
+      return hasRole('read-only');
+    }
+
+    /**
      * True for incoming write data (resource.data doesn't exist yet on create).
      * Use for create-path checks where we need the incoming tenantId.
      */
@@ -53,8 +79,11 @@ service cloud.firestore {
 
     // ── Collection 1: users ──────────────────────────────────────────────────
     match /users/{uid} {
+      // read-only is excluded from the isSelf grant: it must NOT read any users
+      // row, including its OWN (LOCKED matrix; PDPA least-privilege). The other
+      // three roles' isSelf/coach/admin paths are unchanged.
       allow read:
-        if isSelf(uid)
+        if (isSelf(uid) && !isReadOnlyRole())
         || (hasRole('senior-coach') && resource.data.uplineCoachId == null
             // senior-coach reads own user doc
             && request.auth.uid == uid && sameTenant())
@@ -65,7 +94,7 @@ service cloud.firestore {
         || (hasRole('admin') && sameTenant());
 
       allow write:
-        if isSelf(uid)
+        if (isSelf(uid) && !isReadOnlyRole())
         || (hasRole('admin') && incomingTenant());
     }
 
@@ -131,16 +160,19 @@ service cloud.firestore {
     match /leadContext/{leadId} {
       // Lead context is shared cross-pillar but owned by the agent who holds
       // the lead. Cross-pillar write slots are enforced at the application layer.
+      // read-only is excluded from the broad signed-in grant: leadContext carries
+      // cross-pillar lead PII, so read-only must be denied read+write (LOCKED
+      // matrix; PDPA least-privilege). The agent/coach/admin paths are unchanged.
       allow read:
         if (resource.data.coachSlot != null
             // Read if the user owns the corresponding lead (lazy check via leads collection)
-            && isSignedIn())
+            && isSignedIn() && !isReadOnlyRole())
         || (hasRole('admin') && sameTenant());
 
       // Any signed-in user who matches ownership via application logic (the app
       // enforces agent-scoped write slots at the SDK layer). Admin may create.
       allow write:
-        if isSignedIn() && incomingTenant()
+        if (isSignedIn() && incomingTenant() && !isReadOnlyRole())
         || (hasRole('admin') && incomingTenant());
     }
 
@@ -218,7 +250,7 @@ service cloud.firestore {
     // ── Collection 14: evals ─────────────────────────────────────────────────
     // Written by cron / service account (Admin SDK). Read by admin dashboard.
     match /evals/{runId} {
-      allow read: if hasRole('admin') && sameTenant();
+      allow read: if isAnalyticsReader();   // admin + read-only (RO-01); analytics aggregate
       allow write: if false;
     }
 
@@ -280,8 +312,8 @@ service cloud.firestore {
     // via Admin SDK (recordUsageEvent inside after()). Counts only — no content.
     // Admin-read for org-wide cost auditing (T-05-UNRULED / T-05-TAMPER mitigate).
     match /usageEvents/{id} {
-      allow create, update, delete: if false;          // Admin-SDK only
-      allow read: if hasRole('admin') && sameTenant(); // org-wide cost view
+      allow create, update, delete: if false;     // Admin-SDK only
+      allow read: if isAnalyticsReader();          // admin + read-only (RO-01); counts-only
     }
 
     // ── Collection 19: usageRollups ──────────────────────────────────────────
@@ -289,8 +321,8 @@ service cloud.firestore {
     // usage-rollup lazy-cron job via Admin SDK. Admin-read for ADMIN-08 dashboard.
     // (T-05-UNRULED / T-05-TAMPER mitigate).
     match /usageRollups/{id} {
-      allow create, update, delete: if false;          // Admin-SDK only
-      allow read: if hasRole('admin') && sameTenant();
+      allow create, update, delete: if false;     // Admin-SDK only
+      allow read: if isAnalyticsReader();          // admin + read-only (RO-01); daily rollup
     }
 
     // ── Collection 20: erasureRequests ───────────────────────────────────────
