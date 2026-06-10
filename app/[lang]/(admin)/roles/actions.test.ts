@@ -76,6 +76,24 @@ describe('ADMIN-07 assignRole — admin-gate + setUserClaims + audit', () => {
     expect(result).toEqual({ ok: false, error: 'Forbidden' })
   })
 
+  it("returns {ok:false, error:'Forbidden'} for a read-only caller (RO-01)", async () => {
+    // RO-01: the read-only stakeholder is denied EVERY write/admin Server Action.
+    // assignRole must reject a read-only caller server-side (never nav-only hiding).
+    // RED-BY-DESIGN: 'read-only' is not yet a valid Role, so this test compiles
+    // (cast below) and turns GREEN once the action exists and gates read-only out.
+
+    const { requireUser } = await import('@/src/firebase/auth')
+    vi.mocked(requireUser).mockResolvedValueOnce({
+      uid: 'readonly-uid',
+      role: 'read-only',
+      tenantId: 'd2',
+    } as unknown as AuthenticatedUser)
+
+    const result = await assignRole('target-uid', 'new-agent')
+
+    expect(result).toEqual({ ok: false, error: 'Forbidden' })
+  })
+
   it('calls setUserClaims(targetUid, role) on admin success', async () => {
     // ADMIN-07: setUserClaims is the SOLE sanctioned claim-setting path.
     // (src/firebase/auth.ts:148 — "ONLY sanctioned claim-setting path")

@@ -143,4 +143,28 @@ describe('setUserClaims', () => {
     // setCustomUserClaims must NOT be called with a bad role
     expect(mockSetCustomUserClaims).not.toHaveBeenCalled()
   })
+
+  // ─── Phase 6 (RO-01): 4th role tier — read-only stakeholder ──────────────────
+  // RED-BY-DESIGN: 'read-only' is not in the Role union / VALID_ROLES yet, so
+  // setUserClaims rejects it today (treated as an unknown role → InvalidRoleError).
+  // Turns GREEN when Wave 1 adds 'read-only' to src/firebase/auth.ts:36,46.
+  // Cast to Role keeps the test type-clean even before the union is widened.
+
+  it("Behavior 3c (RO-01): setUserClaims(uid, 'read-only') resolves once the role is valid", async () => {
+    await setUserClaims('<UID_PLACEHOLDER>', 'read-only' as 'admin')
+
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith('<UID_PLACEHOLDER>', {
+      role: 'read-only',
+      tenantId: 'd2',
+    })
+  })
+
+  it('Behavior 3d (RO-01 guard): an unknown role STILL throws InvalidRoleError after adding read-only', async () => {
+    // Adding 'read-only' must NOT widen the validator to accept arbitrary roles.
+    await expect(
+      setUserClaims('<UID_PLACEHOLDER>', 'bogus-role' as 'admin')
+    ).rejects.toThrow(/invalid role/i)
+
+    expect(mockSetCustomUserClaims).not.toHaveBeenCalled()
+  })
 })

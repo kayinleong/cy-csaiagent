@@ -35,12 +35,14 @@ import {
   newAgentCtx,
   seniorCoachCtx,
   adminRoleCtx,
+  readOnlyCtx,
   unauthContext,
   adminContext,
   cleanup,
   syntheticNewAgent,
   syntheticSeniorCoach,
   syntheticAdmin,
+  syntheticReadOnly,
 } from './rules-helpers'
 
 // ─── Test data helpers ────────────────────────────────────────────────────────
@@ -1263,6 +1265,237 @@ rulesSuite('erasureRequests collection — server-write-only, admin-read (QUAL-0
     const wrongTenantAdmin = await authedContext('wrong-tenant-admin-er', { role: 'admin', tenantId: WRONG_TENANT })
     const db = wrongTenantAdmin.firestore()
     await assertFails(getDoc(doc(db, 'erasureRequests', erasureDocId)))
+  })
+})
+
+// ─── 18. read-only role — the RO-01 collection-by-collection rules matrix ─────
+//
+// Phase 6 (RO-01). The read-only stakeholder is a least-privilege analytics
+// reader. This block encodes the LOCKED rules matrix from 06-VALIDATION.md /
+// 06-CONTEXT.md as assertions over readOnlyCtx():
+//
+//   ALLOW READ : usageRollups, usageEvents, evals (analytics aggregates)
+//                projects, collateral, kbDocs, kbChunks, kbIngestionJobs (KB read)
+//   DENY  READ : auditLogs, conversations, messages, leads, leadContext,
+//                erasureRequests, rateBudgets, knowledgeGaps, escalations,
+//                users, agentProfiles  (PII / owner-scoped — Pitfall 2)
+//   DENY  WRITE: every collection (read-only never writes)
+//
+// RED-BY-DESIGN: today firestore.rules has no `read-only` role, so the analytics
+// `assertSucceeds` reads FAIL (admin-only rules) — these turn GREEN when Wave 2/3
+// add isAnalyticsReader() to firestore.rules. The DENY assertions should already
+// pass (deny-by-default) and must STAY denied after the rules land.
+//
+// CRITICAL (Pitfall 2): there is NO assertSucceeds on a PII-collection read for
+// read-only anywhere in this block — asserting a PII read SUCCEEDS would encode
+// an information-disclosure leak (T-06-01). The acceptance grep gate enforces this.
+//
+// Emulator-gated via rulesSuite (describe.skip without FIRESTORE_EMULATOR_HOST).
+
+rulesSuite('read-only role — RO-01 analytics-reader matrix (T-06-01)', () => {
+  // Reuse a stable doc id per collection; seeded via the admin (rules-bypassing) ctx.
+  const ROLLUP_ID = '2026-06-07__ro-test-001__coach'
+  const USAGE_EVENT_ID = 'ro-usage-event-001'
+  const EVAL_ID = 'ro-eval-001'
+  const KB_DOC_ID = 'ro-kb-doc-001'
+
+  beforeAll(async () => {
+    await seed(`usageRollups/${ROLLUP_ID}`, {
+      tenantId: D2_TENANT, day: '2026-06-07', uid: syntheticNewAgent.uid, pillar: 'coach',
+      msgCount: 1, inputTokens: 10, outputTokens: 5, cachedInputTokens: 0,
+      cacheCreationInputTokens: 0, updatedAt: new Date(),
+    })
+    await seed(`usageEvents/${USAGE_EVENT_ID}`, {
+      tenantId: D2_TENANT, uid: syntheticNewAgent.uid, pillar: 'coach',
+      inputTokens: 10, outputTokens: 5, cachedInputTokens: 0,
+      cacheCreationInputTokens: 0, day: '2026-06-07', createdAt: new Date(),
+    })
+    await seed(`evals/${EVAL_ID}`, {
+      tenantId: D2_TENANT, suite: 'coach-en', lang: 'en', score: 0.9,
+      judgeModel: 'claude-opus-4-7', failures: [],
+    })
+    for (const col of ['projects', 'collateral', 'kbDocs', 'kbChunks', 'kbIngestionJobs']) {
+      await seed(`${col}/${KB_DOC_ID}`, { tenantId: D2_TENANT, name: 'ro read test' })
+    }
+    // PII / owner-scoped docs the read-only user must NOT read.
+    await seed(`auditLogs/ro-audit-001`, {
+      tenantId: D2_TENANT, actorUid: syntheticNewAgent.uid, action: 'chat_turn',
+      targetRef: 'conversations/c', hashes: {}, ts: new Date(),
+    })
+    await seed(`conversations/ro-conv-001`, {
+      tenantId: D2_TENANT, ownerUid: syntheticNewAgent.uid, pillar: 'coach',
+      lang: 'en', createdAt: new Date(), summary: '',
+    })
+    await seed(`conversations/ro-conv-001/messages/ro-msg-001`, {
+      tenantId: D2_TENANT, role: 'user', content: 'x', citations: [],
+      routeDecision: 'coach', tokens: 1, redacted: false,
+    })
+    await seed(`leads/ro-lead-001`, {
+      tenantId: D2_TENANT, ownerUid: syntheticNewAgent.uid, name: '<LEAD_ID:RO>',
+      phoneHash: 'hash-ro', consentFlag: true, nationality: 'MY', segment: 'investor',
+    })
+    await seed(`leadContext/ro-lead-ctx-001`, {
+      tenantId: D2_TENANT, coachSlot: {}, finderSlot: {}, replySlot: {},
+      rollingSummary: '', updatedAt: new Date(),
+    })
+    await seed(`erasureRequests/ro-erasure-001`, {
+      tenantId: D2_TENANT, subjectType: 'agent', subjectIdHash: 'h', status: 'pending',
+      requestedBy: syntheticAdmin.uid, requestedAt: new Date(),
+      slaDeadline: Date.now() + 1000, collectionsRemaining: [],
+    })
+    await seed(`rateBudgets/${syntheticNewAgent.uid}`, {
+      tenantId: D2_TENANT, ownerUid: syntheticNewAgent.uid, requestCount: 0,
+      tokenCount: 0, windowStart: new Date(),
+    })
+    await seed(`knowledgeGaps/ro-gap-001`, {
+      tenantId: D2_TENANT, seniorCoachId: syntheticSeniorCoach.uid,
+      agentUid: syntheticNewAgent.uid, topicHash: 'h', topicLabel: 't', lang: 'en',
+      count: 1, lastSeenAt: new Date(),
+    })
+    await seed(`escalations/ro-esc-001`, {
+      tenantId: D2_TENANT, agentUid: syntheticNewAgent.uid,
+      seniorCoachId: syntheticSeniorCoach.uid, reason: 'stall-detect',
+      contextBundle: {}, status: 'open', openedAt: new Date(),
+    })
+    await seed(`users/${syntheticNewAgent.uid}`, {
+      tenantId: D2_TENANT, role: 'new-agent', lang: 'en', voiceSamples: [],
+      uplineCoachId: syntheticSeniorCoach.uid,
+    })
+    await seed(`agentProfiles/${syntheticNewAgent.uid}`, {
+      tenantId: D2_TENANT, journeyStage: 'onboarding', currentCheckpoint: 'intro',
+      lastActiveAt: new Date(), activeLeadIds: [], seniorCoachId: syntheticSeniorCoach.uid,
+    })
+    // A users doc for the read-only stakeholder itself — it must NOT be able to
+    // read even its OWN users row (read-only is not self of an agent; LOCKED deny).
+    await seed(`users/${syntheticReadOnly.uid}`, {
+      tenantId: D2_TENANT, role: 'read-only', lang: 'en', voiceSamples: [],
+    })
+  })
+
+  // ── ALLOW READ: analytics aggregates (RED until isAnalyticsReader() lands) ──
+
+  it('read-only CAN read usageRollups (analytics aggregate)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertSucceeds(getDoc(doc(db, 'usageRollups', ROLLUP_ID)))
+  })
+
+  it('read-only CAN read usageEvents (analytics aggregate, counts-only)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertSucceeds(getDoc(doc(db, 'usageEvents', USAGE_EVENT_ID)))
+  })
+
+  it('read-only CAN read evals (analytics aggregate)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertSucceeds(getDoc(doc(db, 'evals', EVAL_ID)))
+  })
+
+  // ── ALLOW READ: KB read collections (signed-in tenant read) ──
+
+  for (const col of ['projects', 'collateral', 'kbDocs', 'kbChunks', 'kbIngestionJobs'] as const) {
+    it(`read-only CAN read ${col} (signed-in tenant read)`, async () => {
+      const db = (await readOnlyCtx()).firestore()
+      await assertSucceeds(getDoc(doc(db, col, KB_DOC_ID)))
+    })
+  }
+
+  // ── DENY READ: PII / owner-scoped collections (Pitfall 2 — never assertSucceeds) ──
+
+  it('read-only CANNOT read auditLogs (PII / compliance — denied)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(getDoc(doc(db, 'auditLogs', 'ro-audit-001')))
+  })
+
+  it('read-only CANNOT read conversations (PII — denied)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(getDoc(doc(db, 'conversations', 'ro-conv-001')))
+  })
+
+  it('read-only CANNOT read conversation messages (PII — denied)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(getDoc(doc(db, 'conversations', 'ro-conv-001', 'messages', 'ro-msg-001')))
+  })
+
+  it('read-only CANNOT read leads (PII — denied)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(getDoc(doc(db, 'leads', 'ro-lead-001')))
+  })
+
+  it('read-only CANNOT read leadContext (PII — denied)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(getDoc(doc(db, 'leadContext', 'ro-lead-ctx-001')))
+  })
+
+  it('read-only CANNOT read erasureRequests (PDPA — denied)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(getDoc(doc(db, 'erasureRequests', 'ro-erasure-001')))
+  })
+
+  it('read-only CANNOT read rateBudgets (owner-scoped — denied)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(getDoc(doc(db, 'rateBudgets', syntheticNewAgent.uid)))
+  })
+
+  it('read-only CANNOT read knowledgeGaps (carries agentUid — denied)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(getDoc(doc(db, 'knowledgeGaps', 'ro-gap-001')))
+  })
+
+  it('read-only CANNOT read escalations (carries agentUid — denied)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(getDoc(doc(db, 'escalations', 'ro-esc-001')))
+  })
+
+  it('read-only CANNOT read users (PII — denied, incl. its own row)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(getDoc(doc(db, 'users', syntheticNewAgent.uid)))
+    await assertFails(getDoc(doc(db, 'users', syntheticReadOnly.uid)))
+  })
+
+  it('read-only CANNOT read agentProfiles (PII — denied)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(getDoc(doc(db, 'agentProfiles', syntheticNewAgent.uid)))
+  })
+
+  // ── DENY WRITE: read-only never writes any collection ──
+
+  it('read-only CANNOT write usageRollups (read-only never writes)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(setDoc(doc(db, 'usageRollups', 'ro-write-rollup'), { tenantId: D2_TENANT }))
+  })
+
+  it('read-only CANNOT write usageEvents (read-only never writes)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(setDoc(doc(db, 'usageEvents', 'ro-write-event'), { tenantId: D2_TENANT }))
+  })
+
+  it('read-only CANNOT write evals (read-only never writes)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(setDoc(doc(db, 'evals', 'ro-write-eval'), { tenantId: D2_TENANT }))
+  })
+
+  it('read-only CANNOT write kbDocs (read-only never writes)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(setDoc(doc(db, 'kbDocs', 'ro-write-kbdoc'), { tenantId: D2_TENANT, name: 'x' }))
+  })
+
+  it('read-only CANNOT write projects (read-only never writes)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(setDoc(doc(db, 'projects', 'ro-write-project'), { tenantId: D2_TENANT, name: 'x' }))
+  })
+
+  it('read-only CANNOT write collateral (read-only never writes)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(setDoc(doc(db, 'collateral', 'ro-write-collateral'), { tenantId: D2_TENANT }))
+  })
+
+  it('read-only CANNOT write leadContext (read-only never writes)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(setDoc(doc(db, 'leadContext', 'ro-write-leadctx'), { tenantId: D2_TENANT }))
+  })
+
+  it('read-only CANNOT write users (read-only never writes)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(setDoc(doc(db, 'users', syntheticReadOnly.uid), { tenantId: D2_TENANT, role: 'admin' }))
   })
 })
 
