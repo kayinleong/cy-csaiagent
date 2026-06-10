@@ -5,10 +5,13 @@
  * They use placeholder formats that will FAIL the CI PII scan if real data
  * is accidentally substituted (see .github/workflows/ci.yml).
  *
- * Three roles as required by D-11 (all three roles needed in Phase 1):
+ * Roles:
  *   - new-agent    : the primary proof-slice user (sign-in flow)
  *   - senior-coach : receives handoff/escalation signals (D-10 seam)
  *   - admin        : uses the minimal KB CRUD form (D-10 seam)
+ *   - read-only    : Phase-6 reporting/analytics stakeholder (RO-01) — read-only
+ *                    access to analytics aggregates; DENIED every write/admin
+ *                    surface and every PII collection. NOT an agent, NOT a coach.
  *
  * Every record includes tenantId: 'd2' per the CLAUDE.md / TSD §4 mandate.
  */
@@ -18,7 +21,7 @@ export interface SyntheticUser {
   email: string
   displayName: string
   tenantId: 'd2'
-  role: 'new-agent' | 'senior-coach' | 'admin'
+  role: 'new-agent' | 'senior-coach' | 'admin' | 'read-only'
   /** Placeholder phone — NOT a real Malaysian number (+60 prefix omitted intentionally) */
   phone: string
   /** Only set for new-agent: which senior coach manages this agent */
@@ -68,9 +71,29 @@ export const syntheticAdmin: SyntheticUser = {
   phone: '+00-PLACEHOLDER-003',
 }
 
-/** All three synthetic users as an array (convenient for table-driven tests). */
+/**
+ * Synthetic read-only stakeholder user (Phase 6, RO-01).
+ *
+ * A 4th role tier for a reporting/analytics stakeholder. Has READ access to
+ * analytics aggregates only (usageRollups, usageEvents, evals) plus the KB read
+ * collections it already shares as a signed-in tenant user. DENIED read on every
+ * PII/owner-scoped collection and DENIED write everywhere. It is NOT an agent
+ * (no uplineCoachId) and NOT a coach (no seniorCoachId) — least-privilege by
+ * construction.
+ */
+export const syntheticReadOnly: SyntheticUser = {
+  uid: 'test-uid-readonly-001',
+  email: 'dave.stakeholder.test@example.com',
+  displayName: 'Dave Stakeholder (Test)',
+  tenantId: 'd2',
+  role: 'read-only',
+  phone: '+00-PLACEHOLDER-004',
+}
+
+/** All four synthetic users as an array (convenient for table-driven tests). */
 export const allSyntheticUsers: SyntheticUser[] = [
   syntheticNewAgent,
   syntheticSeniorCoach,
   syntheticAdmin,
+  syntheticReadOnly,
 ]

@@ -26,6 +26,7 @@ import {
   syntheticNewAgent,
   syntheticSeniorCoach,
   syntheticAdmin,
+  syntheticReadOnly,
   type SyntheticUser,
 } from '@/tests/fixtures/synthetic-users'
 
@@ -125,6 +126,21 @@ export async function adminRoleCtx(): Promise<RulesTestContext> {
 }
 
 /**
+ * Returns a context for the synthetic read-only stakeholder
+ * (role:'read-only', tenantId:'d2') — Phase 6, RO-01.
+ *
+ * Used to assert the read-only rules matrix: CAN read analytics aggregates
+ * (usageRollups/usageEvents/evals) + KB read collections; DENIED every PII
+ * collection and DENIED write everywhere.
+ */
+export async function readOnlyCtx(): Promise<RulesTestContext> {
+  return authedContext(syntheticReadOnly.uid, {
+    role: syntheticReadOnly.role,
+    tenantId: syntheticReadOnly.tenantId,
+  })
+}
+
+/**
  * Tear down the emulator environment.
  * Call in afterAll() to prevent resource leaks.
  */
@@ -136,5 +152,5 @@ export async function cleanup(): Promise<void> {
 }
 
 /** Re-export synthetic user fixtures for convenience in test files. */
-export { syntheticNewAgent, syntheticSeniorCoach, syntheticAdmin }
+export { syntheticNewAgent, syntheticSeniorCoach, syntheticAdmin, syntheticReadOnly }
 export type { SyntheticUser }
