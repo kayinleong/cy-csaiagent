@@ -119,6 +119,44 @@ Requirements for the initial release covering the three pillars + admin + senior
 - [x] **QUAL-09**: PDPA audit + sign-off before production rollout
 - [x] **QUAL-10**: Internal documentation for D2's team (handover)
 
+## Phase 6 Requirements — Console IA v2 (Restructure + Read-only Role)
+
+Derived during `/gsd-plan-phase 6` (2026-06-10) from `.planning/phases/06-console-ia-v2/` (CONTEXT/RESEARCH/UI-SPEC/PATTERNS/VALIDATION). Phase 6 is a brownfield IA restructure: relocate/consolidate existing v1 surfaces under a 6-section nav, add a least-privilege read-only stakeholder role, and add a few light read-only surfaces — **no regression to any v1 feature** (the overriding success criterion). The relocated surfaces keep their existing AUTH-/ADMIN-/CDASH-/REPLY- behaviours unchanged; these NEW REQ-IDs cover only the Phase-6 net-new/relocate work.
+
+### Navigation Information Architecture (IA)
+
+- [ ] **IA-01**: Console navigation presents the six fixed business sections (Home · Knowledge Management · Agents & Cohorts · Conversations & Escalations · Analytics & Performance · System & Compliance), role-filtered, with every existing v1 surface reachable under the correct section — regrouped OVER the existing routes (no route folder moved; hrefs unchanged); a section with zero visible items for a role renders nothing. Nav filtering is UX-only, never the authorization gate.
+- [ ] **IA-02**: The latent broken KB deep-link (`/${lang}/admin/kb/...` → `/${lang}/kb/...`; route group `(admin)` never appears in the URL) is fixed at `kb-doc-list.tsx` and `kb/[docId]/page.tsx`; KB list→detail navigation no longer 404s.
+
+### Read-only Stakeholder Role (RO)
+
+- [ ] **RO-01**: A 4th `read-only` role exists end-to-end — added to the `Role` union + `VALID_ROLES` (`src/firebase/auth.ts`) and `AssignableRole` (`roles/actions.ts`); `setUserClaims('read-only')` succeeds via the existing sole-sanctioned claim path while unknown roles still throw `InvalidRoleError`; read-only gets no agent profile.
+- [ ] **RO-02**: Read-only access is enforced **server-side** — a centralized `requireRole(allowed)` gate helper (regression-covered) plus the route-group `layout.tsx` gates redirect read-only away from every write/admin surface; read-only lands on Home (never chat/dashboard); denial is proven by tests, not nav-hiding.
+- [ ] **RO-03**: Firestore rules grant read-only an `isAnalyticsReader()` read on analytics aggregates only (`usageRollups`, `usageEvents`, `evals`) + inherited signed-in-tenant KB reads (`projects`/`collateral`/`kbDocs`/`kbChunks`/`kbIngestionJobs`); read-only is DENIED read on every PII/owner-scoped collection (`conversations`/`messages`/`leads`/`leadContext`/`auditLogs`/`erasureRequests`/`rateBudgets`/`users`/`agentProfiles`/`knowledgeGaps`/`escalations`/`replyEdits`) and DENIED write everywhere — proven by the rules-unit-test matrix over a 4th synthetic read-only user.
+- [ ] **RO-04**: Every analytics surface read-only may see has BOTH its page/layout gate AND its backing read path widened (the usage analytics surface renders for read-only, not empty/Forbidden); all write/admin Server Actions (`assignRole`, `resolveStall`, `submitCorrection`, KB CRUD, erasure) still return Forbidden for read-only.
+- [ ] **RO-05**: Admin can assign the read-only role from the role-assignment UI (role matrix shows read-only as analytics-read only; read-only has no write/manage/conversations/erasure/assign capability); read-only cannot self-assign.
+
+### Home Surface (HOME)
+
+- [ ] **HOME-01**: `/${lang}` renders a per-role Home landing for console roles (read-only/senior-coach/admin) composed ONLY from existing aggregations (usageRollups — never raw usageEvents — scoped stall/knowledge-gap/funnel counts), reusing the existing stale-watchdog + em-dash empty patterns; no new lazy-cron job, no new pipeline, no write; read-only sees org usage/cost KPIs only (no PII/alerts); new-agent still redirects to chat.
+
+### Knowledge Management (KM)
+
+- [ ] **KM-01**: KB version-history viewer is reachable read-only — the existing `buildVersionChain` timeline (no schema change, no extra reads) renders for read-only/coach with the edit form OMITTED; admin keeps the full edit form. KB + Inventory are grouped under the Knowledge Management section.
+
+### Senior-Coach KB Contribution (CKB)
+
+- [ ] **CKB-01**: A senior coach can contribute to the KB scoped to their downline and audited (via the existing `assertAdminOrCoach` + `correctKbDoc`/`listDocsForReview` + audit/re-ingest pipeline), beyond today's inline-correction panel; read-only and out-of-downline targets are denied; all other KB CRUD stays admin-only.
+
+### Analytics & Performance (AP)
+
+- [ ] **AP-01**: Admin can pivot the read-only analytics aggregations by a chosen coach (`coachUid` → `seniorCoachId == coachUid`, gated to `role === 'admin'`, count()/select() never fetch-all, audited via `auditDrilldown`); a non-admin can never pass `coachUid` (stays scoped to own downline) — no other coach's downline can leak. Coach-dashboard + org usage are grouped under Analytics & Performance.
+
+### System & Compliance (SC) + i18n (I18N)
+
+- [ ] **SC-01**: A static, admin-only Integrations management shell exists under System & Compliance with NO send / connect / auto-send affordance (no Button(send/connect/enable/authorize), Switch, Input, form, or onClick), no data model, no Server Action — proven by a render-invariant test. The v1 hard constraints "No WhatsApp Business API in v1" and "No auto-send, ever" remain in force.
+- [ ] **I18N-01**: All six section labels + every new Phase-6 surface string exist in en/ms/zh, and a new `i18n-parity.test.ts` (CI) asserts the three catalogs have identical key sets (no parity check existed before Phase 6).
+
 ## v2 Requirements
 
 Deferred. Acknowledged but not in current roadmap.
@@ -154,13 +192,15 @@ Explicit exclusions documented to prevent scope creep.
 | Generic real-estate knowledge | All answers must be D2-grounded; generic content is an anti-feature |
 | AI-graded only evals (no humans-in-loop) | Tone drift escapes pure-LLM eval; D2 coaches must score samples |
 | Fine-tuning Claude on client conversations | PDPA / consent constraints; prompt + RAG only in v1 |
+| Phase-6 net-new surfaces (cohorts +data model, agent profiles, coach-assignment UI, flagged queue, audit-log viewer, model-config UI, PDPA-settings display, days-to-first-close) | Deferred to **Phase 7** — net-new, not relocate (CONTEXT split decision 2026-06-10) |
+| WhatsApp Business API integration / any auto-send | Deferred to **Phase 8** — graduation-gated; overrides v1 "no WABA / no auto-send" which stays in force through Phases 6 & 7 |
 
 ## Traceability
 
 Filled by the roadmapper. Each v1 requirement maps to exactly one phase.
 
 Phases are 1-indexed per GSD convention (research Build Order P0–P4 → Phase 1–5):
-Phase 1 = Foundations · Phase 2 = Coach + Admin v1 · Phase 3 = Finder + Intent-Routing · Phase 4 = Reply Assistant + Analytics · Phase 5 = Hardening + Scale-Up.
+Phase 1 = Foundations · Phase 2 = Coach + Admin v1 · Phase 3 = Finder + Intent-Routing · Phase 4 = Reply Assistant + Analytics · Phase 5 = Hardening + Scale-Up · Phase 6 = Console IA v2 (Restructure + Read-only Role).
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
@@ -249,15 +289,29 @@ Phase 1 = Foundations · Phase 2 = Coach + Admin v1 · Phase 3 = Finder + Intent
 | QUAL-08 | Phase 5 | Complete |
 | QUAL-09 | Phase 5 | Complete (code-ready; live drill + Derek sign-off live-gated) |
 | QUAL-10 | Phase 5 | Complete |
+| IA-01 | Phase 6 | Pending |
+| IA-02 | Phase 6 | Pending |
+| RO-01 | Phase 6 | Pending |
+| RO-02 | Phase 6 | Pending |
+| RO-03 | Phase 6 | Pending |
+| RO-04 | Phase 6 | Pending |
+| RO-05 | Phase 6 | Pending |
+| HOME-01 | Phase 6 | Pending |
+| KM-01 | Phase 6 | Pending |
+| CKB-01 | Phase 6 | Pending |
+| AP-01 | Phase 6 | Pending |
+| SC-01 | Phase 6 | Pending |
+| I18N-01 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 requirements: 85 enumerated REQ-IDs (FND 11, AUTH 6, CHAT 8, COACH 10, FIND 12, REPLY 12, CDASH 8, ADMIN 8, QUAL 10). (Prior header said "86 total"; the actual enumerated REQ-ID count is 85 — discrepancy noted and reconciled by the roadmapper.)
-- Mapped to phases: 85 — each to exactly one phase
+- Phase 6 requirements: 13 NEW REQ-IDs (IA 2, RO 5, HOME 1, KM 1, CKB 1, AP 1, SC 1, I18N 1) — each derived during planning, each mapped to ≥1 Phase-6 plan.
+- Mapped to phases: 98 (85 v1 + 13 Phase-6) — each to exactly one phase
 - Unmapped: 0 ✓
 - Duplicates (a REQ in >1 phase): 0 ✓
 
-**Per-phase totals:** Phase 1 = 19 · Phase 2 = 31 · Phase 3 = 13 · Phase 4 = 15 · Phase 5 = 7 → 85 ✓
+**Per-phase totals:** Phase 1 = 19 · Phase 2 = 31 · Phase 3 = 13 · Phase 4 = 15 · Phase 5 = 7 · Phase 6 = 13 → 98 ✓
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-05-31 — traceability finalized by roadmapper (per-REQ phase assignments)*
+*Last updated: 2026-06-10 — Phase 6 (Console IA v2) requirements + traceability appended by planner (`/gsd-plan-phase 6`).*

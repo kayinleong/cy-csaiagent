@@ -142,7 +142,7 @@ Plans:
 **Goal**: The admin/coach console is reorganized into the six business-requested sections (Home · Knowledge Management · Agents & Cohorts · Conversations & Escalations · Analytics & Performance · System & Compliance), a read-only stakeholder role can see reporting surfaces only (server-side gated), and the existing v1 surfaces are relocated/consolidated under the correct sections — without rebuilding any feature that already works. The heavy net-new surfaces are split out to Phase 7.
 **Depends on**: Phase 5 (v1 milestone code-complete)
 **Source**: Post-v1 stakeholder feedback (Derek) + full codebase gap audit (quick-task analysis, 2026-06-10). **Split decision 2026-06-10** (see `.planning/phases/06-console-ia-v2/06-CONTEXT.md`): the original milestone-sized scope is split into Phase 6 (this) + Phase 7 (net-new) + Phase 8 (WABA).
-**Requirements**: TBD (derived during planning; new REQ-IDs for the IA restructure, read-only role, Home surface, consolidation, version-history viewer, senior-coach KB-contribution, per-coach pivot, Integrations shell).
+**Requirements**: IA-01, IA-02, RO-01, RO-02, RO-03, RO-04, RO-05, HOME-01, KM-01, CKB-01, AP-01, SC-01, I18N-01 (derived during planning — see .planning/REQUIREMENTS.md §"Phase 6 Requirements").
 **Scope (narrowed — see 06-CONTEXT.md; full audit in 06-SCOPE.md):**
   - **Built this phase:** the 6-section navigation restructure (role-filtered, existing surfaces relocated); read-only stakeholder role tier (server-side gate + Firestore rules + claims); Home surface (composed from existing data sources); consolidation (fold KB+Inventory→Knowledge Management, escalations beside Conversations, coach-dashboard+usage→Analytics & Performance); KB version-history viewer UI (data already tracked); senior-coach KB-contribution surface (downline-scoped, audited); per-coach analytics pivot; Integrations management *shell* under System & Compliance (registry/placeholder, NO WABA wiring).
   - **Already implemented (wire in, do NOT rebuild):** reply SOPs, training content, conversation viewer, stuck-agent detection, funnel metrics, pillar usage, knowledge gaps, permissions/roles, cost monitoring, erasure, admin role.
@@ -155,6 +155,15 @@ Plans:
   4. Each surface built/relocated this phase is reachable, role-gated, trilingual (EN/BM/中文), and respects all v1 hard constraints.
   5. Any gap deliberately not built in this phase is recorded as an explicit deferral with rationale (cohorts, agent profiles, coach-assignment, flagged queue, audit-log viewer, model-config, PDPA-settings, days-to-first-close → Phase 7; WABA → Phase 8).
 **UI hint**: yes — substantial frontend (IA/nav restructure + Home + consolidation); run /gsd-ui-phase 6 for the design contract.
+**Plans**: 8 plans (waves 0-4)
+- [ ] 06-01-PLAN.md — Wave-0 failing-test scaffold (read-only rules matrix, role union, sidebar filter, gate redirect, i18n parity, integrations no-send, per-coach pivot)
+- [ ] 06-02-PLAN.md — read-only Role union/VALID_ROLES/AssignableRole + centralized requireRole() gate helper (regression-covered)
+- [ ] 06-03-PLAN.md — Firestore rules: isAnalyticsReader() (read-only analytics-read only; PII denied; no writes)
+- [ ] 06-04-PLAN.md — read-only gate widening (layout/landing/sign-in/usage) + role-assignment UI (Pitfall-4 checklist)
+- [ ] 06-05-PLAN.md — 6-section sidebar IA + KB broken-link fix + trilingual i18n catalogs (parity CI)
+- [ ] 06-06-PLAN.md — Home surface RSC (per-role; composed from existing aggregations only)
+- [ ] 06-07-PLAN.md — KB version-history viewer (read-only variant) + static Integrations shell (no-send invariant)
+- [ ] 06-08-PLAN.md — per-coach analytics pivot (admin-gated coachUid) + senior-coach KB-contribution (downline-scoped, audited)
 
 ### Phase 7: Console IA v2 — Net-new Surfaces
 **Goal**: The net-new console surfaces split out of Phase 6 are built into the established 6-section IA: cohort management (+ data model), agent profile pages, coach-assignment UI, conversation flagged queue, audit-log viewer, model-config admin UI (Remote Config read/write), PDPA-settings read-only display, and the days-to-first-close metric (requires a new close/deal signal captured first).
