@@ -60,7 +60,10 @@ export type TenantId = typeof TENANT_ID
 
 export interface UserDoc {
   tenantId: TenantId
-  role: 'new-agent' | 'senior-coach' | 'admin'
+  // MUST mirror the canonical Role union in src/firebase/auth.ts:36.
+  // Inlined (not imported) to avoid a collections↔auth circular import —
+  // auth.ts imports this module. RO-01 (Phase 6) added 'read-only'.
+  role: 'new-agent' | 'senior-coach' | 'admin' | 'read-only'
   /** ID of this agent's senior coach (new-agent only) */
   uplineCoachId?: string
   /** User's preferred language for responses */

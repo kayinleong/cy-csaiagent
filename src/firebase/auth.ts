@@ -33,7 +33,7 @@ import type { FieldValue } from 'firebase-admin/firestore'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type Role = 'new-agent' | 'senior-coach' | 'admin'
+export type Role = 'new-agent' | 'senior-coach' | 'admin' | 'read-only'
 
 /** The shape returned by requireUser — claims extracted from the verified token. */
 export interface AuthenticatedUser {
@@ -42,8 +42,18 @@ export interface AuthenticatedUser {
   tenantId: string
 }
 
-/** Valid role values — used for runtime validation. */
-const VALID_ROLES: Role[] = ['new-agent', 'senior-coach', 'admin']
+/**
+ * Valid role values — used for runtime validation and by the centralized
+ * server-side gate helper (`app/[lang]/_lib/require-role.ts`).
+ *
+ * Exported so role-aware shell helpers and tests can reference the single
+ * source of truth (Phase 6 / RO-01). Adding a value here is the ONLY thing
+ * required to make `setUserClaims(uid, role)` accept that role — the gate
+ * (`requireUser`) reads the role from the verified token, and per-surface
+ * access is still decided by each gate's allow-list (read-only is denied
+ * everywhere until Wave 3 widens specific analytics surfaces).
+ */
+export const VALID_ROLES: Role[] = ['new-agent', 'senior-coach', 'admin', 'read-only']
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
@@ -140,7 +150,10 @@ export async function requireUser(req: Request): Promise<AuthenticatedUser> {
  * T-01-13: role union validated at runtime to prevent unexpected privilege.
  *
  * @param uid     — Firebase Auth UID of the user to provision
- * @param role    — One of 'new-agent' | 'senior-coach' | 'admin'
+ * @param role    — One of 'new-agent' | 'senior-coach' | 'admin' | 'read-only'.
+ *                  'read-only' (RO-01) is a least-privilege analytics-reader role:
+ *                  it gets a users/{uid} doc but NO agentProfiles doc (that branch
+ *                  is new-agent-only, below).
  * @param opts    — Optional: uplineCoachId (new-agent), seniorCoachId (new-agent)
  *
  * @throws {InvalidRoleError} — if role is not in the allowed union

@@ -145,18 +145,39 @@ describe('setUserClaims', () => {
   })
 
   // ─── Phase 6 (RO-01): 4th role tier — read-only stakeholder ──────────────────
-  // RED-BY-DESIGN: 'read-only' is not in the Role union / VALID_ROLES yet, so
-  // setUserClaims rejects it today (treated as an unknown role → InvalidRoleError).
-  // Turns GREEN when Wave 1 adds 'read-only' to src/firebase/auth.ts:36,46.
-  // Cast to Role keeps the test type-clean even before the union is widened.
+  // GREEN as of Wave 1 (06-02): 'read-only' is now in the Role union / VALID_ROLES
+  // (src/firebase/auth.ts:36,46), so setUserClaims accepts it directly — no cast.
 
   it("Behavior 3c (RO-01): setUserClaims(uid, 'read-only') resolves once the role is valid", async () => {
-    await setUserClaims('<UID_PLACEHOLDER>', 'read-only' as 'admin')
+    await setUserClaims('<UID_PLACEHOLDER>', 'read-only')
 
     expect(mockSetCustomUserClaims).toHaveBeenCalledWith('<UID_PLACEHOLDER>', {
       role: 'read-only',
       tenantId: 'd2',
     })
+  })
+
+  it("Behavior 3c-guard (RO-01): setUserClaims(uid, 'read-only') does NOT upsert an agentProfiles doc", async () => {
+    // The agentProfiles upsert (src/firebase/auth.ts:172) is new-agent-only.
+    // read-only must get a users/{uid} doc but NO agent profile (by design).
+    // Both writes route through the same mocked doc().set() (mockDocSet), so we
+    // assert exactly ONE write happens for read-only vs TWO for new-agent.
+    vi.clearAllMocks()
+    mockSetCustomUserClaims.mockResolvedValue(undefined)
+    mockDocSet.mockResolvedValue(undefined)
+
+    await setUserClaims('<UID_PLACEHOLDER>', 'read-only')
+    const readOnlyWrites = mockDocSet.mock.calls.length
+
+    vi.clearAllMocks()
+    mockSetCustomUserClaims.mockResolvedValue(undefined)
+    mockDocSet.mockResolvedValue(undefined)
+
+    await setUserClaims('<UID_PLACEHOLDER>', 'new-agent')
+    const newAgentWrites = mockDocSet.mock.calls.length
+
+    expect(readOnlyWrites).toBe(1) // users/{uid} only — no agentProfiles
+    expect(newAgentWrites).toBe(2) // users/{uid} + agentProfiles/{uid}
   })
 
   it('Behavior 3d (RO-01 guard): an unknown role STILL throws InvalidRoleError after adding read-only', async () => {

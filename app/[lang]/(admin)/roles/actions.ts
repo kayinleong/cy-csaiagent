@@ -31,7 +31,7 @@
  */
 
 import { cookies } from 'next/headers'
-import { requireUser, setUserClaims, UnauthorizedError, InvalidRoleError } from '@/src/firebase/auth'
+import { requireUser, setUserClaims, UnauthorizedError, InvalidRoleError, type Role } from '@/src/firebase/auth'
 import * as audit from '@/src/audit'
 
 // ─── Session helper ───────────────────────────────────────────────────────────
@@ -57,7 +57,10 @@ async function getSessionUser(): Promise<Awaited<ReturnType<typeof requireUser>>
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type AssignableRole = 'new-agent' | 'senior-coach' | 'admin'
+// RO-01: 'read-only' is assignable by an admin (admin assigns it; read-only
+// cannot self-assign — the assignRole/listUsersWithRoles gates below stay
+// admin-only). Adding it here lets the admin role-matrix target the role.
+export type AssignableRole = 'new-agent' | 'senior-coach' | 'admin' | 'read-only'
 
 export interface AssignRoleResult {
   ok: true
@@ -70,7 +73,9 @@ export type AssignRoleError = {
 
 export interface UserWithRole {
   id: string
-  role: 'new-agent' | 'senior-coach' | 'admin'
+  // RO-01: widened to the canonical Role union — a provisioned read-only user
+  // now has role 'read-only' in users/{uid}, so the matrix row must carry it.
+  role: Role
   /** Truncated display ref (first 8 chars of uid). */
   displayRef: string
   seniorCoachId: string | null
