@@ -18,3 +18,18 @@ LATER 06-xx plans, not 06-02:
 
 Action: none in 06-02. These turn GREEN in their owning plans. 06-02 only made the
 role-union + requireRole RED stubs GREEN (per its objective).
+
+## During 06-03 (Wave 2 — read-only Firestore rules / RO-03)
+
+Same three Wave-0 RED scaffolds remain RED (still owned by IA-01 / AP-01 / SC-01 —
+later 06-xx plans). **Verified unchanged by 06-03:** 06-03 modified only
+`firestore.rules` + `src/firebase/__tests__/rules.test.ts` (the seed-harness fix);
+none of the three scaffold files are in the 06-03 diff. They turn GREEN in their
+owning plans. 06-03 only turned the read-only **rules** matrix GREEN (per its objective).
+
+Note (not deferred — fixed in 06-03 as a Rule-3 blocker): the `seed()` helper in
+`rules.test.ts` was returning an invalidated `RulesTestContext` under
+`@firebase/rules-unit-testing@5.0.1` (it called `.firestore()` outside the
+`withSecurityRulesDisabled` callback), which made EVERY seeded rules suite throw
+in `beforeAll`. Fixed in 06-03 so the rules suite can actually execute on the
+emulator. This unblocked all 19 collection suites, not just read-only.
