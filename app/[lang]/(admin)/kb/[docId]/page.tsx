@@ -22,7 +22,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
-import { listDocs, type KbDocWithId } from '@/src/kb/crud'
+import { listDocsForViewer, type KbDocWithId } from '@/src/kb/crud'
 import { KbDocForm } from '../kb-doc-form'
 
 interface PageProps {
@@ -106,9 +106,11 @@ export default async function KbDocDetailPage({ params }: PageProps) {
   }
 
   // ── Load all docs (used for version chain) ──────────────────────────────────
+  // listDocsForViewer admits admin OR read-only (WR-02): listDocs is assertAdmin and
+  // would throw for read-only → empty → 404, making the read-only viewer non-functional.
   let allDocs: KbDocWithId[] = []
   try {
-    allDocs = await listDocs(user)
+    allDocs = await listDocsForViewer(user)
   } catch {
     allDocs = []
   }

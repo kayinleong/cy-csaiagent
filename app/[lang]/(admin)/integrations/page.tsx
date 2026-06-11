@@ -80,7 +80,8 @@ export default async function IntegrationsAdminPage({ params }: PageProps) {
   // System & Compliance is admin-only — read-only/coach/new-agent are denied
   // here (and at the database + mutation layers). Redirect OUTSIDE try/catch.
   if (user.role !== 'admin') {
-    redirect(`/${lang}/chat`)
+    // read-only is denied this admin surface → Home, never chat (RO-01).
+    redirect(`/${lang}`)
   }
 
   const t = await getTranslations('integrations')

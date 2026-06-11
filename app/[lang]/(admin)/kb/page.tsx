@@ -63,8 +63,9 @@ export default async function KbAdminPage({ params }: PageProps) {
   }
 
   if (user.role !== 'admin') {
-    // Non-admin users are redirected to the chat surface
-    redirect(`/${lang}/chat`)
+    // read-only (the only other role admitted to this group) → Home, never chat (RO-01).
+    // The read-only KB version-history viewer lives at kb/[docId], not this management list.
+    redirect(`/${lang}`)
   }
 
   // ── Fetch existing KB docs ─────────────────────────────────────────────────

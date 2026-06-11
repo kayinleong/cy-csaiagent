@@ -49,6 +49,14 @@ function makeContributionMocks() {
     delete: vi.fn().mockResolvedValue(undefined),
   }))
 
+  // Collection-level .get() for listDocsForViewer (reads ALL kbDocs).
+  const mockKbDocsCollectionGet = vi.fn().mockResolvedValue({
+    docs: [
+      { id: 'doc-1', data: () => ({ ...mockOldDocData }) },
+      { id: 'doc-2', data: () => ({ ...mockOldDocData, version: 2, supersedesId: 'doc-1' }) },
+    ],
+  })
+
   const mockKbChunksWhere = vi.fn().mockReturnValue({
     get: vi.fn().mockResolvedValue({ docs: [] }),
   })
@@ -72,6 +80,7 @@ function makeContributionMocks() {
     mockKbDocSet,
     mockKbDocGet,
     mockKbDocRef,
+    mockKbDocsCollectionGet,
     mockKbChunksWhere,
     mockKbChunksAdd,
     mockJobSet,
@@ -83,7 +92,7 @@ function makeContributionMocks() {
 
 function installMocks(m: ReturnType<typeof makeContributionMocks>) {
   vi.doMock('@/src/firebase/collections', () => ({
-    kbDocsRef: vi.fn(() => ({ doc: m.mockKbDocRef })),
+    kbDocsRef: vi.fn(() => ({ doc: m.mockKbDocRef, get: m.mockKbDocsCollectionGet })),
     kbChunksRef: vi.fn(() => ({ where: m.mockKbChunksWhere, add: m.mockKbChunksAdd })),
     kbIngestionJobsRef: vi.fn(() => ({ doc: m.mockJobDoc, where: m.mockJobsWhere })),
     TENANT_ID: 'd2',
@@ -170,5 +179,38 @@ describe('CKB-01: senior-coach KB contribution — permitted, attributed, audite
     ).rejects.toThrow(/admin or senior-coach/i)
     expect(m.mockKbDocSet).not.toHaveBeenCalled()
     expect(m.mockAuditLog).not.toHaveBeenCalled()
+  })
+})
+
+describe('KM-01 / RO-01: listDocsForViewer — read-only may read the version chain', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+  })
+
+  it('read-only is ALLOWED (the read-only KB version-history viewer — CR-01/WR-02)', async () => {
+    const m = makeContributionMocks()
+    installMocks(m)
+    const { listDocsForViewer } = await import('@/src/kb/crud')
+
+    const docs = await listDocsForViewer(READ_ONLY)
+    expect(docs.length).toBe(2)
+    expect(m.mockKbDocsCollectionGet).toHaveBeenCalledTimes(1)
+  })
+
+  it('admin is ALLOWED', async () => {
+    const m = makeContributionMocks()
+    installMocks(m)
+    const { listDocsForViewer } = await import('@/src/kb/crud')
+    const docs = await listDocsForViewer(ADMIN)
+    expect(docs.length).toBe(2)
+  })
+
+  it('senior-coach and new-agent are REJECTED (viewer is admin|read-only only)', async () => {
+    const m = makeContributionMocks()
+    installMocks(m)
+    const { listDocsForViewer } = await import('@/src/kb/crud')
+    await expect(listDocsForViewer(COACH)).rejects.toThrow(/admin or read-only/i)
+    await expect(listDocsForViewer(NEW_AGENT)).rejects.toThrow(/admin or read-only/i)
   })
 })

@@ -61,8 +61,8 @@ export default async function ErasureAdminPage({ params }: PageProps) {
   }
 
   if (user.role !== 'admin') {
-    // Non-admin users are redirected to the chat surface (HR-12)
-    redirect(`/${lang}/chat`)
+    // read-only (the only other role admitted to this group) → Home, never chat (RO-01).
+    redirect(`/${lang}`)
   }
 
   // ── Fetch initial erasure request list ────────────────────────────────────

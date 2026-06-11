@@ -12,14 +12,20 @@
  * The gate lives here (defense-in-depth alongside each page's own admin check)
  * and the verified role drives the role-filtered AppSidebar.
  *
- * RO-01 (Wave 3 / 06-04): this layout still DENIES the read-only role every admin
- * page — read-only only renders the specific pages whose own gate admits it (usage
- * analytics). The redirect below catches read-only on EVERY other admin route and
- * sends it to Home, NOT chat (read-only is not a chat role; downline/write surfaces
- * carry PII). The deny is server-side (this gate) + the Firestore rules (Wave 2),
- * never nav-hiding.
+ * RO-01: this layout ADMITS the read-only role INTO the group so the read-only-allowed
+ * pages (usage analytics, the KB version-history viewer) are reachable — each such
+ * page's OWN gate admits read-only, and every admin-only page's own gate redirects
+ * read-only to Home (NEVER chat; read-only is not a chat role). new-agent → chat,
+ * senior-coach → its own dashboard console. The read-only deny on admin-only
+ * surfaces is enforced server-side (the per-page gate) + the Firestore rules
+ * (Wave 2), never nav-hiding.
  *
- * References: access matrix — only admin manages KB + inventory.
+ * NOTE (CR-01 fix): if this layout denied read-only here, the page-level gates that
+ * admit read-only would be unreachable dead code — so the group-level gate must let
+ * read-only through and defer the per-page decision to each page.
+ *
+ * References: access matrix — only admin manages KB + inventory; read-only reads
+ * analytics + the KB version viewer.
  */
 
 import { cookies } from 'next/headers'
@@ -55,16 +61,13 @@ export default async function AdminLayout({
     throw err
   }
 
-  if (user.role !== 'admin') {
-    // Senior-coaches have a console (dashboard) but not the admin pages.
-    // Read-only is sent to Home (its analytics landing), never chat (RO-01).
-    redirect(
-      user.role === 'senior-coach'
-        ? `/${lang}/dashboard`
-        : user.role === 'read-only'
-          ? `/${lang}`
-          : `/${lang}/chat`
-    )
+  // Admit admin AND read-only into the group; each page's own gate then decides
+  // (usage + KB viewer admit read-only; every admin-only page redirects it to Home).
+  // CR-01: denying read-only here would make those page gates unreachable dead code.
+  if (user.role !== 'admin' && user.role !== 'read-only') {
+    // Senior-coaches have a console (dashboard) but not the admin group.
+    // new-agent → chat.
+    redirect(user.role === 'senior-coach' ? `/${lang}/dashboard` : `/${lang}/chat`)
   }
 
   return (

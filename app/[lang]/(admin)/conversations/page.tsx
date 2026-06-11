@@ -56,7 +56,9 @@ export default async function ConversationsAdminPage({ params }: PageProps) {
   }
 
   if (user.role !== 'admin') {
-    redirect(`/${lang}/chat`)
+    // Only admin + read-only enter this group (layout gate); read-only is denied
+    // this admin page → Home (the role-aware landing), never chat (RO-01).
+    redirect(`/${lang}`)
   }
 
   const t = await getTranslations('adminConversations')

@@ -58,7 +58,8 @@ export default async function RolesAdminPage({ params }: PageProps) {
   }
 
   if (user.role !== 'admin') {
-    redirect(`/${lang}/chat`)
+    // read-only (the only other role admitted to this group) → Home, never chat (RO-01).
+    redirect(`/${lang}`)
   }
 
   // Fetch users + roles server-side; non-blocking (empty fallback on error — kb/page.tsx:71-77)

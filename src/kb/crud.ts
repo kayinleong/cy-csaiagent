@@ -367,6 +367,31 @@ export async function listDocsForReview(user: AuthenticatedUser): Promise<KbDocW
     .filter((d) => d.data.status !== 'superseded')
 }
 
+// ─── listDocsForViewer ─────────────────────────────────────────────────────────
+
+/**
+ * Read ALL KB documents for the version-history VIEWER (KM-01, read-only RO-01).
+ *
+ * Read-only path: permitted for 'admin' OR 'read-only' (the two roles the KB
+ * detail/viewer route admits). Read-only may read kbDocs as a signed-in tenant
+ * user (the least-privilege analytics+KB-read matrix); this is a pure read with
+ * NO mutation, so it does NOT use assertAdmin (which would 404 the read-only
+ * viewer — CR-01/WR-02). KB WRITE/CRUD stays admin-only via assertAdmin.
+ *
+ * Unlike listDocsForReview (correction picker, admin|coach, hides superseded),
+ * this returns EVERY version (incl. superseded) so the version chain renders fully.
+ *
+ * @param user  Verified user — must be 'admin' or 'read-only'.
+ */
+export async function listDocsForViewer(user: AuthenticatedUser): Promise<KbDocWithId[]> {
+  if (user.role !== 'admin' && user.role !== 'read-only') {
+    throw new Error('Forbidden: admin or read-only role required for the KB version viewer')
+  }
+
+  const snap = await kbDocsRef().get()
+  return snap.docs.map((doc) => ({ id: doc.id, data: doc.data() }))
+}
+
 // ─── deleteDoc ───────────────────────────────────────────────────────────────
 
 /**

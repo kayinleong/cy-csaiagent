@@ -65,8 +65,8 @@ export default async function InventoryAdminPage({ params }: PageProps) {
   }
 
   if (user.role !== 'admin') {
-    // Non-admin users are redirected to the chat surface (T-03-22)
-    redirect(`/${lang}/chat`)
+    // read-only (the only other role admitted to this group) → Home, never chat (RO-01).
+    redirect(`/${lang}`)
   }
 
   // ── Fetch project list server-side ─────────────────────────────────────────
