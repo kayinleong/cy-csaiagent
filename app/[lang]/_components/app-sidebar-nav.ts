@@ -34,6 +34,14 @@ import {
   ShieldCheck,
   Plug,
   Trash2,
+  Boxes,
+  UserCircle,
+  UserCog,
+  Flag,
+  ScrollText,
+  SlidersHorizontal,
+  ShieldAlert,
+  Timer,
 } from 'lucide-react'
 import type { Role } from '@/src/firebase/auth'
 
@@ -53,6 +61,15 @@ export type NavItemKey =
   | 'roles'
   | 'integrations'
   | 'erasure'
+  // ── Phase-7 net-new surfaces (NAV-01 / D-25) ──────────────────────────────
+  | 'cohorts'
+  | 'agentProfiles'
+  | 'coachAssignment'
+  | 'flags'
+  | 'auditLog'
+  | 'modelConfig'
+  | 'pdpaSettings'
+  | 'daysToFirstClose'
 
 /** The six FIXED section keys (match the `nav.section*` i18n labels + the test). */
 export type SectionKey =
@@ -110,9 +127,15 @@ export function buildSections(lang: string): Section[] {
     {
       key: 'agents',
       labelKey: 'sectionAgents',
-      // Relocated downline/agent list only — cohorts are Phase 7. Existing route.
       items: [
         { key: 'dashboard', href: `/${lang}/dashboard`, icon: Users, roles: ['admin', 'senior-coach'] },
+        // ── Phase-7 (D-25): cohorts (admin), agent profiles index (admin + coach),
+        // coach-assignment (admin). read-only excluded from all (D-24).
+        { key: 'cohorts', href: `/${lang}/cohorts`, icon: Boxes, roles: ['admin'] },
+        // agentProfiles → the index route app/[lang]/(coach)/agents/page.tsx (07-03);
+        // rows deep-link to agents/[uid]. NOT the [uid]-only drill-in.
+        { key: 'agentProfiles', href: `/${lang}/agents`, icon: UserCircle, roles: ['admin', 'senior-coach'] },
+        { key: 'coachAssignment', href: `/${lang}/coach-assignment`, icon: UserCog, roles: ['admin'] },
       ],
     },
     {
@@ -122,6 +145,9 @@ export function buildSections(lang: string): Section[] {
         { key: 'conversations', href: `/${lang}/conversations`, icon: MessagesSquare, roles: ['admin'] },
         // Stall inbox lives on the dashboard; deep-link via the #stalls anchor.
         { key: 'escalations', href: `/${lang}/dashboard#stalls`, icon: AlertTriangle, roles: ['admin', 'senior-coach'] },
+        // ── Phase-7 (D-25): flagged-conversation review queue (admin + own-downline
+        // coach). read-only excluded (D-24).
+        { key: 'flags', href: `/${lang}/flags`, icon: Flag, roles: ['admin', 'senior-coach'] },
       ],
     },
     {
@@ -131,6 +157,9 @@ export function buildSections(lang: string): Section[] {
         { key: 'usage', href: `/${lang}/usage`, icon: BarChart3, roles: ['admin', 'read-only'] },
         // Coach funnel/ramp/gaps panels live on the dashboard route.
         { key: 'coachAnalytics', href: `/${lang}/dashboard`, icon: LineChart, roles: ['admin', 'senior-coach'] },
+        // ── Phase-7 (D-25 / CLOSE-02): days-to-first-close aggregate tile lives on
+        // the usage dashboard — anchor into it. Admin-only (D-24: read-only excluded).
+        { key: 'daysToFirstClose', href: `/${lang}/usage#days-to-first-close`, icon: Timer, roles: ['admin'] },
       ],
     },
     {
@@ -141,6 +170,11 @@ export function buildSections(lang: string): Section[] {
         // Integrations shell route is built in plan 06-07; the nav entry references it now.
         { key: 'integrations', href: `/${lang}/integrations`, icon: Plug, roles: ['admin'] },
         { key: 'erasure', href: `/${lang}/erasure`, icon: Trash2, roles: ['admin'] },
+        // ── Phase-7 (D-25): audit-log viewer, model-config, PDPA settings — all
+        // admin-only (D-24: read-only excluded).
+        { key: 'auditLog', href: `/${lang}/audit-log`, icon: ScrollText, roles: ['admin'] },
+        { key: 'modelConfig', href: `/${lang}/model-config`, icon: SlidersHorizontal, roles: ['admin'] },
+        { key: 'pdpaSettings', href: `/${lang}/pdpa-settings`, icon: ShieldAlert, roles: ['admin'] },
       ],
     },
   ]
