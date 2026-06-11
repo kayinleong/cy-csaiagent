@@ -75,8 +75,21 @@ export interface AuditLogRow {
   actorUid: string
   action: string
   targetRef: string | null
-  ts: unknown
+  /** Epoch milliseconds (serializable for RSC → client), or null if absent. */
+  ts: number | null
   [key: string]: unknown
+}
+
+/** Normalize a Firestore Timestamp / Date / epoch value to epoch ms (or null). */
+function tsToMillis(ts: unknown): number | null {
+  if (ts == null) return null
+  if (typeof ts === 'number') return ts
+  if (ts instanceof Date) return ts.getTime()
+  // Firestore Admin Timestamp exposes toMillis() / toDate().
+  const t = ts as { toMillis?: () => number; toDate?: () => Date }
+  if (typeof t.toMillis === 'function') return t.toMillis()
+  if (typeof t.toDate === 'function') return t.toDate().getTime()
+  return null
 }
 
 export interface ListAuditLogsResult {
@@ -160,7 +173,7 @@ export async function listAuditLogs(
         actorUid: data.actorUid ?? '',
         action: data.action ?? '',
         targetRef: data.targetRef ?? null,
-        ts: data.ts ?? null,
+        ts: tsToMillis(data.ts),
       }
     })
 
