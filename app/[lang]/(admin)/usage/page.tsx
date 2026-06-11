@@ -34,6 +34,7 @@ import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
 import { usageRollupsRef } from '@/src/firebase/collections'
+import { getOrgDaysToFirstClose } from '@/src/dashboard/queries'
 import { dayKey } from '@/src/usage/types'
 import { UsageDashboard } from './usage-dashboard'
 import type { UsageDashboardProps } from './usage-dashboard'
@@ -259,6 +260,23 @@ export default async function UsagePage({ params, searchParams }: PageProps) {
     }
   }
 
+  // ── Days-to-first-close org aggregate (CLOSE-02 / D-22 — admin only) ──────
+  // Read-time computation over agentProfiles; em-dash when no close recorded.
+  // read-only never reaches this surface section (the nav entry is admin-only,
+  // D-24) — only compute the aggregate for an admin viewer.
+  let daysToFirstClose: { avg: number | null; median: number | null; closedCount: number } = {
+    avg: null,
+    median: null,
+    closedCount: 0,
+  }
+  if (user.role === 'admin') {
+    try {
+      daysToFirstClose = await getOrgDaysToFirstClose()
+    } catch {
+      daysToFirstClose = { avg: null, median: null, closedCount: 0 }
+    }
+  }
+
   const props: UsageDashboardProps = {
     windowDays,
     activeAgents,
@@ -278,6 +296,7 @@ export default async function UsagePage({ params, searchParams }: PageProps) {
     perAgentRows: user.role === 'read-only' ? [] : perAgentRows,
     staleWatchdog,
     latestRollupRelative,
+    daysToFirstClose,
     lang,
     role: user.role,
   }

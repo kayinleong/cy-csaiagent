@@ -427,3 +427,53 @@ export function aggregateDaysToFirstClose(samples: Array<number | null>): DaysTo
     sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!
   return { avg, median, closedCount: closed.length }
 }
+
+/**
+ * Org/cohort days-to-first-close aggregate over ALL agent profiles (CLOSE-02 / D-22).
+ *
+ * Read-time composition (NO stored metric, NO new pipeline — D-22): reads the
+ * agentProfiles collection, computes each agent's days-to-first-close from the doc
+ * `createTime` (onboardingStart, Pitfall 4 zero-migration) + `firstCloseAt`, and
+ * folds them through `aggregateDaysToFirstClose`. Agents with no recorded close are
+ * excluded from the average (never counted as 0 — that would understate ramp time);
+ * the UI renders an em-dash when `closedCount === 0`.
+ *
+ * Admin scope only (the org/cohort aggregate is an admin Analytics surface — D-24).
+ * Caller is expected to have gated to admin before invoking.
+ *
+ * @param opts.cohortId  Optional cohort filter — aggregate over one cohort only.
+ */
+export async function getOrgDaysToFirstClose(opts?: {
+  cohortId?: string
+}): Promise<DaysToCloseAggregate> {
+  let query = agentProfilesRef() as unknown as {
+    where: (field: string, op: string, value: unknown) => typeof query
+    get: () => Promise<{
+      docs: Array<{
+        createTime?: { toDate: () => Date }
+        data: () => Record<string, unknown>
+      }>
+    }>
+  }
+
+  if (opts?.cohortId) {
+    query = query.where('cohortId', '==', opts.cohortId)
+  }
+
+  let snap: Awaited<ReturnType<typeof query.get>>
+  try {
+    snap = await query.get()
+  } catch {
+    // Non-blocking — surface the empty aggregate (em-dash) on a read failure.
+    return { avg: null, median: null, closedCount: 0 }
+  }
+
+  const samples = snap.docs.map((doc) => {
+    const data = (doc.data() ?? {}) as { firstCloseAt?: unknown }
+    const onboardingStart = doc.createTime ? doc.createTime.toDate() : null
+    const firstCloseAt = data.firstCloseAt ? toDate(data.firstCloseAt) : undefined
+    return onboardingStart ? daysToFirstClose(onboardingStart, firstCloseAt) : null
+  })
+
+  return aggregateDaysToFirstClose(samples)
+}

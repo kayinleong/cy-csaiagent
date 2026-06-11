@@ -105,6 +105,12 @@ export interface UsageDashboardProps {
   perAgentRows: AgentRow[]
   staleWatchdog: boolean
   latestRollupRelative: string | null
+  /**
+   * Org/cohort days-to-first-close aggregate (CLOSE-02 / D-22). Read-time only.
+   * `avg`/`median` are null (→ em-dash) when no agent has a recorded close.
+   * Admin-only surface section (read-only never reaches it — D-24).
+   */
+  daysToFirstClose: { avg: number | null; median: number | null; closedCount: number }
   lang: string
   /**
    * Verified role of the viewer (RO-01). Drives the read-only variant: a
@@ -150,6 +156,7 @@ export function UsageDashboard({
   perAgentRows,
   staleWatchdog,
   latestRollupRelative,
+  daysToFirstClose,
   lang,
   role,
 }: UsageDashboardProps) {
@@ -159,6 +166,11 @@ export function UsageDashboard({
   const hasData = totalMsgCount > 0
   // RO-01: the per-agent breakdown surfaces agent UIDs — hidden from read-only.
   const showPerAgent = role !== 'read-only'
+  // CLOSE-02 / D-24: the days-to-first-close org aggregate is an admin-only tile
+  // (read-only never reaches this surface — the nav entry is admin-only).
+  const showDaysToClose = role === 'admin'
+  // Whole-day rounding for the avg/median display; em-dash when no close (D-22).
+  const hasClose = daysToFirstClose.closedCount > 0
 
   // Window switch re-navigates so RSC re-fetches the correct window
   function handleWindowChange(value: string) {
@@ -231,6 +243,46 @@ export function UsageDashboard({
           </CardHeader>
         </Card>
       </div>
+
+      {/* ── Days-to-first-close org aggregate (CLOSE-02 / D-22 — admin only) ── */}
+      {showDaysToClose && (
+        <section id="days-to-first-close" className="scroll-mt-8">
+          <h2 className="mb-4 text-lg font-semibold">{t('daysToCloseTitle')}</h2>
+          <div className="grid gap-6 grid-cols-2 md:grid-cols-3">
+            <Card>
+              <CardHeader>
+                <p className="text-xs text-muted-foreground">{t('daysToCloseAvg')}</p>
+                <span className="text-2xl font-bold">
+                  {hasClose && daysToFirstClose.avg != null
+                    ? t('daysValue', { days: Math.round(daysToFirstClose.avg) })
+                    : '—'}
+                </span>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader>
+                <p className="text-xs text-muted-foreground">{t('daysToCloseMedian')}</p>
+                <span className="text-2xl font-bold">
+                  {hasClose && daysToFirstClose.median != null
+                    ? t('daysValue', { days: Math.round(daysToFirstClose.median) })
+                    : '—'}
+                </span>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader>
+                <p className="text-xs text-muted-foreground">{t('daysToCloseCount')}</p>
+                <span className="text-2xl font-bold">
+                  {hasClose ? daysToFirstClose.closedCount : '—'}
+                </span>
+              </CardHeader>
+            </Card>
+          </div>
+          {!hasClose && (
+            <p className="mt-3 text-sm text-muted-foreground">{t('daysToCloseEmpty')}</p>
+          )}
+        </section>
+      )}
 
       {/* ── Volume trend LineChart ───────────────────────────────────────── */}
       <section>
