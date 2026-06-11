@@ -2,17 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: v1.0-code-complete-gaps-closed
-gap_closure: "2026-06-08 — v1.0 milestone critical gap CLOSED by quick-kayinleong-005 (commit d01fce4): SSE→structured-output decode bridge wired for Reply (ReplyDraftCard) + Finder (MatchList). Milestone audit now gaps_closed; integration 14/14; flows 6/6. ALL 5 phase CLAIMs flipped to done (Phase 1 administrative close — live spike/provisioning gates carried to rollout, not code blockers)."
-stopped_at: Phase 5 EXECUTED + REVIEWED + VERIFIED — all 8 plans (waves 0-6) done. Code review (05-REVIEW.md): 1 Critical (CR-01 raw-PII-at-rest on erasureRequests) + 6 warnings + 6 info → ALL resolved (status: resolved; CR-01 fixed via transient-retain + FieldValue.delete on completion + honest PDPA-SIGNOFF disclosure). Verifier (05-VERIFICATION.md): human_needed, 5/5 must-haves, 0 code gaps. v1 MILESTONE CODE-COMPLETE. 7 live-gated items in 05-HUMAN-UAT.md (deploy, k6 run, PDPA drill, Derek sign-off + SLO finalize, backup drill, trilingual smoke-test) execute during rollout prep. NOT pushed (user hold).
-last_updated: "2026-06-08T12:10:00Z"
-last_activity: 2026-06-07 — Phase 5 executed sequentially on phase-kayinleong-01 (no-worktree per global CLAUDE.md): 8 plans + a lint-regression fix + a code-review-fix. Gates at HEAD — tsc 0 errors, vitest 541 pass/141 skip/0 fail, eslint 0 errors. Hard guarantees confirmed: single PII_ERASURE_MANIFEST (auditLogs EXEMPT), idempotent erasure+sweep lazy-cron (no scheduler/no Cloud Functions), single counts-only usage pipeline (final.totalUsage), three-layer admin gate, audit-before-data drill-down (read-only), setUserClaims-only role assignment, usageRollups-only dashboard, 3 new deny-by-default collections, core/shell split, trilingual parity. NOT pushed.
+status: verifying
+stopped_at: Phase 7 context gathered
+last_updated: "2026-06-11T03:49:55.394Z"
+last_activity: "2026-06-11 — Executed Phase 6 end-to-end via /gsd-plan-phase 6 --auto → gsd-execute-phase (sequential, no-worktree). 8 plans + a code-review fix (CR-01 read-only reachability + WR-01/WR-02). Plan 06-08 finished inline after the executor socket dropped twice. Live-gated: firestore.rules deploy, emulator rules matrix (151/151 local), read-only browser click-through, BM/中文 native sign-off. NOT pushed."
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 30
-  completed_plans: 30
-  percent: 100
+  total_phases: 8
+  completed_phases: 6
+  total_plans: 56
+  completed_plans: 56
+  percent: 75
 ---
 
 # Project State
@@ -34,6 +33,7 @@ Last activity: 2026-06-11 — Executed Phase 6 end-to-end via /gsd-plan-phase 6 
 Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 6 CODE-COMPLETE (8/8 plans). Next: Phase 7.
 
 ### Phase 4 open human-action gate (live-gated — does NOT block Phase 5 planning)
+
 1. `firebase deploy --only firestore:indexes,firestore:rules` — additive `kbChunks` pillar vector index + `replyEdits` indexes/rules.
 2. One-time `npx tsx scripts/backfill-kb-chunks-pillar.ts` — backfill `pillar` onto pre-Phase-4 chunks.
 3. Emulator-gated `replyEdits` rules tests (`npm run test:rules`).
@@ -41,11 +41,13 @@ Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 
 5. Browser click-through: copy-only draft flow, lead-selector gating, parallel-lead isolation, Reply Quality dashboard, admin Reply-SOP create. BM/中文 voice strings await Derek's native sign-off.
 
 ### Phase 3 open human-action gate (live-gated — carried)
+
 1. Live Promptfoo finder/router evals — need live Anthropic/Gemini/Firestore + Opus judge (model from Remote Config).
 2. Playwright `e2e/finder-flow.spec.ts` + `e2e/inventory-admin.spec.ts` — skip-guarded scaffolds; remove `test.skip`, run against a deployed seeded stack.
 3. FIND-12 pilot provisioning — `scripts/provision-finder-pilot.ts --apply` to 15–20 real finder-pilot agents (dry-run by default).
 
 ### Earlier open gates (carried — Phase 1/2 live-stack proofs, run during pilot rollout)
+
 - 01-01 region/residency sign-off + live Firebase/App Hosting/Secret Manager provisioning (`ANTHROPIC_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`); SPIKE-RAG/DEPLOY/INGEST live runs; Phase-1/2 Playwright + Promptfoo trilingual eval. (SPIKE-CRON retired — lazy-cron, no external scheduler.)
 
 ## Performance Metrics
@@ -143,10 +145,11 @@ Items acknowledged and carried forward (v2 / post-pilot):
 
 ## Session Continuity
 
-Last session: 2026-06-07
-Stopped at: Phase 5 Plan 08 (hardening checklist + cost/perf pass + PDPA sign-off + ops handover) COMPLETE — 3 tasks, 12 files created, 1 modified, 3 commits (59d4d2b, f7ca414, 070e708). ALL 30 v1 plans done. v1 milestone code-complete.
-Resume file: None (all plans complete). Next: rollout prep (live-gated items) + Derek sign-off.
+Last session: 2026-06-11T03:49:55.382Z
+Stopped at: Phase 7 context gathered
+Resume file: .planning/phases/07-console-ia-v2-net-new-surfaces/07-CONTEXT.md
 v1 milestone status: CODE-COMPLETE. Live-gated items to execute during rollout prep:
+
   1. firebase deploy --only firestore:rules,firestore:indexes (Phase 4/5 rules + indexes)
   2. k6 run scripts/loadtest/chat.js (load test vs deployed stack)
   3. PDPA live erasure drill (<72h end-to-end) + Derek sign-off on PDPA-SIGNOFF.md
@@ -155,4 +158,5 @@ v1 milestone status: CODE-COMPLETE. Live-gated items to execute during rollout p
   6. Derek A1 (voice in Storage?) + A6 (gcloud export OK?) confirmations
   7. Phase 3: live finder/router Promptfoo evals + Playwright e2e + FIND-12 provisioning
   8. Phase 4: live browser verification (all Reply + admin surfaces)
+
 User standing instruction: do NOT push to any remote without explicit confirmation.
