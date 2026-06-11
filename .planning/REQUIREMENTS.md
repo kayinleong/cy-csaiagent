@@ -157,6 +157,55 @@ Derived during `/gsd-plan-phase 6` (2026-06-10) from `.planning/phases/06-consol
 - [ ] **SC-01**: A static, admin-only Integrations management shell exists under System & Compliance with NO send / connect / auto-send affordance (no Button(send/connect/enable/authorize), Switch, Input, form, or onClick), no data model, no Server Action — proven by a render-invariant test. The v1 hard constraints "No WhatsApp Business API in v1" and "No auto-send, ever" remain in force.
 - [ ] **I18N-01**: All six section labels + every new Phase-6 surface string exist in en/ms/zh, and a new `i18n-parity.test.ts` (CI) asserts the three catalogs have identical key sets (no parity check existed before Phase 6).
 
+## Phase 7 Requirements — Console IA v2 (Net-new Surfaces)
+
+Derived during `/gsd-plan-phase 7` (2026-06-11) from `.planning/phases/07-console-ia-v2-net-new-surfaces/` (CONTEXT/RESEARCH/UI-SPEC/PATTERNS/VALIDATION). Phase 7 builds the 8 net-new surfaces deferred out of Phase 6 INTO the established 6-section IA + read-only role (neither rebuilt). Two new collections (`cohorts`, `conversationFlags`) + two optional `AgentProfileDoc` fields (`cohortId?`, `firstCloseAt?`) are the entire net-new data model; everything else composes existing data. **read-only is DENIED on every Phase-7 surface (D-24) — the Phase-6 least-privilege allow-list is preserved.** These NEW REQ-IDs map back to the 27 CONTEXT decisions (D-01..D-27) and the 5 ROADMAP Phase-7 success criteria.
+
+### Cohort Management (COH)
+
+- [ ] **COH-01**: `cohorts/{cohortId}` is a first-class collection (converter via `makeConverter` stamping `tenantId` + numbered ref factory `cohortsRef()` = Collection 21) with fields `tenantId, name, description, createdAt, createdBy`; deny-by-default Firestore rules + a per-collection rules-unit-test ship in the SAME plan (Pitfall 6). [D-01, D-23]
+- [ ] **COH-02**: Cohort membership is a denormalized optional `cohortId?: string` on `AgentProfileDoc` (one cohort per agent; NOT a UID array, NOT a join collection); filtered via `where('cohortId','==',cid)`; absent on pre-Phase-7 docs (backward-compat, no backfill). [D-02]
+- [ ] **COH-03**: Cohort CRUD is an admin-only audited Server Action; read = admin (all) + senior-coach (cohort metadata, downline filter applied app-side); read-only DENIED. [D-03, D-24]
+
+### Agent Profile Pages (PROF)
+
+- [ ] **PROF-01**: A read-only agent profile drill-in composes ONLY existing data (`agentProfiles/{uid}` + new `cohortId`/`firstCloseAt`, joined with that uid's `usageRollups`, `escalations`/`knowledgeGaps` counts, funnel position); NO journey-state write path anywhere (editing the journey state machine is out of scope). [D-04]
+- [ ] **PROF-02**: Profile access = admin (any agent) + senior-coach (own-downline only, `seniorCoachId == uid`); every coach read writes `auditDrilldown(coachUid,'agentProfiles')` BEFORE returning; read-only DENIED. [D-05, D-24]
+
+### Coach-Assignment (ASSIGN)
+
+- [ ] **ASSIGN-01**: An admin-only audited Server Action atomically dual-writes `agentProfiles.seniorCoachId` + `users.uplineCoachId` (existing fields, no schema change) via `adminDb.batch()`. A senior-coach can NEVER reassign their own downline (admin-only, D-07). [D-06, D-07]
+- [ ] **ASSIGN-02**: Historical denormalized `seniorCoachId` on prior analytics rows (`replyEdits`/`knowledgeGaps`/`escalations`) is LEFT AS-IS on reassignment (documented); only future rows pick up the new coach. Backfilling historical denorm is out of scope. [D-08]
+
+### Conversation Flagged Queue (FLAG)
+
+- [ ] **FLAG-01**: `conversationFlags/{flagId}` is a first-class collection (converter + ref factory `conversationFlagsRef()` = Collection 22) storing a `conversationId` REFERENCE only (no conversation content) + a denormalized `seniorCoachId` for coach read-scope; deny-by-default rules (client create/update/delete DENIED, Admin-SDK only) + rules-unit-test in the same plan. [D-09, D-10, D-23]
+- [ ] **FLAG-02**: A manual flag Server Action (Admin-SDK write) lets a coach (own-downline conversation) or admin flag a conversation; it looks up + stamps the denormalized `seniorCoachId`; no AI auto-flagging in v1; audited. [D-09, D-11]
+- [ ] **FLAG-03**: The flagged-queue read view shows admin all open flags + senior-coach own-downline flags (bounded limit 50, status filter, composite index); rows deep-link to the EXISTING audited conversation viewer; read-only DENIED. [D-11, D-24]
+
+### Audit-Log Viewer (AUDIT)
+
+- [ ] **AUDIT-01**: A read-only admin surface over existing `auditLogs` shows `actorUid, action, targetRef, ts` (hashes NOT decoded — sha256 one-way by design); bounded `orderBy('ts','desc').limit(50)` + cursor pagination + filter by action/actorUid/date (composite indexes); the viewer does NOT self-audit (avoids audit-of-audit recursion); admin-only; read-only DENIED. [D-12, D-13, D-14, D-24]
+
+### Model-Config Admin UI (MODEL)
+
+- [ ] **MODEL-01**: Model-config reads the current `model.{pillar}.default` for the 5 pillars (`coach, finder, reply, router, grader`) via the existing `getServerTemplate` read path; `REMOTE_CONFIG_FALLBACKS` values are shown as hints, never a hard-coded allow-list. [D-15]
+- [ ] **MODEL-02**: Model-config WRITE publishes via the Admin SDK Remote Config path (`getTemplate()` → mutate only `parameters['model.{pillar}.default'].defaultValue` → `publishTemplate(template)` WITHOUT `{force:true}` — ETag optimistic concurrency, conflict surfaced never blind-overwrite); only the 5 keys editable; model IDs stay free-form strings; admin-only; every publish writes an audit row (`model_config_publish`). [D-15, D-16, D-17, D-24]
+
+### PDPA-Settings Display (PDPA)
+
+- [ ] **PDPA-01**: A static, read-only, admin-only PDPA policy display sourced from a single policy-constants module (residency `asia-southeast1`, PII-pseudonymized-at-boundary, `usageEvents` 90d TTL, audit hashes-only, <72h erasure SLA) + a link to the existing erasure flow; zero editable knobs; widening to the read-only role is an open Derek decision, not assumed. [D-18, D-19, D-24]
+
+### Days-to-First-Close (CLOSE)
+
+- [ ] **CLOSE-01**: A minimal close signal — optional `firstCloseAt?: Date` on `AgentProfileDoc` (NOT a full `deals` collection) — set by an audited, idempotent "record first close" Server Action invoked by senior-coach (own downline) or admin (records the FIRST close only; a second call does not overwrite). [D-20, D-21]
+- [ ] **CLOSE-02**: days-to-first-close = `firstCloseAt − onboarding start` (start = the `agentProfiles` doc `snapshot.createTime`, NEVER `lastActiveAt`), computed read-time in Analytics & Performance as an org/cohort aggregate (avg/median) AND per-agent on the profile page; absent close renders an em-dash; wires the real signal behind the CDASH-05 funnel stage. A full `deals` ledger is deferred. [D-22]
+
+### Cross-cutting Nav + i18n (NAV / I18N)
+
+- [ ] **NAV-01**: 8 role-filtered nav entries are placed under the correct Phase-6 sections (Agents & Cohorts: cohorts/agentProfiles/coachAssignment; Conversations & Escalations: flags; System & Compliance: auditLog/modelConfig/pdpaSettings; Analytics & Performance: daysToFirstClose); read-only sees NONE of the 8 (nav filtering is UX-only; the `requireRole()` page gate + Firestore rules are the authorization boundary). [D-25, D-24]
+- [ ] **I18N-07**: Every new Phase-7 surface string + nav label exists in all three `next-intl` catalogs (en/ms/zh) with identical key sets; the existing `i18n-parity.test.ts` (Phase 6) enforces parity in CI. [D-26]
+
 ## v2 Requirements
 
 Deferred. Acknowledged but not in current roadmap.
@@ -302,16 +351,35 @@ Phase 1 = Foundations · Phase 2 = Coach + Admin v1 · Phase 3 = Finder + Intent
 | AP-01 | Phase 6 | Pending |
 | SC-01 | Phase 6 | Pending |
 | I18N-01 | Phase 6 | Pending |
+| COH-01 | Phase 7 | Pending |
+| COH-02 | Phase 7 | Pending |
+| COH-03 | Phase 7 | Pending |
+| PROF-01 | Phase 7 | Pending |
+| PROF-02 | Phase 7 | Pending |
+| ASSIGN-01 | Phase 7 | Pending |
+| ASSIGN-02 | Phase 7 | Pending |
+| FLAG-01 | Phase 7 | Pending |
+| FLAG-02 | Phase 7 | Pending |
+| FLAG-03 | Phase 7 | Pending |
+| AUDIT-01 | Phase 7 | Pending |
+| MODEL-01 | Phase 7 | Pending |
+| MODEL-02 | Phase 7 | Pending |
+| PDPA-01 | Phase 7 | Pending |
+| CLOSE-01 | Phase 7 | Pending |
+| CLOSE-02 | Phase 7 | Pending |
+| NAV-01 | Phase 7 | Pending |
+| I18N-07 | Phase 7 | Pending |
 
 **Coverage:**
 - v1 requirements: 85 enumerated REQ-IDs (FND 11, AUTH 6, CHAT 8, COACH 10, FIND 12, REPLY 12, CDASH 8, ADMIN 8, QUAL 10). (Prior header said "86 total"; the actual enumerated REQ-ID count is 85 — discrepancy noted and reconciled by the roadmapper.)
 - Phase 6 requirements: 13 NEW REQ-IDs (IA 2, RO 5, HOME 1, KM 1, CKB 1, AP 1, SC 1, I18N 1) — each derived during planning, each mapped to ≥1 Phase-6 plan.
-- Mapped to phases: 98 (85 v1 + 13 Phase-6) — each to exactly one phase
+- Phase 7 requirements: 18 NEW REQ-IDs (COH 3, PROF 2, ASSIGN 2, FLAG 3, AUDIT 1, MODEL 2, PDPA 1, CLOSE 2, NAV 1, I18N 1) — each derived during `/gsd-plan-phase 7`, each mapped to ≥1 Phase-7 plan and to ≥1 CONTEXT decision (D-01..D-27).
+- Mapped to phases: 116 (85 v1 + 13 Phase-6 + 18 Phase-7) — each to exactly one phase
 - Unmapped: 0 ✓
 - Duplicates (a REQ in >1 phase): 0 ✓
 
-**Per-phase totals:** Phase 1 = 19 · Phase 2 = 31 · Phase 3 = 13 · Phase 4 = 15 · Phase 5 = 7 · Phase 6 = 13 → 98 ✓
+**Per-phase totals:** Phase 1 = 19 · Phase 2 = 31 · Phase 3 = 13 · Phase 4 = 15 · Phase 5 = 7 · Phase 6 = 13 · Phase 7 = 18 → 116 ✓
 
 ---
 *Requirements defined: 2026-05-31*
-*Last updated: 2026-06-10 — Phase 6 (Console IA v2) requirements + traceability appended by planner (`/gsd-plan-phase 6`).*
+*Last updated: 2026-06-11 — Phase 7 (Console IA v2 — Net-new Surfaces) requirements + traceability appended by planner (`/gsd-plan-phase 7`).*

@@ -10,7 +10,7 @@ created: 2026-06-11
 # Phase 7 — Validation Strategy
 
 > Per-phase validation contract for feedback sampling during execution.
-> Per-task rows below are populated by the planner (Wave-0 RED scaffold) — see 07-RESEARCH.md §"Validation Architecture".
+> Per-task rows below populated by the planner (`/gsd-plan-phase 7`, 2026-06-11) from 07-RESEARCH.md §"Validation Architecture" + the 07-01 Wave-0 plan. The executor flips Status as each test lands and sets `nyquist_compliant: true` when all rows have an automated verify.
 
 ---
 
@@ -41,7 +41,16 @@ created: 2026-06-11
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 07-01-01 | 01 | 0 | (TBD) | T-07-* / — | new-collection rules deny read-only + cross-coach; deny client writes | rules | `npm run test:rules` | ❌ W0 | ⬜ pending |
+| 07-01-01 | 01 | 0 | COH-01/03, FLAG-01/02/03 | T-07-01/02/03 | cohorts+conversationFlags rules deny read-only + cross-coach + client writes | rules | `npm run test:rules` | ❌ W0 → ✅ 07-02 | ⬜ pending |
+| 07-01-01 | 01 | 0 | COH-02, CLOSE-01 | — | AgentProfileDoc.cohortId?/firstCloseAt? compile; old doc literals still valid | unit/typecheck | `npx tsc --noEmit` | ❌ W0 | ⬜ pending |
+| 07-01-02 | 01 | 0 | ASSIGN-01 | T-07-10/27 | coach-assignment atomic dual-write; non-admin + senior-coach → Forbidden (D-07) | unit | `npx vitest run app/[lang]/(admin)/coach-assignment/actions.test.ts` | ❌ W0 → ✅ 07-03 | ⬜ pending |
+| 07-01-02 | 01 | 0 | AUDIT-01 | T-07-20/21 | audit-log bounded limit(50); admin-only; NO auditDrilldown (no self-audit); hashes not decoded | unit | `npx vitest run app/[lang]/(admin)/audit-log/actions.test.ts` | ❌ W0 → ✅ 07-05 | ⬜ pending |
+| 07-01-02 | 01 | 0 | MODEL-02 | T-07-17/18/19 | publish reads template, mutates only model.{pillar}.default, publishes WITHOUT force; stale ETag → conflict; non-admin → Forbidden; audit row | unit (mock RC) | `npx vitest run app/[lang]/(admin)/model-config/actions.test.ts` | ❌ W0 → ✅ 07-05 | ⬜ pending |
+| 07-01-02 | 01 | 0 | CLOSE-01 | T-07-11 | second record-first-close does NOT overwrite firstCloseAt (idempotent); coach own-downline + admin | unit | `npx vitest run app/[lang]/(coach)/agents/actions.test.ts` | ❌ W0 → ✅ 07-03 | ⬜ pending |
+| 07-01-02 | 01 | 0 | PROF-02, CLOSE-02 | T-07-08/09 | getAgentProfile auditDrilldown-before-read + downline gate; daysToFirstClose = close − createTime; absent → excluded | unit | `npx vitest run src/dashboard/queries.test.ts` | ❌ W0 → ✅ 07-03 | ⬜ pending |
+| 07-01-02 | 01 | 0 | NAV-01 | T-07-24 | 8 nav items under correct sections per role; read-only sees none | unit | `npx vitest run app/[lang]/_components/app-sidebar-nav.test.ts` | ❌ W0 → ✅ 07-06 | ⬜ pending |
+| 07-01-03 | 01 | 0 | Gate | T-07-04/19 | no hard-coded model ID; no src/→app/ import; no read-only grant in a new rule; no {force:true} publish | grep guard | `npx vitest run scripts/ci-guards.test.ts` | ❌ W0 | ⬜ pending |
+| 07-06-02 | 06 | 3 | I18N-07 | T-07-25 | en/ms/zh key sets identical incl. all new keys | unit | `npx vitest run src/i18n/__tests__/i18n-parity.test.ts` | ✅ green-gate | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -49,12 +58,12 @@ created: 2026-06-11
 
 ## Wave 0 Requirements
 
-- [ ] Rules-unit-test stubs for `cohorts` + `conversationFlags` (4-role matrix incl. read-only DENY) — extend `src/firebase/__tests__/rules.test.ts`
-- [ ] Type-level stubs for `AgentProfileDoc.cohortId?` + `AgentProfileDoc.firstCloseAt?` (collections.ts)
-- [ ] Server-side gate-denial stubs: read-only DENIED on every Phase-7 surface (requireRole allow-lists)
-- [ ] Remote Config publish contract stub (Surface 6 — getTemplate→mutate→publishTemplate, ETag concurrency)
-- [ ] "record first close" idempotency stub (Surface 8)
-- [ ] i18n parity extension (new nav + surface keys across en/ms/zh — `i18n-parity.test.ts`)
+- [x] Rules-unit-test stubs for `cohorts` + `conversationFlags` (4-role matrix incl. read-only DENY) — extend `src/firebase/__tests__/rules.test.ts`
+- [x] Type-level stubs for `AgentProfileDoc.cohortId?` + `AgentProfileDoc.firstCloseAt?` (collections.ts)
+- [x] Server-side gate-denial stubs: read-only DENIED on every Phase-7 surface (requireRole allow-lists)
+- [x] Remote Config publish contract stub (Surface 6 — getTemplate→mutate→publishTemplate, ETag concurrency)
+- [x] "record first close" idempotency stub (Surface 8)
+- [x] i18n parity extension (new nav + surface keys across en/ms/zh — `i18n-parity.test.ts`)
 
 *Existing infrastructure (vitest, rules-unit-testing, playwright, i18n-parity CI) covers the rest — no new framework install.*
 

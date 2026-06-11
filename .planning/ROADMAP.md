@@ -169,7 +169,7 @@ Plans:
 **Goal**: The net-new console surfaces split out of Phase 6 are built into the established 6-section IA: cohort management (+ data model), agent profile pages, coach-assignment UI, conversation flagged queue, audit-log viewer, model-config admin UI (Remote Config read/write), PDPA-settings read-only display, and the days-to-first-close metric (requires a new close/deal signal captured first).
 **Depends on**: Phase 6 (IA + read-only role must exist first)
 **Source**: Split from Phase 6 on 2026-06-10 (see 06-CONTEXT.md `<deferred>`).
-**Requirements**: TBD (derived during planning).
+**Requirements**: COH-01, COH-02, COH-03, PROF-01, PROF-02, ASSIGN-01, ASSIGN-02, FLAG-01, FLAG-02, FLAG-03, AUDIT-01, MODEL-01, MODEL-02, PDPA-01, CLOSE-01, CLOSE-02, NAV-01, I18N-07 (18 NEW REQ-IDs derived during `/gsd-plan-phase 7` — see .planning/REQUIREMENTS.md §"Phase 7 Requirements").
 **Scope:**
   - **Entirely new:** cohort management (+ new tenantId collection + data model); agent profile pages (per-agent drill-in); coach-assignment UI (coach→agent mapping); conversation flagged queue (flag/report mechanism + collection); audit-log viewer surface (read over existing audit writes); model-config admin UI (read/write Remote Config, never hard-code); PDPA-settings read-only display (retention/redaction/residency policy-fixed + erasure link, no new knobs); days-to-first-close (capture a new close/deal signal, then compute the metric).
 **Hard constraints:** same as Phase 6 — including **No WABA / No auto-send**.
@@ -179,7 +179,15 @@ Plans:
   3. A new close/deal signal is captured and the days-to-first-close metric is computed from it and shown in Analytics & Performance.
   4. Model-config UI reads/writes Remote Config (no hard-coded model IDs); audit-log viewer and PDPA-settings display are read-only and audited where they touch conversations/PII.
   5. All v1 hard constraints honored (no Cloud Functions, PII pseudonymized + audited, tenantId on every doc, core/shell split).
-**UI hint**: yes.
+**UI hint**: yes — substantial frontend (8 net-new surfaces); UI contract approved (07-UI-SPEC.md).
+**Plans**: 6 plans (waves 0-3)
+Plans:
+- [ ] 07-01-PLAN.md — Wave-0 RED scaffold (cohorts/conversationFlags rules matrix incl. read-only+cross-coach DENY, field-type stubs, Server-Action contracts, model-config ETag/no-force, record-close idempotency, nav read-only-blindness, CI grep guards)
+- [ ] 07-02-PLAN.md — Data model: cohorts + conversationFlags collections (converter+ref) + AgentProfileDoc.cohortId?/firstCloseAt? + deny-by-default rules + rules-tests + composite indexes (deploy checkpoint)
+- [ ] 07-03-PLAN.md — Agents & Cohorts cluster: admin cohort CRUD + admin-only coach-assignment dual-write + read-only agent profile (coach group) + getAgentProfile/daysToFirstClose + idempotent record-first-close
+- [ ] 07-04-PLAN.md — Conversation flagged queue: content-free flagConversation (coach own-downline+admin) + scoped queue view (coach group) + admin-viewer flag button
+- [ ] 07-05-PLAN.md — System & Compliance cluster: model-config RC read/publish (ETag, no force, audited) + bounded audit-log viewer (no self-audit) + static PDPA-settings (RC-publish IAM checkpoint)
+- [ ] 07-06-PLAN.md — Cross-cutting: 8 role-filtered nav entries (read-only sees none) + trilingual catalogs (en/ms/zh parity) + days-to-first-close aggregate tile in Analytics
 
 ### Phase 8: WhatsApp Business API (graduation-gated)
 **Goal**: Direct WhatsApp Business API integration — the platform can send/receive WhatsApp messages — consciously overriding the v1 "No WABA / never auto-send" constraints, gated on a reply-quality graduation bar.
@@ -204,5 +212,5 @@ Phases execute in numeric order: 1 → 2 → [week-4 go/no-go gate] → 3 → 4 
 | 4. Reply Assistant + Analytics | 10/10 | Code-complete | 2026-06-05 |
 | 5. Hardening + Scale-Up | 8/8 | Code-complete | 2026-06-07 |
 | 6. Console IA v2 — Restructure + Read-only Role | 8/8 | Code-complete | 2026-06-11 |
-| 7. Console IA v2 — Net-new Surfaces | 0/TBD | Not planned | — |
+| 7. Console IA v2 — Net-new Surfaces | 0/6 | Planned | — |
 | 8. WhatsApp Business API (graduation-gated) | 0/TBD | Not planned | — |
