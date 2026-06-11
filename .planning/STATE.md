@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Phase 7 context gathered
-last_updated: "2026-06-11T03:49:55.394Z"
+stopped_at: Phase 7 UI-SPEC approved
+last_updated: "2026-06-11T04:44:17.087Z"
 last_activity: "2026-06-11 — Executed Phase 6 end-to-end via /gsd-plan-phase 6 --auto → gsd-execute-phase (sequential, no-worktree). 8 plans + a code-review fix (CR-01 read-only reachability + WR-01/WR-02). Plan 06-08 finished inline after the executor socket dropped twice. Live-gated: firestore.rules deploy, emulator rules matrix (151/151 local), read-only browser click-through, BM/中文 native sign-off. NOT pushed."
 progress:
   total_phases: 8
@@ -145,9 +145,9 @@ Items acknowledged and carried forward (v2 / post-pilot):
 
 ## Session Continuity
 
-Last session: 2026-06-11T03:49:55.382Z
-Stopped at: Phase 7 context gathered
-Resume file: .planning/phases/07-console-ia-v2-net-new-surfaces/07-CONTEXT.md
+Last session: 2026-06-11T04:06:18.264Z
+Stopped at: Phase 7 UI-SPEC approved
+Resume file: .planning/phases/07-console-ia-v2-net-new-surfaces/07-UI-SPEC.md
 v1 milestone status: CODE-COMPLETE. Live-gated items to execute during rollout prep:
 
   1. firebase deploy --only firestore:rules,firestore:indexes (Phase 4/5 rules + indexes)
