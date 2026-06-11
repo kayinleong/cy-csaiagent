@@ -35,11 +35,24 @@ vi.mock('@/src/audit', () => ({
 }))
 
 // Capture batch() calls to prove the atomic dual-write (D-06).
-const mockBatchUpdate = vi.fn().mockReturnThis()
-const mockBatchCommit = vi.fn().mockResolvedValue(undefined)
-const mockBatch = vi.fn(() => ({ update: mockBatchUpdate, commit: mockBatchCommit }))
-const mockAgentProfileDocRef = { __ref: 'agentProfiles/doc' }
-const mockUsersDocRef = { __ref: 'users/doc' }
+// vi.hoisted() initializes these BEFORE the hoisted vi.mock() factories run —
+// without it the factories below reference the consts in their TDZ (the vi.mock
+// calls are hoisted above plain `const` declarations), throwing
+// "Cannot access 'mockBatch' before initialization".
+const {
+  mockBatchUpdate,
+  mockBatchCommit,
+  mockBatch,
+  mockAgentProfileDocRef,
+  mockUsersDocRef,
+} = vi.hoisted(() => {
+  const mockBatchUpdate = vi.fn().mockReturnThis()
+  const mockBatchCommit = vi.fn().mockResolvedValue(undefined)
+  const mockBatch = vi.fn(() => ({ update: mockBatchUpdate, commit: mockBatchCommit }))
+  const mockAgentProfileDocRef = { __ref: 'agentProfiles/doc' }
+  const mockUsersDocRef = { __ref: 'users/doc' }
+  return { mockBatchUpdate, mockBatchCommit, mockBatch, mockAgentProfileDocRef, mockUsersDocRef }
+})
 
 vi.mock('@/src/firebase/admin', () => ({
   adminDb: { batch: mockBatch },
