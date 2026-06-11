@@ -27,6 +27,8 @@
  *   18. usageEvents/{eventId} ← Phase-5 per-turn usage counts (QUAL-08; server/Admin-SDK writes; 90d TTL proposed)
  *   19. usageRollups/{key}    ← Phase-5 idempotent daily rollup (QUAL-08/ADMIN-08; server/Admin-SDK writes)
  *   20. erasureRequests/{reqId} ← Phase-5 PDPA erasure ledger (QUAL-09/D-02; server/Admin-SDK writes)
+ *   21. cohorts/{cohortId}    ← Phase-7 cohort registry (COH-01/D-01; admin-write, coach/admin-read)
+ *   22. conversationFlags/{flagId} ← Phase-7 flagged-conversation queue (FLAG-01/D-09; Admin-SDK writes only, content-free reference)
  *
  * Import pattern (always use the @/ alias):
  *   import { usersRef, rateBudgetsRef } from '@/src/firebase/collections'
@@ -637,6 +639,76 @@ export interface ErasureRequestDoc {
   error?: string
 }
 
+/**
+ * Cohort registry record (collection 21, Phase-7 COH-01 / D-01).
+ *
+ * A cohort is an admin-managed onboarding intake batch. Agents reference their
+ * cohort via the denormalized `AgentProfileDoc.cohortId` (one-cohort-per-agent,
+ * D-02) — the cohort doc itself holds NO member-UID array (1 MB trap) and NO
+ * `seniorCoachId` (downline filtering is applied app-side, RESEARCH Open Q3).
+ *
+ * Security (firestore.rules match /cohorts):
+ *   - admin: full CRUD (admin-only writes are audited, D-03).
+ *   - senior-coach: read non-PII cohort metadata only.
+ *   - read-only: DENIED by construction — NO read-only grant in the rule block
+ *     (D-24 / Pitfall 2; cohort membership is agent-PII-adjacent).
+ */
+export interface CohortDoc {
+  tenantId: TenantId
+  /** Human-readable cohort name (e.g. "June 2026 Intake A"). */
+  name: string
+  /** Free-form description of the cohort. */
+  description: string
+  /** Server timestamp at creation (FieldValue.serverTimestamp() on write). */
+  createdAt: Date | FieldValue
+  /** UID of the admin who created the cohort (audit trail). */
+  createdBy: string
+}
+
+/**
+ * Flagged-conversation queue record (collection 22, Phase-7 FLAG-01 / D-09).
+ *
+ * CONTENT-FREE (D-10): stores a `conversationId` REFERENCE only — never any
+ * conversation message text. A senior-coach or admin flags a conversation for
+ * review; the queue surfaces the flag, and a reviewer opens the referenced
+ * conversation server-side (Admin SDK + audit) — not via this row.
+ *
+ * Security (firestore.rules match /conversationFlags):
+ *   - Written EXCLUSIVELY by the flagConversation Server Action via the Admin SDK
+ *     (which bypasses rules) — ALL client create/update/delete DENIED (D-09).
+ *   - senior-coach reads ONLY own-downline flags — requires the DENORMALIZED
+ *     `seniorCoachId` on each row so the rule can match
+ *     `resource.data.seniorCoachId == request.auth.uid` (mirrors the
+ *     ReplyEditDoc / escalations Pitfall D pattern; the writer looks it up from
+ *     `agentProfiles/{agentUid}.seniorCoachId`).
+ *   - admin reads all same-tenant flags.
+ *   - read-only: DENIED by construction — NO read-only grant in the rule block
+ *     (D-24 / T-07-01).
+ */
+export interface ConversationFlagDoc {
+  tenantId: TenantId
+  /** REFERENCE ONLY — id of the flagged conversation; NO content stored (D-10). */
+  conversationId: string
+  /** UID of the coach/admin who raised the flag. */
+  flaggedByUid: string
+  /** Reason the conversation was flagged. */
+  reason: string
+  /** Review lifecycle state. */
+  status: 'open' | 'reviewed' | 'dismissed'
+  /**
+   * DENORMALIZED at write so the coach read-rule can match (Pitfall D).
+   * Looked up from agentProfiles/{agentUid}.seniorCoachId by the writer.
+   * Non-optional — the read rule depends on it being present on every row.
+   */
+  seniorCoachId: string
+  /** Server timestamp at creation (FieldValue.serverTimestamp() on write). */
+  createdAt: Date | FieldValue
+  /** UID of the reviewer (set when status transitions away from 'open'). */
+  reviewedBy?: string
+  /** When the flag was reviewed (set on review). */
+  reviewedAt?: Date | FieldValue
+}
+
 // ─── Converter factory ───────────────────────────────────────────────────────
 
 /**
@@ -687,6 +759,8 @@ export const replyEditConverter = makeConverter<ReplyEditDoc>()
 export const usageEventConverter = makeConverter<UsageEventDoc>()
 export const usageRollupConverter = makeConverter<UsageRollupDoc>()
 export const erasureRequestConverter = makeConverter<ErasureRequestDoc>()
+export const cohortConverter = makeConverter<CohortDoc>()
+export const conversationFlagConverter = makeConverter<ConversationFlagDoc>()
 
 // ─── Ref factories ───────────────────────────────────────────────────────────
 // Export one named factory per collection.
@@ -868,4 +942,34 @@ export function usageRollupsRef(): CollectionReference<UsageRollupDoc> {
  */
 export function erasureRequestsRef(): CollectionReference<ErasureRequestDoc> {
   return adminDb.collection('erasureRequests').withConverter(erasureRequestConverter)
+}
+
+/**
+ * Collection 21: cohorts/{cohortId}
+ *
+ * Phase-7 cohort registry (COH-01 / D-01). Admin-managed onboarding intake
+ * batches. Admin-write (audited, D-03); coach/admin-read of cohort metadata.
+ * read-only DENIED by construction (no read-only grant in firestore.rules).
+ *
+ * Agents reference their cohort via AgentProfileDoc.cohortId (one-per-agent,
+ * D-02) — the cohort doc holds NO member-UID array (1 MB trap).
+ */
+export function cohortsRef(): CollectionReference<CohortDoc> {
+  return adminDb.collection('cohorts').withConverter(cohortConverter)
+}
+
+/**
+ * Collection 22: conversationFlags/{flagId}
+ *
+ * Phase-7 flagged-conversation queue (FLAG-01 / D-09). CONTENT-FREE — stores a
+ * conversationId REFERENCE only, never conversation content (D-10).
+ *
+ * Written EXCLUSIVELY by the flagConversation Server Action via the Admin SDK
+ * (which bypasses rules) — ALL client create/update/delete are DENIED in
+ * firestore.rules. Read scope (mirrors escalations/replyEdits Pitfall D): a
+ * senior-coach reads ONLY own-downline flags (denormalized seniorCoachId ==
+ * uid); an admin reads all same-tenant flags; read-only is DENIED.
+ */
+export function conversationFlagsRef(): CollectionReference<ConversationFlagDoc> {
+  return adminDb.collection('conversationFlags').withConverter(conversationFlagConverter)
 }
