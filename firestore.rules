@@ -293,6 +293,44 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // ── Collection 21: cohorts ───────────────────────────────────────────────
+    // Phase-7 cohort registry (COH-01 / D-01). Admin-managed onboarding intake
+    // batches. Admin-write (admin-only CRUD, audited, D-03); coach/admin read of
+    // non-PII cohort metadata (the downline filter is applied app-side since the
+    // cohort doc carries no seniorCoachId — RESEARCH Open Q3).
+    // CRITICAL (D-24 / Pitfall 2): NO isAnalyticsReader() / hasRole('read-only') /
+    // isReadOnlyRole() grant — read-only is DENIED by construction (it is neither
+    // coach nor admin), preserving the LOCKED Phase-6 least-privilege allow-list.
+    match /cohorts/{cohortId} {
+      allow read:
+        if (hasRole('senior-coach') && sameTenant())
+        || (hasRole('admin') && sameTenant());
+
+      allow write:
+        if hasRole('admin') && incomingTenant();
+    }
+
+    // ── Collection 22: conversationFlags ─────────────────────────────────────
+    // Phase-7 flagged-conversation queue (FLAG-01 / D-09). CONTENT-FREE — stores
+    // a conversationId reference only, never conversation content (D-10). Written
+    // EXCLUSIVELY by the flagConversation Server Action via the Admin SDK (which
+    // bypasses rules) — ALL client create/update/delete DENIED (D-09). Read scope
+    // mirrors escalations/replyEdits (Pitfall D): senior-coach reads ONLY own-
+    // downline flags (denormalized seniorCoachId == uid); admin reads all.
+    // CRITICAL (D-24 / T-07-01): NO read-only grant — read-only is DENIED by
+    // construction (it is neither the owning coach nor admin).
+    match /conversationFlags/{flagId} {
+      allow read:
+        if (hasRole('senior-coach')
+            && resource.data.seniorCoachId == request.auth.uid
+            && sameTenant())
+        || (hasRole('admin') && sameTenant());
+
+      // Admin-SDK only (the flagConversation Server Action bypasses rules).
+      // No client-side create/update/delete allowed (T-07-03 mitigation).
+      allow create, update, delete: if false;
+    }
+
     // ── Collection 15: rateBudgets ───────────────────────────────────────────
     // Owner-scoped: each agent reads/writes ONLY their own budget doc.
     // Cross-agent access is explicitly DENIED — a new-agent reading or writing
