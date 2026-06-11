@@ -29,16 +29,28 @@ vi.mock('@/src/firebase/admin', () => ({
 }))
 
 // ─── Mock audit/log — capture auditDrilldown ordering ────────────────────────
-const mockAuditDrilldown = vi.fn().mockResolvedValue(undefined)
+// vi.hoisted() initializes the capture spy BEFORE the hoisted vi.mock() factory
+// runs — a plain `const` is in its TDZ when the hoisted factory references it
+// ("Cannot access 'mockAuditDrilldown' before initialization").
+const { mockAuditDrilldown } = vi.hoisted(() => ({
+  mockAuditDrilldown: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock('@/src/audit/log', () => ({
   log: vi.fn().mockResolvedValue(undefined),
   auditDrilldown: mockAuditDrilldown,
 }))
 
 // ─── Mock collections — a single agentProfiles doc fetch ─────────────────────
+// `fakeProfile` stays a mutable module-scope `let` (the spies close over it and
+// read it at call time, after each test mutates it). The capture spies are
+// vi.hoisted() so the hoisted vi.mock() factory can reference them (TDZ-safe).
 let fakeProfile: { exists: boolean; createTime?: { toDate: () => Date }; data: () => Record<string, unknown> }
-const mockProfileDocGet = vi.fn(async () => fakeProfile)
-const mockProfileDoc = vi.fn(() => ({ get: mockProfileDocGet }))
+const { mockProfileDocGet, mockProfileDoc } = vi.hoisted(() => {
+  const mockProfileDocGet = vi.fn()
+  const mockProfileDoc = vi.fn(() => ({ get: mockProfileDocGet }))
+  return { mockProfileDocGet, mockProfileDoc }
+})
+mockProfileDocGet.mockImplementation(async () => fakeProfile)
 
 vi.mock('@/src/firebase/collections', () => ({
   agentProfilesRef: vi.fn(() => ({ doc: mockProfileDoc })),

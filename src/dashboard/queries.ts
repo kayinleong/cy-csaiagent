@@ -23,7 +23,12 @@
  *   - CDASH-01 (downline list), CDASH-02 (stall inbox), CDASH-03 (knowledge-gap feed)
  */
 
-import { agentProfilesRef, escalationsRef, knowledgeGapsRef } from '@/src/firebase/collections'
+import {
+  agentProfilesRef,
+  escalationsRef,
+  knowledgeGapsRef,
+  usageRollupsRef,
+} from '@/src/firebase/collections'
 import { auditDrilldown } from '@/src/audit/log'
 
 // Re-export auditDrilldown so callers can import it from here (TDD test expects it)
@@ -219,4 +224,206 @@ export async function getKnowledgeGaps(
       data: { ...data, lastSeenAt: toDate(data.lastSeenAt) },
     }
   })
+}
+
+// ─── Agent profile (PROF-01 / PROF-02 / D-04 / D-05) ────────────────────────────
+
+/**
+ * Error thrown when a non-downline coach tries to read an agent's profile (D-05).
+ * The page gate (requireRole) is gate 1; this seniorCoachId match is the app-side
+ * downline gate; the agentProfiles Firestore rule is gate 3 (AUTH-06 double-gate).
+ */
+export class NotInDownlineError extends Error {
+  constructor(msg = 'Agent is not in your downline') {
+    super(msg)
+    this.name = 'NotInDownlineError'
+  }
+}
+
+/**
+ * A composed, READ-ONLY agent profile (D-04 — NO journey-edit path anywhere).
+ *
+ * Composes EXISTING data only: the agentProfiles doc (+ cohortId / firstCloseAt),
+ * that agent's usageRollups, escalation + knowledge-gap counts, and the read-time
+ * days-to-first-close. There is intentionally NO write surface here — the profile
+ * is a pure projection (PROF-01 / D-04).
+ */
+export interface AgentProfile {
+  id: string
+  journeyStage: string
+  currentCheckpoint: string
+  seniorCoachId: string
+  lastActiveAt: Date
+  activeLeadIds: string[]
+  /** Cohort membership (COH-02 / D-02) — absent on pre-Phase-7 agents. */
+  cohortId: string | null
+  /** First-close signal (CLOSE-01 / D-20) — null when no close recorded. */
+  firstCloseAt: Date | null
+  /** Onboarding start = the agentProfiles doc createTime (Pitfall 4, zero-migration). */
+  onboardingStart: Date | null
+  /** Read-time days-to-first-close (CLOSE-02 / D-22) — null when no close → em-dash. */
+  daysToFirstClose: number | null
+  /** Count of escalations attributed to this agent (counts only — no content). */
+  escalationCount: number
+  /** Count of knowledge-gap rows attributed to this agent (counts only). */
+  knowledgeGapCount: number
+  /** Total tokens across this agent's usageRollups (counts only). */
+  totalTokens: number
+}
+
+/**
+ * Read-time days-to-first-close (CLOSE-02 / D-22).
+ *
+ * = firstCloseAt − onboardingStart, in WHOLE days. Returns null when there is no
+ * recorded close (absent firstCloseAt → the UI renders an em-dash, NOT 0/N/A).
+ *
+ * onboardingStart MUST be the agentProfiles doc `createTime` (Admin SDK metadata —
+ * Pitfall 4 / Open Q1 zero-migration default). NEVER lastActiveAt (which drifts
+ * every session and would understate ramp time). Computed read-time — no stored
+ * metric (D-22).
+ *
+ * @param onboardingStart  The agentProfiles doc createTime.
+ * @param firstCloseAt     The recorded first-close timestamp, or undefined.
+ */
+export function daysToFirstClose(onboardingStart: Date, firstCloseAt?: Date): number | null {
+  if (!firstCloseAt) return null
+  const ms = firstCloseAt.getTime() - onboardingStart.getTime()
+  return Math.floor(ms / (1000 * 60 * 60 * 24))
+}
+
+/**
+ * Compose a single agent's read-only profile (PROF-01 / PROF-02 / D-04 / D-05).
+ *
+ * AUTH-06 / D-05 (downline gate, gate 1): a non-admin coach may only read an agent
+ * whose `agentProfiles.seniorCoachId === coachUid`; otherwise NotInDownlineError.
+ * Admin reads any agent via `opts.adminAll`.
+ *
+ * PDPA / PROF-02 (T-02-29): `auditDrilldown(coachUid, 'agentProfiles')` is written
+ * BEFORE the doc is read — the audit ALWAYS precedes data access.
+ *
+ * The profile is a pure read-time composition of existing collections. There is NO
+ * journey-state write path here (D-04) — the route renders no edit affordance.
+ *
+ * @param coachUid   The reading coach's (or admin's) UID — the audit actor + downline key.
+ * @param agentUid   The agent whose profile to compose.
+ * @param opts       { adminAll: true } to skip the downline gate (admin reads all).
+ */
+export async function getAgentProfile(
+  coachUid: string,
+  agentUid: string,
+  opts?: QueryOptions,
+): Promise<AgentProfile> {
+  // PROF-02: audit the drilldown BEFORE any read (ordering, T-02-29).
+  await auditDrilldown(coachUid, 'agentProfiles')
+
+  const profileDocRef = (agentProfilesRef() as unknown as {
+    doc: (id: string) => {
+      get: () => Promise<{
+        exists: boolean
+        createTime?: { toDate: () => Date }
+        data: () => Record<string, unknown> | undefined
+      }>
+    }
+  }).doc(agentUid)
+
+  const snap = await profileDocRef.get()
+  if (!snap.exists) {
+    throw new NotInDownlineError('Agent profile not found')
+  }
+
+  const data = (snap.data() ?? {}) as {
+    journeyStage?: string
+    currentCheckpoint?: string
+    seniorCoachId?: string
+    lastActiveAt?: unknown
+    activeLeadIds?: string[]
+    cohortId?: string
+    firstCloseAt?: unknown
+  }
+
+  // D-05 downline gate (gate 1): a non-admin coach is denied a non-downline agent.
+  if (!opts?.adminAll && data.seniorCoachId !== coachUid) {
+    throw new NotInDownlineError()
+  }
+
+  // onboardingStart = doc createTime (Pitfall 4 zero-migration); NEVER lastActiveAt.
+  const onboardingStart = snap.createTime ? snap.createTime.toDate() : null
+  const firstCloseAt = data.firstCloseAt ? toDate(data.firstCloseAt) : null
+  const days =
+    onboardingStart && firstCloseAt
+      ? daysToFirstClose(onboardingStart, firstCloseAt)
+      : null
+
+  // ── Compose counts from existing collections (counts only — no PII content) ──
+  type CountableRef = {
+    where: (field: string, op: string, value: unknown) => CountableRef
+    get: () => Promise<{ docs: Array<{ data: () => Record<string, unknown> }> }>
+  }
+
+  const escSnap = await (escalationsRef() as unknown as CountableRef)
+    .where('agentUid', '==', agentUid)
+    .get()
+  const gapSnap = await (knowledgeGapsRef() as unknown as CountableRef)
+    .where('agentUid', '==', agentUid)
+    .get()
+  const usageSnap = await (usageRollupsRef() as unknown as CountableRef)
+    .where('uid', '==', agentUid)
+    .get()
+
+  const totalTokens = usageSnap.docs.reduce((sum, d) => {
+    const data = d.data()
+    const inTok = typeof data.inputTokens === 'number' ? data.inputTokens : 0
+    const outTok = typeof data.outputTokens === 'number' ? data.outputTokens : 0
+    return sum + inTok + outTok
+  }, 0)
+
+  return {
+    id: agentUid,
+    journeyStage: data.journeyStage ?? 'onboarding',
+    currentCheckpoint: data.currentCheckpoint ?? 'start',
+    seniorCoachId: data.seniorCoachId ?? '',
+    lastActiveAt: toDate(data.lastActiveAt),
+    activeLeadIds: data.activeLeadIds ?? [],
+    cohortId: data.cohortId ?? null,
+    firstCloseAt,
+    onboardingStart,
+    daysToFirstClose: days,
+    escalationCount: escSnap.docs.length,
+    knowledgeGapCount: gapSnap.docs.length,
+    totalTokens,
+  }
+}
+
+// ─── days-to-first-close aggregate (CLOSE-02 / D-22) ────────────────────────────
+
+/** Org/cohort aggregate of days-to-first-close over agents WITH a recorded close. */
+export interface DaysToCloseAggregate {
+  /** Mean days-to-first-close over agents with a close — null when none. */
+  avg: number | null
+  /** Median days-to-first-close over agents with a close — null when none. */
+  median: number | null
+  /** Count of agents with a recorded close (the denominator). */
+  closedCount: number
+}
+
+/**
+ * Aggregate days-to-first-close across a set of per-agent samples (D-22).
+ *
+ * Only agents WITH a recorded close contribute (a null sample = no close yet and
+ * is excluded — never counted as 0, which would understate ramp time). Returns
+ * { avg: null, median: null, closedCount: 0 } when no agent has closed.
+ *
+ * @param samples  Per-agent daysToFirstClose values (null = no close → excluded).
+ */
+export function aggregateDaysToFirstClose(samples: Array<number | null>): DaysToCloseAggregate {
+  const closed = samples.filter((s): s is number => s !== null)
+  if (closed.length === 0) {
+    return { avg: null, median: null, closedCount: 0 }
+  }
+  const avg = closed.reduce((a, b) => a + b, 0) / closed.length
+  const sorted = [...closed].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  const median =
+    sorted.length % 2 === 0 ? (sorted[mid - 1]! + sorted[mid]!) / 2 : sorted[mid]!
+  return { avg, median, closedCount: closed.length }
 }
