@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: "Completed 07-06-PLAN.md (FINAL Wave-3): 8 role-filtered nav entries (read-only blind) + full trilingual catalogs (parity GREEN) + days-to-first-close org aggregate tile. Phase 7 code-complete (6/6 plans)."
-last_updated: "2026-06-11T14:55:00.000Z"
-last_activity: 2026-06-11 -- Completed Phase 7 plan 06 (NAV-01/I18N-07/CLOSE-02): wired 8 net-new surfaces into the Phase-6 6-section sidebar as role-filtered NavItems (cohorts/agentProfiles/coachAssignment → Agents; flags → Conversations; auditLog/modelConfig/pdpaSettings → System; daysToFirstClose → Analytics) with read-only blind to all (D-24) — Wave-0 NAV-01 test GREEN (8/8); authored 8 nav labels + 7 surface namespaces (adminCohorts/adminCoachAssignment/agentsIndex/agentProfile/adminModelConfig/adminAuditLog/adminPdpa) + adminUsage daysToClose keys to all three catalogs — i18n-parity GREEN; added getOrgDaysToFirstClose() read-time org aggregate (no new pipeline, D-22) + avg/median/count tile in the usage dashboard anchored #days-to-first-close. Full gate: tsc clean; vitest 638 passed/186 skipped (1 unrelated flaky-timeout, passes in isolation); next build compiles (26 routes, 63 static pages, all 8 Phase-7 routes present).
+status: completed
+stopped_at: "Phase 7 code-complete + verified (human_needed: 18/18 must-haves, 0 code gaps); 6 human-action items in 07-UAT.md (live deploy + RC IAM + native i18n sign-off + 3 browser click-throughs)"
+last_updated: "2026-06-11T07:09:01.518Z"
+last_activity: "2026-06-11 -- Completed 07-06-PLAN.md (FINAL Wave-3, NAV-01/I18N-07/CLOSE-02): 8 role-filtered nav entries placed per D-25 (cohorts/agentProfiles/coachAssignment → Agents & Cohorts; flags → Conversations & Escalations; auditLog/modelConfig/pdpaSettings → System & Compliance; daysToFirstClose → Analytics & Performance), read-only blind to all 8 (D-24) → app-sidebar-nav.test.ts GREEN (8/8); authored 8 nav labels + 7 surface namespaces + adminUsage daysToClose keys across en/ms/zh → i18n-parity GREEN; getOrgDaysToFirstClose() read-time aggregate (D-22, no new pipeline) + avg/median/count tile in the usage dashboard (#days-to-first-close). Full gate clean (tsc, vitest 638/186 skip, next build 26 routes)."
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 62
   completed_plans: 62
-  percent: 87
+  percent: 88
 ---
 
 # Project State
@@ -180,9 +180,9 @@ Items acknowledged and carried forward (v2 / post-pilot):
 
 ## Session Continuity
 
-Last session: 2026-06-11T14:55:00.000Z
-Stopped at: Completed 07-06-PLAN.md (FINAL Wave-3 — net-new surface nav wiring + trilingual parity + days-to-first-close tile). Phase 7 CODE-COMPLETE (6/6 plans). Next: phase verification / Phase 8 (WABA, graduation-gated) or rollout prep. Open Phase-7 live-gated checkpoints (07-02 deploy + 07-05 RC-publish IAM) and the BM/中文 native sign-off manual gate carry to rollout.
-Resume file: .planning/phases/07-console-ia-v2-net-new-surfaces/07-06-SUMMARY.md
+Last session: 2026-06-11T07:09:01.501Z
+Stopped at: Phase 7 code-complete + verified (human_needed: 18/18 must-haves, 0 code gaps); 6 human-action items in 07-UAT.md (live deploy + RC IAM + native i18n sign-off + 3 browser click-throughs)
+Resume file: .planning/phases/07-console-ia-v2-net-new-surfaces/07-UAT.md
 v1 milestone status: CODE-COMPLETE. Live-gated items to execute during rollout prep:
 
   1. firebase deploy --only firestore:rules,firestore:indexes (Phase 4/5 rules + indexes)
