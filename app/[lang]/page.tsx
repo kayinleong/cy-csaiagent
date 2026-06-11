@@ -35,6 +35,7 @@ import {
   type HomeKpi,
   type HomeQuickAction,
 } from './_components/home-surface'
+import { ConsoleShell } from './_components/console-shell'
 
 /** Compute the Asia/Kuala_Lumpur day-key string N days ago (matches rollup keys). */
 function nDaysAgo(n: number): string {
@@ -221,17 +222,23 @@ export default async function LangPage({
     ]
   })()
 
+  // Home lives at the locale root (outside the (admin)/(coach) route groups), so it
+  // must wrap itself in ConsoleShell to get the sidebar — the route-group layouts do
+  // that for every other console surface, but never run for /[lang]. role is narrowed
+  // to a console role by the guards above.
   return (
-    <HomeSurface
-      role={role}
-      lang={lang}
-      hasData={hasData}
-      kpis={kpis}
-      alerts={alerts}
-      recentActivity={recentActivity}
-      quickActions={quickActions}
-      staleWatchdog={staleWatchdog}
-      latestRollupRelative={latestRollupRelative}
-    />
+    <ConsoleShell role={role} lang={lang}>
+      <HomeSurface
+        role={role}
+        lang={lang}
+        hasData={hasData}
+        kpis={kpis}
+        alerts={alerts}
+        recentActivity={recentActivity}
+        quickActions={quickActions}
+        staleWatchdog={staleWatchdog}
+        latestRollupRelative={latestRollupRelative}
+      />
+    </ConsoleShell>
   )
 }
