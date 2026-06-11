@@ -53,6 +53,7 @@ import { FieldValue } from 'firebase-admin/firestore'
 import { kbDocsRef, kbChunksRef, TENANT_ID, type KbDocDoc } from '@/src/firebase/collections'
 import type { AuthenticatedUser } from '@/src/firebase/auth'
 import { shardJob, type ShardJobResult } from '@/src/kb/ingest/pipeline'
+import { log as auditLog } from '@/src/audit/log'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -505,6 +506,18 @@ export async function correctKbDoc(
   }
 
   await newDocRef.set({ ...newDocData, tenantId: TENANT_ID } as KbDocDoc)
+
+  // CKB-01 — attribute + audit the contribution. KB docs are ORG-WIDE knowledge
+  // with no per-doc owner field: the downline-accountability control is
+  // (a) correctedBy:user.uid stamped above and (b) this append-only audit row, so a
+  // senior coach's injected content is traceable via the version chain + audit log.
+  // Hashes-only writer (PDPA): we pass identifiers to be hashed, never content.
+  await auditLog({
+    actorUid: user.uid,
+    action: 'kb_contribution',
+    targetRef: `kbDocs/${docId}`,
+    raw: { contributorUid: user.uid, role: user.role, docId, newDocId },
+  })
 
   const lang = opts?.lang ?? existing.lang
   const pillar = opts?.pillar ?? existing.pillar
