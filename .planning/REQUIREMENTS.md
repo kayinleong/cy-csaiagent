@@ -164,7 +164,7 @@ Derived during `/gsd-plan-phase 7` (2026-06-11) from `.planning/phases/07-consol
 ### Cohort Management (COH)
 
 - [x] **COH-01**: `cohorts/{cohortId}` is a first-class collection (converter via `makeConverter` stamping `tenantId` + numbered ref factory `cohortsRef()` = Collection 21) with fields `tenantId, name, description, createdAt, createdBy`; deny-by-default Firestore rules + a per-collection rules-unit-test ship in the SAME plan (Pitfall 6). [D-01, D-23]
-- [ ] **COH-02**: Cohort membership is a denormalized optional `cohortId?: string` on `AgentProfileDoc` (one cohort per agent; NOT a UID array, NOT a join collection); filtered via `where('cohortId','==',cid)`; absent on pre-Phase-7 docs (backward-compat, no backfill). [D-02]
+- [x] **COH-02**: Cohort membership is a denormalized optional `cohortId?: string` on `AgentProfileDoc` (one cohort per agent; NOT a UID array, NOT a join collection); filtered via `where('cohortId','==',cid)`; absent on pre-Phase-7 docs (backward-compat, no backfill). [D-02]
 - [x] **COH-03**: Cohort CRUD is an admin-only audited Server Action; read = admin (all) + senior-coach (cohort metadata, downline filter applied app-side); read-only DENIED. [D-03, D-24]
 
 ### Agent Profile Pages (PROF)
