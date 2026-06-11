@@ -36,6 +36,7 @@ import {
 import { correctKbDoc, listDocsForReview } from '@/src/kb/crud'
 import { loadRecent } from '@/src/memory/conversation'
 import { auditDrilldown } from '@/src/audit/log'
+import { resolvePivotScope } from './per-coach-pivot'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -346,7 +347,7 @@ export interface ReplyQualityResult {
  * PDPA / no-PII-in-logs: this function reads + returns COUNTS ONLY. originalDraft /
  * editedFinal are never read here and never logged (CLAUDE.md).
  */
-export async function getReplyQualityMetrics(): Promise<ReplyQualityResult> {
+export async function getReplyQualityMetrics(coachUid?: string): Promise<ReplyQualityResult> {
   let user: Awaited<ReturnType<typeof requireUser>>
   try {
     user = await getSessionUser()
@@ -355,14 +356,22 @@ export async function getReplyQualityMetrics(): Promise<ReplyQualityResult> {
   }
 
   // Same role gate as the rest of the dashboard (T-02-31 — role from verified token).
+  // NOTE: read-only is NOT admitted here — these coach/admin analytics actions stay
+  // Forbidden for read-only (the gate is unchanged; AP-01 only adds an admin pivot).
   if (user.role !== 'senior-coach' && user.role !== 'admin') {
     return { ok: false, error: 'Forbidden: senior-coach or admin role required' }
   }
 
-  const adminAll = user.role === 'admin'
-  const scope: 'downline' | 'org' = adminAll ? 'org' : 'downline'
+  // AP-01 per-coach pivot (Pattern D, T-06-25): resolve the effective downline scope.
+  // coachUid is honored ONLY when user.role === 'admin'; a coach's coachUid is
+  // discarded so they stay locked to their own downline (resolvePivotScope is the
+  // single source of truth + the privilege boundary — see per-coach-pivot.ts).
+  const pivot = resolvePivotScope({ role: user.role, uid: user.uid, coachUid })
+  const adminAll = pivot.adminAll
+  const scope: 'downline' | 'org' = pivot.seniorCoachId === null ? 'org' : 'downline'
 
-  // The base scope predicate — coach is downline-locked (AUTH-06), admin is org-wide.
+  // The base scope predicate — coach is downline-locked (AUTH-06), admin is org-wide
+  // unless pivoting to a specific coach (pivot.seniorCoachId).
   // replyEditsRef() / escalationsRef() return Admin-SDK queries with .where()/.count().
   type CountableQuery = {
     where: (field: string, op: string, value: unknown) => CountableQuery
@@ -374,7 +383,9 @@ export async function getReplyQualityMetrics(): Promise<ReplyQualityResult> {
 
   const scopedReplyEdits = (): CountableQuery => {
     const base = replyEditsRef() as unknown as CountableQuery
-    return adminAll ? base : base.where('seniorCoachId', '==', user.uid)
+    return pivot.seniorCoachId === null
+      ? base
+      : base.where('seniorCoachId', '==', pivot.seniorCoachId)
   }
 
   const countOf = async (q: CountableQuery): Promise<number> => {
@@ -392,7 +403,7 @@ export async function getReplyQualityMetrics(): Promise<ReplyQualityResult> {
     if (totalDrafts === 0) {
       // Empty state — every chart renders replyQuality.noData. Still return escalation
       // rate (it has its own collection) but short-circuit the replyEdits-derived KPIs.
-      const escalationRate = await computeEscalationRate(user.uid, adminAll)
+      const escalationRate = await computeEscalationRate(pivot.seniorCoachId)
       return {
         ok: true,
         metrics: {
@@ -447,7 +458,7 @@ export async function getReplyQualityMetrics(): Promise<ReplyQualityResult> {
     perSop.sort((a, b) => b.editRate - a.editRate)
     const topEditedSop = perSop.length > 0 ? perSop[0]!.sopDocId : null
 
-    const escalationRate = await computeEscalationRate(user.uid, adminAll)
+    const escalationRate = await computeEscalationRate(pivot.seniorCoachId)
 
     return {
       ok: true,
@@ -469,17 +480,22 @@ export async function getReplyQualityMetrics(): Promise<ReplyQualityResult> {
 
 /**
  * Escalation rate = open escalations / total escalations, scoped the same way as
- * the reply-edit aggregation (downline for a coach, org-wide for admin). Uses
- * Firestore count() aggregation (no fetch-all). Returns 0 when there are none.
+ * the reply-edit aggregation. Uses Firestore count() aggregation (no fetch-all).
+ * Returns 0 when there are none.
+ *
+ * @param seniorCoachId  The resolved AP-01 pivot scope (per-coach-pivot.ts): a
+ *   coach's own uid (downline-locked), an admin's chosen coachUid (pivot), or null
+ *   (admin org-wide, no filter). The privilege boundary is enforced upstream by
+ *   resolvePivotScope — a coach can never reach another coach's downline here.
  */
-async function computeEscalationRate(coachUid: string, adminAll: boolean): Promise<number> {
+async function computeEscalationRate(seniorCoachId: string | null): Promise<number> {
   type CountableQuery = {
     where: (field: string, op: string, value: unknown) => CountableQuery
     count: () => { get: () => Promise<{ data: () => { count: number } }> }
   }
   const scoped = (): CountableQuery => {
     const base = escalationsRef() as unknown as CountableQuery
-    return adminAll ? base : base.where('seniorCoachId', '==', coachUid)
+    return seniorCoachId === null ? base : base.where('seniorCoachId', '==', seniorCoachId)
   }
   const total = (await scoped().count().get()).data().count
   if (total === 0) return 0
@@ -532,7 +548,7 @@ export interface FunnelV2Result {
  * PDPA: agentProfiles hold uid-keyed journey stages only — no PII content.
  * Audited as a downline drilldown (counts, no raw content).
  */
-export async function getFunnelV2Metrics(): Promise<FunnelV2Result> {
+export async function getFunnelV2Metrics(coachUid?: string): Promise<FunnelV2Result> {
   let user: Awaited<ReturnType<typeof requireUser>>
   try {
     user = await getSessionUser()
@@ -540,12 +556,15 @@ export async function getFunnelV2Metrics(): Promise<FunnelV2Result> {
     return { ok: false, error: 'Unauthorized' }
   }
 
+  // read-only is NOT admitted here — the gate is unchanged (AP-01 only adds an admin pivot).
   if (user.role !== 'senior-coach' && user.role !== 'admin') {
     return { ok: false, error: 'Forbidden: senior-coach or admin role required' }
   }
 
-  const adminAll = user.role === 'admin'
-  const scope: 'downline' | 'org' = adminAll ? 'org' : 'downline'
+  // AP-01 per-coach pivot (Pattern D, T-06-25): coachUid honored ONLY for admin;
+  // a coach's coachUid is discarded → stays locked to self (resolvePivotScope).
+  const pivot = resolvePivotScope({ role: user.role, uid: user.uid, coachUid })
+  const scope: 'downline' | 'org' = pivot.seniorCoachId === null ? 'org' : 'downline'
 
   try {
     await auditDrilldown(user.uid, 'agentProfiles')
@@ -558,9 +577,9 @@ export async function getFunnelV2Metrics(): Promise<FunnelV2Result> {
     }
 
     const base = agentProfilesRef() as unknown as ProjQuery
-    const scoped = adminAll
+    const scoped = pivot.seniorCoachId === null
       ? base
-      : base.where('seniorCoachId', '==', user.uid)
+      : base.where('seniorCoachId', '==', pivot.seniorCoachId)
 
     const snap = await scoped.select('journeyStage', 'lastActiveAt').get()
     const profiles = snap.docs.map((d) => d.data())
@@ -647,7 +666,7 @@ export interface KnowledgeGapAggResult {
  * PDPA: topicLabel is pseudonymized on write (CLAUDE.md); pillar is an enum.
  * Counts only — no agentUid in the result (no PII in the panel props).
  */
-export async function getKnowledgeGapAggregation(): Promise<KnowledgeGapAggResult> {
+export async function getKnowledgeGapAggregation(coachUid?: string): Promise<KnowledgeGapAggResult> {
   let user: Awaited<ReturnType<typeof requireUser>>
   try {
     user = await getSessionUser()
@@ -655,12 +674,15 @@ export async function getKnowledgeGapAggregation(): Promise<KnowledgeGapAggResul
     return { ok: false, error: 'Unauthorized' }
   }
 
+  // read-only is NOT admitted here — the gate is unchanged (AP-01 only adds an admin pivot).
   if (user.role !== 'senior-coach' && user.role !== 'admin') {
     return { ok: false, error: 'Forbidden: senior-coach or admin role required' }
   }
 
-  const adminAll = user.role === 'admin'
-  const scope: 'downline' | 'org' = adminAll ? 'org' : 'downline'
+  // AP-01 per-coach pivot (Pattern D, T-06-25): coachUid honored ONLY for admin;
+  // a coach's coachUid is discarded → stays locked to self (resolvePivotScope).
+  const pivot = resolvePivotScope({ role: user.role, uid: user.uid, coachUid })
+  const scope: 'downline' | 'org' = pivot.seniorCoachId === null ? 'org' : 'downline'
 
   type GapQuery = {
     where: (f: string, op: string, v: unknown) => GapQuery
@@ -673,7 +695,9 @@ export async function getKnowledgeGapAggregation(): Promise<KnowledgeGapAggResul
     await auditDrilldown(user.uid, 'knowledgeGaps')
 
     const base = knowledgeGapsRef() as unknown as GapQuery
-    const scoped = adminAll ? base : base.where('seniorCoachId', '==', user.uid)
+    const scoped = pivot.seniorCoachId === null
+      ? base
+      : base.where('seniorCoachId', '==', pivot.seniorCoachId)
 
     // Projection — topicLabel (pseudonymized on write), pillar, count.
     const snap = await scoped.select('topicLabel', 'pillar', 'count').get()
