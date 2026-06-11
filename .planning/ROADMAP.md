@@ -219,7 +219,7 @@ Plans:
 **Wave 1**
 
 - [x] 07-01-PLAN.md — Wave-0 RED scaffold (cohorts/conversationFlags rules matrix incl. read-only+cross-coach DENY, field-type stubs, Server-Action contracts, model-config ETag/no-force, record-close idempotency, nav read-only-blindness, CI grep guards) ✅ 2026-06-11
-- [ ] 07-02-PLAN.md — Data model: cohorts + conversationFlags collections (converter+ref) + AgentProfileDoc.cohortId?/firstCloseAt? + deny-by-default rules + rules-tests + composite indexes (deploy checkpoint)
+- [x] 07-02-PLAN.md — Data model: cohorts + conversationFlags collections (converter+ref) + AgentProfileDoc.cohortId?/firstCloseAt? + deny-by-default rules + rules-tests + composite indexes — code/config complete; rules matrices GREEN 171/171; **deploy checkpoint live-gated** (firebase deploy rules+indexes + async index build) ✅ 2026-06-11
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -255,5 +255,5 @@ Phases execute in numeric order: 1 → 2 → [week-4 go/no-go gate] → 3 → 4 
 | 4. Reply Assistant + Analytics | 10/10 | Code-complete | 2026-06-05 |
 | 5. Hardening + Scale-Up | 8/8 | Code-complete | 2026-06-07 |
 | 6. Console IA v2 — Restructure + Read-only Role | 8/8 | Code-complete | 2026-06-11 |
-| 7. Console IA v2 — Net-new Surfaces | 0/6 | Planned | — |
+| 7. Console IA v2 — Net-new Surfaces | 2/6 | Executing (07-02 deploy checkpoint live-gated) | — |
 | 8. WhatsApp Business API (graduation-gated) | 0/TBD | Not planned | — |

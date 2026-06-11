@@ -163,7 +163,7 @@ Derived during `/gsd-plan-phase 7` (2026-06-11) from `.planning/phases/07-consol
 
 ### Cohort Management (COH)
 
-- [ ] **COH-01**: `cohorts/{cohortId}` is a first-class collection (converter via `makeConverter` stamping `tenantId` + numbered ref factory `cohortsRef()` = Collection 21) with fields `tenantId, name, description, createdAt, createdBy`; deny-by-default Firestore rules + a per-collection rules-unit-test ship in the SAME plan (Pitfall 6). [D-01, D-23]
+- [x] **COH-01**: `cohorts/{cohortId}` is a first-class collection (converter via `makeConverter` stamping `tenantId` + numbered ref factory `cohortsRef()` = Collection 21) with fields `tenantId, name, description, createdAt, createdBy`; deny-by-default Firestore rules + a per-collection rules-unit-test ship in the SAME plan (Pitfall 6). [D-01, D-23]
 - [ ] **COH-02**: Cohort membership is a denormalized optional `cohortId?: string` on `AgentProfileDoc` (one cohort per agent; NOT a UID array, NOT a join collection); filtered via `where('cohortId','==',cid)`; absent on pre-Phase-7 docs (backward-compat, no backfill). [D-02]
 - [ ] **COH-03**: Cohort CRUD is an admin-only audited Server Action; read = admin (all) + senior-coach (cohort metadata, downline filter applied app-side); read-only DENIED. [D-03, D-24]
 
@@ -179,7 +179,7 @@ Derived during `/gsd-plan-phase 7` (2026-06-11) from `.planning/phases/07-consol
 
 ### Conversation Flagged Queue (FLAG)
 
-- [ ] **FLAG-01**: `conversationFlags/{flagId}` is a first-class collection (converter + ref factory `conversationFlagsRef()` = Collection 22) storing a `conversationId` REFERENCE only (no conversation content) + a denormalized `seniorCoachId` for coach read-scope; deny-by-default rules (client create/update/delete DENIED, Admin-SDK only) + rules-unit-test in the same plan. [D-09, D-10, D-23]
+- [x] **FLAG-01**: `conversationFlags/{flagId}` is a first-class collection (converter + ref factory `conversationFlagsRef()` = Collection 22) storing a `conversationId` REFERENCE only (no conversation content) + a denormalized `seniorCoachId` for coach read-scope; deny-by-default rules (client create/update/delete DENIED, Admin-SDK only) + rules-unit-test in the same plan. [D-09, D-10, D-23]
 - [ ] **FLAG-02**: A manual flag Server Action (Admin-SDK write) lets a coach (own-downline conversation) or admin flag a conversation; it looks up + stamps the denormalized `seniorCoachId`; no AI auto-flagging in v1; audited. [D-09, D-11]
 - [ ] **FLAG-03**: The flagged-queue read view shows admin all open flags + senior-coach own-downline flags (bounded limit 50, status filter, composite index); rows deep-link to the EXISTING audited conversation viewer; read-only DENIED. [D-11, D-24]
 
@@ -351,14 +351,14 @@ Phase 1 = Foundations · Phase 2 = Coach + Admin v1 · Phase 3 = Finder + Intent
 | AP-01 | Phase 6 | Pending |
 | SC-01 | Phase 6 | Pending |
 | I18N-01 | Phase 6 | Pending |
-| COH-01 | Phase 7 | Pending |
+| COH-01 | Phase 7 | Done (07-02) |
 | COH-02 | Phase 7 | Pending |
 | COH-03 | Phase 7 | Pending |
 | PROF-01 | Phase 7 | Pending |
 | PROF-02 | Phase 7 | Pending |
 | ASSIGN-01 | Phase 7 | Pending |
 | ASSIGN-02 | Phase 7 | Pending |
-| FLAG-01 | Phase 7 | Pending |
+| FLAG-01 | Phase 7 | Done (07-02) |
 | FLAG-02 | Phase 7 | Pending |
 | FLAG-03 | Phase 7 | Pending |
 | AUDIT-01 | Phase 7 | Pending |

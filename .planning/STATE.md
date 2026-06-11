@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 07-01-PLAN.md (Wave-0 RED scaffold)
-last_updated: "2026-06-11T05:10:00.000Z"
-last_activity: 2026-06-11 -- Completed Phase 7 plan 01 (Wave-0 RED scaffold)
+stopped_at: "Completed 07-02-PLAN.md code/config tasks (data model); deploy checkpoint live-gated"
+last_updated: "2026-06-11T13:10:00.000Z"
+last_activity: 2026-06-11 -- Completed Phase 7 plan 02 (net-new data model; deploy checkpoint pending)
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 62
-  completed_plans: 57
-  percent: 76
+  completed_plans: 58
+  percent: 77
 ---
 
 # Project State
@@ -26,11 +26,18 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 ## Current Position
 
 Phase: 7 (Console IA v2 — Net-new Surfaces) — EXECUTING
-Plan: 2 of 6
-Status: Executing Phase 7 (07-01 Wave-0 RED scaffold complete)
-Last activity: 2026-06-11 -- Completed 07-01-PLAN.md (Wave-0 RED scaffold)
+Plan: 3 of 6
+Status: Executing Phase 7 (07-02 net-new data model code/config complete; deploy checkpoint live-gated)
+Last activity: 2026-06-11 -- Completed 07-02-PLAN.md (cohorts + conversationFlags collections + rules + indexes; rules matrices GREEN 171/171)
 
 Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 6 CODE-COMPLETE (8/8 plans). Next: Phase 7.
+
+### Phase 7 open human-action gate (07-02 — BLOCKING for Wave-2 consuming surfaces 07-04/07-05)
+
+1. `firebase deploy --only firestore:rules,firestore:indexes` — deploys the new `cohorts` + `conversationFlags` rule blocks and the 4 new composite indexes (region `asia-southeast1` — confirm with Derek if prompted).
+2. In Firebase console → Firestore → Indexes, confirm the 4 new composites show status **"Enabled"** (not "Building"): `conversationFlags (seniorCoachId,status)`, `conversationFlags (status,createdAt)`, `auditLogs (action,ts)`, `auditLogs (actorUid,ts)`. Firestore throws FAILED_PRECONDITION until built (Pitfall 6).
+3. Confirm the deployed rules (Firestore → Rules) include the `cohorts` + `conversationFlags` blocks.
+4. (07-RESEARCH Open Q5 / A2) Confirm the App Hosting service account has Remote Config publish permission (`firebaseremoteconfig.remoteConfig.update`) before 07-05 ships Surface 6 — verifiable now or at 07-05's checkpoint.
 
 ### Phase 4 open human-action gate (live-gated — does NOT block Phase 5 planning)
 
