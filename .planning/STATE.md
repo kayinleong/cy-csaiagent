@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Completed 07-04-PLAN.md (conversation flagged queue: content-free flagConversation + scoped queue view + flag action on the admin viewer)"
-last_updated: "2026-06-11T14:32:00.000Z"
-last_activity: 2026-06-11 -- Completed Phase 7 plan 04 (content-free flagConversation write with write-time own-downline assert + denormalized seniorCoachId; bounded scoped (coach)/flags queue with review/dismiss; admin-viewer flag button; FLAG-02/FLAG-03 realized)
+stopped_at: "Completed 07-05-PLAN.md code tasks (model-config RC read/ETag-safe publish + bounded audit-log viewer + static PDPA-settings); RC-publish IAM checkpoint live-gated (carried to rollout)"
+last_updated: "2026-06-11T14:40:00.000Z"
+last_activity: 2026-06-11 -- Completed Phase 7 plan 05 code tasks (publishModelConfig getTemplate→mutate one key→publishTemplate WITHOUT force + conflict-on-stale-ETag + audited; readModelConfig 5-pillar read; listAuditLogs bounded/no-self-audit/metadata-only; static PDPA-settings from policy-constants; MODEL-01/02 + AUDIT-01 + PDPA-01 GREEN; ci-guards 1 & 4 GREEN; tsc clean). RC-publish IAM (firebaseremoteconfig.remoteConfig.update on the App Hosting SA) checkpoint live-gated.
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 62
-  completed_plans: 60
-  percent: 81
+  completed_plans: 61
+  percent: 82
 ---
 
 # Project State
@@ -26,18 +26,23 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 ## Current Position
 
 Phase: 7 (Console IA v2 — Net-new Surfaces) — EXECUTING
-Plan: 5 of 6
-Status: Executing Phase 7 (07-04 conversation flagged queue complete; 07-02 deploy checkpoint still live-gated — conversationFlags composite indexes must be built before the scoped listFlags query runs in production)
-Last activity: 2026-06-11 -- Completed 07-04-PLAN.md (flagConversation content-free write [coach own-downline + admin; write-time downline assert; denormalized seniorCoachId; audited]; bounded scoped (coach)/flags queue with review/dismiss + neutral-primary AlertDialog; content-free flag button on the admin conversation-viewer; trilingual flagQueue.* namespace; FLAG-02/FLAG-03 GREEN)
+Plan: 6 of 6
+Status: Executing Phase 7 (07-05 System & Compliance cluster code-complete: model-config RC read/publish + audit-log viewer + static PDPA-settings; 07-02 deploy checkpoint + 07-05 RC-publish IAM checkpoint both live-gated — auditLogs (action,ts)/(actorUid,ts) composite indexes must be built before the filtered listAuditLogs query runs in production; RC publish needs firebaseremoteconfig.remoteConfig.update on the App Hosting SA)
+Last activity: 2026-06-11 -- Completed 07-05-PLAN.md code tasks (publishModelConfig: getTemplate→mutate one model.{pillar}.default key→publishTemplate WITHOUT {force:true} + stale-ETag→conflict + audited model_config_publish + 5-pillar allow-list; readModelConfig 5-pillar read via getServerTemplate; listAuditLogs bounded orderBy('ts','desc').limit(50)+cursor, metadata-only [hashes never decoded, D-12], no auditDrilldown [no self-audit, D-14]; static PDPA-settings RSC from src/pdpa/policy-constants.ts + erasure link, zero knobs; all 3 pages requireRole({allowed:['admin']}) — read-only DENIED; MODEL-01/02 + AUDIT-01 + PDPA-01 GREEN; ci-guards 1 [no hard-coded model id] + 4 [no force:true] GREEN; tsc clean). RC-publish IAM checkpoint returned as live-gated human-action.
 
 Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 6 CODE-COMPLETE (8/8 plans). Next: Phase 7.
 
 ### Phase 7 open human-action gate (07-02 — BLOCKING for Wave-2 consuming surfaces 07-04/07-05)
 
 1. `firebase deploy --only firestore:rules,firestore:indexes` — deploys the new `cohorts` + `conversationFlags` rule blocks and the 4 new composite indexes (region `asia-southeast1` — confirm with Derek if prompted).
-2. In Firebase console → Firestore → Indexes, confirm the 4 new composites show status **"Enabled"** (not "Building"): `conversationFlags (seniorCoachId,status)`, `conversationFlags (status,createdAt)`, `auditLogs (action,ts)`, `auditLogs (actorUid,ts)`. Firestore throws FAILED_PRECONDITION until built (Pitfall 6).
+2. In Firebase console → Firestore → Indexes, confirm the 4 new composites show status **"Enabled"** (not "Building"): `conversationFlags (seniorCoachId,status)`, `conversationFlags (status,createdAt)`, `auditLogs (action,ts)`, `auditLogs (actorUid,ts)`. Firestore throws FAILED_PRECONDITION until built (Pitfall 6) — the `auditLogs` composites back the 07-05 filtered `listAuditLogs(action/actorUid)` queries (single-field `orderBy('ts','desc')` needs no composite).
 3. Confirm the deployed rules (Firestore → Rules) include the `cohorts` + `conversationFlags` blocks.
-4. (07-RESEARCH Open Q5 / A2) Confirm the App Hosting service account has Remote Config publish permission (`firebaseremoteconfig.remoteConfig.update`) before 07-05 ships Surface 6 — verifiable now or at 07-05's checkpoint.
+
+### Phase 7 open human-action gate (07-05 — RC-publish IAM; live-gated, carried to rollout)
+
+1. (07-RESEARCH Open Q5 / A2) Confirm the App Hosting service account IAM includes `firebaseremoteconfig.remoteConfig.update` (Remote Config **publish**, not just read). `modelFor()` read already works in production; the new `publishModelConfig` WRITE path (Surface 6) needs this scope. If absent, grant Remote Config Admin (or a custom role with the publish permission) to the SA.
+2. In Firebase console → Remote Config, confirm the 5 keys (`model.{coach,finder,reply,router,grader}.default`) exist — or accept that the first publish CREATES a missing key (the write path handles create-or-update either way).
+3. (Manual end-to-end, carried to the phase gate) Publish a `model.coach.default` change via the admin UI; confirm the next chat turn resolves the new model id through `modelFor('coach')` (allow for propagation latency — the UI copy says "may take a moment to take effect").
 
 ### Phase 4 open human-action gate (live-gated — does NOT block Phase 5 planning)
 

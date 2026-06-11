@@ -185,16 +185,16 @@ Derived during `/gsd-plan-phase 7` (2026-06-11) from `.planning/phases/07-consol
 
 ### Audit-Log Viewer (AUDIT)
 
-- [ ] **AUDIT-01**: A read-only admin surface over existing `auditLogs` shows `actorUid, action, targetRef, ts` (hashes NOT decoded — sha256 one-way by design); bounded `orderBy('ts','desc').limit(50)` + cursor pagination + filter by action/actorUid/date (composite indexes); the viewer does NOT self-audit (avoids audit-of-audit recursion); admin-only; read-only DENIED. [D-12, D-13, D-14, D-24]
+- [x] **AUDIT-01**: A read-only admin surface over existing `auditLogs` shows `actorUid, action, targetRef, ts` (hashes NOT decoded — sha256 one-way by design); bounded `orderBy('ts','desc').limit(50)` + cursor pagination + filter by action/actorUid/date (composite indexes); the viewer does NOT self-audit (avoids audit-of-audit recursion); admin-only; read-only DENIED. [D-12, D-13, D-14, D-24]
 
 ### Model-Config Admin UI (MODEL)
 
-- [ ] **MODEL-01**: Model-config reads the current `model.{pillar}.default` for the 5 pillars (`coach, finder, reply, router, grader`) via the existing `getServerTemplate` read path; `REMOTE_CONFIG_FALLBACKS` values are shown as hints, never a hard-coded allow-list. [D-15]
-- [ ] **MODEL-02**: Model-config WRITE publishes via the Admin SDK Remote Config path (`getTemplate()` → mutate only `parameters['model.{pillar}.default'].defaultValue` → `publishTemplate(template)` WITHOUT `{force:true}` — ETag optimistic concurrency, conflict surfaced never blind-overwrite); only the 5 keys editable; model IDs stay free-form strings; admin-only; every publish writes an audit row (`model_config_publish`). [D-15, D-16, D-17, D-24]
+- [x] **MODEL-01**: Model-config reads the current `model.{pillar}.default` for the 5 pillars (`coach, finder, reply, router, grader`) via the existing `getServerTemplate` read path; `REMOTE_CONFIG_FALLBACKS` values are shown as hints, never a hard-coded allow-list. [D-15]
+- [x] **MODEL-02**: Model-config WRITE publishes via the Admin SDK Remote Config path (`getTemplate()` → mutate only `parameters['model.{pillar}.default'].defaultValue` → `publishTemplate(template)` WITHOUT `{force:true}` — ETag optimistic concurrency, conflict surfaced never blind-overwrite); only the 5 keys editable; model IDs stay free-form strings; admin-only; every publish writes an audit row (`model_config_publish`). [D-15, D-16, D-17, D-24]
 
 ### PDPA-Settings Display (PDPA)
 
-- [ ] **PDPA-01**: A static, read-only, admin-only PDPA policy display sourced from a single policy-constants module (residency `asia-southeast1`, PII-pseudonymized-at-boundary, `usageEvents` 90d TTL, audit hashes-only, <72h erasure SLA) + a link to the existing erasure flow; zero editable knobs; widening to the read-only role is an open Derek decision, not assumed. [D-18, D-19, D-24]
+- [x] **PDPA-01**: A static, read-only, admin-only PDPA policy display sourced from a single policy-constants module (residency `asia-southeast1`, PII-pseudonymized-at-boundary, `usageEvents` 90d TTL, audit hashes-only, <72h erasure SLA) + a link to the existing erasure flow; zero editable knobs; widening to the read-only role is an open Derek decision, not assumed. [D-18, D-19, D-24]
 
 ### Days-to-First-Close (CLOSE)
 
@@ -361,10 +361,10 @@ Phase 1 = Foundations · Phase 2 = Coach + Admin v1 · Phase 3 = Finder + Intent
 | FLAG-01 | Phase 7 | Done (07-02) |
 | FLAG-02 | Phase 7 | Complete |
 | FLAG-03 | Phase 7 | Complete |
-| AUDIT-01 | Phase 7 | Pending |
-| MODEL-01 | Phase 7 | Pending |
-| MODEL-02 | Phase 7 | Pending |
-| PDPA-01 | Phase 7 | Pending |
+| AUDIT-01 | Phase 7 | Done (07-05) |
+| MODEL-01 | Phase 7 | Done (07-05) |
+| MODEL-02 | Phase 7 | Done (07-05; RC-publish IAM live-gated) |
+| PDPA-01 | Phase 7 | Done (07-05) |
 | CLOSE-01 | Phase 7 | Done (07-03) |
 | CLOSE-02 | Phase 7 | Done (07-03) |
 | NAV-01 | Phase 7 | Pending |
