@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Completed 07-02-PLAN.md code/config tasks (data model); deploy checkpoint live-gated"
-last_updated: "2026-06-11T13:10:00.000Z"
-last_activity: 2026-06-11 -- Completed Phase 7 plan 02 (net-new data model; deploy checkpoint pending)
+stopped_at: "Completed 07-03-PLAN.md (Agents & Cohorts cluster: cohort CRUD + coach-assignment + agent profile + days-to-first-close)"
+last_updated: "2026-06-11T14:13:00.000Z"
+last_activity: 2026-06-11 -- Completed Phase 7 plan 03 (cohort CRUD, admin-only coach-assignment dual-write, read-only agent profile + days-to-first-close; ASSIGN-01/PROF-02/CLOSE-01/02 GREEN)
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 62
-  completed_plans: 58
-  percent: 77
+  completed_plans: 59
+  percent: 79
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 ## Current Position
 
 Phase: 7 (Console IA v2 — Net-new Surfaces) — EXECUTING
-Plan: 3 of 6
-Status: Executing Phase 7 (07-02 net-new data model code/config complete; deploy checkpoint live-gated)
-Last activity: 2026-06-11 -- Completed 07-02-PLAN.md (cohorts + conversationFlags collections + rules + indexes; rules matrices GREEN 171/171)
+Plan: 4 of 6
+Status: Executing Phase 7 (07-03 Agents & Cohorts cluster complete; 07-02 deploy checkpoint still live-gated for 07-04/07-05)
+Last activity: 2026-06-11 -- Completed 07-03-PLAN.md (admin-only cohort CRUD + atomic coach-assignment dual-write; read-only downline-gated agent profile + read-time days-to-first-close; idempotent record-first-close; /[lang]/agents index resolves the NAV-01 href; ASSIGN-01/PROF-01/02/CLOSE-01/02 GREEN)
 
 Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 6 CODE-COMPLETE (8/8 plans). Next: Phase 7.
 
@@ -69,12 +69,12 @@ Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 7 | 3 | ~42 min | ~14 min |
 
 **Recent Trend:**
 
-- Last 5 plans: none yet
-- Trend: —
+- Last plan: 07-03 (~12 min, 3 tasks, 14 files) — Agents & Cohorts cluster
+- Trend: steady (12–18 min per Phase-7 plan)
 
 *Updated after each plan completion*
 
@@ -125,6 +125,13 @@ Recent decisions affecting current work:
 - [07-01]: scripts/**/*.test.ts added to vitest include (was uncovered) so the CI guard suite is collected.
 - [07-01]: src/dashboard/queries.test.ts created new (only dashboard.test.ts existed) — isolates Phase-7 PROF-02/CLOSE-02 contracts from the Phase-2 dashboard tests.
 - [07-01]: record-first-close + agent-profile contracts placed under the (coach) route group (admits senior-coach + admin); the (admin) group redirects coaches to /dashboard (07 CLAIM routing correction).
+- [07-03]: assignCoach is admin-ONLY (D-07) — a senior-coach/read-only token → Forbidden; atomic adminDb.batch() dual-write of agentProfiles.seniorCoachId + users.uplineCoachId + commit (D-06). Historical denorm rows NOT backfilled (D-08/ASSIGN-02).
+- [07-03]: days-to-first-close computed read-time off the agentProfiles doc snapshot.createTime (Pitfall 4 zero-migration), NEVER lastActiveAt; null → em-dash; aggregate = avg+median over agents WITH a close (D-22). No stored metric.
+- [07-03]: getAgentProfile audits BEFORE read (PROF-02) and throws NotInDownlineError for a non-downline coach (gate 1); the RSC catches it and renders an Empty denied state. The agent profile is pure read-only — NO journey-edit path (D-04; ci-guard 5 GREEN).
+- [07-03]: requireRole({allowed}) page-gate helper (Wave-0) now consumed; read-only excluded from every Phase-7 allow-list (D-24). Imported via relative ../../_lib/require-role (bracket route-group path).
+- [07-03]: profile totalTokens sums inputTokens+outputTokens (no `tokens` field on UsageRollupDoc); cohort writes stamp tenantId:TENANT_ID explicitly to satisfy WithFieldValue<CohortDoc> (converter also stamps).
+- [07-03]: [Rule 1] fixed TDZ in two Wave-0 test harnesses (coach-assignment + queries) — wrapped captured mock refs in vi.hoisted() so hoisted vi.mock factories can reference them; assertions unchanged.
+- [07-03]: i18n keys (adminCohorts/adminCoachAssignment/agentsIndex/agentProfile) + the 8 sidebar nav items are referenced here but AUTHORED in 07-06 (cross-plan split); app-sidebar-nav.test.ts stays RED until 07-06.
 
 ### Pending Todos
 
@@ -158,9 +165,9 @@ Items acknowledged and carried forward (v2 / post-pilot):
 
 ## Session Continuity
 
-Last session: 2026-06-11T04:06:18.264Z
-Stopped at: Phase 7 UI-SPEC approved
-Resume file: .planning/phases/07-console-ia-v2-net-new-surfaces/07-UI-SPEC.md
+Last session: 2026-06-11T14:13:00.000Z
+Stopped at: Completed 07-03-PLAN.md (Agents & Cohorts cluster). Next: 07-04 (coach-scoped flagged queue).
+Resume file: .planning/phases/07-console-ia-v2-net-new-surfaces/07-03-SUMMARY.md
 v1 milestone status: CODE-COMPLETE. Live-gated items to execute during rollout prep:
 
   1. firebase deploy --only firestore:rules,firestore:indexes (Phase 4/5 rules + indexes)

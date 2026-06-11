@@ -165,17 +165,17 @@ Derived during `/gsd-plan-phase 7` (2026-06-11) from `.planning/phases/07-consol
 
 - [x] **COH-01**: `cohorts/{cohortId}` is a first-class collection (converter via `makeConverter` stamping `tenantId` + numbered ref factory `cohortsRef()` = Collection 21) with fields `tenantId, name, description, createdAt, createdBy`; deny-by-default Firestore rules + a per-collection rules-unit-test ship in the SAME plan (Pitfall 6). [D-01, D-23]
 - [ ] **COH-02**: Cohort membership is a denormalized optional `cohortId?: string` on `AgentProfileDoc` (one cohort per agent; NOT a UID array, NOT a join collection); filtered via `where('cohortId','==',cid)`; absent on pre-Phase-7 docs (backward-compat, no backfill). [D-02]
-- [ ] **COH-03**: Cohort CRUD is an admin-only audited Server Action; read = admin (all) + senior-coach (cohort metadata, downline filter applied app-side); read-only DENIED. [D-03, D-24]
+- [x] **COH-03**: Cohort CRUD is an admin-only audited Server Action; read = admin (all) + senior-coach (cohort metadata, downline filter applied app-side); read-only DENIED. [D-03, D-24]
 
 ### Agent Profile Pages (PROF)
 
-- [ ] **PROF-01**: A read-only agent profile drill-in composes ONLY existing data (`agentProfiles/{uid}` + new `cohortId`/`firstCloseAt`, joined with that uid's `usageRollups`, `escalations`/`knowledgeGaps` counts, funnel position); NO journey-state write path anywhere (editing the journey state machine is out of scope). [D-04]
-- [ ] **PROF-02**: Profile access = admin (any agent) + senior-coach (own-downline only, `seniorCoachId == uid`); every coach read writes `auditDrilldown(coachUid,'agentProfiles')` BEFORE returning; read-only DENIED. [D-05, D-24]
+- [x] **PROF-01**: A read-only agent profile drill-in composes ONLY existing data (`agentProfiles/{uid}` + new `cohortId`/`firstCloseAt`, joined with that uid's `usageRollups`, `escalations`/`knowledgeGaps` counts, funnel position); NO journey-state write path anywhere (editing the journey state machine is out of scope). [D-04]
+- [x] **PROF-02**: Profile access = admin (any agent) + senior-coach (own-downline only, `seniorCoachId == uid`); every coach read writes `auditDrilldown(coachUid,'agentProfiles')` BEFORE returning; read-only DENIED. [D-05, D-24]
 
 ### Coach-Assignment (ASSIGN)
 
-- [ ] **ASSIGN-01**: An admin-only audited Server Action atomically dual-writes `agentProfiles.seniorCoachId` + `users.uplineCoachId` (existing fields, no schema change) via `adminDb.batch()`. A senior-coach can NEVER reassign their own downline (admin-only, D-07). [D-06, D-07]
-- [ ] **ASSIGN-02**: Historical denormalized `seniorCoachId` on prior analytics rows (`replyEdits`/`knowledgeGaps`/`escalations`) is LEFT AS-IS on reassignment (documented); only future rows pick up the new coach. Backfilling historical denorm is out of scope. [D-08]
+- [x] **ASSIGN-01**: An admin-only audited Server Action atomically dual-writes `agentProfiles.seniorCoachId` + `users.uplineCoachId` (existing fields, no schema change) via `adminDb.batch()`. A senior-coach can NEVER reassign their own downline (admin-only, D-07). [D-06, D-07]
+- [x] **ASSIGN-02**: Historical denormalized `seniorCoachId` on prior analytics rows (`replyEdits`/`knowledgeGaps`/`escalations`) is LEFT AS-IS on reassignment (documented); only future rows pick up the new coach. Backfilling historical denorm is out of scope. [D-08]
 
 ### Conversation Flagged Queue (FLAG)
 
@@ -198,8 +198,8 @@ Derived during `/gsd-plan-phase 7` (2026-06-11) from `.planning/phases/07-consol
 
 ### Days-to-First-Close (CLOSE)
 
-- [ ] **CLOSE-01**: A minimal close signal — optional `firstCloseAt?: Date` on `AgentProfileDoc` (NOT a full `deals` collection) — set by an audited, idempotent "record first close" Server Action invoked by senior-coach (own downline) or admin (records the FIRST close only; a second call does not overwrite). [D-20, D-21]
-- [ ] **CLOSE-02**: days-to-first-close = `firstCloseAt − onboarding start` (start = the `agentProfiles` doc `snapshot.createTime`, NEVER `lastActiveAt`), computed read-time in Analytics & Performance as an org/cohort aggregate (avg/median) AND per-agent on the profile page; absent close renders an em-dash; wires the real signal behind the CDASH-05 funnel stage. A full `deals` ledger is deferred. [D-22]
+- [x] **CLOSE-01**: A minimal close signal — optional `firstCloseAt?: Date` on `AgentProfileDoc` (NOT a full `deals` collection) — set by an audited, idempotent "record first close" Server Action invoked by senior-coach (own downline) or admin (records the FIRST close only; a second call does not overwrite). [D-20, D-21]
+- [x] **CLOSE-02**: days-to-first-close = `firstCloseAt − onboarding start` (start = the `agentProfiles` doc `snapshot.createTime`, NEVER `lastActiveAt`), computed read-time in Analytics & Performance as an org/cohort aggregate (avg/median) AND per-agent on the profile page; absent close renders an em-dash; wires the real signal behind the CDASH-05 funnel stage. A full `deals` ledger is deferred. [D-22]
 
 ### Cross-cutting Nav + i18n (NAV / I18N)
 
@@ -353,11 +353,11 @@ Phase 1 = Foundations · Phase 2 = Coach + Admin v1 · Phase 3 = Finder + Intent
 | I18N-01 | Phase 6 | Pending |
 | COH-01 | Phase 7 | Done (07-02) |
 | COH-02 | Phase 7 | Pending |
-| COH-03 | Phase 7 | Pending |
-| PROF-01 | Phase 7 | Pending |
-| PROF-02 | Phase 7 | Pending |
-| ASSIGN-01 | Phase 7 | Pending |
-| ASSIGN-02 | Phase 7 | Pending |
+| COH-03 | Phase 7 | Done (07-03) |
+| PROF-01 | Phase 7 | Done (07-03) |
+| PROF-02 | Phase 7 | Done (07-03) |
+| ASSIGN-01 | Phase 7 | Done (07-03) |
+| ASSIGN-02 | Phase 7 | Done (07-03) |
 | FLAG-01 | Phase 7 | Done (07-02) |
 | FLAG-02 | Phase 7 | Pending |
 | FLAG-03 | Phase 7 | Pending |
@@ -365,8 +365,8 @@ Phase 1 = Foundations · Phase 2 = Coach + Admin v1 · Phase 3 = Finder + Intent
 | MODEL-01 | Phase 7 | Pending |
 | MODEL-02 | Phase 7 | Pending |
 | PDPA-01 | Phase 7 | Pending |
-| CLOSE-01 | Phase 7 | Pending |
-| CLOSE-02 | Phase 7 | Pending |
+| CLOSE-01 | Phase 7 | Done (07-03) |
+| CLOSE-02 | Phase 7 | Done (07-03) |
 | NAV-01 | Phase 7 | Pending |
 | I18N-07 | Phase 7 | Pending |
 
