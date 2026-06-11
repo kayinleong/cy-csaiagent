@@ -529,25 +529,31 @@ export interface AgentProfileDoc {
 
 **Note:** Package names are all already-installed and verified against `node_modules`; none are `[ASSUMED]`. The assumptions above are about *runtime configuration/IAM state and one data-model gap*, which the planner should gate behind a `checkpoint:human-verify` (confirm with Derek) before the dependent surface ships.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All four open questions are resolved and locked into the Phase-7 plans. Recommendations below are now decisions; the `RESOLVED:` line on each names the plan that owns the implementation.
 
 1. **What is the canonical "onboarding start" timestamp for days-to-first-close?** (Pitfall 4 / A4)
    - What we know: `AgentProfileDoc` has no `createdAt`; `lastActiveAt` is a moving value; D-22 says "agentProfiles creation / journey start."
    - What's unclear: whether to use Firestore `createTime` metadata (zero-migration), add an explicit `onboardingStartedAt` field (future agents only + backfill), or derive from the `users`/first-conversation.
    - Recommendation: default to `snapshot.createTime` for a read-time computation; flag for Derek confirmation. Add an explicit field only if he wants it editable.
+   - **RESOLVED: onboarding-start = Admin SDK `snapshot.createTime` of the agentProfiles doc (zero-migration), computed read-time in `daysToFirstClose` (07-03 Task 2). NEVER `lastActiveAt`. An explicit editable field is out of scope unless Derek requests it.**
 
 2. **Are the 5 `model.{pillar}.default` Remote Config keys already published?** (A1)
    - What we know: `modelFor` falls back to `REMOTE_CONFIG_FALLBACKS` if a key is missing; production should have them.
    - What's unclear: whether all 5 exist in the live template.
    - Recommendation: the publish action handles both create and update of a parameter; the read display falls back to the labeled hints. Confirm provisioning with Derek (checkpoint).
+   - **RESOLVED via blocking checkpoint: the publish action handles both create and update of a `model.{pillar}.default` parameter; key-provisioning is confirmed at the 07-05 RC-publish blocking checkpoint (and the 07-02 deploy checkpoint surfaces the IAM half early). Reads fall back to labeled hints.**
 
 3. **Cohort coach-read scoping — rule-level or app-level?** (A5 / Pattern 3)
    - What we know: a cohort doc has no `seniorCoachId` (membership is on the agent); D-03 wants "cohorts containing their downline."
    - What's unclear: whether broad coach-read of cohort metadata + app-side downline filter is acceptable, or whether a denormalized field is required for rule-level scoping.
    - Recommendation: admit coach read of cohort metadata at the rule level (non-PII names/descriptions), enforce the downline filter in the Server Component query. Escalate to Derek only if cohort metadata is treated as sensitive.
+   - **RESOLVED: rule-level coach read of non-PII cohort metadata + app-side downline filter (07-02 `match /cohorts` admits any signed-in coach to read; the Server Component query applies the downline filter). No denormalized `seniorCoachId` added to cohorts.**
 
 4. **Does the App Hosting service account have RC publish permission?** (A2)
    - Recommendation: verify before the Surface-6 wave; add a `checkpoint:human-verify` task.
+   - **RESOLVED via blocking checkpoint: the App Hosting service-account RC publish IAM scope (`firebaseremoteconfig.remoteConfig.update`) is verified at the 07-05 RC-publish blocking checkpoint (surfaced early, optionally, at the 07-02 deploy checkpoint). No code change required — it is a deploy-time IAM confirmation.**
 
 ## Environment Availability
 

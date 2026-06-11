@@ -31,6 +31,7 @@ created: 2026-06-11
 - **After every task commit:** Run `npx vitest run` (scoped to touched files where possible)
 - **After every plan wave:** Run `npx tsc --noEmit && npx vitest run`
 - **Before `/gsd-verify-work`:** Full suite green, including `npm run test:rules` (emulator) for the 2 new collections
+- **CI is non-vacuous:** under `CI=true` the emulator MUST be reachable — `scripts/ci-guards.test.ts` guard 6 FAILS if the emulator is absent or the rules suite executed 0 assertions (the read-only-DENY + cross-coach-DENY matrices can never `describe.skip` to a vacuous green)
 - **Max feedback latency:** ~120 seconds (unit); rules tests are live-gated on the emulator
 
 ---
@@ -49,7 +50,7 @@ created: 2026-06-11
 | 07-01-02 | 01 | 0 | CLOSE-01 | T-07-11 | second record-first-close does NOT overwrite firstCloseAt (idempotent); coach own-downline + admin | unit | `npx vitest run app/[lang]/(coach)/agents/actions.test.ts` | ❌ W0 → ✅ 07-03 | ⬜ pending |
 | 07-01-02 | 01 | 0 | PROF-02, CLOSE-02 | T-07-08/09 | getAgentProfile auditDrilldown-before-read + downline gate; daysToFirstClose = close − createTime; absent → excluded | unit | `npx vitest run src/dashboard/queries.test.ts` | ❌ W0 → ✅ 07-03 | ⬜ pending |
 | 07-01-02 | 01 | 0 | NAV-01 | T-07-24 | 8 nav items under correct sections per role; read-only sees none | unit | `npx vitest run app/[lang]/_components/app-sidebar-nav.test.ts` | ❌ W0 → ✅ 07-06 | ⬜ pending |
-| 07-01-03 | 01 | 0 | Gate | T-07-04/19 | no hard-coded model ID; no src/→app/ import; no read-only grant in a new rule; no {force:true} publish | grep guard | `npx vitest run scripts/ci-guards.test.ts` | ❌ W0 | ⬜ pending |
+| 07-01-03 | 01 | 0 | Gate / PROF-01 | T-07-04/19/28 | no hard-coded model ID; no src/→app/ import; no read-only grant in a new rule; no {force:true} publish; **no journey-edit symbol on the agent-profile route (PROF-01/D-04)**; **anti-vacuous: FAIL under CI when the rules emulator is absent or 0 rule assertions ran** | grep guard + CI-env guard | `CI=1 npx vitest run scripts/ci-guards.test.ts` | ❌ W0 | ⬜ pending |
 | 07-06-02 | 06 | 3 | I18N-07 | T-07-25 | en/ms/zh key sets identical incl. all new keys | unit | `npx vitest run src/i18n/__tests__/i18n-parity.test.ts` | ✅ green-gate | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
@@ -64,6 +65,8 @@ created: 2026-06-11
 - [x] Remote Config publish contract stub (Surface 6 — getTemplate→mutate→publishTemplate, ETag concurrency)
 - [x] "record first close" idempotency stub (Surface 8)
 - [x] i18n parity extension (new nav + surface keys across en/ms/zh — `i18n-parity.test.ts`)
+- [x] PROF-01/D-04 no-journey-edit ci-guard (agent-profile route exports/contains no journey-state write or editable journey control)
+- [x] Nyquist anti-vacuous ci-guard (FAIL under CI when the rules emulator is absent / 0 rule assertions executed — closes the `describe.skip` vacuous-pass surface)
 
 *Existing infrastructure (vitest, rules-unit-testing, playwright, i18n-parity CI) covers the rest — no new framework install.*
 
