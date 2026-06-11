@@ -31,7 +31,7 @@ These are hard, non-negotiable boundaries carried from PROJECT.md / config. No p
 - [x] **Phase 4: Reply Assistant + Reply Analytics** - Paste-and-draft WhatsApp replies in D2's voice, never auto-sent, with edit-as-signal analytics — *code-complete + verified (0 code gaps) 2026-06-05; 10/10 plans, 16/16 reqs; live index/rules deploy + kbChunks.pillar backfill + emulator rules tests + live Reply evals + browser click-through are the live-gated human-action step*
 - [x] **Phase 5: Hardening + Scale-Up** - PDPA erasure, cost/perf passes, coach dashboard v2, funnel metrics, load test for ~400 agents — *code-complete + documented (0 code gaps) 2026-06-07; 8/8 plans; v1 MILESTONE CODE-COMPLETE; live-gated: load test run, PDPA drill + Derek sign-off, backup drill, SLO finalization execute during rollout prep*
 - [x] **Phase 6: Console IA v2 — Restructure + Read-only Role** - Restructure the admin/coach console into the business-requested 6-section information architecture, add a read-only stakeholder role (server-side gated), build the Home surface, consolidate existing surfaces (KB+Inventory→Knowledge Management, escalations beside Conversations, coach-dashboard+usage→Analytics), add a KB version-history viewer + senior-coach KB-contribution surface + per-coach analytics pivot + an Integrations management *shell* — without rebuilding any working v1 feature — *code-complete + verified (0 code gaps) 2026-06-11; 8/8 plans, 13/13 reqs; code review 1 Critical (CR-01 read-only reachability) + 2 warnings RESOLVED; live-gated: firestore.rules deploy, emulator rules matrix (151/151 local), read-only browser click-through, BM/中文 native sign-off*
-- [ ] **Phase 7: Console IA v2 — Net-new Surfaces** - The heavy net-new surfaces split out of Phase 6: cohort management (+ data model), agent profile pages, coach-assignment UI, conversation flagged queue, audit-log viewer, model-config admin UI (Remote Config read/write), PDPA-settings read-only display, and the days-to-first-close metric (requires capturing a new close/deal signal first) — *split from Phase 6 on 2026-06-10; not planned yet*
+- [x] **Phase 7: Console IA v2 — Net-new Surfaces** - The heavy net-new surfaces split out of Phase 6: cohort management (+ data model), agent profile pages, coach-assignment UI, conversation flagged queue, audit-log viewer, model-config admin UI (Remote Config read/write), PDPA-settings read-only display, and the days-to-first-close metric — *code-complete 2026-06-11; 6/6 plans; all 8 surfaces reachable via role-filtered nav (read-only blind), trilingual to parity, server-side gated; live-gated: 07-02 deploy (rules+indexes) + 07-05 RC-publish IAM + BM/中文 native sign-off carry to rollout*
 - [ ] **Phase 8: WhatsApp Business API (graduation-gated)** - Direct WABA integration (Meta Business Platform API, webhooks, message templates + approval, phone-number provisioning, send/receive). Consciously overrides the v1 "No WABA / never auto-send" constraints and is gated on a reply-quality graduation bar. Out of scope for Phases 6/7; its own dedicated phase — *deferred; not planned yet*
 
 ## Phase Details
@@ -229,7 +229,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 07-06-PLAN.md — Cross-cutting: 8 role-filtered nav entries (read-only sees none) + trilingual catalogs (en/ms/zh parity) + days-to-first-close aggregate tile in Analytics
+- [x] 07-06-PLAN.md — Cross-cutting (FINAL): 8 role-filtered nav entries placed per D-25 (cohorts/agentProfiles/coachAssignment→Agents & Cohorts; flags→Conversations & Escalations; auditLog/modelConfig/pdpaSettings→System & Compliance; daysToFirstClose→Analytics & Performance), read-only blind to all 8 (D-24) → app-sidebar-nav.test.ts GREEN (8/8); 8 nav labels + 7 surface namespaces + adminUsage daysToClose keys authored en/ms/zh to parity → i18n-parity GREEN; getOrgDaysToFirstClose() read-time aggregate (D-22, no new pipeline) + avg/median/count tile in usage dashboard (#days-to-first-close) — NAV-01/I18N-07/CLOSE-02 GREEN; tsc clean; next build compiles (26 routes, all 8 Phase-7 routes present) ✅ 2026-06-11
 
 ### Phase 8: WhatsApp Business API (graduation-gated)
 
@@ -255,5 +255,5 @@ Phases execute in numeric order: 1 → 2 → [week-4 go/no-go gate] → 3 → 4 
 | 4. Reply Assistant + Analytics | 10/10 | Code-complete | 2026-06-05 |
 | 5. Hardening + Scale-Up | 8/8 | Code-complete | 2026-06-07 |
 | 6. Console IA v2 — Restructure + Read-only Role | 8/8 | Code-complete | 2026-06-11 |
-| 7. Console IA v2 — Net-new Surfaces | 4/6 | Executing (07-02 deploy checkpoint live-gated; 07-04 done — FLAG-02/03 GREEN) | — |
+| 7. Console IA v2 — Net-new Surfaces | 6/6 | Code-complete (NAV-01/I18N-07/CLOSE-02 GREEN; 07-02 deploy + 07-05 RC-publish IAM + BM/中文 sign-off live-gated to rollout) | 2026-06-11 |
 | 8. WhatsApp Business API (graduation-gated) | 0/TBD | Not planned | — |

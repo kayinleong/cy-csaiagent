@@ -203,8 +203,8 @@ Derived during `/gsd-plan-phase 7` (2026-06-11) from `.planning/phases/07-consol
 
 ### Cross-cutting Nav + i18n (NAV / I18N)
 
-- [ ] **NAV-01**: 8 role-filtered nav entries are placed under the correct Phase-6 sections (Agents & Cohorts: cohorts/agentProfiles/coachAssignment; Conversations & Escalations: flags; System & Compliance: auditLog/modelConfig/pdpaSettings; Analytics & Performance: daysToFirstClose); read-only sees NONE of the 8 (nav filtering is UX-only; the `requireRole()` page gate + Firestore rules are the authorization boundary). [D-25, D-24]
-- [ ] **I18N-07**: Every new Phase-7 surface string + nav label exists in all three `next-intl` catalogs (en/ms/zh) with identical key sets; the existing `i18n-parity.test.ts` (Phase 6) enforces parity in CI. [D-26]
+- [x] **NAV-01**: 8 role-filtered nav entries are placed under the correct Phase-6 sections (Agents & Cohorts: cohorts/agentProfiles/coachAssignment; Conversations & Escalations: flags; System & Compliance: auditLog/modelConfig/pdpaSettings; Analytics & Performance: daysToFirstClose); read-only sees NONE of the 8 (nav filtering is UX-only; the `requireRole()` page gate + Firestore rules are the authorization boundary). [D-25, D-24]
+- [x] **I18N-07**: Every new Phase-7 surface string + nav label exists in all three `next-intl` catalogs (en/ms/zh) with identical key sets; the existing `i18n-parity.test.ts` (Phase 6) enforces parity in CI. [D-26]
 
 ## v2 Requirements
 
@@ -366,9 +366,9 @@ Phase 1 = Foundations · Phase 2 = Coach + Admin v1 · Phase 3 = Finder + Intent
 | MODEL-02 | Phase 7 | Done (07-05; RC-publish IAM live-gated) |
 | PDPA-01 | Phase 7 | Done (07-05) |
 | CLOSE-01 | Phase 7 | Done (07-03) |
-| CLOSE-02 | Phase 7 | Done (07-03) |
-| NAV-01 | Phase 7 | Pending |
-| I18N-07 | Phase 7 | Pending |
+| CLOSE-02 | Phase 7 | Done (07-03 per-agent + 07-06 org aggregate tile) |
+| NAV-01 | Phase 7 | Done (07-06) |
+| I18N-07 | Phase 7 | Done (07-06) |
 
 **Coverage:**
 - v1 requirements: 85 enumerated REQ-IDs (FND 11, AUTH 6, CHAT 8, COACH 10, FIND 12, REPLY 12, CDASH 8, ADMIN 8, QUAL 10). (Prior header said "86 total"; the actual enumerated REQ-ID count is 85 — discrepancy noted and reconciled by the roadmapper.)

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Completed 07-05-PLAN.md code tasks (model-config RC read/ETag-safe publish + bounded audit-log viewer + static PDPA-settings); RC-publish IAM checkpoint live-gated (carried to rollout)"
-last_updated: "2026-06-11T14:40:00.000Z"
-last_activity: 2026-06-11 -- Completed Phase 7 plan 05 code tasks (publishModelConfig getTemplate→mutate one key→publishTemplate WITHOUT force + conflict-on-stale-ETag + audited; readModelConfig 5-pillar read; listAuditLogs bounded/no-self-audit/metadata-only; static PDPA-settings from policy-constants; MODEL-01/02 + AUDIT-01 + PDPA-01 GREEN; ci-guards 1 & 4 GREEN; tsc clean). RC-publish IAM (firebaseremoteconfig.remoteConfig.update on the App Hosting SA) checkpoint live-gated.
+stopped_at: "Completed 07-06-PLAN.md (FINAL Wave-3): 8 role-filtered nav entries (read-only blind) + full trilingual catalogs (parity GREEN) + days-to-first-close org aggregate tile. Phase 7 code-complete (6/6 plans)."
+last_updated: "2026-06-11T14:55:00.000Z"
+last_activity: 2026-06-11 -- Completed Phase 7 plan 06 (NAV-01/I18N-07/CLOSE-02): wired 8 net-new surfaces into the Phase-6 6-section sidebar as role-filtered NavItems (cohorts/agentProfiles/coachAssignment → Agents; flags → Conversations; auditLog/modelConfig/pdpaSettings → System; daysToFirstClose → Analytics) with read-only blind to all (D-24) — Wave-0 NAV-01 test GREEN (8/8); authored 8 nav labels + 7 surface namespaces (adminCohorts/adminCoachAssignment/agentsIndex/agentProfile/adminModelConfig/adminAuditLog/adminPdpa) + adminUsage daysToClose keys to all three catalogs — i18n-parity GREEN; added getOrgDaysToFirstClose() read-time org aggregate (no new pipeline, D-22) + avg/median/count tile in the usage dashboard anchored #days-to-first-close. Full gate: tsc clean; vitest 638 passed/186 skipped (1 unrelated flaky-timeout, passes in isolation); next build compiles (26 routes, 63 static pages, all 8 Phase-7 routes present).
 progress:
   total_phases: 8
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 62
-  completed_plans: 61
-  percent: 82
+  completed_plans: 62
+  percent: 87
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 
 ## Current Position
 
-Phase: 7 (Console IA v2 — Net-new Surfaces) — EXECUTING
-Plan: 6 of 6
-Status: Executing Phase 7 (07-05 System & Compliance cluster code-complete: model-config RC read/publish + audit-log viewer + static PDPA-settings; 07-02 deploy checkpoint + 07-05 RC-publish IAM checkpoint both live-gated — auditLogs (action,ts)/(actorUid,ts) composite indexes must be built before the filtered listAuditLogs query runs in production; RC publish needs firebaseremoteconfig.remoteConfig.update on the App Hosting SA)
-Last activity: 2026-06-11 -- Completed 07-05-PLAN.md code tasks (publishModelConfig: getTemplate→mutate one model.{pillar}.default key→publishTemplate WITHOUT {force:true} + stale-ETag→conflict + audited model_config_publish + 5-pillar allow-list; readModelConfig 5-pillar read via getServerTemplate; listAuditLogs bounded orderBy('ts','desc').limit(50)+cursor, metadata-only [hashes never decoded, D-12], no auditDrilldown [no self-audit, D-14]; static PDPA-settings RSC from src/pdpa/policy-constants.ts + erasure link, zero knobs; all 3 pages requireRole({allowed:['admin']}) — read-only DENIED; MODEL-01/02 + AUDIT-01 + PDPA-01 GREEN; ci-guards 1 [no hard-coded model id] + 4 [no force:true] GREEN; tsc clean). RC-publish IAM checkpoint returned as live-gated human-action.
+Phase: 7 (Console IA v2 — Net-new Surfaces) — CODE-COMPLETE (6/6 plans)
+Plan: 6 of 6 — DONE
+Status: Phase 7 code-complete. All 8 net-new surfaces built, reachable via role-filtered nav (read-only blind), trilingual to parity, and gated server-side. Open live-gated checkpoints carried to rollout: 07-02 deploy (cohorts + conversationFlags rules + 4 composite indexes incl. auditLogs (action,ts)/(actorUid,ts)) and 07-05 RC-publish IAM (firebaseremoteconfig.remoteConfig.update on the App Hosting SA). Manual gate: BM/中文 native sign-off on the 8 surfaces' copy.
+Last activity: 2026-06-11 -- Completed 07-06-PLAN.md (FINAL Wave-3, NAV-01/I18N-07/CLOSE-02): 8 role-filtered nav entries placed per D-25 (cohorts/agentProfiles/coachAssignment → Agents & Cohorts; flags → Conversations & Escalations; auditLog/modelConfig/pdpaSettings → System & Compliance; daysToFirstClose → Analytics & Performance), read-only blind to all 8 (D-24) → app-sidebar-nav.test.ts GREEN (8/8); authored 8 nav labels + 7 surface namespaces + adminUsage daysToClose keys across en/ms/zh → i18n-parity GREEN; getOrgDaysToFirstClose() read-time aggregate (D-22, no new pipeline) + avg/median/count tile in the usage dashboard (#days-to-first-close). Full gate clean (tsc, vitest 638/186 skip, next build 26 routes).
 
-Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 6 CODE-COMPLETE (8/8 plans). Next: Phase 7.
+Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 6 CODE-COMPLETE (8/8 plans); Phase 7 CODE-COMPLETE (6/6 plans). Next: Phase 8 (WABA — graduation-gated) or rollout.
 
 ### Phase 7 open human-action gate (07-02 — BLOCKING for Wave-2 consuming surfaces 07-04/07-05)
 
@@ -74,12 +74,12 @@ Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 7 | 4 | ~56 min | ~14 min |
+| 7 | 6 | ~78 min | ~13 min |
 
 **Recent Trend:**
 
-- Last plan: 07-04 (~14 min, 2 tasks, 8 files) — conversation flagged queue
-- Trend: steady (12–18 min per Phase-7 plan)
+- Last plan: 07-06 (~8 min, 2 tasks, 7 files) — net-new surface nav wiring + trilingual parity + days-to-first-close tile (FINAL Wave-3)
+- Trend: steady (8–18 min per Phase-7 plan)
 
 *Updated after each plan completion*
 
@@ -142,6 +142,11 @@ Recent decisions affecting current work:
 - [07-04]: Trilingual flagQueue.* namespace authored NOW in all three catalogs (NOT deferred to 07-06) — the i18n-parity test is a live GREEN gate and next-intl resolves missing keys at build; deferring would break parity + the build. 07-06 still owns the nav-item wiring.
 - [07-04]: flagConversation write passes tenantId:TENANT_ID explicitly (mirrors cohorts/actions.ts) to satisfy WithFieldValue<ConversationFlagDoc>; converter also stamps (idempotent).
 - [07-04]: scoped listFlags depends on the 07-02 conversationFlags composite indexes being live (built at the rollout deploy checkpoint); until then FAILED_PRECONDITION (Pitfall 6), surfaced via the queue error toast.
+- [07-06]: 8 net-new nav items wired into app-sidebar-nav.ts per D-25 (cohorts/agentProfiles/coachAssignment→agents; flags→conversations; auditLog/modelConfig/pdpaSettings→system; daysToFirstClose→analytics); read-only in NO new item's roles (D-24); coach-visible = flags+agentProfiles ['admin','senior-coach'], rest ['admin']. Wave-0 NAV-01 test GREEN. Nav filtering UX-only — requireRole() page gate is the boundary.
+- [07-06]: agentProfiles nav href = /[lang]/agents (the 07-03 index route, rows deep-link to [uid]) NOT the [uid]-only drill-in (no dead link). daysToFirstClose href = /[lang]/usage#days-to-first-close (anchors the existing Analytics tile) — CLOSE-02 is presentation-only, no new route.
+- [07-06]: 7 surface namespaces (adminCohorts/adminCoachAssignment/agentsIndex/agentProfile/adminModelConfig/adminAuditLog/adminPdpa) + 8 nav labels + adminUsage daysToClose keys authored in all three catalogs to exact key-set parity (i18n-parity GREEN). EN = UI-SPEC source; BM/中文 machine-assisted (ms/zh _note marker, D-08) awaiting native sign-off (carried gate). flagQueue was already authored in 07-04.
+- [07-06]: getOrgDaysToFirstClose() added to src/dashboard/queries.ts — read-time org/cohort aggregate over agentProfiles (createTime=onboardingStart, Pitfall 4), folds through the existing daysToFirstClose + aggregateDaysToFirstClose; NO stored metric, NO lazy-cron (D-22). Computed admin-only in usage/page.tsx; read-only never reaches the admin-gated tile section.
+- [07-06]: days-to-first-close tile renders avg/median (rounded) + closedCount with literal em-dash '—' when closedCount===0 + the "No first-close recorded for this cohort yet." empty line; section guarded by role==='admin' (D-24). Phase 7 CODE-COMPLETE.
 
 ### Pending Todos
 
@@ -175,9 +180,9 @@ Items acknowledged and carried forward (v2 / post-pilot):
 
 ## Session Continuity
 
-Last session: 2026-06-11T14:32:00.000Z
-Stopped at: Completed 07-04-PLAN.md (conversation flagged queue). Next: 07-05 (audit-log viewer + model-config admin UI — turns the 07-01 audit-log/model-config Wave-0 RED stubs GREEN).
-Resume file: .planning/phases/07-console-ia-v2-net-new-surfaces/07-04-SUMMARY.md
+Last session: 2026-06-11T14:55:00.000Z
+Stopped at: Completed 07-06-PLAN.md (FINAL Wave-3 — net-new surface nav wiring + trilingual parity + days-to-first-close tile). Phase 7 CODE-COMPLETE (6/6 plans). Next: phase verification / Phase 8 (WABA, graduation-gated) or rollout prep. Open Phase-7 live-gated checkpoints (07-02 deploy + 07-05 RC-publish IAM) and the BM/中文 native sign-off manual gate carry to rollout.
+Resume file: .planning/phases/07-console-ia-v2-net-new-surfaces/07-06-SUMMARY.md
 v1 milestone status: CODE-COMPLETE. Live-gated items to execute during rollout prep:
 
   1. firebase deploy --only firestore:rules,firestore:indexes (Phase 4/5 rules + indexes)
