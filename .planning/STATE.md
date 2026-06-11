@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Completed 07-03-PLAN.md (Agents & Cohorts cluster: cohort CRUD + coach-assignment + agent profile + days-to-first-close)"
-last_updated: "2026-06-11T14:13:00.000Z"
-last_activity: 2026-06-11 -- Completed Phase 7 plan 03 (cohort CRUD, admin-only coach-assignment dual-write, read-only agent profile + days-to-first-close; ASSIGN-01/PROF-02/CLOSE-01/02 GREEN)
+stopped_at: "Completed 07-04-PLAN.md (conversation flagged queue: content-free flagConversation + scoped queue view + flag action on the admin viewer)"
+last_updated: "2026-06-11T14:32:00.000Z"
+last_activity: 2026-06-11 -- Completed Phase 7 plan 04 (content-free flagConversation write with write-time own-downline assert + denormalized seniorCoachId; bounded scoped (coach)/flags queue with review/dismiss; admin-viewer flag button; FLAG-02/FLAG-03 realized)
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 62
-  completed_plans: 59
-  percent: 79
+  completed_plans: 60
+  percent: 81
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 ## Current Position
 
 Phase: 7 (Console IA v2 — Net-new Surfaces) — EXECUTING
-Plan: 4 of 6
-Status: Executing Phase 7 (07-03 Agents & Cohorts cluster complete; 07-02 deploy checkpoint still live-gated for 07-04/07-05)
-Last activity: 2026-06-11 -- Completed 07-03-PLAN.md (admin-only cohort CRUD + atomic coach-assignment dual-write; read-only downline-gated agent profile + read-time days-to-first-close; idempotent record-first-close; /[lang]/agents index resolves the NAV-01 href; ASSIGN-01/PROF-01/02/CLOSE-01/02 GREEN)
+Plan: 5 of 6
+Status: Executing Phase 7 (07-04 conversation flagged queue complete; 07-02 deploy checkpoint still live-gated — conversationFlags composite indexes must be built before the scoped listFlags query runs in production)
+Last activity: 2026-06-11 -- Completed 07-04-PLAN.md (flagConversation content-free write [coach own-downline + admin; write-time downline assert; denormalized seniorCoachId; audited]; bounded scoped (coach)/flags queue with review/dismiss + neutral-primary AlertDialog; content-free flag button on the admin conversation-viewer; trilingual flagQueue.* namespace; FLAG-02/FLAG-03 GREEN)
 
 Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 6 CODE-COMPLETE (8/8 plans). Next: Phase 7.
 
@@ -69,11 +69,11 @@ Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 7 | 3 | ~42 min | ~14 min |
+| 7 | 4 | ~56 min | ~14 min |
 
 **Recent Trend:**
 
-- Last plan: 07-03 (~12 min, 3 tasks, 14 files) — Agents & Cohorts cluster
+- Last plan: 07-04 (~14 min, 2 tasks, 8 files) — conversation flagged queue
 - Trend: steady (12–18 min per Phase-7 plan)
 
 *Updated after each plan completion*
@@ -132,6 +132,11 @@ Recent decisions affecting current work:
 - [07-03]: profile totalTokens sums inputTokens+outputTokens (no `tokens` field on UsageRollupDoc); cohort writes stamp tenantId:TENANT_ID explicitly to satisfy WithFieldValue<CohortDoc> (converter also stamps).
 - [07-03]: [Rule 1] fixed TDZ in two Wave-0 test harnesses (coach-assignment + queries) — wrapped captured mock refs in vi.hoisted() so hoisted vi.mock factories can reference them; assertions unchanged.
 - [07-03]: i18n keys (adminCohorts/adminCoachAssignment/agentsIndex/agentProfile) + the 8 sidebar nav items are referenced here but AUTHORED in 07-06 (cross-plan split); app-sidebar-nav.test.ts stays RED until 07-06.
+- [07-04]: flagConversation lives in (admin)/conversations/actions.ts (flag originates from the admin viewer) but is coach-or-admin gated; own-downline is enforced at WRITE time (resolve conversation.ownerUid → agentProfiles.seniorCoachId → assert == coach uid) — a coach never gains read access to conversation content. Admin may flag any.
+- [07-04]: When the owning agent has no assigned senior coach, the flag's denormalized seniorCoachId is stamped '' — admins still flag (they bypass the assert); no coach uid equals '', so the flag stays admin-visible only (consistent with the coach read-rule).
+- [07-04]: Trilingual flagQueue.* namespace authored NOW in all three catalogs (NOT deferred to 07-06) — the i18n-parity test is a live GREEN gate and next-intl resolves missing keys at build; deferring would break parity + the build. 07-06 still owns the nav-item wiring.
+- [07-04]: flagConversation write passes tenantId:TENANT_ID explicitly (mirrors cohorts/actions.ts) to satisfy WithFieldValue<ConversationFlagDoc>; converter also stamps (idempotent).
+- [07-04]: scoped listFlags depends on the 07-02 conversationFlags composite indexes being live (built at the rollout deploy checkpoint); until then FAILED_PRECONDITION (Pitfall 6), surfaced via the queue error toast.
 
 ### Pending Todos
 
@@ -165,9 +170,9 @@ Items acknowledged and carried forward (v2 / post-pilot):
 
 ## Session Continuity
 
-Last session: 2026-06-11T14:13:00.000Z
-Stopped at: Completed 07-03-PLAN.md (Agents & Cohorts cluster). Next: 07-04 (coach-scoped flagged queue).
-Resume file: .planning/phases/07-console-ia-v2-net-new-surfaces/07-03-SUMMARY.md
+Last session: 2026-06-11T14:32:00.000Z
+Stopped at: Completed 07-04-PLAN.md (conversation flagged queue). Next: 07-05 (audit-log viewer + model-config admin UI — turns the 07-01 audit-log/model-config Wave-0 RED stubs GREEN).
+Resume file: .planning/phases/07-console-ia-v2-net-new-surfaces/07-04-SUMMARY.md
 v1 milestone status: CODE-COMPLETE. Live-gated items to execute during rollout prep:
 
   1. firebase deploy --only firestore:rules,firestore:indexes (Phase 4/5 rules + indexes)

@@ -224,7 +224,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 07-03-PLAN.md — Agents & Cohorts cluster: admin cohort CRUD + admin-only coach-assignment dual-write + read-only agent profile (coach group) + getAgentProfile/daysToFirstClose + idempotent record-first-close — ASSIGN-01/02, PROF-01/02, COH-03, CLOSE-01/02 GREEN; /[lang]/agents index resolves NAV-01 href; tsc clean; i18n keys + nav items deferred to 07-06 ✅ 2026-06-11
-- [ ] 07-04-PLAN.md — Conversation flagged queue: content-free flagConversation (coach own-downline+admin) + scoped queue view (coach group) + admin-viewer flag button
+- [x] 07-04-PLAN.md — Conversation flagged queue: content-free flagConversation (coach own-downline+admin, write-time downline assert, denormalized seniorCoachId, audited) + bounded scoped (coach)/flags queue (review/dismiss, neutral-primary AlertDialog, deep-link to existing viewer) + content-free admin-viewer flag button + trilingual flagQueue.* namespace — FLAG-02/FLAG-03 GREEN; tsc clean; next build compiles /[lang]/flags ✅ 2026-06-11
 - [ ] 07-05-PLAN.md — System & Compliance cluster: model-config RC read/publish (ETag, no force, audited) + bounded audit-log viewer (no self-audit) + static PDPA-settings (RC-publish IAM checkpoint)
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -255,5 +255,5 @@ Phases execute in numeric order: 1 → 2 → [week-4 go/no-go gate] → 3 → 4 
 | 4. Reply Assistant + Analytics | 10/10 | Code-complete | 2026-06-05 |
 | 5. Hardening + Scale-Up | 8/8 | Code-complete | 2026-06-07 |
 | 6. Console IA v2 — Restructure + Read-only Role | 8/8 | Code-complete | 2026-06-11 |
-| 7. Console IA v2 — Net-new Surfaces | 3/6 | Executing (07-02 deploy checkpoint live-gated; 07-03 done) | — |
+| 7. Console IA v2 — Net-new Surfaces | 4/6 | Executing (07-02 deploy checkpoint live-gated; 07-04 done — FLAG-02/03 GREEN) | — |
 | 8. WhatsApp Business API (graduation-gated) | 0/TBD | Not planned | — |

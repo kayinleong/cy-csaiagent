@@ -180,8 +180,8 @@ Derived during `/gsd-plan-phase 7` (2026-06-11) from `.planning/phases/07-consol
 ### Conversation Flagged Queue (FLAG)
 
 - [x] **FLAG-01**: `conversationFlags/{flagId}` is a first-class collection (converter + ref factory `conversationFlagsRef()` = Collection 22) storing a `conversationId` REFERENCE only (no conversation content) + a denormalized `seniorCoachId` for coach read-scope; deny-by-default rules (client create/update/delete DENIED, Admin-SDK only) + rules-unit-test in the same plan. [D-09, D-10, D-23]
-- [ ] **FLAG-02**: A manual flag Server Action (Admin-SDK write) lets a coach (own-downline conversation) or admin flag a conversation; it looks up + stamps the denormalized `seniorCoachId`; no AI auto-flagging in v1; audited. [D-09, D-11]
-- [ ] **FLAG-03**: The flagged-queue read view shows admin all open flags + senior-coach own-downline flags (bounded limit 50, status filter, composite index); rows deep-link to the EXISTING audited conversation viewer; read-only DENIED. [D-11, D-24]
+- [x] **FLAG-02**: A manual flag Server Action (Admin-SDK write) lets a coach (own-downline conversation) or admin flag a conversation; it looks up + stamps the denormalized `seniorCoachId`; no AI auto-flagging in v1; audited. [D-09, D-11]
+- [x] **FLAG-03**: The flagged-queue read view shows admin all open flags + senior-coach own-downline flags (bounded limit 50, status filter, composite index); rows deep-link to the EXISTING audited conversation viewer; read-only DENIED. [D-11, D-24]
 
 ### Audit-Log Viewer (AUDIT)
 
@@ -359,8 +359,8 @@ Phase 1 = Foundations · Phase 2 = Coach + Admin v1 · Phase 3 = Finder + Intent
 | ASSIGN-01 | Phase 7 | Done (07-03) |
 | ASSIGN-02 | Phase 7 | Done (07-03) |
 | FLAG-01 | Phase 7 | Done (07-02) |
-| FLAG-02 | Phase 7 | Pending |
-| FLAG-03 | Phase 7 | Pending |
+| FLAG-02 | Phase 7 | Complete |
+| FLAG-03 | Phase 7 | Complete |
 | AUDIT-01 | Phase 7 | Pending |
 | MODEL-01 | Phase 7 | Pending |
 | MODEL-02 | Phase 7 | Pending |
