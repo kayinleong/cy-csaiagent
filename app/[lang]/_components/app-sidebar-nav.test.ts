@@ -132,3 +132,85 @@ describe('app-sidebar role-filter — per-role visibility (RO-01 least-privilege
     expect(keys).not.toContain('dashboard')
   })
 })
+
+// ─── Phase-7 NAV-01: 8 net-new nav items, section placement + read-only blindness ──
+//
+// Phase 7 adds 8 nav items distributed across 4 of the existing Phase-6 sections
+// (D-25): cohorts + agentProfiles + coachAssignment → Agents & Cohorts; flags →
+// Conversations & Escalations; auditLog + modelConfig + pdpaSettings → System &
+// Compliance; daysToFirstClose → Analytics & Performance.
+//
+// CRITICAL (D-24): read-only sees NONE of the 8 new items — Phase 7 adds NO new
+// read-only-visible surface (preserves the LOCKED Phase-6 least-privilege allow-list).
+// Coach-visible items (flags, agentProfiles) list ['admin','senior-coach'];
+// the rest are ['admin']. Nav filtering is UX-only — the server gate is the boundary.
+//
+// RED-BY-DESIGN: these 8 keys are not in the nav model until 07-06 ships them.
+
+const PHASE7_NAV_KEYS = [
+  'cohorts',
+  'agentProfiles',
+  'coachAssignment',
+  'flags',
+  'auditLog',
+  'modelConfig',
+  'pdpaSettings',
+  'daysToFirstClose',
+] as const
+
+const PHASE7_SECTION_PLACEMENT: Record<string, string> = {
+  cohorts: 'agents',
+  agentProfiles: 'agents',
+  coachAssignment: 'agents',
+  flags: 'conversations',
+  auditLog: 'system',
+  modelConfig: 'system',
+  pdpaSettings: 'system',
+  daysToFirstClose: 'analytics',
+}
+
+/** Map item key → its containing section key for a given role's visible sections. */
+function itemSectionMap(sections: SectionShape[]): Record<string, string> {
+  const map: Record<string, string> = {}
+  for (const section of sections) {
+    for (const item of section.items) map[item.key] = section.key
+  }
+  return map
+}
+
+describe('Phase-7 nav — 8 net-new items, placement + read-only blindness (NAV-01 / D-25 / D-24)', () => {
+  it('admin sees all 8 new items, each under its D-25 section', async () => {
+    const { visibleSectionsForRole } = await loadNav()
+    const sections = visibleSectionsForRole!('admin', LANG)
+    const map = itemSectionMap(sections)
+
+    for (const key of PHASE7_NAV_KEYS) {
+      expect(map[key]).toBe(PHASE7_SECTION_PLACEMENT[key])
+    }
+  })
+
+  it('senior-coach sees the coach-visible items (flags, agentProfiles) but NOT the admin-only ones', async () => {
+    const { visibleSectionsForRole } = await loadNav()
+    const keys = visibleItemKeys(visibleSectionsForRole!('senior-coach', LANG))
+
+    // Coach-visible (own-downline flags + agent profiles)
+    expect(keys).toContain('flags')
+    expect(keys).toContain('agentProfiles')
+
+    // Admin-only Phase-7 surfaces — never visible to a coach
+    expect(keys).not.toContain('cohorts')
+    expect(keys).not.toContain('coachAssignment')
+    expect(keys).not.toContain('auditLog')
+    expect(keys).not.toContain('modelConfig')
+    expect(keys).not.toContain('pdpaSettings')
+  })
+
+  it('read-only sees NONE of the 8 new Phase-7 items (D-24 — least-privilege LOCKED)', async () => {
+    const { visibleSectionsForRole } = await loadNav()
+    const keys = visibleItemKeys(visibleSectionsForRole!('read-only' as unknown as Role, LANG))
+
+    for (const key of PHASE7_NAV_KEYS) {
+      expect(keys).not.toContain(key)
+    }
+  })
+})
