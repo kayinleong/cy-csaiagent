@@ -101,6 +101,8 @@ rulesSuite('Deny-by-default: unauthenticated reads', () => {
     'replyEdits',
     // Phase-5 collections 18-20 (T-05-UNRULED / T-05-TAMPER mitigate)
     'usageEvents', 'usageRollups', 'erasureRequests',
+    // Phase-7 collections 21-22 (T-07-01/03 mitigate — RED until 07-02 rules land)
+    'cohorts', 'conversationFlags',
   ]
 
   for (const col of collections) {
@@ -640,6 +642,175 @@ rulesSuite('escalations collection', () => {
         contextBundle: {},
         status: 'open',
         openedAt: new Date(),
+      })
+    )
+  })
+})
+
+// ─── 9b. conversationFlags collection (Phase-7 FLAG-01/02/03) ────────────────
+//
+// New top-level collection (D-09). Content-free: stores a `conversationId`
+// reference only, never conversation content (D-10). Writes are Admin-SDK-only
+// (Server Action via flagConversation) — ALL client create/update/delete DENIED.
+// Reads: coach sees ONLY own-downline flags (denormalized seniorCoachId == uid,
+// mirrors escalations Pitfall D); admin sees any; new-agent/read-only DENIED.
+//
+// RED-BY-DESIGN: firestore.rules has no conversationFlags block until 07-02.
+// Emulator-gated via rulesSuite (describe.skip without FIRESTORE_EMULATOR_HOST).
+
+rulesSuite('conversationFlags collection', () => {
+  const downlineFlagId = 'flag-downline-001'
+  const strangerFlagId = 'flag-stranger-001'
+
+  beforeAll(async () => {
+    await seed(`conversationFlags/${downlineFlagId}`, {
+      tenantId: D2_TENANT,
+      conversationId: 'conv-001',                       // reference only — no content (D-10)
+      flaggedByUid: syntheticSeniorCoach.uid,
+      reason: 'tone-mismatch',
+      status: 'open',
+      seniorCoachId: syntheticSeniorCoach.uid,          // denormalized for coach read-scope
+      createdAt: new Date(),
+    })
+    await seed(`conversationFlags/${strangerFlagId}`, {
+      tenantId: D2_TENANT,
+      conversationId: 'conv-002',
+      flaggedByUid: 'other-coach-uid',
+      reason: 'tone-mismatch',
+      status: 'open',
+      seniorCoachId: 'other-coach-uid',                 // a DIFFERENT coach's flag
+      createdAt: new Date(),
+    })
+  })
+
+  it('senior-coach CAN read a flag in their own downline (seniorCoachId == uid)', async () => {
+    const ctx = await seniorCoachCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(getDoc(doc(db, 'conversationFlags', downlineFlagId)))
+  })
+
+  it('senior-coach CANNOT read a stranger flag (different seniorCoachId) — cross-coach DENY (T-07-02)', async () => {
+    const ctx = await seniorCoachCtx()
+    const db = ctx.firestore()
+    await assertFails(getDoc(doc(db, 'conversationFlags', strangerFlagId)))
+  })
+
+  it('admin CAN read any conversationFlag', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(getDoc(doc(db, 'conversationFlags', downlineFlagId)))
+  })
+
+  it('new-agent CANNOT read conversationFlags', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertFails(getDoc(doc(db, 'conversationFlags', downlineFlagId)))
+  })
+
+  it('no client can CREATE a conversationFlag (Admin-SDK only, D-09)', async () => {
+    const ctx = await seniorCoachCtx()
+    const db = ctx.firestore()
+    await assertFails(
+      setDoc(doc(db, 'conversationFlags', 'client-created-flag'), {
+        tenantId: D2_TENANT,
+        conversationId: 'conv-003',
+        flaggedByUid: syntheticSeniorCoach.uid,
+        reason: 'test',
+        status: 'open',
+        seniorCoachId: syntheticSeniorCoach.uid,
+        createdAt: new Date(),
+      })
+    )
+  })
+
+  it('no client can UPDATE a conversationFlag (Admin-SDK only, D-09)', async () => {
+    const ctx = await seniorCoachCtx()
+    const db = ctx.firestore()
+    await assertFails(
+      updateDoc(doc(db, 'conversationFlags', downlineFlagId), { status: 'reviewed' })
+    )
+  })
+
+  it('no client can DELETE a conversationFlag (Admin-SDK only, D-09)', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertFails(deleteDoc(doc(db, 'conversationFlags', downlineFlagId)))
+  })
+})
+
+// ─── 9c. cohorts collection (Phase-7 COH-01/03) ──────────────────────────────
+//
+// New top-level collection (D-01). Admin-write (admin-only CRUD, audited);
+// read = admin (all) + senior-coach (cohort metadata; downline filter is
+// app-side since the cohort doc has no seniorCoachId). read-only DENIED (D-03 —
+// membership is agent-PII-adjacent). Writes by non-admin clients DENIED.
+//
+// RED-BY-DESIGN: firestore.rules has no cohorts block until 07-02.
+// Emulator-gated via rulesSuite (describe.skip without FIRESTORE_EMULATOR_HOST).
+
+rulesSuite('cohorts collection', () => {
+  const cohortId = 'cohort-2026-intake-a'
+
+  beforeAll(async () => {
+    await seed(`cohorts/${cohortId}`, {
+      tenantId: D2_TENANT,
+      name: 'June 2026 Intake A',
+      description: 'First intake batch',
+      createdAt: new Date(),
+      createdBy: syntheticAdmin.uid,
+    })
+  })
+
+  it('admin CAN read a same-tenant cohort', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(getDoc(doc(db, 'cohorts', cohortId)))
+  })
+
+  it('admin CAN write a same-tenant cohort (admin-only CRUD, D-03)', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(
+      setDoc(doc(db, 'cohorts', 'cohort-admin-created'), {
+        tenantId: D2_TENANT,
+        name: 'Admin-created cohort',
+        description: '',
+        createdAt: new Date(),
+        createdBy: syntheticAdmin.uid,
+      })
+    )
+  })
+
+  it('senior-coach CAN read cohort metadata', async () => {
+    const ctx = await seniorCoachCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(getDoc(doc(db, 'cohorts', cohortId)))
+  })
+
+  it('new-agent CANNOT write a cohort (non-admin write DENIED, D-03)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertFails(
+      setDoc(doc(db, 'cohorts', 'agent-created-cohort'), {
+        tenantId: D2_TENANT,
+        name: 'Should fail',
+        description: '',
+        createdAt: new Date(),
+        createdBy: syntheticNewAgent.uid,
+      })
+    )
+  })
+
+  it('senior-coach CANNOT write a cohort (non-admin write DENIED, D-03)', async () => {
+    const ctx = await seniorCoachCtx()
+    const db = ctx.firestore()
+    await assertFails(
+      setDoc(doc(db, 'cohorts', 'coach-created-cohort'), {
+        tenantId: D2_TENANT,
+        name: 'Should fail',
+        description: '',
+        createdAt: new Date(),
+        createdBy: syntheticSeniorCoach.uid,
       })
     )
   })
@@ -1375,6 +1546,17 @@ rulesSuite('read-only role — RO-01 analytics-reader matrix (T-06-01)', () => {
     await seed(`users/${syntheticReadOnly.uid}`, {
       tenantId: D2_TENANT, role: 'read-only', lang: 'en', voiceSamples: [],
     })
+    // Phase-7 collections the read-only stakeholder must NOT read (D-24 Pitfall 2:
+    // every new Phase-7 surface is admin/coach config or agent-PII-adjacent —
+    // read-only gains NOTHING in Phase 7, preserving the LOCKED Phase-6 allow-list).
+    await seed(`cohorts/ro-cohort-001`, {
+      tenantId: D2_TENANT, name: 'ro read test', description: '',
+      createdAt: new Date(), createdBy: syntheticAdmin.uid,
+    })
+    await seed(`conversationFlags/ro-flag-001`, {
+      tenantId: D2_TENANT, conversationId: 'conv-ro', flaggedByUid: syntheticSeniorCoach.uid,
+      reason: 'x', status: 'open', seniorCoachId: syntheticSeniorCoach.uid, createdAt: new Date(),
+    })
   })
 
   // ── ALLOW READ: analytics aggregates (RED until isAnalyticsReader() lands) ──
@@ -1461,7 +1643,29 @@ rulesSuite('read-only role — RO-01 analytics-reader matrix (T-06-01)', () => {
     await assertFails(getDoc(doc(db, 'agentProfiles', syntheticNewAgent.uid)))
   })
 
+  // ── DENY READ: Phase-7 collections (D-24 — read-only gains nothing, T-07-01) ──
+
+  it('read-only CANNOT read cohorts (membership is agent-PII-adjacent — denied, D-03/D-24)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(getDoc(doc(db, 'cohorts', 'ro-cohort-001')))
+  })
+
+  it('read-only CANNOT read conversationFlags (carries conversationId/PII — denied, D-11/D-24)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(getDoc(doc(db, 'conversationFlags', 'ro-flag-001')))
+  })
+
   // ── DENY WRITE: read-only never writes any collection ──
+
+  it('read-only CANNOT write cohorts (read-only never writes, D-24)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(setDoc(doc(db, 'cohorts', 'ro-write-cohort'), { tenantId: D2_TENANT, name: 'x' }))
+  })
+
+  it('read-only CANNOT write conversationFlags (read-only never writes, D-24)', async () => {
+    const db = (await readOnlyCtx()).firestore()
+    await assertFails(setDoc(doc(db, 'conversationFlags', 'ro-write-flag'), { tenantId: D2_TENANT }))
+  })
 
   it('read-only CANNOT write usageRollups (read-only never writes)', async () => {
     const db = (await readOnlyCtx()).firestore()
@@ -1501,6 +1705,45 @@ rulesSuite('read-only role — RO-01 analytics-reader matrix (T-06-01)', () => {
   it('read-only CANNOT write users (read-only never writes)', async () => {
     const db = (await readOnlyCtx()).firestore()
     await assertFails(setDoc(doc(db, 'users', syntheticReadOnly.uid), { tenantId: D2_TENANT, role: 'admin' }))
+  })
+})
+
+// ─── 19. AgentProfileDoc Phase-7 optional-field type stubs (COH-02 / CLOSE-01) ─
+//
+// Type-level backward-compat assertions for the two NEW optional fields added to
+// AgentProfileDoc (cohortId?, firstCloseAt?). NOT emulator-gated — runs offline.
+// `npx tsc --noEmit` is the real gate; this describe documents the contract and
+// keeps a runtime touch-point so the type stubs are exercised.
+
+describe('AgentProfileDoc Phase-7 optional fields (COH-02 / CLOSE-01)', () => {
+  it('a doc literal OMITTING cohortId and firstCloseAt still typechecks (backward-compat)', async () => {
+    const { /* type-only import */ } = await import('@/src/firebase/collections')
+    // A pre-Phase-7 doc shape — no cohortId, no firstCloseAt — must remain valid.
+    const legacy: import('@/src/firebase/collections').AgentProfileDoc = {
+      tenantId: 'd2',
+      journeyStage: 'onboarding',
+      currentCheckpoint: 'intro',
+      lastActiveAt: new Date(),
+      activeLeadIds: [],
+      seniorCoachId: syntheticSeniorCoach.uid,
+    }
+    expect(legacy.cohortId).toBeUndefined()
+    expect(legacy.firstCloseAt).toBeUndefined()
+  })
+
+  it('a doc literal WITH cohortId and firstCloseAt typechecks (Phase-7 shape)', () => {
+    const enriched: import('@/src/firebase/collections').AgentProfileDoc = {
+      tenantId: 'd2',
+      journeyStage: 'producing',
+      currentCheckpoint: 'first-close',
+      lastActiveAt: new Date(),
+      activeLeadIds: [],
+      seniorCoachId: syntheticSeniorCoach.uid,
+      cohortId: 'cohort-2026-intake-a',
+      firstCloseAt: new Date('2026-07-01T00:00:00Z'),
+    }
+    expect(enriched.cohortId).toBe('cohort-2026-intake-a')
+    expect(enriched.firstCloseAt).toBeInstanceOf(Date)
   })
 })
 

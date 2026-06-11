@@ -80,6 +80,22 @@ export interface AgentProfileDoc {
   activeLeadIds: string[]
   /** UID of the senior coach managing this agent */
   seniorCoachId: string
+  /**
+   * Phase-7 COH-02: one-cohort-per-agent membership (D-02). Denormalized
+   * cohort reference (NOT a UID array on the cohort doc — 1 MB trap; NOT a
+   * join collection — YAGNI). Cohort filtering reuses `where('cohortId','==',cid)`.
+   * OPTIONAL — absent on pre-Phase-7 docs (backward-compat, no backfill;
+   * mirrors the EscalationDoc.resolvedAt optional-field precedent below).
+   */
+  cohortId?: string
+  /**
+   * Phase-7 CLOSE-01: first-close signal (D-20). Set by an audited, idempotent
+   * "record first close" Server Action (D-21 — records the FIRST close only;
+   * subsequent calls no-op). Absent = no close yet. days-to-first-close (CLOSE-02)
+   * = firstCloseAt − onboarding start, computed read-time (no stored metric).
+   * OPTIONAL — absent on pre-Phase-7 docs (backward-compat, no backfill).
+   */
+  firstCloseAt?: Date | FieldValue
 }
 
 export interface ConversationDoc {
