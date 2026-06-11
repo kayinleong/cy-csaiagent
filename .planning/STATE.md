@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 7 UI-SPEC approved
-last_updated: "2026-06-11T04:46:47.775Z"
-last_activity: 2026-06-11 -- Phase 7 execution started
+stopped_at: Completed 07-01-PLAN.md (Wave-0 RED scaffold)
+last_updated: "2026-06-11T05:10:00.000Z"
+last_activity: 2026-06-11 -- Completed Phase 7 plan 01 (Wave-0 RED scaffold)
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 62
-  completed_plans: 56
-  percent: 75
+  completed_plans: 57
+  percent: 76
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 ## Current Position
 
 Phase: 7 (Console IA v2 — Net-new Surfaces) — EXECUTING
-Plan: 1 of 6
-Status: Executing Phase 7
-Last activity: 2026-06-11 -- Phase 7 execution started
+Plan: 2 of 6
+Status: Executing Phase 7 (07-01 Wave-0 RED scaffold complete)
+Last activity: 2026-06-11 -- Completed 07-01-PLAN.md (Wave-0 RED scaffold)
 
 Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 6 CODE-COMPLETE (8/8 plans). Next: Phase 7.
 
@@ -112,6 +112,12 @@ Recent decisions affecting current work:
 - [05-08]: pre-Phase-5 token undercount (route.ts:607/:522/:620) documented in PERF-COST.md as a separate claim + Derek sign-off required (behavioral change to TOKEN_CAP).
 - [05-08]: backup posture = managed gcloud firestore export on-demand + lazy-cron reminder (NOT automated; confirm-with-Derek A6 note in HARDENING.md + backup-restore-runbook.md).
 - [05-08]: v1 milestone code-complete — all 5 phases, 8 Phase-5 plans done; live-gated items execute during rollout prep.
+- [07-01]: Wave-0 RED scaffold landed (mirrors Phase-5/6 D-27). 8 test files + 2 optional AgentProfileDoc fields; all new assertions RED-by-construction (or emulator-gated skip) until 07-02/03/05/06.
+- [07-01]: ci-guards Guard 2 (src/→app/) excludes *.test.ts — colocated tests legitimately import the app/ module they verify; the portable core production code is verified app/-clean. The core/shell rule governs the portable core, not its tests.
+- [07-01]: Nyquist anti-vacuous Guard 6 — under CI=true, FAIL if FIRESTORE_EMULATOR_HOST is unset, so the read-only-DENY + cross-coach-DENY rules matrices can never describe.skip vacuously. No-op offline. Verified failing under CI w/o emulator, passing with it.
+- [07-01]: scripts/**/*.test.ts added to vitest include (was uncovered) so the CI guard suite is collected.
+- [07-01]: src/dashboard/queries.test.ts created new (only dashboard.test.ts existed) — isolates Phase-7 PROF-02/CLOSE-02 contracts from the Phase-2 dashboard tests.
+- [07-01]: record-first-close + agent-profile contracts placed under the (coach) route group (admits senior-coach + admin); the (admin) group redirects coaches to /dashboard (07 CLAIM routing correction).
 
 ### Pending Todos
 

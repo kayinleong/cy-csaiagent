@@ -218,7 +218,7 @@ Plans:
 **Plans**: 6 plans (waves 0-3)Plans:
 **Wave 1**
 
-- [ ] 07-01-PLAN.md — Wave-0 RED scaffold (cohorts/conversationFlags rules matrix incl. read-only+cross-coach DENY, field-type stubs, Server-Action contracts, model-config ETag/no-force, record-close idempotency, nav read-only-blindness, CI grep guards)
+- [x] 07-01-PLAN.md — Wave-0 RED scaffold (cohorts/conversationFlags rules matrix incl. read-only+cross-coach DENY, field-type stubs, Server-Action contracts, model-config ETag/no-force, record-close idempotency, nav read-only-blindness, CI grep guards) ✅ 2026-06-11
 - [ ] 07-02-PLAN.md — Data model: cohorts + conversationFlags collections (converter+ref) + AgentProfileDoc.cohortId?/firstCloseAt? + deny-by-default rules + rules-tests + composite indexes (deploy checkpoint)
 
 **Wave 2** *(blocked on Wave 1 completion)*
