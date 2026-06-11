@@ -9,8 +9,12 @@
  *   3. Audited-access Alert banner at the top of the dialog (adminConversations.auditNotice).
  *   4. Per-message pillar Badge.
  *
- * READ-ONLY — no resolve/reply/delete affordance. Footer = close only (HR-5).
- * All strings from adminConversations.* namespace (HR-2).
+ * READ-ONLY content — no resolve/reply/delete affordance (HR-5). The only write is
+ * a CONTENT-FREE "Flag conversation" action (FLAG-02 / D-10): it sends the
+ * conversationId + a reason to flagConversation, never any message content. This is
+ * a triage marker, not a content mutation — the read-only contract on conversation
+ * CONTENT is preserved.
+ * All strings from adminConversations.* + flagQueue.* namespaces (HR-2).
  *
  * Analog: stall-inbox.tsx:137-184 (Dialog+ScrollArea drilldown — verbatim bubble styling).
  *
@@ -36,6 +40,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Table,
@@ -45,7 +51,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { getConversationForReview, searchConversations } from './actions'
+import { getConversationForReview, searchConversations, flagConversation } from './actions'
 import type { ConversationMessage, ConversationRef } from './actions'
 
 interface ConversationViewerProps {
@@ -78,6 +84,7 @@ function pillarBadgeVariant(pillar: string | null): 'default' | 'secondary' | 'o
 
 export function ConversationViewer({ lang: _lang }: ConversationViewerProps) {
   const t = useTranslations('adminConversations')
+  const tf = useTranslations('flagQueue')
 
   // Search state
   const [query, setQuery] = useState('')
@@ -90,8 +97,28 @@ export function ConversationViewer({ lang: _lang }: ConversationViewerProps) {
   const [threadError, setThreadError] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
 
+  // Flag-conversation state (FLAG-02 — content-free reason dialog)
+  const [flagDialogOpen, setFlagDialogOpen] = useState(false)
+  const [flagReason, setFlagReason] = useState('')
+
   const [isSearchPending, startSearchTransition] = useTransition()
   const [isLoadPending, startLoadTransition] = useTransition()
+  const [isFlagPending, startFlagTransition] = useTransition()
+
+  function submitFlag() {
+    if (!selectedCid || flagReason.trim().length === 0) return
+    startFlagTransition(async () => {
+      // CONTENT-FREE: only the conversationId + reason cross the boundary (D-10).
+      const result = await flagConversation(selectedCid, flagReason.trim())
+      if (result.ok) {
+        toast.success(tf('flagged'))
+        setFlagDialogOpen(false)
+        setFlagReason('')
+      } else {
+        toast.error(result.error ?? tf('error'))
+      }
+    })
+  }
 
   function handleSearch() {
     startSearchTransition(async () => {
@@ -265,10 +292,50 @@ export function ConversationViewer({ lang: _lang }: ConversationViewerProps) {
             </ScrollArea>
           )}
 
-          {/* Footer: close only (HR-5 — no reply/resolve/delete) */}
+          {/* Footer: close + flag (HR-5 read-only on CONTENT; flag is content-free, FLAG-02) */}
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog}>
               {t('close')}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => { setFlagReason(''); setFlagDialogOpen(true) }}
+              disabled={!selectedCid}
+            >
+              {tf('flagButton')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Flag-conversation reason dialog (FLAG-02) — sends only conversationId + reason (D-10). */}
+      <Dialog open={flagDialogOpen} onOpenChange={(open) => { if (!open) setFlagDialogOpen(false) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{tf('flagDialogTitle')}</DialogTitle>
+            <DialogDescription>{tf('flagDialogBody')}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="flag-reason">{tf('reasonLabel')}</Label>
+            <Textarea
+              id="flag-reason"
+              value={flagReason}
+              onChange={(e) => setFlagReason(e.target.value)}
+              placeholder={tf('reasonPlaceholder')}
+              rows={4}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFlagDialogOpen(false)}>
+              {tf('cancel')}
+            </Button>
+            <Button
+              onClick={submitFlag}
+              disabled={isFlagPending || flagReason.trim().length === 0}
+            >
+              {isFlagPending ? '…' : tf('flagSubmit')}
             </Button>
           </DialogFooter>
         </DialogContent>
