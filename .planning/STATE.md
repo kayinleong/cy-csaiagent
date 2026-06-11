@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: verifying
+status: executing
 stopped_at: Phase 7 UI-SPEC approved
-last_updated: "2026-06-11T04:44:17.087Z"
-last_activity: "2026-06-11 — Executed Phase 6 end-to-end via /gsd-plan-phase 6 --auto → gsd-execute-phase (sequential, no-worktree). 8 plans + a code-review fix (CR-01 read-only reachability + WR-01/WR-02). Plan 06-08 finished inline after the executor socket dropped twice. Live-gated: firestore.rules deploy, emulator rules matrix (151/151 local), read-only browser click-through, BM/中文 native sign-off. NOT pushed."
+last_updated: "2026-06-11T04:46:47.775Z"
+last_activity: 2026-06-11 -- Phase 7 execution started
 progress:
   total_phases: 8
   completed_phases: 6
-  total_plans: 56
+  total_plans: 62
   completed_plans: 56
   percent: 75
 ---
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-31)
 
 **Core value:** Compress new-agent ramp-up from 60 days to 7–10 days via a D2-grounded multi-pillar AI chat surface (the 11pm-on-a-phone answer).
-**Current focus:** Phase 6 — Console IA v2 (Restructure + Read-only Role) — CODE-COMPLETE + VERIFIED (8/8 plans). Next: Phase 7 (net-new surfaces) — /gsd-discuss-phase 7 or /gsd-plan-phase 7.
+**Current focus:** Phase 7 — Console IA v2 — Net-new Surfaces
 
 ## Current Position
 
-Phase: 6 of (now) 8 — CODE-COMPLETE + VERIFIED (v1 Phases 1-5 COMPLETE; claim phase-kayinleong-06 DONE)
-Plan: Phase 6 = 8 plans across 5 waves, ALL DONE (W0 RED scaffold → W1 role union + requireRole() helper → W2 Firestore analytics rules → W3 gate widening + role-assignment UI → W4: IA sidebar+links+i18n / Home / KB viewer+Integrations shell / per-coach pivot+KB-contribution). plan-checker PASSED (12/12); gsd-verifier human_needed (13/13 must-haves, 0 code gaps); code review CR-01+WR-01/02 RESOLVED.
-Status: Phase 6 code-complete + verified. Read-only stakeholder role (server-side + Firestore-rules gated, least-privilege), 6-section IA over unchanged routes, Home, KB version viewer, Integrations no-send shell, per-coach pivot, audited senior-coach KB contribution. tsc 0 / vitest 605 passed / 0 failed (+51 over baseline, 0 regression). Scope split (2026-06-10): Phase 7 (new) = net-new surfaces; Phase 8 (new) = WhatsApp Business API (graduation-gated). NOT pushed (user hold).
-Last activity: 2026-06-11 — Executed Phase 6 end-to-end via /gsd-plan-phase 6 --auto → gsd-execute-phase (sequential, no-worktree). 8 plans + a code-review fix (CR-01 read-only reachability + WR-01/WR-02). Plan 06-08 finished inline after the executor socket dropped twice. Live-gated: firestore.rules deploy, emulator rules matrix (151/151 local), read-only browser click-through, BM/中文 native sign-off. NOT pushed.
+Phase: 7 (Console IA v2 — Net-new Surfaces) — EXECUTING
+Plan: 1 of 6
+Status: Executing Phase 7
+Last activity: 2026-06-11 -- Phase 7 execution started
 
 Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 6 CODE-COMPLETE (8/8 plans). Next: Phase 7.
 
