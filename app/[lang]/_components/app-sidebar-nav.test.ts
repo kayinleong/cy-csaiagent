@@ -135,10 +135,10 @@ describe('app-sidebar role-filter — per-role visibility (RO-01 least-privilege
 
 // ─── Phase-7 NAV-01: 8 net-new nav items, section placement + read-only blindness ──
 //
-// Phase 7 adds 8 nav items distributed across 4 of the existing Phase-6 sections
+// Phase 7 adds net-new nav items across 3 of the existing Phase-6 sections
 // (D-25): cohorts + agentProfiles + coachAssignment → Agents & Cohorts; flags →
 // Conversations & Escalations; auditLog + modelConfig + pdpaSettings → System &
-// Compliance; daysToFirstClose → Analytics & Performance.
+// Compliance. (daysToFirstClose has NO nav row — its tile lives on /usage.)
 //
 // CRITICAL (D-24): read-only sees NONE of the 8 new items — Phase 7 adds NO new
 // read-only-visible surface (preserves the LOCKED Phase-6 least-privilege allow-list).
@@ -147,6 +147,9 @@ describe('app-sidebar role-filter — per-role visibility (RO-01 least-privilege
 //
 // RED-BY-DESIGN: these 8 keys are not in the nav model until 07-06 ships them.
 
+// NOTE: 'daysToFirstClose' was REMOVED from the nav model (user IA dedup) — its
+// aggregate tile lives ON the /usage page, so the standalone deep-link nav entry was
+// redundant. The metric still renders on the usage dashboard; it just has no nav row.
 const PHASE7_NAV_KEYS = [
   'cohorts',
   'agentProfiles',
@@ -155,7 +158,6 @@ const PHASE7_NAV_KEYS = [
   'auditLog',
   'modelConfig',
   'pdpaSettings',
-  'daysToFirstClose',
 ] as const
 
 const PHASE7_SECTION_PLACEMENT: Record<string, string> = {
@@ -166,7 +168,6 @@ const PHASE7_SECTION_PLACEMENT: Record<string, string> = {
   auditLog: 'system',
   modelConfig: 'system',
   pdpaSettings: 'system',
-  daysToFirstClose: 'analytics',
 }
 
 /** Map item key → its containing section key for a given role's visible sections. */
@@ -179,7 +180,7 @@ function itemSectionMap(sections: SectionShape[]): Record<string, string> {
 }
 
 describe('Phase-7 nav — 8 net-new items, placement + read-only blindness (NAV-01 / D-25 / D-24)', () => {
-  it('admin sees all 8 new items, each under its D-25 section', async () => {
+  it('admin sees all net-new items, each under its D-25 section', async () => {
     const { visibleSectionsForRole } = await loadNav()
     const sections = visibleSectionsForRole!('admin', LANG)
     const map = itemSectionMap(sections)

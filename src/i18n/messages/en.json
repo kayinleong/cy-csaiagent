@@ -578,6 +578,13 @@
     "genericError": "Something went wrong. Your change wasn't saved — please try again."
   },
   "adminModelConfig": {
+    "pillar": {
+      "coach": "Coach",
+      "finder": "Finder",
+      "reply": "Reply",
+      "router": "Router",
+      "grader": "Grader"
+    },
     "pageTitle": "Model configuration",
     "pageSubtitle": "Set the AI model used by each pillar. Changes are reversible and take a moment to propagate.",
     "currentLabel": "Current value",
@@ -614,6 +621,13 @@
     "genericError": "This view is still preparing. Try again in a few minutes."
   },
   "adminPdpa": {
+    "policy": {
+      "dataResidency": "Data residency",
+      "piiPseudonymization": "PII pseudonymization",
+      "usageEventsTtl": "Usage-event retention",
+      "auditHashesOnly": "Audit log",
+      "erasureSla": "Erasure SLA"
+    },
     "pageTitle": "PDPA settings",
     "pageSubtitle": "Data-protection policy and the erasure workflow for this tenant.",
     "policyTitle": "Data-protection policy",

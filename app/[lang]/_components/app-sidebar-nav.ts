@@ -28,9 +28,7 @@ import {
   Building2,
   Users,
   MessagesSquare,
-  AlertTriangle,
   BarChart3,
-  LineChart,
   ShieldCheck,
   Plug,
   Trash2,
@@ -41,7 +39,6 @@ import {
   ScrollText,
   SlidersHorizontal,
   ShieldAlert,
-  Timer,
 } from 'lucide-react'
 import type { Role } from '@/src/firebase/auth'
 
@@ -55,9 +52,7 @@ export type NavItemKey =
   | 'inventory'
   | 'dashboard'
   | 'conversations'
-  | 'escalations'
   | 'usage'
-  | 'coachAnalytics'
   | 'roles'
   | 'integrations'
   | 'erasure'
@@ -69,7 +64,6 @@ export type NavItemKey =
   | 'auditLog'
   | 'modelConfig'
   | 'pdpaSettings'
-  | 'daysToFirstClose'
 
 /** The six FIXED section keys (match the `nav.section*` i18n labels + the test). */
 export type SectionKey =
@@ -101,10 +95,12 @@ export interface Section {
  * `/admin/` or `/coach/` route-group segment ever appears in an href (those are
  * Next.js route GROUPS, which never surface in the URL — Pitfall 1).
  *
- * The `dashboard` route legitimately backs three sections (Agents downline list,
- * the Escalations stall inbox via `#stalls`, and Coach Analytics panels); Phase 6
- * does NOT split the route — the nav deep-links into the same page (UI-SPEC §1,
- * option (a), the lowest-risk default).
+ * The `dashboard` route surfaces the downline list, the stall inbox, and the coach
+ * funnel/analytics panels on ONE page, reached via the single `dashboard` entry under
+ * Agents & Cohorts. The earlier duplicate deep-link entries (Escalations → `#stalls`,
+ * Coach Analytics → `/dashboard`) and the `daysToFirstClose` deep-link (→ the tile on
+ * `/usage`) were removed from the nav per user IA feedback — each pointed at a page
+ * already reachable elsewhere, so the nav now has one entry per destination page.
  */
 export function buildSections(lang: string): Section[] {
   return [
@@ -143,10 +139,11 @@ export function buildSections(lang: string): Section[] {
       labelKey: 'sectionConversations',
       items: [
         { key: 'conversations', href: `/${lang}/conversations`, icon: MessagesSquare, roles: ['admin'] },
-        // Stall inbox lives on the dashboard; deep-link via the #stalls anchor.
-        { key: 'escalations', href: `/${lang}/dashboard#stalls`, icon: AlertTriangle, roles: ['admin', 'senior-coach'] },
         // ── Phase-7 (D-25): flagged-conversation review queue (admin + own-downline
         // coach). read-only excluded (D-24).
+        // NOTE: the stall-inbox deep-link ('escalations' → /dashboard#stalls) was removed
+        // from the nav — it pointed at the same page as the Agents→dashboard entry (the
+        // dashboard surface already shows the stall inbox). Dedup per user IA feedback.
         { key: 'flags', href: `/${lang}/flags`, icon: Flag, roles: ['admin', 'senior-coach'] },
       ],
     },
@@ -155,11 +152,10 @@ export function buildSections(lang: string): Section[] {
       labelKey: 'sectionAnalytics',
       items: [
         { key: 'usage', href: `/${lang}/usage`, icon: BarChart3, roles: ['admin', 'read-only'] },
-        // Coach funnel/ramp/gaps panels live on the dashboard route.
-        { key: 'coachAnalytics', href: `/${lang}/dashboard`, icon: LineChart, roles: ['admin', 'senior-coach'] },
-        // ── Phase-7 (D-25 / CLOSE-02): days-to-first-close aggregate tile lives on
-        // the usage dashboard — anchor into it. Admin-only (D-24: read-only excluded).
-        { key: 'daysToFirstClose', href: `/${lang}/usage#days-to-first-close`, icon: Timer, roles: ['admin'] },
+        // NOTE: 'coachAnalytics' (→ /dashboard) and 'daysToFirstClose'
+        // (→ /usage#days-to-first-close) were removed from the nav — both deep-linked
+        // into pages already reachable elsewhere (the dashboard via Agents, and the
+        // days-to-first-close tile lives ON the usage page). Dedup per user IA feedback.
       ],
     },
     {
@@ -186,8 +182,9 @@ export function buildSections(lang: string): Section[] {
  * visible items DROPPED entirely (no empty label is rendered — UI-SPEC §1).
  *
  * read-only sees EXACTLY: Home + Knowledge(kb viewer) + Analytics(usage).
- * senior-coach sees: Home + Agents(dashboard) + Conversations(escalations) +
- *   Analytics(coachAnalytics) — never roles/erasure/integrations/inventory.
+ * senior-coach sees: Home + Agents(dashboard, agentProfiles) + Conversations(flags) —
+ *   never roles/erasure/integrations/inventory. (The dashboard page still carries the
+ *   stall inbox + coach analytics; their duplicate nav deep-links were removed.)
  * admin sees all six sections with all their items.
  *
  * UX ONLY — not the security gate (see file header / T-06-15).

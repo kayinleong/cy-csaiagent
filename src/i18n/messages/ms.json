@@ -580,6 +580,13 @@
     "genericError": "Sesuatu tidak kena. Perubahan anda tidak disimpan — sila cuba lagi."
   },
   "adminModelConfig": {
+    "pillar": {
+      "coach": "Jurulatih",
+      "finder": "Pencari",
+      "reply": "Balasan",
+      "router": "Penghala",
+      "grader": "Penilai"
+    },
     "pageTitle": "Konfigurasi model",
     "pageSubtitle": "Tetapkan model AI yang digunakan oleh setiap tiang. Perubahan boleh dibatalkan dan mengambil masa untuk disebarkan.",
     "currentLabel": "Nilai semasa",
@@ -616,6 +623,13 @@
     "genericError": "Paparan ini masih sedang disediakan. Cuba lagi dalam beberapa minit."
   },
   "adminPdpa": {
+    "policy": {
+      "dataResidency": "Pemastautinan data",
+      "piiPseudonymization": "Penyamaran PII",
+      "usageEventsTtl": "Pengekalan acara penggunaan",
+      "auditHashesOnly": "Log audit",
+      "erasureSla": "SLA pemadaman"
+    },
     "pageTitle": "Tetapan PDPA",
     "pageSubtitle": "Dasar perlindungan data dan aliran kerja pemadaman untuk penyewa ini.",
     "policyTitle": "Dasar perlindungan data",

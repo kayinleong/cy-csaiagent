@@ -580,6 +580,13 @@
     "genericError": "出现问题。您的更改未保存——请重试。"
   },
   "adminModelConfig": {
+    "pillar": {
+      "coach": "教练",
+      "finder": "搜寻",
+      "reply": "回复",
+      "router": "路由",
+      "grader": "评分"
+    },
     "pageTitle": "模型配置",
     "pageSubtitle": "设置每个支柱使用的AI模型。更改可撤销，需稍候才能生效。",
     "currentLabel": "当前值",
@@ -616,6 +623,13 @@
     "genericError": "此视图仍在准备中。请几分钟后重试。"
   },
   "adminPdpa": {
+    "policy": {
+      "dataResidency": "数据驻留地",
+      "piiPseudonymization": "PII 假名化",
+      "usageEventsTtl": "使用事件保留期",
+      "auditHashesOnly": "审计日志",
+      "erasureSla": "删除 SLA"
+    },
     "pageTitle": "PDPA 设置",
     "pageSubtitle": "本租户的数据保护政策和删除工作流。",
     "policyTitle": "数据保护政策",
