@@ -22,16 +22,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-31)
 
 **Core value:** Compress new-agent ramp-up from 60 days to 7–10 days via a D2-grounded multi-pillar AI chat surface (the 11pm-on-a-phone answer).
-**Current focus:** Phase 6 — Console IA v2 (Restructure + Read-only Role) — PLANNED + VERIFIED (8 plans, waves 0-4), ready to execute. Next: /gsd-execute-phase 6.
+**Current focus:** Phase 6 — Console IA v2 (Restructure + Read-only Role) — CODE-COMPLETE + VERIFIED (8/8 plans). Next: Phase 7 (net-new surfaces) — /gsd-discuss-phase 7 or /gsd-plan-phase 7.
 
 ## Current Position
 
-Phase: 6 of (now) 8 — PLANNED + VERIFIED, ready to execute (v1 Phases 1-5 all COMPLETE; claim phase-kayinleong-06 in-progress)
-Plan: Phase 6 = 8 plans across 5 waves (W0 RED scaffold → W1 role union + requireRole() helper → W2 Firestore analytics rules → W3 gate widening + role-assignment UI → W4 parallel: IA sidebar+links+i18n / Home / KB viewer+Integrations shell / per-coach pivot+KB-contribution). plan-checker VERIFICATION PASSED (12/12 dimensions, 13/13 REQ-IDs).
-Status: Phase 6 planned + verified. Scope split (2026-06-10): Phase 6 = IA restructure + read-only role + consolidation; Phase 7 (new) = net-new surfaces; Phase 8 (new) = WhatsApp Business API (graduation-gated). v1 milestone code-complete; v1 live-gated items still pending rollout prep.
-Last activity: 2026-06-10 — Planned Phase 6 (claim phase-kayinleong-06): CONTEXT/RESEARCH/UI-SPEC/PATTERNS/VALIDATION + 8 PLANs; split ROADMAP into 6/7/8; appended 13 Phase-6 REQ-IDs to REQUIREMENTS.md. Invoked via /gsd-plan-phase 6 --auto → auto-advancing to execute. NOT pushed (user hold). [Prior: 2026-06-09 — quick-kayinleong-006 docs/ARCHITECTURE.md, commit 2f43bc8.]
+Phase: 6 of (now) 8 — CODE-COMPLETE + VERIFIED (v1 Phases 1-5 COMPLETE; claim phase-kayinleong-06 DONE)
+Plan: Phase 6 = 8 plans across 5 waves, ALL DONE (W0 RED scaffold → W1 role union + requireRole() helper → W2 Firestore analytics rules → W3 gate widening + role-assignment UI → W4: IA sidebar+links+i18n / Home / KB viewer+Integrations shell / per-coach pivot+KB-contribution). plan-checker PASSED (12/12); gsd-verifier human_needed (13/13 must-haves, 0 code gaps); code review CR-01+WR-01/02 RESOLVED.
+Status: Phase 6 code-complete + verified. Read-only stakeholder role (server-side + Firestore-rules gated, least-privilege), 6-section IA over unchanged routes, Home, KB version viewer, Integrations no-send shell, per-coach pivot, audited senior-coach KB contribution. tsc 0 / vitest 605 passed / 0 failed (+51 over baseline, 0 regression). Scope split (2026-06-10): Phase 7 (new) = net-new surfaces; Phase 8 (new) = WhatsApp Business API (graduation-gated). NOT pushed (user hold).
+Last activity: 2026-06-11 — Executed Phase 6 end-to-end via /gsd-plan-phase 6 --auto → gsd-execute-phase (sequential, no-worktree). 8 plans + a code-review fix (CR-01 read-only reachability + WR-01/WR-02). Plan 06-08 finished inline after the executor socket dropped twice. Live-gated: firestore.rules deploy, emulator rules matrix (151/151 local), read-only browser click-through, BM/中文 native sign-off. NOT pushed.
 
-Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 6 planned (0/8 plans executed).
+Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 6 CODE-COMPLETE (8/8 plans). Next: Phase 7.
 
 ### Phase 4 open human-action gate (live-gated — does NOT block Phase 5 planning)
 1. `firebase deploy --only firestore:indexes,firestore:rules` — additive `kbChunks` pillar vector index + `replyEdits` indexes/rules.
