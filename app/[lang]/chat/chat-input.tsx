@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
 import type { ChatMessage } from './message-list'
 import { decodeReplyOutput, decodeFinderOutput } from './decode-structured-output'
+import { parseTextDelta, isHandoffChunk } from './decode-stream-chunk'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,37 +70,6 @@ interface ChatInputProps {
   /** i18n copy */
   placeholder?: string
   sendLabel?: string
-}
-
-// ─── UIMessageChunk parsing ───────────────────────────────────────────────────
-
-/**
- * Parse a UIMessageStream SSE line and extract text delta content.
- * The AI SDK v5 UIMessageStream format uses data-stream chunks:
- *   `0:"token"` — text delta (part type 0)
- *   `e:{...}`   — finish event
- *   `d:{...}`   — done event
- */
-function parseTextDelta(line: string): string | null {
-  // Format: `0:"text content"` — part type 0 is text-start/text-delta
-  const match = line.match(/^[0-9a-f]:"((?:[^"\\]|\\.)*)"\s*$/)
-  if (match) {
-    try {
-      // The content is JSON-encoded within the double quotes
-      return JSON.parse(`"${match[1]}"`) as string
-    } catch {
-      return match[1]
-    }
-  }
-  return null
-}
-
-/**
- * Detect if the stream chunk contains a KB-miss handoff signal.
- * The Coach emits this as a tool result or finish event annotation.
- */
-function isHandoffChunk(line: string): boolean {
-  return line.includes('kb_miss') || line.includes('handoff')
 }
 
 // ─── useChatStream hook ───────────────────────────────────────────────────────

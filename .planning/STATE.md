@@ -166,6 +166,7 @@ Carried from research — must be held during Phase 1 planning:
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | quick-kayinleong-006 | Create an architecture diagram explaining how the project works | 2026-06-09 | 2f43bc8 | [quick-kayinleong-006](./quick/quick-kayinleong-006/) |
+| quick-kayinleong-007 | Fix chat UI not rendering streamed assistant text (v4→v5 UI Message Stream parser mismatch) | 2026-06-12 | _pending_ | [quick-kayinleong-007](./quick/quick-kayinleong-007/) |
 
 ## Deferred Items
 
