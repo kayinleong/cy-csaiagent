@@ -172,6 +172,51 @@ describe('decrement (real write, QUAL-07)', () => {
   })
 })
 
+describe('decrement (first request + window reset — set() path)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockRateBudgetsDocSet.mockResolvedValue(undefined)
+    mockRateBudgetsDocUpdate.mockResolvedValue(undefined)
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('first request (no doc): creates the budget via set(), never update() — regression for NOT_FOUND', async () => {
+    // Reproduces the production bug: on a user's first chat, rateBudgets/{uid}
+    // does not exist. The previous code fell through to update() → Firestore
+    // throws "5 NOT_FOUND: No document to update". decrement() must set() instead.
+    mockRateBudgetsDocGet.mockResolvedValue(missingSnap)
+
+    await expect(decrement('uid-first-chat', 1500)).resolves.toBeUndefined()
+
+    expect(mockRateBudgetsDocSet).toHaveBeenCalledOnce()
+    expect(mockRateBudgetsDocUpdate).not.toHaveBeenCalled()
+
+    const setArg = mockRateBudgetsDocSet.mock.calls[0][0] as Record<string, unknown>
+    expect(setArg).toMatchObject({
+      requestCount: 1,
+      tokenCount: 1500,
+      tenantId: 'd2',
+      ownerUid: 'uid-first-chat',
+    })
+    expect(setArg).toHaveProperty('windowStart')
+  })
+
+  it('expired window (doc exists): resets the budget via set(), never update()', async () => {
+    const yesterday = new Date(Date.now() - WINDOW_MS - 1000)
+    mockRateBudgetsDocGet.mockResolvedValue(
+      makeBudgetSnap({ requestCount: REQUEST_CAP, tokenCount: TOKEN_CAP, windowStart: yesterday })
+    )
+
+    await decrement('uid-expired', 700)
+
+    expect(mockRateBudgetsDocSet).toHaveBeenCalledOnce()
+    expect(mockRateBudgetsDocUpdate).not.toHaveBeenCalled()
+
+    const setArg = mockRateBudgetsDocSet.mock.calls[0][0] as Record<string, unknown>
+    expect(setArg).toMatchObject({ requestCount: 1, tokenCount: 700 })
+  })
+})
+
 describe('window reset (deterministic clock injection)', () => {
   beforeEach(() => {
     vi.clearAllMocks()

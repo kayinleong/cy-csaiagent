@@ -91,27 +91,32 @@ export async function check(uid: string, action: 'chat'): Promise<void> {
  * @param tokens  The number of tokens consumed in this turn.
  */
 export async function decrement(uid: string, tokens: number): Promise<void> {
-  const snap = await rateBudgetsRef().doc(uid).get()
+  const ref = rateBudgetsRef().doc(uid)
+  const snap = await ref.get()
 
-  // Window reset: if the current window has expired, reset the document.
-  if (snap.exists) {
-    const budget = snap.data() as RateBudgetDoc
-    if (isWindowExpired(budget.windowStart as Date)) {
-      // Reset the window — set a fresh document with this turn already counted
-      await rateBudgetsRef().doc(uid).update({
-        requestCount: 1,
-        tokenCount: tokens,
-        windowStart: FieldValue.serverTimestamp(),
-        tenantId: TENANT_ID,
-        ownerUid: uid,
-      } as Partial<RateBudgetDoc> & { windowStart: FieldValue })
-      return
-    }
+  // (Re)initialize the window doc with this turn already counted when either:
+  //   - no doc exists yet (the agent's first request — update() would throw
+  //     NOT_FOUND because there is nothing to update), or
+  //   - the current window has expired (budget resets).
+  // set() creates-or-overwrites, so it covers both. RateBudgetDoc has exactly
+  // these five fields, so an unmerged set() is a full, equivalent write.
+  const needsInit =
+    !snap.exists || isWindowExpired((snap.data() as RateBudgetDoc).windowStart as Date)
+
+  if (needsInit) {
+    await ref.set({
+      requestCount: 1,
+      tokenCount: tokens,
+      windowStart: FieldValue.serverTimestamp(),
+      tenantId: TENANT_ID,
+      ownerUid: uid,
+    } as RateBudgetDoc)
+    return
   }
 
   // Normal case: atomically increment both counters via FieldValue.increment()
   // This is safe under concurrent requests (no read-modify-write race).
-  await rateBudgetsRef().doc(uid).update({
+  await ref.update({
     requestCount: FieldValue.increment(1),
     tokenCount: FieldValue.increment(tokens),
   })
