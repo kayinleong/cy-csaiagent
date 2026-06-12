@@ -5,7 +5,7 @@ milestone_name: milestone
 status: completed
 stopped_at: "Phase 7 code-complete + verified (human_needed: 18/18 must-haves, 0 code gaps); 6 human-action items in 07-UAT.md (live deploy + RC IAM + native i18n sign-off + 3 browser click-throughs)"
 last_updated: "2026-06-11T07:09:01.518Z"
-last_activity: "2026-06-11 -- Completed 07-06-PLAN.md (FINAL Wave-3, NAV-01/I18N-07/CLOSE-02): 8 role-filtered nav entries placed per D-25 (cohorts/agentProfiles/coachAssignment → Agents & Cohorts; flags → Conversations & Escalations; auditLog/modelConfig/pdpaSettings → System & Compliance; daysToFirstClose → Analytics & Performance), read-only blind to all 8 (D-24) → app-sidebar-nav.test.ts GREEN (8/8); authored 8 nav labels + 7 surface namespaces + adminUsage daysToClose keys across en/ms/zh → i18n-parity GREEN; getOrgDaysToFirstClose() read-time aggregate (D-22, no new pipeline) + avg/median/count tile in the usage dashboard (#days-to-first-close). Full gate clean (tsc, vitest 638/186 skip, next build 26 routes)."
+last_activity: "2026-06-12 -- Completed quick-kayinleong-008: fixed /api/chat 500 on a user's first message (5 NOT_FOUND on rateBudgets/{uid}). decrement() now set()s a fresh RateBudgetDoc when the doc is missing or the window expired, instead of update() (which throws on a non-existent doc); steady-state still uses atomic FieldValue.increment(). +2 regression tests in window.test.ts. Gate clean: tsc 0, vitest 58 (ratelimit + both chat-route suites), eslint 0. Commit c3d40d9."
 progress:
   total_phases: 8
   completed_phases: 7
@@ -167,6 +167,7 @@ Carried from research — must be held during Phase 1 planning:
 |---|-------------|------|--------|-----------|
 | quick-kayinleong-006 | Create an architecture diagram explaining how the project works | 2026-06-09 | 2f43bc8 | [quick-kayinleong-006](./quick/quick-kayinleong-006/) |
 | quick-kayinleong-007 | Fix chat UI not rendering streamed assistant text (v4→v5 UI Message Stream parser mismatch) | 2026-06-12 | c2c8327 | [quick-kayinleong-007](./quick/quick-kayinleong-007/) |
+| quick-kayinleong-008 | Fix RateLimitError NOT_FOUND on first chat — create rateBudgets/{uid} doc via set() in decrement() | 2026-06-12 | c3d40d9 | [quick-kayinleong-008](./quick/quick-kayinleong-008/) |
 
 ## Deferred Items
 
