@@ -87,13 +87,11 @@ export const adminAuth: Auth = getAuth()
 
 /**
  * Accessor for Firebase Remote Config.
- * Model IDs (e.g. claude-sonnet-4-6) MUST be resolved via Remote Config —
- * they are NEVER hard-coded (TSD §2.3 C5, CLAUDE.md model-agnostic constraint).
  *
- * Usage:
- *   const rc = remoteConfig()
- *   const template = await rc.getTemplate()
- *   const modelId = template.parameters['coach_model']?.defaultValue?.value ?? 'claude-sonnet-4-6'
+ * NOTE: model IDs are NO LONGER resolved via Remote Config — they live in the
+ * Firestore doc `appConfig/modelConfig` (src/llm/provider.ts modelFor;
+ * quick-kayinleong-017). Remote Config remains an allowed Firebase surface (TSD
+ * C2) for any future non-model config, but is not used for model resolution.
  *
  * Returns a fresh accessor each call (cheap — no extra network round-trip).
  */
