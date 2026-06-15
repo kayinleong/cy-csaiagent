@@ -25,6 +25,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AuthenticatedUser } from '@/src/firebase/auth'
+import en from '@/src/i18n/messages/en.json'
 
 // ─── Mock dependencies BEFORE importing the action module ─────────────────────
 
@@ -124,13 +125,51 @@ describe('MODEL-02 publishModelConfig — ETag/no-force/conflict/pillar-gate/adm
     }
   })
 
-  it("returns {ok:false, error:'conflict'} when publishTemplate rejects (stale ETag — never blind-overwrite, D-16)", async () => {
+  it("returns {ok:false, error:'conflict'} when publishTemplate rejects with a stale-ETag code (failed-precondition — never blind-overwrite, D-16)", async () => {
     const { requireUser } = await import('@/src/firebase/auth')
     vi.mocked(requireUser).mockResolvedValueOnce(adminUser)
-    mockPublishTemplate.mockRejectedValueOnce(new Error('VERSION_MISMATCH'))
+    // Real stale-ETag shape: a FirebaseRemoteConfigError carries a prefixed `.code`.
+    mockPublishTemplate.mockRejectedValueOnce(
+      Object.assign(new Error('VERSION_MISMATCH'), { code: 'remote-config/failed-precondition' }),
+    )
 
     const result = await publishModelConfig('coach', 'claude-opus-4-7')
     expect(result).toMatchObject({ ok: false, error: 'conflict' })
+  })
+
+  it("returns {ok:false, error:'permission-denied'} when publishTemplate rejects with permission-denied, and writes NO audit row (D-17)", async () => {
+    const { requireUser } = await import('@/src/firebase/auth')
+    vi.mocked(requireUser).mockResolvedValueOnce(adminUser)
+    const audit = await import('@/src/audit')
+    mockPublishTemplate.mockRejectedValueOnce(
+      Object.assign(new Error('insufficient permission'), { code: 'remote-config/permission-denied' }),
+    )
+
+    const result = await publishModelConfig('coach', 'claude-opus-4-7')
+    expect(result).toMatchObject({ ok: false, error: 'permission-denied' })
+    expect(mockPublishTemplate).toHaveBeenCalledTimes(1)
+    // Failed publish writes no audit row (D-17 — audit is success-only).
+    expect(vi.mocked(audit.log)).not.toHaveBeenCalled()
+  })
+
+  it("returns {ok:false, error:'publish-failed'} (NOT masked as conflict) when publishTemplate rejects with a plain Error, and writes NO audit row (anti-masking, D-17)", async () => {
+    const { requireUser } = await import('@/src/firebase/auth')
+    vi.mocked(requireUser).mockResolvedValueOnce(adminUser)
+    const audit = await import('@/src/audit')
+    // A plain Error with no `.code` must fall through to publish-failed, not conflict.
+    mockPublishTemplate.mockRejectedValueOnce(new Error('network'))
+
+    const result = await publishModelConfig('coach', 'claude-opus-4-7')
+    expect(result).toMatchObject({ ok: false, error: 'publish-failed' })
+    expect(result).not.toMatchObject({ error: 'conflict' })
+    expect(vi.mocked(audit.log)).not.toHaveBeenCalled()
+  })
+
+  it("BUG-1 guard: en adminModelConfig.confirmBody uses {pillar} + {model} (NOT {modelId}) — matches the form's { pillar, model } args", () => {
+    const confirmBody = (en.adminModelConfig as { confirmBody: string }).confirmBody
+    expect(confirmBody).toContain('{pillar}')
+    expect(confirmBody).toContain('{model}')
+    expect(confirmBody).not.toContain('{modelId}')
   })
 
   it('rejects a pillar not in {coach,finder,reply,router,grader} (D-16)', async () => {
