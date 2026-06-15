@@ -372,5 +372,16 @@ service cloud.firestore {
       allow read: if hasRole('admin') && sameTenant();
     }
 
+    // ── Collection 23: appConfig ─────────────────────────────────────────────
+    // Model-config source of truth (MODEL-01/02 / D-15/16/17). The singleton doc
+    // appConfig/modelConfig holds per-pillar model IDs. Written + read EXCLUSIVELY
+    // by the server via Admin SDK (modelFor resolution + the model-config Server
+    // Actions, which bypass rules). The three-layer admin gate on those actions is
+    // the authorization boundary — no client ever touches this doc directly, so
+    // ALL client access is DENIED (replaced Remote Config; quick-kayinleong-017).
+    match /appConfig/{configId} {
+      allow read, write: if false;     // Admin-SDK only
+    }
+
   }
 }
