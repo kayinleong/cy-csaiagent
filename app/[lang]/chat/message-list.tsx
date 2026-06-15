@@ -68,7 +68,11 @@ export function MessageList({ messages, isStreaming, className }: MessageListPro
   return (
     <ScrollArea
       data-slot="chat-message-list"
-      className={cn('flex-1 px-3 py-4', className)}
+      // min-h-0 is required: as a flex-1 child of the h-[100dvh] overflow-hidden
+      // chat column, the default min-height:auto would let this grow to fit all
+      // messages (bounding the Radix viewport to content height) instead of
+      // scrolling. min-h-0 lets it shrink so the viewport scrolls. (quick-020)
+      className={cn('flex-1 min-h-0 px-3 py-4', className)}
     >
       <div className="flex flex-col gap-4 max-w-2xl mx-auto">
         {messages.length === 0 && !isStreaming && (
