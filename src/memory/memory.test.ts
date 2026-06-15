@@ -265,7 +265,9 @@ describe('ensurePrimaryThread (D-01 — deterministic primary Coach thread)', ()
   })
 
   it('is idempotent — does NOT overwrite an existing conversation doc summary', async () => {
-    mockConversationsDocGet.mockResolvedValue({ exists: true, data: () => ({ summary: 'Existing summary' }) })
+    // Doc has createdAt → no backfill, no write (quick-010). Without createdAt the
+    // new backfill path would fire, so include it here to prove the no-write path.
+    mockConversationsDocGet.mockResolvedValue({ exists: true, data: () => ({ summary: 'Existing summary', createdAt: new Date('2026-01-01') }) })
 
     const { ensurePrimaryThread } = await import('./conversation')
 
@@ -273,6 +275,40 @@ describe('ensurePrimaryThread (D-01 — deterministic primary Coach thread)', ()
 
     expect(cid).toBe('coach-uid-002')
     // set should NOT be called when the doc already exists
+    expect(mockConversationsDocSet).not.toHaveBeenCalled()
+  })
+
+  it('backfills createdAt on an existing doc missing createdAt WITHOUT clobbering summary (quick-010)', async () => {
+    mockConversationsDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ summary: 'Existing summary', ownerUid: 'uid-x', pillar: 'coach', lang: 'en', tenantId: 'd2' }),
+    })
+
+    const { ensurePrimaryThread } = await import('./conversation')
+
+    const cid = await ensurePrimaryThread('uid-x', 'en')
+
+    expect(cid).toBe('coach-uid-x')
+    expect(mockConversationsDocSet).toHaveBeenCalledOnce()
+
+    const setArg = mockConversationsDocSet.mock.calls[0][0] as Record<string, unknown>
+    expect(setArg).toHaveProperty('createdAt')
+    expect(setArg).toHaveProperty('ownerUid', 'uid-x')
+    expect(setArg).toHaveProperty('tenantId', 'd2')
+    // summary MUST be preserved — never written by the backfill path (D-01)
+    expect(setArg).not.toHaveProperty('summary')
+    // merge:true
+    expect(mockConversationsDocSet.mock.calls[0][1]).toEqual({ merge: true })
+  })
+
+  it('does NOT write when an existing doc already has createdAt (idempotent no-op, quick-010)', async () => {
+    mockConversationsDocGet.mockResolvedValue({ exists: true, data: () => ({ summary: 'X', createdAt: new Date('2026-01-01') }) })
+
+    const { ensurePrimaryThread } = await import('./conversation')
+
+    const cid = await ensurePrimaryThread('uid-y', 'en')
+
+    expect(cid).toBe('coach-uid-y')
     expect(mockConversationsDocSet).not.toHaveBeenCalled()
   })
 
