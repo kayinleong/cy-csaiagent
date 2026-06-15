@@ -5,7 +5,7 @@ milestone_name: milestone
 status: completed
 stopped_at: "Phase 7 code-complete + verified (human_needed: 18/18 must-haves, 0 code gaps); 6 human-action items in 07-UAT.md (live deploy + RC IAM + native i18n sign-off + 3 browser click-throughs)"
 last_updated: "2026-06-11T07:09:01.518Z"
-last_activity: "2026-06-12 -- Completed quick-kayinleong-008: fixed /api/chat 500 on a user's first message (5 NOT_FOUND on rateBudgets/{uid}). decrement() now set()s a fresh RateBudgetDoc when the doc is missing or the window expired, instead of update() (which throws on a non-existent doc); steady-state still uses atomic FieldValue.increment(). +2 regression tests in window.test.ts. Gate clean: tsc 0, vitest 58 (ratelimit + both chat-route suites), eslint 0. Commit c3d40d9."
+last_activity: "2026-06-15 -- Completed quick-kayinleong-009: assistant chat messages now render Markdown (bold/lists/links/code) instead of raw **...** / - text. New MarkdownMessage component (react-markdown ^10 + remark-gfm ^4) wired into the assistant plain-text branch of message-list.tsx; user bubbles + Reply/Finder cards unchanged. No rehype-raw -> XSS-safe (raw HTML escaped). +6 render/XSS tests via react-dom/server (no new test infra). Gate clean: tsc 0, eslint 0, vitest 650/186 skip, next build OK (63 routes). Commit f6081d9."
 progress:
   total_phases: 8
   completed_phases: 7
@@ -168,6 +168,7 @@ Carried from research — must be held during Phase 1 planning:
 | quick-kayinleong-006 | Create an architecture diagram explaining how the project works | 2026-06-09 | 2f43bc8 | [quick-kayinleong-006](./quick/quick-kayinleong-006/) |
 | quick-kayinleong-007 | Fix chat UI not rendering streamed assistant text (v4→v5 UI Message Stream parser mismatch) | 2026-06-12 | c2c8327 | [quick-kayinleong-007](./quick/quick-kayinleong-007/) |
 | quick-kayinleong-008 | Fix RateLimitError NOT_FOUND on first chat — create rateBudgets/{uid} doc via set() in decrement() | 2026-06-12 | c3d40d9 | [quick-kayinleong-008](./quick/quick-kayinleong-008/) |
+| quick-kayinleong-009 | Render assistant chat messages as Markdown (react-markdown + remark-gfm), XSS-safe, plain-text branch only | 2026-06-15 | f6081d9 | [quick-kayinleong-009](./quick/quick-kayinleong-009/) |
 
 ## Deferred Items
 
