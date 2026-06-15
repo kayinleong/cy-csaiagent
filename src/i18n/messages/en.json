@@ -354,7 +354,7 @@
     "navLabel": "Conversations",
     "pageTitle": "Conversation Log",
     "pageSubtitle": "Review agent and lead conversations for compliance. Every access is audited.",
-    "searchPlaceholder": "Search by conversation ID, agent ref, or lead ref…",
+    "searchPlaceholder": "Search by conversation ID or agent email…",
     "idle": "Search a conversation, agent, or lead to review.",
     "noResults": "No conversations found.",
     "loading": "Loading conversation…",

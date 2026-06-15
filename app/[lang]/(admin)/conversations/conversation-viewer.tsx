@@ -202,8 +202,8 @@ export function ConversationViewer({ lang: _lang }: ConversationViewerProps) {
                     {conv.pillar ?? '—'}
                   </Badge>
                 </TableCell>
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  {conv.agentRef ? `${conv.agentRef.slice(0, 8)}…` : '—'}
+                <TableCell className="text-xs text-muted-foreground">
+                  {conv.agentEmail ?? (conv.agentRef ? `${conv.agentRef.slice(0, 8)}…` : '—')}
                 </TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">
                   {conv.leadRef ? `${conv.leadRef.slice(0, 8)}…` : '—'}
@@ -229,7 +229,7 @@ export function ConversationViewer({ lang: _lang }: ConversationViewerProps) {
 
       {/* Thread viewer dialog — READ-ONLY (HR-5) */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog() }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[calc(100%-2rem)] max-w-lg">
           <DialogHeader>
             <DialogTitle>{t('pageTitle')}</DialogTitle>
             <DialogDescription className="font-mono text-xs text-muted-foreground">
@@ -270,13 +270,17 @@ export function ConversationViewer({ lang: _lang }: ConversationViewerProps) {
                         : 'mr-8 rounded-lg bg-muted px-3 py-2'
                     }
                   >
-                    <div className="mb-1 flex items-center gap-2">
+                    <div className="mb-1 flex items-center gap-2 min-w-0">
                       <span className="text-xs font-medium text-muted-foreground capitalize">
                         {m.role}
                       </span>
                       {m.pillar && (
-                        <Badge variant={pillarBadgeVariant(m.pillar)} className="text-xs px-1 py-0">
-                          {m.pillar}
+                        <Badge
+                          variant={pillarBadgeVariant(m.pillar?.split(':')[0] ?? null)}
+                          title={m.pillar ?? undefined}
+                          className="h-auto max-w-full whitespace-normal break-words text-xs px-1 py-0"
+                        >
+                          {m.pillar?.split(':')[0]}
                         </Badge>
                       )}
                       {m.redacted && (

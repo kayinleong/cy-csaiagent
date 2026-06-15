@@ -82,6 +82,13 @@ export interface ConversationRef {
   cid: string
   pillar: string | null
   agentRef: string | null
+  /**
+   * Resolved Firebase Auth email of the conversation owner (`ownerUid`).
+   * Null when the owner has no email (phone/anon auth) or was not found in Auth
+   * (deleted, or email resolution failed). Resolved server-side only — only this
+   * string crosses to the client (PII boundary; never logged/audited).
+   */
+  agentEmail: string | null
   leadRef: string | null
   lastMessageAt: string | null
 }
@@ -181,21 +188,65 @@ export async function searchConversations(
 
   try {
     // Import inline to avoid admin SDK at module load time in test environments.
-    const { adminDb } = await import('@/src/firebase/admin')
+    // Resolve adminAuth the SAME inline way (NOT a top-level import) to preserve
+    // the test-friendly module shape.
+    const { adminDb, adminAuth } = await import('@/src/firebase/admin')
 
-    // Bounded query: limit to 50 most-recent conversations (never fetch-all).
-    const q = adminDb.collection('conversations').limit(50)
+    // Three-branch snapshot selection on `query`:
+    //   email (@-detection) → getUserByEmail → ownerUid query (reuses the existing
+    //     (ownerUid ASC, createdAt DESC) composite index)
+    //   prefix             → __name__ doc-ID prefix range (unchanged)
+    //   recent             → bare limit(50) (unchanged)
+    let snapshot
+    if (query && query.includes('@')) {
+      // Email branch — resolve email → uid server-side (PII never logged/audited).
+      let uid: string
+      try {
+        const userRecord = await adminAuth.getUserByEmail(query.trim())
+        uid = userRecord.uid
+      } catch {
+        // Unknown/malformed email (e.g. auth/user-not-found) → empty result,
+        // NOT an error toast. Do NOT surface or log the offending query.
+        return { ok: true, conversations: [] }
+      }
+      snapshot = await adminDb
+        .collection('conversations')
+        .where('ownerUid', '==', uid)
+        .orderBy('createdAt', 'desc')
+        .limit(50)
+        .get()
+    } else if (query) {
+      // Prefix branch — doc-ID prefix range (unchanged).
+      snapshot = await adminDb
+        .collection('conversations')
+        .orderBy('__name__')
+        .startAt(query)
+        .endAt(query + '￿')
+        .limit(50)
+        .get()
+    } else {
+      // Recent branch — bounded limit(50) most-recent (unchanged).
+      snapshot = await adminDb.collection('conversations').limit(50).get()
+    }
 
-    // If a query was provided that looks like a doc ID, order and bound by it.
-    const snapshot = await (query
-      ? adminDb
-          .collection('conversations')
-          .orderBy('__name__')
-          .startAt(query)
-          .endAt(query + '￿')
-          .limit(50)
-          .get()
-      : q.get())
+    // Resolve owner emails for the table server-side (quick-011 chunked pattern).
+    // Resolution failure must NOT break the listing — on error the map stays empty
+    // so every row falls back to a null agentEmail.
+    const uids = [
+      ...new Set(snapshot.docs.map((d) => d.data().ownerUid).filter(Boolean) as string[]),
+    ]
+    const emailByUid = new Map<string, string | null>()
+    try {
+      for (let i = 0; i < uids.length; i += 100) {
+        const chunk = uids.slice(i, i + 100)
+        const result = await adminAuth.getUsers(chunk.map((uid) => ({ uid })))
+        for (const u of result.users) {
+          emailByUid.set(u.uid, u.email ?? null)
+        }
+      }
+    } catch {
+      // Email resolution failed — leave the map empty; rows fall back to null.
+    }
 
     const conversations: ConversationRef[] = snapshot.docs.map((doc) => {
       const data = doc.data()
@@ -203,6 +254,7 @@ export async function searchConversations(
         cid: doc.id,
         pillar: (data.pillar as string | null) ?? (data.routeDecision as string | null) ?? null,
         agentRef: (data.ownerUid as string | null) ?? null,
+        agentEmail: emailByUid.get(data.ownerUid as string) ?? null,
         leadRef: (data.leadId as string | null) ?? null,
         // WR-03 fix: ConversationDoc has no `lastMessageAt` field — nothing writes it.
         // Fall back to `createdAt` (which does exist) so the column shows meaningful data

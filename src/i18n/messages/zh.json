@@ -356,7 +356,7 @@
     "navLabel": "对话记录",
     "pageTitle": "对话日志",
     "pageSubtitle": "查看代理和客户的对话以进行合规审查。每次访问均被审计。",
-    "searchPlaceholder": "按对话ID、代理引用或客户引用搜索…",
+    "searchPlaceholder": "按对话ID或代理邮箱搜索…",
     "idle": "搜索对话、代理或客户以进行审查。",
     "noResults": "未找到对话。",
     "loading": "正在加载对话…",

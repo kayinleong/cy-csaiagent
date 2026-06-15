@@ -356,7 +356,7 @@
     "navLabel": "Perbualan",
     "pageTitle": "Log Perbualan",
     "pageSubtitle": "Semak perbualan ejen dan lead untuk pematuhan. Setiap akses diaudit.",
-    "searchPlaceholder": "Cari mengikut ID perbualan, rujukan ejen, atau rujukan lead…",
+    "searchPlaceholder": "Cari mengikut ID perbualan atau emel ejen…",
     "idle": "Cari perbualan, ejen, atau lead untuk disemak.",
     "noResults": "Tiada perbualan dijumpai.",
     "loading": "Memuatkan perbualan…",
