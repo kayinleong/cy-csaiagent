@@ -1,13 +1,13 @@
 'use server'
 
 /**
- * app/[lang]/(admin)/model-config/actions.ts — Model-config Remote Config
- * read + publish Server Actions (MODEL-01 / MODEL-02 / D-15 / D-16 / D-17).
+ * app/[lang]/(admin)/model-config/actions.ts — Model-config read + publish
+ * Server Actions (MODEL-01 / MODEL-02 / D-15 / D-16 / D-17).
  *
- * THE ONE NET-NEW MECHANISM of Phase 7: the Remote Config WRITE round-trip.
- * Everything else in this phase copies a verbatim-proven pattern; this adds the
- * write half of Remote Config to the existing read half (src/llm/provider.ts
- * modelFor).
+ * The model-config store is the singleton Firestore doc `appConfig/modelConfig`
+ * (quick-kayinleong-017 — replaced Firebase Remote Config). These actions are the
+ * write/read half; the resolution half is src/llm/provider.ts modelFor, which
+ * reads the same doc.
  *
  * Three-layer admin gate (mirrors roles/actions.ts):
  *   Layer 1: (admin)/layout.tsx admits admin + read-only into the group.
@@ -15,37 +15,37 @@
  *   Layer 3: these Server Actions assert role === 'admin' from the VERIFIED token (never args, T-07-10).
  *
  * Security / correctness invariants:
- *   - READ reuses modelFor's server-template path (getServerTemplate → evaluate →
- *     getString) for display; the WRITE MUST use getTemplate() (it carries the
- *     writable ETag — getServerTemplate does not).
- *   - publishModelConfig publishes WITHOUT { force:true } — the ETag provides
- *     optimistic concurrency. A stale-ETag rejection returns {ok:false,error:'conflict'},
- *     never a blind overwrite (D-16, ci-guard 4).
- *   - ONLY the 5 model.{pillar}.default keys are editable; an unknown pillar is
- *     rejected (D-16). Model IDs stay free-form strings — NO hard-coded model id
- *     literal lives in this surface (D-15, ci-guard 1).
- *   - Every publish writes an audit row action:'model_config_publish' (hashed
- *     pillar + model id, D-17). REMOTE_CONFIG_FALLBACKS constants are NOT mutated.
+ *   - READ + WRITE both go through appConfigRef() (Admin SDK; bypasses rules — the
+ *     three-layer admin gate above is the authorization boundary).
+ *   - publishModelConfig runs a Firestore transaction with an expected-current-value
+ *     check: a stale read returns {ok:false,error:'conflict'}, never a blind
+ *     overwrite of a concurrent publish (D-16).
+ *   - ONLY the 5 pillars are editable; an unknown pillar is rejected (D-16). Model
+ *     IDs stay free-form strings — NO hard-coded model id literal lives in this
+ *     surface (D-15, ci-guard 1).
+ *   - Every successful publish writes an audit row action:'model_config_publish'
+ *     (hashed pillar + model id, D-17). A conflict or failure writes no audit row.
  *
  * References:
  *   - MODEL-01, MODEL-02, D-15, D-16, D-17
  *   - src/llm/provider.ts (modelFor READ path + the 5-pillar union)
+ *   - src/firebase/collections.ts (appConfigRef + MODEL_CONFIG_DOC_ID, collection 23)
  *   - roles/actions.ts:43-56 (getSessionUser pattern, verbatim)
- *   - 07-PATTERNS.md §model-config/actions.ts (the WRITE example)
- *   - 07-RESEARCH.md §Code Examples "Remote Config WRITE with ETag concurrency"
  */
 
 import { cookies } from 'next/headers'
+import { FieldValue } from 'firebase-admin/firestore'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
-import { remoteConfig } from '@/src/firebase/admin'
+import { adminDb } from '@/src/firebase/admin'
+import { appConfigRef, MODEL_CONFIG_DOC_ID } from '@/src/firebase/collections'
 import type { Pillar } from '@/src/llm/provider'
 import * as audit from '@/src/audit'
 
-// ─── The 5-pillar union (D-16 — the ONLY editable model.{pillar}.default keys) ──
+// ─── The 5-pillar union (D-16 — the ONLY editable models.{pillar} keys) ────────
 
 /**
  * The five model-config pillars. This is the SOLE allow-list of editable keys —
- * an unknown pillar is rejected before any template mutation (D-16). Mirrors the
+ * an unknown pillar is rejected before any Firestore write (D-16). Mirrors the
  * Pillar union in src/llm/provider.ts (single source of pillar names).
  */
 const PILLARS: readonly Pillar[] = ['coach', 'finder', 'reply', 'router', 'grader'] as const
@@ -92,10 +92,10 @@ export type PublishModelConfigResult =
 // ─── readModelConfig ──────────────────────────────────────────────────────────
 
 /**
- * Admin-only read of the current model.{pillar}.default value for the 5 pillars
- * (MODEL-01 / D-15). Reuses modelFor's server-template read path for display.
+ * Admin-only read of the current model id per pillar (MODEL-01 / D-15) from the
+ * singleton Firestore doc `appConfig/modelConfig` — the same doc modelFor() reads.
  *
- * A key with no published value returns modelId:null — the UI labels it as
+ * A pillar with no published value returns modelId:null — the UI labels it as
  * "unset (cold-bootstrap fallback in effect)" rather than naming a model string,
  * so no hard-coded model id literal ever lives in this surface (ci-guard 1).
  */
@@ -112,14 +112,13 @@ export async function readModelConfig(): Promise<ReadModelConfigResult | { ok: f
   }
 
   try {
-    const rc = remoteConfig()
-    const template = await rc.getServerTemplate()
-    const config = template.evaluate()
+    const snap = await appConfigRef().doc(MODEL_CONFIG_DOC_ID).get()
+    const models = snap.data()?.models ?? {}
 
-    const rows: ModelConfigRow[] = PILLARS.map((pillar) => {
-      const resolved = config.getString(`model.${pillar}.default`)
-      return { pillar, modelId: resolved ? resolved : null }
-    })
+    const rows: ModelConfigRow[] = PILLARS.map((pillar) => ({
+      pillar,
+      modelId: models[pillar] ?? null,
+    }))
 
     return { ok: true, rows }
   } catch (err) {
@@ -128,26 +127,33 @@ export async function readModelConfig(): Promise<ReadModelConfigResult | { ok: f
   }
 }
 
-// ─── publishModelConfig — the net-new Remote Config WRITE round-trip ──────────
+// ─── publishModelConfig — the model-config Firestore WRITE round-trip ─────────
 
 /**
- * Admin-only publish of ONE model.{pillar}.default key (MODEL-02 / D-15/16/17).
+ * Admin-only publish of ONE pillar's model id into `appConfig/modelConfig`
+ * (MODEL-02 / D-15/16/17).
  *
  * Flow:
  *   1. Assert role === 'admin' from the verified token (never args).
  *   2. Validate pillar ∈ the 5-pillar union — reject unknown (D-16).
- *   3. getTemplate() — carries the writable ETag (NOT getServerTemplate).
- *   4. Mutate ONLY parameters['model.{pillar}.default'].defaultValue = {value: modelId}.
- *   5. publishTemplate(template) WITHOUT { force:true } — ETag optimistic concurrency.
- *      A rejection (stale ETag) → {ok:false,error:'conflict'}, never blind-overwrite.
- *   6. audit.log({ action:'model_config_publish', raw:{ pillar, modelId } }) — hashed.
+ *   3. Run a Firestore transaction: read the current models map; if the stored
+ *      value for this pillar differs from `expectedCurrent` (what the admin saw
+ *      when they opened the form), return {ok:false,error:'conflict'} and DO NOT
+ *      write — never blind-overwrite a concurrent publish (D-16). Otherwise write
+ *      the merged models map (tenantId stamped by the converter).
+ *   4. audit.log({ action:'model_config_publish', raw:{ pillar, modelId } }) — hashed,
+ *      success-only (a conflict or failure returns before this).
  *
- * @param pillar   The pillar key to update (must be one of the 5 pillars).
- * @param modelId  Free-form model id string (D-15 — never validated against a literal allow-list).
+ * @param pillar           The pillar key to update (must be one of the 5 pillars).
+ * @param modelId          Free-form model id string (D-15 — never validated against a literal allow-list).
+ * @param expectedCurrent  The published value the admin saw when opening the form
+ *                         (null when the pillar was unpublished). Used for the D-16
+ *                         optimistic-concurrency check.
  */
 export async function publishModelConfig(
   pillar: string,
   modelId: string,
+  expectedCurrent: string | null,
 ): Promise<PublishModelConfigResult> {
   let user: Awaited<ReturnType<typeof requireUser>>
   try {
@@ -161,61 +167,50 @@ export async function publishModelConfig(
     return { ok: false, error: 'Forbidden' }
   }
 
-  // D-16: only the 5 model.{pillar}.default keys are editable; reject anything else.
+  // D-16: only the 5 pillars are editable; reject anything else.
   if (!isPillar(pillar)) {
     return { ok: false, error: 'invalid-pillar', detail: `Unknown pillar: ${pillar}` }
   }
 
-  const rc = remoteConfig()
-
-  // getTemplate() (NOT getServerTemplate) — the project template carries the
-  // writable ETag the SDK sends back on publish for optimistic concurrency.
-  const template = await rc.getTemplate()
-  const key = `model.${pillar}.default`
-
-  // Mutate (or create) ONLY this one parameter's default value. Other keys and
-  // REMOTE_CONFIG_FALLBACKS are untouched. ExplicitParameterValue = { value: string }.
-  template.parameters[key] = {
-    ...(template.parameters[key] ?? {}),
-    defaultValue: { value: modelId },
-  }
+  const docRef = appConfigRef().doc(MODEL_CONFIG_DOC_ID)
+  let conflict = false
 
   try {
-    // Publish WITHOUT { force:true } — the SDK sends the template's ETag (D-16).
-    // A concurrent publish since our read → stale-ETag rejection below.
-    await rc.publishTemplate(template)
-  } catch (err) {
-    // firebase-admin throws FirebaseRemoteConfigError (PrefixedFirebaseError),
-    // whose `.code` is a prefixed string like `remote-config/failed-precondition`.
-    // Read defensively: a plain Error with no `.code` falls through to publish-failed
-    // (anti-masking — we must NOT report every failure as a conflict).
-    const code = (err as { code?: string })?.code ?? ''
+    await adminDb.runTransaction(async (tx) => {
+      const snap = await tx.get(docRef)
+      const currentModels: Partial<Record<Pillar, string>> = snap.data()?.models ?? {}
+      const current = currentModels[pillar] ?? null
 
-    // Stale ETag / concurrent publish → genuine conflict; never blind-overwrite (D-16).
-    if (code.includes('failed-precondition') || code.includes('aborted')) {
-      return { ok: false, error: 'conflict', detail: 'Template changed — reload and retry.' }
-    }
-
-    // SA lacks Remote Config publish permission. Surface a distinct, actionable
-    // error WITHOUT naming the SA email or echoing the raw message (PII/secrets hygiene).
-    if (code.includes('permission-denied')) {
-      return {
-        ok: false,
-        error: 'permission-denied',
-        detail: 'Service account lacks Remote Config publish permission.',
+      // D-16 optimistic concurrency: the stored value changed since the admin
+      // opened the form → surface a conflict, never blind-overwrite.
+      if (current !== expectedCurrent) {
+        conflict = true
+        return
       }
-    }
 
-    // Any other failure (validation, network, not-found, plain Error): surface a
-    // generic code; do NOT echo err.message (may carry identifiers).
-    return { ok: false, error: 'publish-failed', detail: 'Remote Config publish failed.' }
+      const nextModels: Partial<Record<Pillar, string>> = { ...currentModels, [pillar]: modelId }
+      tx.set(docRef, {
+        tenantId: 'd2' as const,
+        models: nextModels,
+        updatedBy: user.uid,
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+    })
+  } catch {
+    // Any Firestore failure (network, infra). Surface a generic code; do NOT echo
+    // the raw error message (may carry identifiers — PII/secrets hygiene).
+    return { ok: false, error: 'publish-failed', detail: 'Model config publish failed.' }
+  }
+
+  if (conflict) {
+    return { ok: false, error: 'conflict', detail: 'This setting changed since you opened it. Reload and retry.' }
   }
 
   // Audit (hashes-only) — log() sha256-hashes every value in `raw` (D-17).
   await audit.log({
     actorUid: user.uid,
     action: 'model_config_publish',
-    targetRef: `remoteConfig/${key}`,
+    targetRef: `appConfig/${MODEL_CONFIG_DOC_ID}`,
     raw: { pillar, modelId },
   })
 

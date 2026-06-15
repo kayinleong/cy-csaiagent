@@ -97,16 +97,20 @@ export function ModelConfigForm({ initialRows }: ModelConfigFormProps) {
     const modelId = draft[pillar]?.trim()
     if (!modelId) return
 
+    // Pass the value the admin currently sees so the action can detect a
+    // concurrent publish (D-16 optimistic concurrency) — never blind-overwrite.
+    const expectedCurrent = published[pillar] ?? null
+
     startTransition(async () => {
-      const result = await publishModelConfig(pillar, modelId)
+      const result = await publishModelConfig(pillar, modelId, expectedCurrent)
       if (result.ok) {
-        // Do NOT claim instant — Remote Config propagates (D-15).
+        // Do NOT claim instant — the new value propagates to readers (D-15).
         toast.success(t('publishedToast'))
         setPublished((prev) => ({ ...prev, [pillar]: modelId }))
         setDraft((prev) => ({ ...prev, [pillar]: '' }))
         setConflict(false)
       } else if (result.error === 'conflict') {
-        // Stale ETag — never blind-overwrite. Prompt a reload (D-16).
+        // Concurrent publish since load — never blind-overwrite. Prompt a reload (D-16).
         setConflict(true)
         toast.error(t('conflictError'))
       } else {
