@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 Phase: 7 (Console IA v2 — Net-new Surfaces) — CODE-COMPLETE (6/6 plans)
 Plan: 6 of 6 — DONE
 Status: Phase 7 code-complete. All 8 net-new surfaces built, reachable via role-filtered nav (read-only blind), trilingual to parity, and gated server-side. Open live-gated checkpoints carried to rollout: 07-02 deploy (cohorts + conversationFlags rules + 4 composite indexes incl. auditLogs (action,ts)/(actorUid,ts)) and 07-05 RC-publish IAM (firebaseremoteconfig.remoteConfig.update on the App Hosting SA). Manual gate: BM/中文 native sign-off on the 8 surfaces' copy.
-Last activity: 2026-06-15 -- Completed quick-kayinleong-016: chat-history sidebar now loads (was "Missing or insufficient permissions"). The conversations `list` rule requires sameTenant(); the client query constrained only ownerUid so Firestore denied the whole query. Added where('tenantId','==','d2') to the drawer query (two equality filters, no composite index) + the missing list-rule emulator tests. Rules emulator 173/0; full suite 669/188 skip/0.
+Last activity: 2026-06-15 -- Completed quick-kayinleong-017: model config moved from Remote Config to Firestore (singleton `appConfig/modelConfig` doc). `modelFor()` resolves per-pillar model IDs from the doc; the admin publish surface writes it in a transaction with a D-16 expected-value conflict check (no blind overwrite); appConfig is deny-all to clients (Admin-SDK only). This makes publish work without the 07-05 RC-publish IAM grant (now obsolete for model config). tsc 0, full suite 670/188 skip/0, eslint clean.
 Prior activity: 2026-06-11 -- Completed 07-06-PLAN.md (FINAL Wave-3, NAV-01/I18N-07/CLOSE-02): 8 role-filtered nav entries placed per D-25 (cohorts/agentProfiles/coachAssignment → Agents & Cohorts; flags → Conversations & Escalations; auditLog/modelConfig/pdpaSettings → System & Compliance; daysToFirstClose → Analytics & Performance), read-only blind to all 8 (D-24) → app-sidebar-nav.test.ts GREEN (8/8); authored 8 nav labels + 7 surface namespaces + adminUsage daysToClose keys across en/ms/zh → i18n-parity GREEN; getOrgDaysToFirstClose() read-time aggregate (D-22, no new pipeline) + avg/median/count tile in the usage dashboard (#days-to-first-close). Full gate clean (tsc, vitest 638/186 skip, next build 26 routes).
 
 Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 6 CODE-COMPLETE (8/8 plans); Phase 7 CODE-COMPLETE (6/6 plans). Next: Phase 8 (WABA — graduation-gated) or rollout.
@@ -39,11 +39,16 @@ Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 
 2. In Firebase console → Firestore → Indexes, confirm the 4 new composites show status **"Enabled"** (not "Building"): `conversationFlags (seniorCoachId,status)`, `conversationFlags (status,createdAt)`, `auditLogs (action,ts)`, `auditLogs (actorUid,ts)`. Firestore throws FAILED_PRECONDITION until built (Pitfall 6) — the `auditLogs` composites back the 07-05 filtered `listAuditLogs(action/actorUid)` queries (single-field `orderBy('ts','desc')` needs no composite).
 3. Confirm the deployed rules (Firestore → Rules) include the `cohorts` + `conversationFlags` blocks.
 
-### Phase 7 open human-action gate (07-05 — RC-publish IAM; live-gated, carried to rollout)
+### Phase 7 open human-action gate (07-05 — RC-publish IAM; ~~live-gated~~ OBSOLETE as of quick-kayinleong-017)
 
-1. (07-RESEARCH Open Q5 / A2) Confirm the App Hosting service account IAM includes `firebaseremoteconfig.remoteConfig.update` (Remote Config **publish**, not just read). `modelFor()` read already works in production; the new `publishModelConfig` WRITE path (Surface 6) needs this scope. If absent, grant Remote Config Admin (or a custom role with the publish permission) to the SA.
-2. In Firebase console → Remote Config, confirm the 5 keys (`model.{coach,finder,reply,router,grader}.default`) exist — or accept that the first publish CREATES a missing key (the write path handles create-or-update either way).
-3. (Manual end-to-end, carried to the phase gate) Publish a `model.coach.default` change via the admin UI; confirm the next chat turn resolves the new model id through `modelFor('coach')` (allow for propagation latency — the UI copy says "may take a moment to take effect").
+> **OBSOLETE (quick-kayinleong-017, 2026-06-15):** model config moved from Remote Config to the
+> Firestore doc `appConfig/modelConfig`. `modelFor()` + `publishModelConfig` now read/write Firestore,
+> which the App Hosting SA can already do — **no RC-publish IAM grant is needed.** Items 1–2 below no
+> longer apply. Item 3 still applies as a live smoke test, but against Firestore (not Remote Config).
+
+1. ~~Confirm the App Hosting SA IAM includes `firebaseremoteconfig.remoteConfig.update`.~~ Not needed — model config is in Firestore.
+2. ~~In Firebase console → Remote Config, confirm the 5 `model.{pillar}.default` keys exist.~~ Not needed — the doc `appConfig/modelConfig` is created on first publish.
+3. (Manual end-to-end, carried to the phase gate) Publish a model change for `coach` via the admin UI; confirm the next chat turn resolves the new model id through `modelFor('coach')` (now reading the Firestore `appConfig/modelConfig` doc).
 
 ### Phase 4 open human-action gate (live-gated — does NOT block Phase 5 planning)
 
@@ -177,6 +182,7 @@ Carried from research — must be held during Phase 1 planning:
 | quick-kayinleong-014 | Conversation Log (/en/conversations): search by agent email (@-detection → getUserByEmail → ownerUid query); Agent column shows email not uid (chunked adminAuth.getUsers, PDPA-safe); responsive detail modal (clean pillar-token badge, full routeDecision on hover) | 2026-06-15 | 992f269 | [quick-kayinleong-014](./quick/quick-kayinleong-014/) |
 | quick-kayinleong-015 | Fix /usage showing no stats — usage-rollup job rolled up only today once/24h (fired before events existed); now 1h window + rolls up yesterday+today (idempotent recompute) | 2026-06-15 | 30be068 | [quick-kayinleong-015](./quick/quick-kayinleong-015/) |
 | quick-kayinleong-016 | Fix chat-history sidebar "Missing or insufficient permissions" (residual H2 from 010) — conversations `list` rule needs sameTenant(); query constrained only ownerUid so Firestore denied it. Added where('tenantId','==','d2') + missing list-rule emulator tests (denied-without / allowed-with) | 2026-06-15 | 3ac7909 | [quick-kayinleong-016](./quick/quick-kayinleong-016/) |
+| quick-kayinleong-017 | Move model-config persistence from Remote Config to Firestore (singleton `appConfig/modelConfig` doc): `modelFor()` + admin publish both read/write the doc; publish is a transaction with a D-16 expected-value conflict check; appConfig is deny-all client (Admin-SDK only). Obsoletes the 07-05 RC-publish IAM gate. tsc 0, vitest 670/188 skip/0, eslint clean | 2026-06-15 | 3adf493 | [quick-kayinleong-017](./quick/quick-kayinleong-017/) |
 
 ## Deferred Items
 
