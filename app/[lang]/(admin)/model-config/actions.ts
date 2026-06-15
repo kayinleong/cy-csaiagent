@@ -184,10 +184,31 @@ export async function publishModelConfig(
     // Publish WITHOUT { force:true } — the SDK sends the template's ETag (D-16).
     // A concurrent publish since our read → stale-ETag rejection below.
     await rc.publishTemplate(template)
-  } catch {
-    // Stale ETag → another admin published since our read. Surface a conflict;
-    // never blind-overwrite their change (D-16).
-    return { ok: false, error: 'conflict', detail: 'Template changed — reload and retry.' }
+  } catch (err) {
+    // firebase-admin throws FirebaseRemoteConfigError (PrefixedFirebaseError),
+    // whose `.code` is a prefixed string like `remote-config/failed-precondition`.
+    // Read defensively: a plain Error with no `.code` falls through to publish-failed
+    // (anti-masking — we must NOT report every failure as a conflict).
+    const code = (err as { code?: string })?.code ?? ''
+
+    // Stale ETag / concurrent publish → genuine conflict; never blind-overwrite (D-16).
+    if (code.includes('failed-precondition') || code.includes('aborted')) {
+      return { ok: false, error: 'conflict', detail: 'Template changed — reload and retry.' }
+    }
+
+    // SA lacks Remote Config publish permission. Surface a distinct, actionable
+    // error WITHOUT naming the SA email or echoing the raw message (PII/secrets hygiene).
+    if (code.includes('permission-denied')) {
+      return {
+        ok: false,
+        error: 'permission-denied',
+        detail: 'Service account lacks Remote Config publish permission.',
+      }
+    }
+
+    // Any other failure (validation, network, not-found, plain Error): surface a
+    // generic code; do NOT echo err.message (may carry identifiers).
+    return { ok: false, error: 'publish-failed', detail: 'Remote Config publish failed.' }
   }
 
   // Audit (hashes-only) — log() sha256-hashes every value in `raw` (D-17).
