@@ -20,7 +20,8 @@
  *   - stall-detect  (daily window: 24 h) — runs findStalled + in-app nudge + emitHandoffSignal
  *   - escalate      (daily window: 24 h) — 48h stall → emitHandoffSignal gated to working hours
  *   - eval-nightly  (daily window: 24 h) — delegates to runNightlyEval seam (02-07 fills body)
- *   - usage-rollup  (no-op stub — Phase 3)
+ *   - usage-rollup  (hourly window) — aggregates usageEvents → usageRollups for
+ *                   yesterday + today (idempotent recompute; quick-015)
  *
  * D-09 RESOLUTION (2026-06-02): ON-VISIT nudges — the lazy-cron fires only when an
  * authorized user visits the app. A truly idle overnight defers nudges. The wall-clock
@@ -62,6 +63,9 @@ const JOB_RUNS_COLLECTION = 'jobRuns'
 
 /** One full day in milliseconds — default window for daily jobs. */
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
+
+/** One hour in milliseconds — window for jobs that must refresh the in-progress day. */
+const ONE_HOUR_MS = 60 * 60 * 1000
 
 // ─── Job registry ─────────────────────────────────────────────────────────────
 
@@ -210,22 +214,34 @@ const JOB_REGISTRY: Record<string, JobDefinition> = {
   /**
    * usage-rollup — QUAL-08 / ADMIN-08 / D-05
    *
-   * Runs daily. Aggregates usageEvents for the current day into per-(uid, pillar)
-   * usageRollups documents using AggregateField.sum()/count() — NEVER fetch-all.
+   * Aggregates usageEvents into per-(uid, pillar) usageRollups documents using
+   * AggregateField.sum()/count() — NEVER fetch-all.
+   *
+   * Rolls up BOTH the previous day and the current day on each run:
+   *   - Current day (`dayKey(now)`): the on-visit lazy-cron fires on chat-page LOAD,
+   *     i.e. before the visitor sends a message, so the in-progress day must be
+   *     re-aggregated on later visits or its events are never captured (quick-015).
+   *   - Previous day (`dayKey(now - 1d)`): covers the midnight boundary so the tail
+   *     of yesterday (events after that day's last run) is not dropped.
    *
    * Idempotent: each rollup doc is keyed `${day}__${uid}__${pillar}` and written
-   * with set(merge:true) — re-running overwrites, never accumulates (Pitfall 3).
+   * with set(merge:true) — recompute-from-source overwrite, never accumulates
+   * (Pitfall 3). This is what makes the hourly recompute below safe.
    *
-   * DUE-gate (runJob txn, lines 229+): exactly-once-per-window under concurrent
-   * visitors. Body-level idempotency handles edge cases (Pitfall 3 double-count).
+   * DUE-gate (runJob txn): exactly-once-per-window under concurrent visitors.
    *
-   * windowMs: ONE_DAY_MS — rollup covers the calendar day in Asia/Kuala_Lumpur.
-   * dayKey(now) converts to 'YYYY-MM-DD' in MYT so the rollup aligns with D2's day.
+   * windowMs: ONE_HOUR_MS — the current day must refresh more than once per day,
+   * otherwise the single daily run (which lands before any events exist) leaves
+   * usageRollups empty and the usage page shows nothing (quick-015 root cause).
+   * dayKey() converts to 'YYYY-MM-DD' in MYT so rollups align with D2's day.
    */
   'usage-rollup': {
-    windowMs: ONE_DAY_MS,
+    windowMs: ONE_HOUR_MS,
     run: async (now: Date) => {
-      await rollupUsage(dayKey(now))
+      const yesterday = dayKey(new Date(now.getTime() - ONE_DAY_MS))
+      const today = dayKey(now)
+      await rollupUsage(yesterday)
+      await rollupUsage(today)
       await writeHeartbeat('usage-rollup')
     },
   },

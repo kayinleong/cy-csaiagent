@@ -38,6 +38,7 @@ const mockFindStalled = vi.hoisted(() => vi.fn())
 const mockEmitHandoffSignal = vi.hoisted(() => vi.fn())
 const mockWriteHeartbeat = vi.hoisted(() => vi.fn())
 const mockAppendMessage = vi.hoisted(() => vi.fn())
+const mockRollupUsage = vi.hoisted(() => vi.fn())
 
 // Firestore transaction mock infrastructure
 const mockTxGet = vi.hoisted(() => vi.fn())
@@ -64,6 +65,12 @@ vi.mock('@/src/memory/conversation', () => ({
 vi.mock('@/src/jobs/heartbeat', () => ({
   writeHeartbeat: mockWriteHeartbeat,
   readHeartbeat: vi.fn(),
+}))
+
+// ─── Mock @/src/usage/rollup (usage-rollup job body) ──────────────────────────
+
+vi.mock('@/src/usage/rollup', () => ({
+  rollupUsage: mockRollupUsage,
 }))
 
 // ─── Mock @/src/firebase/admin ────────────────────────────────────────────────
@@ -528,6 +535,58 @@ describe('runDueJobs — escalate job body (COACH-05 + CDASH-06)', () => {
     expect(mockEmitHandoffSignal).not.toHaveBeenCalled()
     // heartbeat still written (job ran; no escalation emitted but job succeeded)
     expect(mockWriteHeartbeat).toHaveBeenCalledWith('escalate')
+  })
+})
+
+// ─── usage-rollup job body tests (quick-kayinleong-015) ───────────────────────
+
+describe('runJob — usage-rollup (quick-015)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockCollectionDoc.mockReturnValue({ id: 'usage-rollup' })
+    mockRollupUsage.mockResolvedValue(undefined)
+    mockWriteHeartbeat.mockResolvedValue(undefined)
+  })
+
+  it('rolls up BOTH yesterday and today, then writes the heartbeat', async () => {
+    // now = 2026-06-15 03:00 UTC = 11:00 MYT
+    const now = new Date('2026-06-15T03:00:00Z')
+    setupTransaction(false) // never ran → due
+
+    const { runJob } = await import('./runDueJobs')
+    const { dayKey } = await import('@/src/usage/types')
+    const ran = await runJob('usage-rollup', now)
+
+    const today = dayKey(now)
+    const yesterday = dayKey(new Date(now.getTime() - 24 * 60 * 60 * 1000))
+
+    expect(ran).toBe(true)
+    expect(mockRollupUsage).toHaveBeenCalledWith(yesterday)
+    expect(mockRollupUsage).toHaveBeenCalledWith(today)
+    expect(mockRollupUsage).toHaveBeenCalledTimes(2)
+    expect(mockWriteHeartbeat).toHaveBeenCalledWith('usage-rollup')
+  })
+
+  it('uses a 1h window — due at 90m since last run', async () => {
+    const now = new Date('2026-06-15T03:00:00Z')
+    setupTransaction(true, new Date(now.getTime() - 90 * 60 * 1000)) // 90m ago
+
+    const { runJob } = await import('./runDueJobs')
+    const ran = await runJob('usage-rollup', now)
+
+    expect(ran).toBe(true)
+    expect(mockRollupUsage).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses a 1h window — skipped at 30m since last run (recompute throttled)', async () => {
+    const now = new Date('2026-06-15T03:00:00Z')
+    setupTransaction(true, new Date(now.getTime() - 30 * 60 * 1000)) // 30m ago
+
+    const { runJob } = await import('./runDueJobs')
+    const ran = await runJob('usage-rollup', now)
+
+    expect(ran).toBe(false)
+    expect(mockRollupUsage).not.toHaveBeenCalled()
   })
 })
 
