@@ -170,6 +170,7 @@ Carried from research — must be held during Phase 1 planning:
 | quick-kayinleong-007 | Fix chat UI not rendering streamed assistant text (v4→v5 UI Message Stream parser mismatch) | 2026-06-12 | c2c8327 | [quick-kayinleong-007](./quick/quick-kayinleong-007/) |
 | quick-kayinleong-008 | Fix RateLimitError NOT_FOUND on first chat — create rateBudgets/{uid} doc via set() in decrement() | 2026-06-12 | c3d40d9 | [quick-kayinleong-008](./quick/quick-kayinleong-008/) |
 | quick-kayinleong-009 | Render assistant chat messages as Markdown (react-markdown + remark-gfm), XSS-safe, plain-text branch only | 2026-06-15 | f6081d9 | [quick-kayinleong-009](./quick/quick-kayinleong-009/) |
+| quick-kayinleong-011 | Agent dropdown shows user email instead of truncated uid (admin roles) | 2026-06-15 | 62789cd | [quick-kayinleong-011](./quick/quick-kayinleong-011/) |
 | quick-kayinleong-012 | Show staff email instead of raw UID in /en/audit-log Actor column (server-side adminAuth.getUsers, batched, PDPA-safe) | 2026-06-15 | 3a3e831 | [quick-kayinleong-012](./quick/quick-kayinleong-012/) |
 
 ## Deferred Items
