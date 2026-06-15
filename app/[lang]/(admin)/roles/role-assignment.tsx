@@ -220,7 +220,7 @@ export function RoleAssignment({ initialUsers, lang: _lang }: RoleAssignmentProp
                 <SelectContent>
                   {users.map((u) => (
                     <SelectItem key={u.id} value={u.id}>
-                      <span className="font-mono text-xs">{u.displayRef}…</span>
+                      <span className="text-xs">{u.email ?? `${u.displayRef}…`}</span>
                       &nbsp;
                       <Badge variant={roleBadgeVariant(u.role)} className="text-xs">
                         {u.role}
