@@ -32,6 +32,7 @@
 
 import { cookies } from 'next/headers'
 import { requireUser, setUserClaims, UnauthorizedError, InvalidRoleError, type Role } from '@/src/firebase/auth'
+import { adminAuth } from '@/src/firebase/admin'
 import * as audit from '@/src/audit'
 
 // ─── Session helper ───────────────────────────────────────────────────────────
@@ -78,6 +79,13 @@ export interface UserWithRole {
   role: Role
   /** Truncated display ref (first 8 chars of uid). */
   displayRef: string
+  /**
+   * Resolved Firebase Auth email for the user (ADMIN-07).
+   * `null` when the user has no email (phone/anonymous auth) or was not found
+   * in Firebase Auth. Email is PII — resolved server-side only; never logged or
+   * audited. Only this projected string crosses to the client.
+   */
+  email: string | null
   seniorCoachId: string | null
 }
 
@@ -179,12 +187,32 @@ export async function listUsersWithRoles(): Promise<ListUsersResult | ListUsersE
     // Bounded read: limit to 200 (never fetch-all; pilot org ≤ 200 agents).
     const snap = await usersRef().limit(200).get()
 
+    // ADMIN-07: resolve each user's email from Firebase Auth server-side.
+    // Email lives ONLY in Auth (the users/{uid} doc has no email field).
+    // adminAuth.getUsers caps at 100 identifiers per call; chunk the uids.
+    // A resolution failure must NOT break the listing — fall back to null emails.
+    const uids = snap.docs.map((d) => d.id)
+    const emailByUid = new Map<string, string | null>()
+    try {
+      for (let i = 0; i < uids.length; i += 100) {
+        const chunk = uids.slice(i, i + 100)
+        const { users: records } = await adminAuth.getUsers(chunk.map((uid) => ({ uid })))
+        for (const rec of records) {
+          emailByUid.set(rec.uid, rec.email ?? null)
+        }
+      }
+    } catch {
+      // Email resolution failed — leave emailByUid empty so every row falls
+      // back to email:null. The listing must still return the rows.
+    }
+
     const users: UserWithRole[] = snap.docs.map((doc) => {
       const data = doc.data()
       return {
         id: doc.id,
         role: data.role,
         displayRef: doc.id.slice(0, 8),
+        email: emailByUid.get(doc.id) ?? null,
         seniorCoachId: (data as typeof data & { seniorCoachId?: string }).seniorCoachId ?? null,
       }
     })
