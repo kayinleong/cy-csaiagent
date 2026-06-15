@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { ReplyDraftCard } from './reply-draft-card'
 import { MatchList } from './match-list'
+import { MarkdownMessage } from './markdown-message'
 import type { ReplyOutput } from '@/src/agents/reply/schema'
 import type { FinderOutput } from '@/src/agents/finder/schema'
 
@@ -138,9 +139,9 @@ export function MessageList({ messages, isStreaming, className }: MessageListPro
               >
                 <CardContent
                   data-slot="card-content"
-                  className="px-4 py-3 text-sm md:text-[0.8125rem] leading-relaxed whitespace-pre-wrap"
+                  className="px-4 py-3 text-sm md:text-[0.8125rem] leading-relaxed"
                 >
-                  {msg.content}
+                  <MarkdownMessage content={msg.content} />
                 </CardContent>
 
                 {/* Citations footer — the visible grounding proof (D-09) */}
