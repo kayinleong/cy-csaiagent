@@ -99,6 +99,30 @@ describe('appendMessage (conversation subcollection)', () => {
     // If the implementation used an inline array it would need to call a different mock path
     expect(mockMessagesAdd).toHaveBeenCalledOnce()
   })
+
+  it('Behavior 1c: stamps createdAt at the write site without requiring the caller to pass it (quick-018)', async () => {
+    const msg = {
+      tenantId: 'd2' as const,
+      role: 'assistant' as const,
+      content: 'A timestamped turn',
+      citations: [],
+      routeDecision: 'coach',
+      tokens: 42,
+      redacted: false,
+    }
+
+    await appendMessage('conv-ts', msg)
+
+    expect(mockMessagesAdd).toHaveBeenCalledOnce()
+    const addArg = mockMessagesAdd.mock.calls[0][0] as Record<string, unknown>
+    // appendMessage injected createdAt (a serverTimestamp sentinel) even though
+    // the caller's msg object had none — this is the transcript sort key (quick-018).
+    expect(addArg).toHaveProperty('createdAt')
+    expect(addArg.createdAt).toBeDefined()
+    // The caller's other fields are preserved.
+    expect(addArg.content).toBe('A timestamped turn')
+    expect(addArg.role).toBe('assistant')
+  })
 })
 
 describe('loadRecent (pagination, T-01-22)', () => {
