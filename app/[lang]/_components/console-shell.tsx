@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppSidebar } from './app-sidebar'
+import { DebugSidebar } from './debug-sidebar'
 
 interface ConsoleShellProps {
   role: Role
@@ -35,6 +36,7 @@ export function ConsoleShell({ role, lang, children }: ConsoleShellProps) {
           </header>
           {children}
         </SidebarInset>
+        {role === 'admin' && <DebugSidebar />}
       </SidebarProvider>
     </TooltipProvider>
   )
