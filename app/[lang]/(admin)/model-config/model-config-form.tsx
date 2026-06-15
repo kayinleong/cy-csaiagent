@@ -193,7 +193,7 @@ export function ModelConfigForm({ initialRows }: ModelConfigFormProps) {
               {confirmPillar
                 ? t('confirmBody', {
                     pillar: t(`pillar.${confirmPillar}`),
-                    modelId: draft[confirmPillar]?.trim() ?? '',
+                    model: draft[confirmPillar]?.trim() ?? '',
                   })
                 : ''}
             </AlertDialogDescription>
