@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-31)
 Phase: 7 (Console IA v2 — Net-new Surfaces) — CODE-COMPLETE (6/6 plans)
 Plan: 6 of 6 — DONE
 Status: Phase 7 code-complete. All 8 net-new surfaces built, reachable via role-filtered nav (read-only blind), trilingual to parity, and gated server-side. Open live-gated checkpoints carried to rollout: 07-02 deploy (cohorts + conversationFlags rules + 4 composite indexes incl. auditLogs (action,ts)/(actorUid,ts)) and 07-05 RC-publish IAM (firebaseremoteconfig.remoteConfig.update on the App Hosting SA). Manual gate: BM/中文 native sign-off on the 8 surfaces' copy.
-Last activity: 2026-06-15 -- Completed quick-kayinleong-010: chat conversation now appears in the history sidebar after reload (robust equality-only query, client-side createdAt sort with null=newest, non-silent catch, createdAt backfill).
+Last activity: 2026-06-15 -- Completed quick-kayinleong-015: /usage now shows stats — usage-rollup job runs hourly and rolls up yesterday+today (was: today-only once/24h, fired before events existed).
 Prior activity: 2026-06-11 -- Completed 07-06-PLAN.md (FINAL Wave-3, NAV-01/I18N-07/CLOSE-02): 8 role-filtered nav entries placed per D-25 (cohorts/agentProfiles/coachAssignment → Agents & Cohorts; flags → Conversations & Escalations; auditLog/modelConfig/pdpaSettings → System & Compliance; daysToFirstClose → Analytics & Performance), read-only blind to all 8 (D-24) → app-sidebar-nav.test.ts GREEN (8/8); authored 8 nav labels + 7 surface namespaces + adminUsage daysToClose keys across en/ms/zh → i18n-parity GREEN; getOrgDaysToFirstClose() read-time aggregate (D-22, no new pipeline) + avg/median/count tile in the usage dashboard (#days-to-first-close). Full gate clean (tsc, vitest 638/186 skip, next build 26 routes).
 
 Progress: [██████████] v1 100% (5/5 phases). Post-v1: Phase 6 CODE-COMPLETE (8/8 plans); Phase 7 CODE-COMPLETE (6/6 plans). Next: Phase 8 (WABA — graduation-gated) or rollout.
@@ -173,6 +173,7 @@ Carried from research — must be held during Phase 1 planning:
 | quick-kayinleong-010 | Fix chat conversation missing from history sidebar after reload — equality-only query (drop orderBy/composite-index dep), client-side sort (null createdAt = newest), non-silent catch, createdAt backfill in ensurePrimaryThread | 2026-06-15 | 145a534 | [quick-kayinleong-010](./quick/quick-kayinleong-010/) |
 | quick-kayinleong-011 | Agent dropdown shows user email instead of truncated uid (admin roles) | 2026-06-15 | 62789cd | [quick-kayinleong-011](./quick/quick-kayinleong-011/) |
 | quick-kayinleong-012 | Show staff email instead of raw UID in /en/audit-log Actor column (server-side adminAuth.getUsers, batched, PDPA-safe) | 2026-06-15 | 3a3e831 | [quick-kayinleong-012](./quick/quick-kayinleong-012/) |
+| quick-kayinleong-015 | Fix /usage showing no stats — usage-rollup job rolled up only today once/24h (fired before events existed); now 1h window + rolls up yesterday+today (idempotent recompute) | 2026-06-15 | 30be068 | [quick-kayinleong-015](./quick/quick-kayinleong-015/) |
 
 ## Deferred Items
 
