@@ -29,6 +29,7 @@
  *   20. erasureRequests/{reqId} ← Phase-5 PDPA erasure ledger (QUAL-09/D-02; server/Admin-SDK writes)
  *   21. cohorts/{cohortId}    ← Phase-7 cohort registry (COH-01/D-01; admin-write, coach/admin-read)
  *   22. conversationFlags/{flagId} ← Phase-7 flagged-conversation queue (FLAG-01/D-09; Admin-SDK writes only, content-free reference)
+ *   23. appConfig/{configId} ← model-config source of truth (MODEL-01/02; singleton doc appConfig/modelConfig; server/Admin-SDK writes only, client-denied)
  *
  * Import pattern (always use the @/ alias):
  *   import { usersRef, rateBudgetsRef } from '@/src/firebase/collections'
@@ -709,6 +710,37 @@ export interface ConversationFlagDoc {
   reviewedAt?: Date | FieldValue
 }
 
+/**
+ * App-configuration record (collection 23, MODEL-01 / MODEL-02 / D-15/16/17).
+ *
+ * The model-config source of truth. Stored as a SINGLETON document
+ * `appConfig/{MODEL_CONFIG_DOC_ID}` (`appConfig/modelConfig`) holding the
+ * published model id per pillar. `modelFor()` (src/llm/provider.ts) reads this
+ * doc to resolve the model for a chat turn; the admin model-config surface
+ * publishes into it. Firestore is the source of truth — model IDs are NEVER
+ * hard-coded (the compile-time MODEL_FALLBACKS in provider.ts is the sole
+ * labeled fallback, used only when this doc is unreachable / a pillar is unpublished).
+ *
+ * Security (firestore.rules match /appConfig): server / Admin-SDK writes & reads
+ * ONLY — ALL client access is DENIED (read, write: if false). `modelFor()` and the
+ * model-config Server Actions reach it via the Admin SDK (which bypasses rules);
+ * no client ever touches this doc directly.
+ */
+export interface ModelConfigDoc {
+  tenantId: TenantId
+  /**
+   * Published model id per pillar. Pillar keys mirror the `Pillar` union in
+   * src/llm/provider.ts — INLINED here (not imported) to avoid a
+   * collections↔provider circular import (same precedent as UserDoc.role).
+   * A pillar absent from the map = unpublished → modelFor() uses its fallback.
+   */
+  models: Partial<Record<'coach' | 'finder' | 'reply' | 'router' | 'grader', string>>
+  /** UID of the admin who last published a change (audit trail). */
+  updatedBy: string
+  /** Server timestamp of the last publish. */
+  updatedAt: Date | FieldValue
+}
+
 // ─── Converter factory ───────────────────────────────────────────────────────
 
 /**
@@ -761,6 +793,7 @@ export const usageRollupConverter = makeConverter<UsageRollupDoc>()
 export const erasureRequestConverter = makeConverter<ErasureRequestDoc>()
 export const cohortConverter = makeConverter<CohortDoc>()
 export const conversationFlagConverter = makeConverter<ConversationFlagDoc>()
+export const modelConfigConverter = makeConverter<ModelConfigDoc>()
 
 // ─── Ref factories ───────────────────────────────────────────────────────────
 // Export one named factory per collection.
@@ -972,4 +1005,27 @@ export function cohortsRef(): CollectionReference<CohortDoc> {
  */
 export function conversationFlagsRef(): CollectionReference<ConversationFlagDoc> {
   return adminDb.collection('conversationFlags').withConverter(conversationFlagConverter)
+}
+
+/**
+ * The singleton document id under `appConfig` that holds the model-config map.
+ * Callers use `appConfigRef().doc(MODEL_CONFIG_DOC_ID)` — never a string literal.
+ */
+export const MODEL_CONFIG_DOC_ID = 'modelConfig' as const
+
+/**
+ * Collection 23: appConfig/{configId}
+ *
+ * App-configuration store (MODEL-01 / MODEL-02 / D-15/16/17). The model-config
+ * source of truth lives in the SINGLETON doc `appConfig/modelConfig`
+ * (MODEL_CONFIG_DOC_ID). `modelFor()` reads it to resolve per-pillar model IDs;
+ * the admin model-config Server Actions publish into it (transactional, with an
+ * expected-value conflict check — D-16). Firestore replaced Remote Config as the
+ * model-config source of truth (quick-kayinleong-017).
+ *
+ * Server / Admin-SDK writes & reads ONLY — ALL client access is DENIED in
+ * firestore.rules (read, write: if false). No client touches this doc directly.
+ */
+export function appConfigRef(): CollectionReference<ModelConfigDoc> {
+  return adminDb.collection('appConfig').withConverter(modelConfigConverter)
 }
