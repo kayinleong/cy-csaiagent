@@ -101,6 +101,19 @@ function useChatStream({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId])
 
+  // Re-seed the visible transcript when the SELECTED conversation changes —
+  // history select loads a thread's persisted messages, New conversation clears
+  // them (quick-018). chat-shell sets historyMessages + activeCid together, so
+  // both deps update in one commit. These deps only change on select/new (never
+  // during a stream — onMessagesChange feeds back into chat-shell's own mirror,
+  // not historyMessages), so this re-seed never clobbers an in-flight response.
+  // setState-in-effect is intentional here (same pattern as conversation-list.tsx).
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    setMessages(initialMessages ?? [])
+  }, [conversationId, initialMessages])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
   // Keep parent in sync when messages update
   useEffect(() => {
     onMessagesChange(messages)

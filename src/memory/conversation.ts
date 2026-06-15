@@ -44,7 +44,15 @@ export interface ConversationRecord {
 export async function appendMessage(cid: string, msg: MessageDoc): Promise<string> {
   // messagesRef(cid) returns the SUBCOLLECTION ref — not the parent conversation doc.
   // This is the critical distinction that prevents the 1 MB inline-array trap.
-  const ref = await messagesRef(cid).add(msg)
+  //
+  // Stamp createdAt at this single write site (quick-018) so EVERY persisted
+  // message carries a server timestamp without any caller change — this is the
+  // sort key a reloaded transcript is ordered by. A caller-supplied createdAt is
+  // respected if present; otherwise the server clock is used.
+  const ref = await messagesRef(cid).add({
+    ...msg,
+    createdAt: msg.createdAt ?? FieldValue.serverTimestamp(),
+  })
   return ref.id
 }
 

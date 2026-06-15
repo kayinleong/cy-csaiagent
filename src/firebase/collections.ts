@@ -45,6 +45,7 @@ import {
   type FirestoreDataConverter,
   type QueryDocumentSnapshot,
   type FieldValue,
+  type Timestamp,
   type WithFieldValue,
 } from 'firebase-admin/firestore'
 import { adminDb } from '@/src/firebase/admin'
@@ -129,6 +130,13 @@ export interface MessageDoc {
   tokens: number
   /** true if PDPA pseudonymization was applied before sending to the model */
   redacted: boolean
+  /**
+   * Server timestamp stamped by appendMessage at write time (quick-018) — the
+   * sort key that orders a reloaded transcript. Optional: messages persisted
+   * before quick-018 have no createdAt; readers must treat a missing value as
+   * oldest rather than dropping the message.
+   */
+  createdAt?: Timestamp | FieldValue
 }
 
 export interface LeadDoc {

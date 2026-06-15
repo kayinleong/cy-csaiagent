@@ -30,6 +30,7 @@ import { ChatHeader, type LangOverride, type PillarOverride } from './chat-heade
 import { DisclosureModal } from './disclosure-modal'
 import { ConversationList } from './conversation-list'
 import { LeadSelector } from './lead-selector'
+import { loadConversationMessages } from './load-conversation-messages'
 import type { ChatMessage } from './message-list'
 
 interface ChatShellProps {
@@ -74,17 +75,29 @@ export function ChatShell({ placeholder, sendLabel, emptyStateMessage }: ChatShe
   // ── Messages state (shared between MessageList and ChatInput) ────────────────
   const [messages, setMessages] = useState<ChatMessage[]>([])
 
+  // Transcript loaded from history when a past conversation is selected (CHAT-07 /
+  // quick-018). Passed to ChatInput as `initialMessages`; ChatInput re-seeds its
+  // canonical message state from it whenever the selected conversationId changes.
+  const [historyMessages, setHistoryMessages] = useState<ChatMessage[]>([])
+
   const isStreaming = messages.length > 0 &&
     messages[messages.length - 1]?.role === 'assistant' &&
     messages[messages.length - 1]?.content === ''
 
-  const handleSelectConversation = (cid: string) => {
+  // Selecting a past thread (quick-018): load its persisted transcript, then set
+  // activeCid + the loaded messages together so ChatInput re-seeds with history.
+  // Previously this only cleared messages and never fetched the transcript, so the
+  // selected conversation rendered empty.
+  const handleSelectConversation = async (cid: string) => {
+    const history = await loadConversationMessages(cid)
+    setHistoryMessages(history)
+    setMessages(history) // show immediately; ChatInput converges via onMessagesChange
     setActiveCid(cid)
-    setMessages([]) // clear current messages; ChatInput will use new cid
   }
 
   const handleNewConversation = () => {
     setActiveCid('')
+    setHistoryMessages([])
     setMessages([])
   }
 
@@ -167,6 +180,7 @@ export function ChatShell({ placeholder, sendLabel, emptyStateMessage }: ChatShe
       {/* ── Chat input — sticky bottom ───────────────────────────────────────── */}
       <ChatInput
         onMessagesChange={setMessages}
+        initialMessages={historyMessages}
         conversationId={activeCid || undefined}
         langOverride={langOverride}
         pillarOverride={pillarOverride}
