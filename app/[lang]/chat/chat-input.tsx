@@ -356,7 +356,10 @@ export function ChatInput({
     <div
       data-slot="chat-input-bar"
       className={cn(
-        'border-t bg-background/95 backdrop-blur px-3 py-3',
+        // shrink-0: the input bar must always reserve its full height at the
+        // bottom of the chat column so the scroll area above can never grow into
+        // it / paint the last message behind it (quick-022).
+        'shrink-0 border-t bg-background/95 backdrop-blur px-3 py-3',
         'flex items-end gap-2 max-w-2xl mx-auto w-full',
       )}
     >

@@ -106,7 +106,7 @@ export function ChatHeader({
   return (
     <header
       data-slot="chat-header"
-      className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-3 py-2 flex items-center gap-2"
+      className="shrink-0 sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-3 py-2 flex items-center gap-2"
     >
       {/* History button — opens conversation list drawer */}
       <Button

@@ -72,11 +72,13 @@ export function MessageList({ messages, isStreaming, className }: MessageListPro
       // chat column, the default min-height:auto would let this grow to fit all
       // messages (bounding the Radix viewport to content height) instead of
       // scrolling. min-h-0 lets it shrink so the viewport scrolls. (quick-020)
-      // pb-8 (vs pt-4) gives the last bubble breathing room above the input bar
-      // so it never sits cramped against the composer. (quick-021)
-      className={cn('flex-1 min-h-0 px-3 pt-4 pb-8', className)}
+      // overflow-hidden clips the Radix viewport to this flex-bounded box so its
+      // content can never bleed past into the input bar below. (quick-022)
+      // Bottom breathing room is on the inner content (pb-8) so it scrolls WITH
+      // the messages and the last bubble always clears the composer. (quick-021/022)
+      className={cn('flex-1 min-h-0 overflow-hidden px-3 pt-4', className)}
     >
-      <div className="flex flex-col gap-4 max-w-2xl mx-auto">
+      <div className="flex flex-col gap-4 max-w-2xl mx-auto pb-8">
         {messages.length === 0 && !isStreaming && (
           <div className="text-center text-muted-foreground text-sm py-8">
             {/* Empty state copy is injected by the server page via messages[] */}
