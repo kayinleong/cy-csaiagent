@@ -23,7 +23,7 @@ D2 is a Malaysian real-estate brokerage. New agents currently wait 60 days to ra
 | C2 | **No GCP beyond the Firebase SDK surface** | Allowed: Firebase Auth, Firestore, Cloud Storage for Firebase, App Hosting, App Check, Remote Config, Analytics. Forbidden: Cloud Run (direct), Vertex AI, BigQuery, Pub/Sub, Cloud Scheduler, Cloud Functions |
 | C3 | **No WhatsApp Business API in v1** | Reply Assistant is paste-and-draft only; WABA is a post-pilot graduation milestone |
 | C4 | **No auto-send, ever** | Reply Assistant emits drafts; agent reviews + sends from own phone. Copy-to-clipboard only |
-| C5 | **Model-agnostic** | Claude Sonnet 4.6 default behind a provider abstraction; model IDs in Remote Config, never hard-coded |
+| C5 | **Model-agnostic** | Claude Sonnet 4.6 default behind a provider abstraction; model IDs in Firestore (`appConfig/modelConfig`), never hard-coded |
 | C6 | **PDPA / Malaysian data residency** | Firestore + Storage pinned in-region; PII pseudonymized at the Claude boundary; audit log on every client-related conversation; no PII in logs |
 | C7 | **Multilingual from day one** | EN / BM / 中文 affect retrieval, routing, and UI — not a late add-on |
 
@@ -47,7 +47,7 @@ Versions verified against current docs/registries as of 2026-05-31. Installed = 
 
 ### 2.3 AI layer
 - **Abstraction** — Vercel **AI SDK v5** (`ai ^5` + `@ai-sdk/anthropic ^2` + `@ai-sdk/google ^2` for embeddings) as the streaming + tool-calling surface; `@anthropic-ai/sdk ^0.100.1` as an escape hatch for features the SDK lags on. **Not** `@anthropic-ai/claude-agent-sdk`. (v5 stream method is `toUIMessageStreamResponse()`; the v4 `toDataStreamResponse()` does not exist in v5.)
-- **Models** — `claude-sonnet-4-6` default (all three pillars); `claude-opus-4-7` reserved for the eval judge + manual escalation; `claude-haiku-4-5` for the intent router if/when activated. **Model IDs resolved from Firebase Remote Config at request time.**
+- **Models** — `claude-sonnet-4-6` default (all three pillars); `claude-opus-4-7` reserved for the eval judge + manual escalation; `claude-haiku-4-5` for the intent router if/when activated. **Model IDs resolved from the Firestore `appConfig/modelConfig` doc at request time** (quick-kayinleong-017 — replaced Remote Config).
 - **Embeddings** — Gemini `gemini-embedding-001` (1024-d via `outputDimensionality`, normalized, multilingual) through `@ai-sdk/google` (Gemini **Developer API**, key `GOOGLE_GENERATIVE_AI_API_KEY` — NOT Vertex AI). Standardize **1024-d across all collections**. Fallback: Pinecone Serverless / alternate embedder (decided by SPIKE-RAG).
 - **Prompt caching** — Anthropic ephemeral cache, 4-segment layout (system → voice guide → SOP/KB context → tools).
 
@@ -105,7 +105,7 @@ cy-csaiagent/
 |--------|----------------|-------|--------|
 | `agents/<pillar>/` | System prompt, tool set, output schema, handoff rules per pillar. Tools are **read-only** against Firestore and authenticate **as the user**. | KB, projects, SOPs, leadContext | (via tools — none directly) |
 | `router/` | Pick the pillar for a turn. Heuristic-first; LLM-classifier fallback (activated Phase 3); manual-override chip escape hatch. | conversation, message | route decision (logged) |
-| `llm/` | Streaming-native abstraction over AI SDK v5. `generate({messages, tools, model})` → stream. Fake provider for deterministic tests. | Remote Config (model IDs) | token-usage telemetry |
+| `llm/` | Streaming-native abstraction over AI SDK v5. `generate({messages, tools, model})` → stream. Fake provider for deterministic tests. | Firestore `appConfig/modelConfig` (model IDs) | token-usage telemetry |
 | `memory/` | `leadContext/{leadId}` shared doc with **agent-scoped write slots** + rolling summary. The cross-pillar handoff medium. | leadContext | leadContext (slot-scoped) |
 | `rag/` | Embed query (Gemini `gemini-embedding-001`, 1024-d), `findNearest` retrieval with `lang`/`ownerCollection` pre-filters, citation assembly. **Adapter** — Firestore default, Pinecone fallback. | kbChunks (vector) | — |
 | `kb/` | Chunked client-driven ingestion, chunk metadata, versioning/supersedes. | Storage, kbIngestionJobs | kbDocs, kbChunks |
@@ -199,7 +199,7 @@ match /agentProfiles/{uid} {
 - **Grounding mandate:** answers cite sources (KB chunk IDs / SOP IDs / project IDs). Coach refuses generic real-estate advice; Reply emits `no_sop_match` instead of inventing SOP content; Finder's `searchProjects` enforces `status:'active'` so sold-out units cannot be recommended.
 - **Voice/tone:** per-agent voice fingerprint (10 of the agent's own anonymized replies as few-shot, captured at onboarding); explicit anti-AI-tell pattern list in the system prompt; pre-display detector flags "Certainly!"/em-dash tells; edit-distance telemetry (>40% change = flag).
 - **Prompt caching:** cache system + voice guide + retrieved context + tool defs as ephemeral segments to cut cost/latency on multi-turn threads.
-- **Model swap:** `llm/` resolves the model ID from Remote Config; an integration test proves the same chat call succeeds on a second provider (QUAL-01).
+- **Model swap:** `llm/` resolves the model ID from the Firestore `appConfig/modelConfig` doc; an integration test proves the same chat call succeeds on a second provider (QUAL-01).
 
 ---
 

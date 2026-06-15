@@ -31,7 +31,7 @@ Planning artifacts (read these before non-trivial work):
 - **Frontend:** Next.js `16.2.6` (App Router) + React `19.2.4` + shadcn/ui (`radix-ui` + `@base-ui/react`) + Tailwind 4. **All shadcn components already vendored in `components/ui/`.**
 - **Backend:** Firebase only — Auth (+ custom claims), Firestore (Native), Cloud Storage, App Hosting. Region `asia-southeast1` (confirm with Derek before creating resources — immovable).
 - **Vector store:** Firestore native `findNearest` KNN (no Cloud Functions). Fallback behind the `rag/` adapter: Pinecone Serverless.
-- **AI:** Vercel AI SDK v5 (`ai` + `@ai-sdk/anthropic`) over Anthropic SDK. Default `claude-sonnet-4-6`; `claude-opus-4-7` for eval judge; model IDs in **Remote Config, never hard-coded**.
+- **AI:** Vercel AI SDK v5 (`ai` + `@ai-sdk/anthropic`) over Anthropic SDK. Default `claude-sonnet-4-6`; `claude-opus-4-7` for eval judge; model IDs in **Firestore (`appConfig/modelConfig`), never hard-coded** (resolved by `src/llm/provider.ts` `modelFor`; published by the admin model-config surface).
 - **Embeddings:** Gemini `gemini-embedding-001` (1024-d via `outputDimensionality`, normalized, multilingual) through `@ai-sdk/google` (Gemini **Developer API**, key `GOOGLE_GENERATIVE_AI_API_KEY` — NOT Vertex AI). Standardize 1024-d across all collections.
 - **Scheduled jobs:** **on-visit lazy-cron Server Action** — periodic work (stall-detect, escalate, eval-nightly, usage-rollup) runs when an authorized user loads the app, guarded by a Firestore last-run-per-window check. No QStash, no external scheduler. (Tradeoff: not wall-clock cron; fires on visit.)
 - **i18n:** `next-intl ^4`, `app/[lang]/` segment. **EN / BM / 中文 from day one.**
@@ -42,7 +42,7 @@ Planning artifacts (read these before non-trivial work):
 - **No GCP beyond the Firebase SDK surface.** No Cloud Run (direct), Vertex AI, BigQuery, Pub/Sub, Cloud Scheduler. (No external scheduler at all — periodic work is an on-visit lazy-cron Server Action. Gemini embeddings use the **Developer API**, not Vertex.)
 - **No WhatsApp Business API in v1.** Paste-and-draft only.
 - **No auto-send, ever.** Reply Assistant = copy-to-clipboard; the agent sends from their own phone.
-- **Model-agnostic.** Never hard-code a model ID; resolve from Remote Config.
+- **Model-agnostic.** Never hard-code a model ID; resolve from Firestore (`appConfig/modelConfig`).
 - **PDPA / data residency.** Pseudonymize PII at the Claude boundary; audit log on every client-related conversation; never log PII.
 - **Multilingual is not a late add-on.** It affects retrieval, routing, and UI copy.
 
