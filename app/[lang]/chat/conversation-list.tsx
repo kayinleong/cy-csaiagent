@@ -9,8 +9,12 @@
  * Data loading:
  *   - Conversations are loaded via the client Firestore SDK (read-only from the client,
  *     gated by Firestore rules: owner-only reads on conversations/{cid}).
- *   - On open, queries `conversations` where ownerUid == currentUser.uid, ordered by
- *     createdAt DESC, limit 50.
+ *   - On open, runs an EQUALITY-ONLY query: `conversations` where
+ *     ownerUid == currentUser.uid, limit 50 (no orderBy). The result is sorted
+ *     client-side by createdAt DESC via sortConversationsByCreatedAtDesc, with a
+ *     null/unresolved createdAt treated as the newest. This avoids depending on
+ *     the (ownerUid, createdAt) composite index and no longer drops a freshly-
+ *     created thread whose serverTimestamp() has not yet resolved (quick-010).
  *
  * Search:
  *   - Client-side substring filter over `summary` (Firestore has no native full-text).
@@ -21,8 +25,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
-import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore'
+import { collection, query, where, limit, getDocs } from 'firebase/firestore'
 import { clientAuth, clientDb } from '@/src/firebase/client'
+import { sortConversationsByCreatedAtDesc } from './conversation-sort'
 import {
   Sheet,
   SheetContent,
@@ -58,9 +63,10 @@ interface ConversationListProps {
 /**
  * Conversation history drawer with search.
  *
- * Uses the client Firestore SDK to query conversations belonging to the
- * authenticated user, ordered by createdAt DESC. The owner-only read rule
- * is enforced by Firestore rules (conversations/{cid}: isSelf(ownerUid)).
+ * Uses the client Firestore SDK with an equality-only query on `ownerUid`
+ * (limit 50, no orderBy), then sorts client-side by createdAt DESC with a
+ * null/unresolved createdAt treated as newest. The owner-only read rule is
+ * enforced by Firestore rules (conversations/{cid}: isSelf(ownerUid)).
  */
 export function ConversationList({
   open,
@@ -83,7 +89,6 @@ export function ConversationList({
       const q = query(
         collection(clientDb, 'conversations'),
         where('ownerUid', '==', currentUser.uid),
-        orderBy('createdAt', 'desc'),
         limit(50),
       )
       const snap = await getDocs(q)
@@ -96,9 +101,12 @@ export function ConversationList({
           createdAt: data.createdAt?.toDate?.() ?? null,
         }
       })
-      setThreads(items)
-    } catch {
-      // Load failure is non-fatal — the user can still chat in the current thread
+      setThreads(sortConversationsByCreatedAtDesc(items))
+    } catch (err) {
+      // Load failure is non-fatal — the user can still chat in the current thread.
+      // Log the error OBJECT only (Firestore error carries a code like
+      // permission-denied / failed-precondition) — never PII. quick-010.
+      console.error('[conversation-list] failed to load history', err)
     } finally {
       setIsLoading(false)
     }
