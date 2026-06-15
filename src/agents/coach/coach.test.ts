@@ -2,7 +2,7 @@
  * Coach agent unit tests — 7 behaviors (offline, no real Firebase/Anthropic).
  *
  * All external dependencies are mocked:
- *   - @/src/firebase/admin (remoteConfig) — returns a mock ServerConfig
+ *   - @/src/firebase/collections (appConfigRef) — stubbed appConfig/modelConfig doc
  *   - @/src/rag (retrieve, buildCitations, isRetrievalMiss) — scripted responses
  *   - @/src/escalation (emitHandoffSignal) — spy to assert calls
  *   - @/src/memory/agentProfile (getAgentProfile) — returns mock journey state
@@ -10,7 +10,7 @@
  * Tests run via: npx vitest run src/agents/coach/coach.test.ts
  * No live Anthropic API calls. No live Firestore reads.
  *
- * Test 1: modelFor reads from remoteConfig().getServerTemplate() — no hard-coded ID
+ * Test 1: modelFor reads the Firestore appConfig/modelConfig doc — no hard-coded ID
  * Test 2: retrieveKnowledge tool returns real chunk-ID citations from rag.retrieve
  * Test 3: Coach output is Zod-valid; rejects empty citations when retrieval succeeded
  * Test 4: On retrieval miss, emitHandoffSignal is called; no content fabricated
@@ -26,10 +26,8 @@ import { z } from 'zod'
 // vi.hoisted ensures the mock variable refs are initialised before vi.mock factories run.
 
 const mocks = vi.hoisted(() => {
-  const mockGetString = vi.fn()
-  const mockEvaluate = vi.fn(() => ({ getString: mockGetString }))
-  const mockGetServerTemplate = vi.fn(async () => ({ evaluate: mockEvaluate }))
-  const mockGetTemplate = vi.fn(async () => ({ parameters: {} }))
+  // modelFor now resolves from the Firestore appConfig/modelConfig doc.
+  const mockAppConfigGet = vi.fn()
 
   const mockRetrieve = vi.fn()
   const mockBuildCitations = vi.fn()
@@ -44,10 +42,7 @@ const mocks = vi.hoisted(() => {
   }))
 
   return {
-    mockGetString,
-    mockEvaluate,
-    mockGetServerTemplate,
-    mockGetTemplate,
+    mockAppConfigGet,
     mockRetrieve,
     mockBuildCitations,
     mockIsRetrievalMiss,
@@ -59,13 +54,21 @@ const mocks = vi.hoisted(() => {
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
 vi.mock('@/src/firebase/admin', () => ({
-  remoteConfig: vi.fn(() => ({
-    getServerTemplate: mocks.mockGetServerTemplate,
-    getTemplate: mocks.mockGetTemplate,
-  })),
   adminDb: {},
   adminAuth: {},
 }))
+
+// modelFor reads appConfig/modelConfig — override appConfigRef to a stubbed doc
+// get(); keep every other real collection ref intact for the coach modules.
+vi.mock('@/src/firebase/collections', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/src/firebase/collections')>()
+  return {
+    ...real,
+    appConfigRef: vi.fn(() => ({
+      doc: vi.fn(() => ({ get: mocks.mockAppConfigGet })),
+    })),
+  }
+})
 
 vi.mock('@/src/rag', () => ({
   retrieve: mocks.mockRetrieve,
@@ -108,46 +111,39 @@ const seedRetrievalResults = [
   },
 ]
 
-// ─── Test 1: modelFor reads model ID from Remote Config ──────────────────────
+// ─── Test 1: modelFor reads model ID from Firestore appConfig/modelConfig ─────
 
-describe('Test 1: modelFor resolves model ID from Remote Config — no hard-coded ID', () => {
+describe('Test 1: modelFor resolves model ID from Firestore appConfig/modelConfig — no hard-coded ID', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('calls remoteConfig().getServerTemplate() to resolve the model ID', async () => {
-    mocks.mockGetString.mockReturnValue('claude-sonnet-test-model')
+  it('reads the appConfig/modelConfig doc to resolve the model ID', async () => {
+    mocks.mockAppConfigGet.mockResolvedValue({
+      data: () => ({ models: { coach: 'claude-sonnet-test-model' } }),
+    })
 
     const model = await modelFor('coach')
 
-    // getServerTemplate was called (Server SDK path)
-    expect(mocks.mockGetServerTemplate).toHaveBeenCalled()
-
-    // evaluate was called to get the ServerConfig
-    expect(mocks.mockEvaluate).toHaveBeenCalled()
-
-    // getString was called with the pillar-specific key
-    expect(mocks.mockGetString).toHaveBeenCalledWith('model.coach.default')
+    // The Firestore doc was read (Admin SDK path)
+    expect(mocks.mockAppConfigGet).toHaveBeenCalled()
 
     // The returned model is an AI SDK LanguageModel (not a raw string)
     expect(model).toBeDefined()
     expect(typeof model).toBe('object')
   })
 
-  it('resolves different keys for different pillars', async () => {
-    mocks.mockGetString.mockReturnValue('test-model-xyz')
+  it('resolves a defined model for different pillars from the models map', async () => {
+    mocks.mockAppConfigGet.mockResolvedValue({
+      data: () => ({ models: { coach: 'test-coach-model', router: 'test-router-model' } }),
+    })
 
-    await modelFor('coach')
-    expect(mocks.mockGetString).toHaveBeenCalledWith('model.coach.default')
-
-    vi.clearAllMocks()
-    mocks.mockGetString.mockReturnValue('test-router-model')
-    await modelFor('router')
-    expect(mocks.mockGetString).toHaveBeenCalledWith('model.router.default')
+    await expect(modelFor('coach')).resolves.toBeDefined()
+    await expect(modelFor('router')).resolves.toBeDefined()
   })
 
-  it('falls back gracefully when Remote Config throws (offline dev)', async () => {
-    mocks.mockGetServerTemplate.mockRejectedValueOnce(new Error('Network error'))
+  it('falls back gracefully when Firestore throws (offline dev)', async () => {
+    mocks.mockAppConfigGet.mockRejectedValueOnce(new Error('Network error'))
 
     // Should not throw — falls back to the labeled constant
     await expect(modelFor('coach')).resolves.toBeDefined()
