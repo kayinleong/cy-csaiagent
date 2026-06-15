@@ -192,7 +192,11 @@ export function AuditLogViewer({ initialRows }: AuditLogViewerProps) {
                     {formatTs(row.ts)}
                   </TableCell>
                   <TableCell className="text-sm">{row.action}</TableCell>
-                  <TableCell className="font-mono text-sm">{row.actorUid}</TableCell>
+                  <TableCell className="text-sm" title={row.actorUid}>
+                    {row.actorEmail ?? (
+                      <span className="font-mono">{row.actorUid}</span>
+                    )}
+                  </TableCell>
                   <TableCell className="font-mono text-sm">{row.targetRef ?? '—'}</TableCell>
                 </TableRow>
               ))}

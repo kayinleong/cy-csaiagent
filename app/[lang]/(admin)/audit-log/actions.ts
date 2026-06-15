@@ -16,8 +16,10 @@
  *   - BOUNDED (D-13): orderBy('ts','desc').limit(50) — never fetch-all. Cursor
  *     pagination via startAfter(cursorTs). Optional action / actorUid / date-range
  *     filters use the 07-02 (action,ts)/(actorUid,ts) composite indexes.
- *   - METADATA-ONLY (D-12): returns { id, actorUid, action, targetRef, ts } only —
- *     the stored sha256 `hashes` map is one-way and is NEVER decoded or surfaced.
+ *   - METADATA-ONLY (D-12): returns { id, actorUid, actorEmail, action, targetRef,
+ *     ts } only — the stored sha256 `hashes` map is one-way and is NEVER decoded or
+ *     surfaced. actorEmail is the staff/actor's email resolved server-side from the
+ *     plaintext actorUid (Admin Auth); it is staff identity, not lead PII.
  *   - NO SELF-AUDIT (D-14): this action does NOT import or call auditDrilldown —
  *     viewing hashes-only metadata touches no PII, so auditing the audit-viewer
  *     would be useless recursion. The server-side gate is the control.
@@ -73,6 +75,15 @@ export interface AuditLogFilter {
 export interface AuditLogRow {
   id: string
   actorUid: string
+  /**
+   * Email of the staff/actor who performed the action, resolved from actorUid
+   * via the Admin SDK (server-side, admin-gated). `null` when the UID has no
+   * Auth record / email (deleted account) or the lookup fails — the viewer
+   * falls back to rendering actorUid. SAFE: actorUid is a staff/actor UID, never
+   * a lead/PII value, so resolving it to an email does not breach the D-12
+   * hashes-only PDPA guarantee (hashes are still never decoded).
+   */
+  actorEmail: string | null
   action: string
   targetRef: string | null
   /** Epoch milliseconds (serializable for RSC → client), or null if absent. */
@@ -128,7 +139,7 @@ export async function listAuditLogs(
   try {
     // Inline import — avoids the Admin SDK at module load time in test environments
     // (same idiom as conversations/actions.ts:184).
-    const { adminDb } = await import('@/src/firebase/admin')
+    const { adminDb, adminAuth } = await import('@/src/firebase/admin')
 
     // Bounded query: orderBy('ts','desc').limit(50) — never fetch-all (D-13).
     let q: FirebaseFirestore.Query<FirebaseFirestore.DocumentData> = adminDb
@@ -171,11 +182,36 @@ export async function listAuditLogs(
       return {
         id: doc.id,
         actorUid: data.actorUid ?? '',
+        actorEmail: null,
         action: data.action ?? '',
         targetRef: data.targetRef ?? null,
         ts: tsToMillis(data.ts),
       }
     })
+
+    // Resolve staff actor UIDs → emails for display (server-side, admin-gated,
+    // batched). SAFE: actorUid is a plaintext staff/actor UID — never a lead/PII
+    // value and never sourced from `hashes`/`targetRef` — so this does not breach
+    // the D-12 hashes-only guarantee. One getUsers call per page (≤50 rows, well
+    // under the 100-identifier Admin SDK cap); deleted/unknown UIDs are simply
+    // omitted (notFound) and fall back to rendering the UID. Wrapped in its own
+    // try/catch so an Auth hiccup degrades to actorEmail:null rather than failing
+    // the whole listing.
+    try {
+      const uids = [...new Set(rows.map((r) => r.actorUid).filter(Boolean))]
+      if (uids.length > 0) {
+        const { users } = await adminAuth.getUsers(uids.map((uid) => ({ uid })))
+        const emailByUid = new Map<string, string>()
+        for (const u of users) {
+          if (u.email) emailByUid.set(u.uid, u.email)
+        }
+        for (const r of rows) {
+          r.actorEmail = emailByUid.get(r.actorUid) ?? null
+        }
+      }
+    } catch {
+      // Non-fatal — leave actorEmail as null so the actorUid still renders.
+    }
 
     return { ok: true, rows }
   } catch (err) {

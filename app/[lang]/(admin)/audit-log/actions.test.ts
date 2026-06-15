@@ -58,8 +58,15 @@ const mockLimit = vi.fn(() => ({ get: mockGet, startAfter: vi.fn().mockReturnThi
 const mockOrderBy = vi.fn(() => ({ limit: mockLimit, where: vi.fn().mockReturnThis() }))
 const mockCollection = vi.fn(() => ({ orderBy: mockOrderBy, where: vi.fn().mockReturnThis() }))
 
+// adminAuth.getUsers resolves staff actorUid → email for display.
+const mockGetUsers = vi.fn().mockResolvedValue({
+  users: [{ uid: 'admin-uid', email: 'admin@d2.app' }],
+  notFound: [],
+})
+
 vi.mock('@/src/firebase/admin', () => ({
   adminDb: { collection: mockCollection },
+  adminAuth: { getUsers: mockGetUsers },
 }))
 
 vi.mock('next/headers', () => ({
@@ -69,7 +76,7 @@ vi.mock('next/headers', () => ({
 }))
 
 // This import FAILS until 07-05 creates the action module (Wave-0 red-bar intent):
-import { listAuditLogs } from './actions'
+import { listAuditLogs, type AuditLogRow } from './actions'
 
 describe('AUDIT-01 listAuditLogs — admin-gate + bounded + no-self-audit + metadata-only', () => {
   beforeEach(() => {
@@ -132,5 +139,33 @@ describe('AUDIT-01 listAuditLogs — admin-gate + bounded + no-self-audit + meta
     expect(row).toHaveProperty('ts')
     // sha256 hashes are one-way — never surfaced/decoded by the viewer.
     expect(row).not.toHaveProperty('hashes')
+  })
+
+  it('resolves staff actorUid → actorEmail via a single batched adminAuth.getUsers call', async () => {
+    const { requireUser } = await import('@/src/firebase/auth')
+    vi.mocked(requireUser).mockResolvedValueOnce({
+      uid: 'admin-uid', role: 'admin', tenantId: 'd2',
+    } as AuthenticatedUser)
+
+    const result = (await listAuditLogs({})) as { ok: true; rows: AuditLogRow[] }
+    expect(result.ok).toBe(true)
+    // Batched: one getUsers call over the de-duped UID set (never per-row N+1).
+    expect(mockGetUsers).toHaveBeenCalledTimes(1)
+    expect(mockGetUsers).toHaveBeenCalledWith([{ uid: 'admin-uid' }])
+    expect(result.rows[0].actorEmail).toBe('admin@d2.app')
+  })
+
+  it('degrades to actorEmail:null (UID still rendered) when the Auth lookup fails', async () => {
+    const { requireUser } = await import('@/src/firebase/auth')
+    vi.mocked(requireUser).mockResolvedValueOnce({
+      uid: 'admin-uid', role: 'admin', tenantId: 'd2',
+    } as AuthenticatedUser)
+    mockGetUsers.mockRejectedValueOnce(new Error('auth unavailable'))
+
+    const result = (await listAuditLogs({})) as { ok: true; rows: AuditLogRow[] }
+    // Listing still succeeds — the email lookup is non-fatal.
+    expect(result.ok).toBe(true)
+    expect(result.rows[0].actorUid).toBe('admin-uid')
+    expect(result.rows[0].actorEmail).toBeNull()
   })
 })
