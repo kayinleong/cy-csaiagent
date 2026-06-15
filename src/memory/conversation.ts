@@ -53,8 +53,14 @@ export async function appendMessage(cid: string, msg: MessageDoc): Promise<strin
  *
  * The thread has a deterministic cid = `coach-${uid}` (D-01 — ONE persistent
  * primary Coach thread per agent). Uses get-then-set(merge:true) to be
- * idempotent: if the doc already exists, it is NOT overwritten — preserving the
- * existing `summary` field (rolling summary updated by memory module).
+ * idempotent: if the doc already exists WITH a createdAt, it is NOT overwritten —
+ * preserving the existing `summary` field (rolling summary updated by memory module).
+ *
+ * Defensive backfill (quick-010, H1 subcase 2): if the doc exists but is missing
+ * `createdAt`, only `createdAt`/`ownerUid`/`tenantId` are merged in to repair it.
+ * `summary` (and `pillar`/`lang`) are NOT written, so the rolling summary is
+ * preserved (D-01 contract). A doc with no `createdAt` is otherwise permanently
+ * invisible to a createdAt-ordered history listing.
  *
  * @param uid   The authenticated agent's UID.
  * @param lang  The language for this thread (from request or user profile).
@@ -78,6 +84,18 @@ export async function ensurePrimaryThread(
         createdAt: FieldValue.serverTimestamp(),
         summary: '',
         // tenantId stamped by converter — never omitted
+        tenantId: 'd2' as const,
+      },
+      { merge: true },
+    )
+  } else if (snap.data()?.createdAt == null) {
+    // Doc exists but lacks createdAt (H1 subcase 2) — repair only the
+    // visibility/ownership/tenant fields. Do NOT write summary (preserve the
+    // rolling summary, D-01) or pillar/lang.
+    await docRef.set(
+      {
+        createdAt: FieldValue.serverTimestamp(),
+        ownerUid: uid,
         tenantId: 'd2' as const,
       },
       { merge: true },
