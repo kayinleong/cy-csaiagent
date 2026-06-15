@@ -8,13 +8,17 @@
  *
  * Data loading:
  *   - Conversations are loaded via the client Firestore SDK (read-only from the client,
- *     gated by Firestore rules: owner-only reads on conversations/{cid}).
+ *     gated by Firestore rules: owner-only + same-tenant reads on conversations/{cid}).
  *   - On open, runs an EQUALITY-ONLY query: `conversations` where
- *     ownerUid == currentUser.uid, limit 50 (no orderBy). The result is sorted
- *     client-side by createdAt DESC via sortConversationsByCreatedAtDesc, with a
- *     null/unresolved createdAt treated as the newest. This avoids depending on
- *     the (ownerUid, createdAt) composite index and no longer drops a freshly-
- *     created thread whose serverTimestamp() has not yet resolved (quick-010).
+ *     ownerUid == currentUser.uid AND tenantId == 'd2', limit 50 (no orderBy).
+ *     Both equality filters are mandatory: the `list` rule requires `sameTenant()`,
+ *     and Firestore rules are not filters — a query must constrain every
+ *     resource.data field the rule references or the whole query is denied
+ *     (quick-016). The result is sorted client-side by createdAt DESC via
+ *     sortConversationsByCreatedAtDesc, with a null/unresolved createdAt treated
+ *     as the newest. This avoids depending on the (ownerUid, createdAt) composite
+ *     index and no longer drops a freshly-created thread whose serverTimestamp()
+ *     has not yet resolved (quick-010).
  *
  * Search:
  *   - Client-side substring filter over `summary` (Firestore has no native full-text).
@@ -63,10 +67,11 @@ interface ConversationListProps {
 /**
  * Conversation history drawer with search.
  *
- * Uses the client Firestore SDK with an equality-only query on `ownerUid`
- * (limit 50, no orderBy), then sorts client-side by createdAt DESC with a
- * null/unresolved createdAt treated as newest. The owner-only read rule is
- * enforced by Firestore rules (conversations/{cid}: isSelf(ownerUid)).
+ * Uses the client Firestore SDK with an equality-only query on `ownerUid` AND
+ * `tenantId` (limit 50, no orderBy), then sorts client-side by createdAt DESC
+ * with a null/unresolved createdAt treated as newest. The owner-only + same-tenant
+ * read rule is enforced by Firestore rules (conversations/{cid}); the tenantId
+ * filter is what makes that `list` rule satisfiable (quick-016).
  */
 export function ConversationList({
   open,
@@ -89,6 +94,15 @@ export function ConversationList({
       const q = query(
         collection(clientDb, 'conversations'),
         where('ownerUid', '==', currentUser.uid),
+        // tenantId is REQUIRED here, not optional: the conversations `list` rule
+        // grants reads only when `sameTenant()` holds (resource.data.tenantId ==
+        // request.auth.token.tenantId). Firestore rules are not filters — a query
+        // must CONSTRAIN every resource.data field the rule references, or the
+        // whole query is denied (permission-denied). Without this clause the
+        // drawer always fails to load. 'd2' is the single tenant (TENANT_ID is
+        // server-only in collections.ts, so the literal is inlined here). Two
+        // equality filters need no composite index. quick-016.
+        where('tenantId', '==', 'd2'),
         limit(50),
       )
       const snap = await getDocs(q)

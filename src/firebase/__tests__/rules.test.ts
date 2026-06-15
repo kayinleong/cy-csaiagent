@@ -29,7 +29,7 @@ import {
   assertFails,
   assertSucceeds,
 } from '@firebase/rules-unit-testing'
-import { doc, getDoc, setDoc, deleteDoc, updateDoc, collection, addDoc } from 'firebase/firestore'
+import { doc, getDoc, setDoc, deleteDoc, updateDoc, collection, query, where, limit, getDocs } from 'firebase/firestore'
 import {
   getTestEnv,
   newAgentCtx,
@@ -271,6 +271,35 @@ rulesSuite('conversations collection', () => {
     const ctx = await adminRoleCtx()
     const db = ctx.firestore()
     await assertSucceeds(getDoc(doc(db, 'conversations', ownConvId)))
+  })
+
+  // ── list / query rule (the history-drawer read path, quick-016) ──────────────
+  // Firestore rules are NOT filters: a `list` query is denied wholesale unless it
+  // CONSTRAINS every resource.data field the rule references. The conversations
+  // read rule requires `sameTenant()`, so a query missing the tenantId equality
+  // filter is rejected — the exact bug that made the history drawer always empty.
+
+  it('new-agent list query WITHOUT a tenantId filter is DENIED (sameTenant not satisfiable)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    const q = query(
+      collection(db, 'conversations'),
+      where('ownerUid', '==', syntheticNewAgent.uid),
+      limit(50),
+    )
+    await assertFails(getDocs(q))
+  })
+
+  it('new-agent list query WITH ownerUid + tenantId filters SUCCEEDS (matches the drawer query)', async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    const q = query(
+      collection(db, 'conversations'),
+      where('ownerUid', '==', syntheticNewAgent.uid),
+      where('tenantId', '==', D2_TENANT),
+      limit(50),
+    )
+    await assertSucceeds(getDocs(q))
   })
 })
 
