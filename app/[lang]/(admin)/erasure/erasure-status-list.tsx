@@ -26,6 +26,7 @@ import { useTranslations } from 'next-intl'
 import { CheckCircle2 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Paginator, usePagination } from '../../_components/paginator'
 import type { ErasureRequestRow } from './actions'
 
 interface ErasureStatusListProps {
@@ -35,16 +36,20 @@ interface ErasureStatusListProps {
 export function ErasureStatusList({ initialRequests }: ErasureStatusListProps) {
   const t = useTranslations('adminErasure')
   const [requests] = useState<ErasureRequestRow[]>(initialRequests)
+  const { page, setPage, pageItems, pageCount } = usePagination(requests)
 
   if (requests.length === 0) {
     return <p className="text-sm text-muted-foreground">{t('idle')}</p>
   }
 
   return (
-    <div className="space-y-3">
-      {requests.map((req) => (
-        <ErasureRequestCard key={req.id} req={req} t={t} />
-      ))}
+    <div>
+      <div className="space-y-3">
+        {pageItems.map((req) => (
+          <ErasureRequestCard key={req.id} req={req} t={t} />
+        ))}
+      </div>
+      <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
     </div>
   )
 }

@@ -31,6 +31,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Paginator, usePagination } from '../../_components/paginator'
 import {
   resolveStall,
   getAgentChatHistory,
@@ -52,6 +53,7 @@ interface StallInboxProps {
 export function StallInbox({ stalls: initialStalls }: StallInboxProps) {
   const t = useTranslations('dashboard')
   const [stalls, setStalls] = useState<StallItem[]>(initialStalls)
+  const { page, setPage, pageItems, pageCount } = usePagination(stalls)
   const [isPending, startTransition] = useTransition()
 
   // Chat-history drill-down state
@@ -97,7 +99,7 @@ export function StallInbox({ stalls: initialStalls }: StallInboxProps) {
   return (
     <>
       <div className="space-y-3">
-        {stalls.map((stall) => (
+        {pageItems.map((stall) => (
           <Card key={stall.id}>
             <CardContent className="flex items-start justify-between gap-4 py-4">
               <div className="space-y-1.5">
@@ -133,6 +135,8 @@ export function StallInbox({ stalls: initialStalls }: StallInboxProps) {
           </Card>
         ))}
       </div>
+
+      <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
 
       <Dialog
         open={historyFor !== null}

@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Paginator, usePagination } from '../../_components/paginator'
 import type { UserWithRole } from '../roles/actions'
 import type { Role } from '@/src/firebase/auth'
 
@@ -51,6 +52,8 @@ function roleLabelKey(role: Role): string {
 export function UserList({ users }: UserListProps) {
   const t = useTranslations('adminUsers')
 
+  const { page, setPage, pageItems, pageCount } = usePagination(users)
+
   if (users.length === 0) {
     return <p className="text-sm text-muted-foreground">{t('emptyList')}</p>
   }
@@ -59,38 +62,41 @@ export function UserList({ users }: UserListProps) {
   const emailByUid = new Map(users.map((u) => [u.id, u.email]))
 
   return (
-    <div className="rounded-md border">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>{t('colEmail')}</TableHead>
-            <TableHead>{t('colRole')}</TableHead>
-            <TableHead>{t('colCoach')}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {users.map((u) => {
-            const coachEmail = u.seniorCoachId ? (emailByUid.get(u.seniorCoachId) ?? null) : null
-            return (
-              <TableRow key={u.id}>
-                <TableCell className={u.email ? 'text-sm' : 'font-mono text-xs'}>
-                  {u.email ?? `${u.displayRef}…`}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={roleBadgeVariant(u.role)}>
-                    {t(roleLabelKey(u.role) as Parameters<typeof t>[0])}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {u.seniorCoachId
-                    ? (coachEmail ?? `${u.seniorCoachId.slice(0, 8)}…`)
-                    : '—'}
-                </TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
+    <div>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t('colEmail')}</TableHead>
+              <TableHead>{t('colRole')}</TableHead>
+              <TableHead>{t('colCoach')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {pageItems.map((u) => {
+              const coachEmail = u.seniorCoachId ? (emailByUid.get(u.seniorCoachId) ?? null) : null
+              return (
+                <TableRow key={u.id}>
+                  <TableCell className={u.email ? 'text-sm' : 'font-mono text-xs'}>
+                    {u.email ?? `${u.displayRef}…`}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={roleBadgeVariant(u.role)}>
+                      {t(roleLabelKey(u.role) as Parameters<typeof t>[0])}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {u.seniorCoachId
+                      ? (coachEmail ?? `${u.seniorCoachId.slice(0, 8)}…`)
+                      : '—'}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </div>
+      <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
     </div>
   )
 }

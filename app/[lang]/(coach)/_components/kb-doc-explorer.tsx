@@ -31,6 +31,7 @@ import {
   type KbDocSummary,
 } from '../dashboard/actions'
 import { InlineCorrectionDialog, type CorrectionTarget } from './inline-correction-dialog'
+import { Paginator, usePagination } from '../../_components/paginator'
 
 interface KbDocExplorerProps {
   /** Firebase ID token for the correction dialog's ingest poll. */
@@ -82,13 +83,15 @@ export function KbDocExplorer({ idToken }: KbDocExplorerProps) {
     d.title.toLowerCase().includes(search.trim().toLowerCase()),
   )
 
+  const { page, setPage, pageItems, pageCount } = usePagination(filtered)
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{t('kbExplorerDescription')}</p>
 
       <Input
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        onChange={(e) => { setSearch(e.target.value); setPage(1) }}
         placeholder={t('kbExplorerSearch')}
         className="max-w-sm"
       />
@@ -124,7 +127,7 @@ export function KbDocExplorer({ idToken }: KbDocExplorerProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((doc) => (
+              {pageItems.map((doc) => (
                 <TableRow key={doc.id}>
                   <TableCell className="font-medium">{doc.title}</TableCell>
                   <TableCell className="uppercase text-xs text-muted-foreground">
@@ -152,6 +155,7 @@ export function KbDocExplorer({ idToken }: KbDocExplorerProps) {
               ))}
             </TableBody>
           </Table>
+          <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
         </div>
       )}
 

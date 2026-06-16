@@ -19,6 +19,7 @@
 import { useTranslations } from 'next-intl'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { Paginator, usePagination } from '../../_components/paginator'
 
 export interface GapItem {
   id: string
@@ -34,6 +35,7 @@ interface KnowledgeGapFeedProps {
 
 export function KnowledgeGapFeed({ gaps }: KnowledgeGapFeedProps) {
   const t = useTranslations('dashboard')
+  const { page, setPage, pageItems, pageCount } = usePagination(gaps)
 
   if (gaps.length === 0) {
     return (
@@ -42,8 +44,9 @@ export function KnowledgeGapFeed({ gaps }: KnowledgeGapFeedProps) {
   }
 
   return (
-    <div className="space-y-2">
-      {gaps.map((gap) => (
+    <div>
+      <div className="space-y-2">
+      {pageItems.map((gap) => (
         <Card key={gap.id}>
           <CardContent className="flex items-center justify-between gap-4 py-3">
             <div className="min-w-0 flex-1">
@@ -61,6 +64,8 @@ export function KnowledgeGapFeed({ gaps }: KnowledgeGapFeedProps) {
           </CardContent>
         </Card>
       ))}
+      </div>
+      <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
     </div>
   )
 }

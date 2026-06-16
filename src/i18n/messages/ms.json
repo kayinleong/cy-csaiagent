@@ -234,6 +234,11 @@
     "pdpaSettings": "Tetapan PDPA",
     "daysToFirstClose": "Hari ke penutupan pertama"
   },
+  "pagination": {
+    "previous": "Sebelumnya",
+    "next": "Seterusnya",
+    "pageOf": "Halaman {page} daripada {total}"
+  },
   "home": {
     "title": "Laman Utama",
     "subtitleAdmin": "Gambaran keseluruhan organisasi",

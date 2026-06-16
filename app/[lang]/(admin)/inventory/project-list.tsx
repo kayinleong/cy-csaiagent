@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button'
 import { ProjectForm } from './project-form'
 import { CollateralForm } from './collateral-form'
 import { hideProjectAction, unhideProjectAction } from './actions'
+import { Paginator, usePagination } from '../../_components/paginator'
 import type { ProjectWithId } from '@/src/inventory/list'
 
 // ─── Status badge helper ──────────────────────────────────────────────────────
@@ -54,6 +55,7 @@ export function ProjectList({ projects, lang: _lang }: ProjectListProps) {
   const [collateralProjectId, setCollateralProjectId] = useState<string | null>(null)
   const [hidingId, setHidingId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const { page, setPage, pageItems, pageCount } = usePagination(projects)
 
   function handleHideToggle(projectId: string, currentStatus: string) {
     setHidingId(projectId)
@@ -92,7 +94,7 @@ export function ProjectList({ projects, lang: _lang }: ProjectListProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {projects.map(({ id, data }) => (
+          {pageItems.map(({ id, data }) => (
             <TableRow key={id}>
               <TableCell className="max-w-[200px] truncate font-medium">{data.name}</TableCell>
 
@@ -156,6 +158,8 @@ export function ProjectList({ projects, lang: _lang }: ProjectListProps) {
           ))}
         </TableBody>
       </Table>
+
+      <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
 
       {/* Inline edit form */}
       {editingId && (

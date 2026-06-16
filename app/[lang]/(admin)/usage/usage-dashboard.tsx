@@ -65,6 +65,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Paginator, usePagination } from '../../_components/paginator'
 
 // ─── Serializable prop types (from RSC page) ──────────────────────────────────
 
@@ -162,6 +163,7 @@ export function UsageDashboard({
 }: UsageDashboardProps) {
   const t = useTranslations('adminUsage')
   const router = useRouter()
+  const { page, setPage, pageItems, pageCount } = usePagination(perAgentRows)
 
   const hasData = totalMsgCount > 0
   // RO-01: the per-agent breakdown surfaces agent UIDs — hidden from read-only.
@@ -398,7 +400,7 @@ export function UsageDashboard({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {perAgentRows.map((row) => (
+                      {pageItems.map((row) => (
                         <TableRow key={row.uid}>
                           <TableCell className="font-mono text-xs">{row.shortUid}</TableCell>
                           <TableCell className="text-right">{kNum(row.inputTokens)}</TableCell>
@@ -409,6 +411,7 @@ export function UsageDashboard({
                       ))}
                     </TableBody>
                   </Table>
+                  <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
                 </div>
               )}
             </CardContent>

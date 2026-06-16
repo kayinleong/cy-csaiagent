@@ -26,6 +26,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { Paginator, usePagination } from '../../_components/paginator'
 
 export interface AgentRow {
   id: string
@@ -45,6 +46,7 @@ interface DownlineTableProps {
 
 export function DownlineTable({ agents }: DownlineTableProps) {
   const t = useTranslations('dashboard')
+  const { page, setPage, pageItems, pageCount } = usePagination(agents)
 
   if (agents.length === 0) {
     return (
@@ -53,7 +55,8 @@ export function DownlineTable({ agents }: DownlineTableProps) {
   }
 
   return (
-    <div className="rounded-md border">
+    <div>
+      <div className="rounded-md border">
       <Table>
         <TableHeader>
           <TableRow>
@@ -66,7 +69,7 @@ export function DownlineTable({ agents }: DownlineTableProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {agents.map((agent) => (
+          {pageItems.map((agent) => (
             <TableRow key={agent.id}>
               {/* Email when resolvable; truncated UID is the fallback. */}
               <TableCell className={agent.email ? 'text-sm' : 'font-mono text-xs'}>
@@ -91,6 +94,8 @@ export function DownlineTable({ agents }: DownlineTableProps) {
           ))}
         </TableBody>
       </Table>
+      </div>
+      <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
     </div>
   )
 }

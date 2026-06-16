@@ -57,6 +57,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { createCohort, updateCohort, deleteCohort, type CohortSummary } from './actions'
+import { Paginator, usePagination } from '../../_components/paginator'
 
 interface CohortManagementProps {
   initialCohorts: CohortSummary[]
@@ -67,6 +68,7 @@ export function CohortManagement({ initialCohorts, lang: _lang }: CohortManageme
   const t = useTranslations('adminCohorts')
 
   const [cohorts, setCohorts] = useState<CohortSummary[]>(initialCohorts)
+  const { page, setPage, pageItems, pageCount } = usePagination(cohorts)
   const [isPending, startTransition] = useTransition()
 
   // Create/edit dialog state
@@ -158,7 +160,8 @@ export function CohortManagement({ initialCohorts, lang: _lang }: CohortManageme
           </EmptyHeader>
         </Empty>
       ) : (
-        <div className="rounded-md border">
+        <div>
+          <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -168,7 +171,7 @@ export function CohortManagement({ initialCohorts, lang: _lang }: CohortManageme
               </TableRow>
             </TableHeader>
             <TableBody>
-              {cohorts.map((cohort) => (
+              {pageItems.map((cohort) => (
                 <TableRow key={cohort.id}>
                   <TableCell className="text-sm font-medium">{cohort.name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
@@ -200,6 +203,8 @@ export function CohortManagement({ initialCohorts, lang: _lang }: CohortManageme
               ))}
             </TableBody>
           </Table>
+          </div>
+          <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
         </div>
       )}
 

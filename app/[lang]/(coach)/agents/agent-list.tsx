@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Paginator, usePagination } from '../../_components/paginator'
 
 export interface AgentIndexRow {
   id: string
@@ -43,13 +44,15 @@ interface AgentListProps {
 
 export function AgentList({ agents, lang }: AgentListProps) {
   const t = useTranslations('agentsIndex')
+  const { page, setPage, pageItems, pageCount } = usePagination(agents)
 
   if (agents.length === 0) {
     return <p className="text-sm text-muted-foreground">{t('noAgents')}</p>
   }
 
   return (
-    <div className="rounded-md border">
+    <div>
+      <div className="rounded-md border">
       <Table>
         <TableHeader>
           <TableRow>
@@ -59,7 +62,7 @@ export function AgentList({ agents, lang }: AgentListProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {agents.map((agent) => (
+          {pageItems.map((agent) => (
             <TableRow key={agent.id} className="hover:bg-muted/50">
               <TableCell>
                 {/* Deep-link to the read-only [uid] profile drill-in (NAV-01). */}
@@ -78,6 +81,8 @@ export function AgentList({ agents, lang }: AgentListProps) {
           ))}
         </TableBody>
       </Table>
+      </div>
+      <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
     </div>
   )
 }

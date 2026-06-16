@@ -52,6 +52,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { getConversationForReview, searchConversations, flagConversation } from './actions'
+import { Paginator, usePagination } from '../../_components/paginator'
 import type { ConversationMessage, ConversationRef } from './actions'
 
 interface ConversationViewerProps {
@@ -105,6 +106,8 @@ export function ConversationViewer({ lang: _lang }: ConversationViewerProps) {
   const [isLoadPending, startLoadTransition] = useTransition()
   const [isFlagPending, startFlagTransition] = useTransition()
 
+  const { page, setPage, pageItems, pageCount } = usePagination(conversations ?? [])
+
   function submitFlag() {
     if (!selectedCid || flagReason.trim().length === 0) return
     startFlagTransition(async () => {
@@ -126,6 +129,7 @@ export function ConversationViewer({ lang: _lang }: ConversationViewerProps) {
       if (result.ok) {
         setConversations(result.conversations)
         setSearched(true)
+        setPage(1)
       } else {
         toast.error(result.error ?? t('error'))
       }
@@ -182,6 +186,7 @@ export function ConversationViewer({ lang: _lang }: ConversationViewerProps) {
       )}
 
       {searched && conversations !== null && conversations.length > 0 && (
+        <div>
         <Table>
           <TableHeader>
             <TableRow>
@@ -194,7 +199,7 @@ export function ConversationViewer({ lang: _lang }: ConversationViewerProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {conversations.map((conv) => (
+            {pageItems.map((conv) => (
               <TableRow key={conv.cid}>
                 <TableCell className="font-mono text-xs">{conv.cid.slice(0, 12)}…</TableCell>
                 <TableCell>
@@ -225,6 +230,8 @@ export function ConversationViewer({ lang: _lang }: ConversationViewerProps) {
             ))}
           </TableBody>
         </Table>
+        <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
+        </div>
       )}
 
       {/* Thread viewer dialog — READ-ONLY (HR-5) */}

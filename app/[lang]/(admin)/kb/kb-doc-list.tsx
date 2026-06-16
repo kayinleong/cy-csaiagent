@@ -42,6 +42,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PublishToggle } from './publish-toggle'
 import { deleteKbDocAction } from './actions'
+import { Paginator, usePagination } from '../../_components/paginator'
 import type { KbDocWithId } from '@/src/kb/crud'
 
 // ─── Status badge helper ──────────────────────────────────────────────────────
@@ -104,6 +105,8 @@ export function KbDocList({ docs, lang }: KbDocListProps) {
     (d) => d.data.status === 'superseded',
   ).length
 
+  const { page, setPage, pageItems, pageCount } = usePagination(visibleDocs)
+
   function handleDelete(docId: string, title: string) {
     if (!window.confirm(`Delete "${title}"? This will also remove all its chunks.`)) return
 
@@ -130,7 +133,7 @@ export function KbDocList({ docs, lang }: KbDocListProps) {
   const pillarTabs = (
     <Tabs
       value={pillarFilter}
-      onValueChange={(v) => setPillarFilter(v as PillarFilter)}
+      onValueChange={(v) => { setPillarFilter(v as PillarFilter); setPage(1) }}
     >
       <TabsList>
         <TabsTrigger value="all">{t('pillarFilter.all')}</TabsTrigger>
@@ -160,7 +163,7 @@ export function KbDocList({ docs, lang }: KbDocListProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setShowSuperseded((v) => !v)}
+            onClick={() => { setShowSuperseded((v) => !v); setPage(1) }}
             className="text-xs text-muted-foreground"
           >
             {showSuperseded
@@ -183,7 +186,7 @@ export function KbDocList({ docs, lang }: KbDocListProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {visibleDocs.map(({ id, data }) => (
+          {pageItems.map(({ id, data }) => (
             <TableRow key={id}>
               {/* Title → link to detail page */}
               <TableCell className="max-w-[240px] truncate font-medium">
@@ -228,6 +231,8 @@ export function KbDocList({ docs, lang }: KbDocListProps) {
           ))}
         </TableBody>
       </Table>
+
+      <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
     </div>
   )
 }

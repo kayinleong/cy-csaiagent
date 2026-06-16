@@ -232,6 +232,11 @@
     "pdpaSettings": "PDPA settings",
     "daysToFirstClose": "Days to first close"
   },
+  "pagination": {
+    "previous": "Previous",
+    "next": "Next",
+    "pageOf": "Page {page} of {total}"
+  },
   "home": {
     "title": "Home",
     "subtitleAdmin": "Org overview",

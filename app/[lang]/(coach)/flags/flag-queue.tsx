@@ -55,6 +55,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { listFlags, reviewFlag, dismissFlag } from './actions'
+import { Paginator, usePagination } from '../../_components/paginator'
 import type { FlagRow, FlagStatus } from './actions'
 
 interface FlagQueueProps {
@@ -92,6 +93,7 @@ export function FlagQueue({ initialFlags, lang, isAdmin: _isAdmin }: FlagQueuePr
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [confirmDismissId, setConfirmDismissId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const { page, setPage, pageItems, pageCount } = usePagination(flags)
 
   /** Re-read the queue after a mutation so the row reflects the new status. */
   function refresh() {
@@ -169,7 +171,7 @@ export function FlagQueue({ initialFlags, lang, isAdmin: _isAdmin }: FlagQueuePr
           </TableRow>
         </TableHeader>
         <TableBody>
-          {flags.map((flag) => (
+          {pageItems.map((flag) => (
             <TableRow key={flag.id}>
               <TableCell className="font-mono text-xs">
                 {/* Deep-link to the EXISTING audited viewer — content lives there, not here (D-10). */}
@@ -220,6 +222,8 @@ export function FlagQueue({ initialFlags, lang, isAdmin: _isAdmin }: FlagQueuePr
           ))}
         </TableBody>
       </Table>
+
+      <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
 
       {/* Dismiss confirm — neutral-primary (flags are reversible, NOT destructive). */}
       <AlertDialog
