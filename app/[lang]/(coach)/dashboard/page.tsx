@@ -22,6 +22,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
+import { adminAuth } from '@/src/firebase/admin'
 import {
   getDownline,
   getOpenStalls,
@@ -112,9 +113,28 @@ export default async function CoachDashboardPage({ params }: PageProps) {
   // ── Metric derivation ───────────────────────────────────────────────────────
   const now = new Date()
 
+  // Resolve each agent's email for display (email lives only in Firebase Auth;
+  // the agentProfiles/users docs carry none). Chunked at 100 (getUsers cap),
+  // fail-soft → fallback to the truncated UID. PII: resolved here, never logged.
+  // Mirrors the /agents index (quick-024) + roles/actions.ts.
+  const agentUids = downlineAgents.map((a) => a.id)
+  const emailByUid = new Map<string, string | null>()
+  try {
+    for (let i = 0; i < agentUids.length; i += 100) {
+      const chunk = agentUids.slice(i, i + 100)
+      const { users: records } = await adminAuth.getUsers(chunk.map((uid) => ({ uid })))
+      for (const rec of records) {
+        emailByUid.set(rec.uid, rec.email ?? null)
+      }
+    }
+  } catch {
+    // Leave the map empty — every row falls back to its truncated UID.
+  }
+
   // Build serializable agent summary rows for the downline table
   const agentRows = downlineAgents.map((agent) => ({
     id: agent.id,
+    email: emailByUid.get(agent.id) ?? null,
     journeyStage: agent.data.journeyStage,
     currentCheckpoint: agent.data.currentCheckpoint,
     seniorCoachId: agent.data.seniorCoachId,

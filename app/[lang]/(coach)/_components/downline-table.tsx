@@ -29,6 +29,8 @@ import { Badge } from '@/components/ui/badge'
 
 export interface AgentRow {
   id: string
+  /** Resolved Firebase Auth email; null falls back to a truncated UID. */
+  email: string | null
   journeyStage: string
   currentCheckpoint: string
   seniorCoachId: string
@@ -66,9 +68,9 @@ export function DownlineTable({ agents }: DownlineTableProps) {
         <TableBody>
           {agents.map((agent) => (
             <TableRow key={agent.id}>
-              {/* Agent UID truncated — no raw name (PDPA) */}
-              <TableCell className="font-mono text-xs">
-                {agent.id.slice(0, 8)}…
+              {/* Email when resolvable; truncated UID is the fallback. */}
+              <TableCell className={agent.email ? 'text-sm' : 'font-mono text-xs'}>
+                {agent.email ?? `${agent.id.slice(0, 8)}…`}
               </TableCell>
               <TableCell>
                 <Badge variant={stageBadgeVariant(agent.journeyStage)}>
