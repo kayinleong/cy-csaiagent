@@ -207,6 +207,8 @@
     "settings": "设置",
     "console": "控制台",
     "signedInAs": "登录身份：{role}",
+    "signOut": "退出登录",
+    "language": "语言",
     "conversations": "对话记录",
     "roles": "权限角色",
     "users": "添加用户",

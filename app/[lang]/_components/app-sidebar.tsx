@@ -37,6 +37,8 @@ import {
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
 import { buildSections, visibleSectionsForRole, type Section } from './app-sidebar-nav'
+import { LanguageSwitcher } from './language-switcher'
+import { SignOutButton } from './sign-out-button'
 
 interface AppSidebarProps {
   role: Role
@@ -103,6 +105,10 @@ export function AppSidebar({ role, lang }: AppSidebarProps) {
         ))}
       </SidebarContent>
       <SidebarFooter>
+        <SidebarMenu>
+          <LanguageSwitcher lang={lang} />
+          <SignOutButton />
+        </SidebarMenu>
         <div className="px-2 py-1.5 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
           {t('signedInAs', { role })}
         </div>

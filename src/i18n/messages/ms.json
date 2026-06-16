@@ -207,6 +207,8 @@
     "settings": "Tetapan",
     "console": "Konsol",
     "signedInAs": "Log masuk sebagai {role}",
+    "signOut": "Log keluar",
+    "language": "Bahasa",
     "conversations": "Perbualan",
     "roles": "Peranan",
     "users": "Tambah pengguna",

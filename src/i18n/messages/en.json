@@ -205,6 +205,8 @@
     "settings": "Settings",
     "console": "Console",
     "signedInAs": "Signed in as {role}",
+    "signOut": "Sign out",
+    "language": "Language",
     "conversations": "Conversations",
     "roles": "Roles",
     "users": "Add user",
