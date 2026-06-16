@@ -28,6 +28,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Paginator, usePagination } from '../../_components/paginator'
+import {
+  journeyStageLabel,
+  journeyCheckpointLabel,
+  type JourneyTranslator,
+} from '../../_components/journey-label'
 
 export interface AgentIndexRow {
   id: string
@@ -44,6 +49,7 @@ interface AgentListProps {
 
 export function AgentList({ agents, lang }: AgentListProps) {
   const t = useTranslations('agentsIndex')
+  const tj = useTranslations('journey') as unknown as JourneyTranslator
   const { page, setPage, pageItems, pageCount } = usePagination(agents)
 
   if (agents.length === 0) {
@@ -74,9 +80,9 @@ export function AgentList({ agents, lang }: AgentListProps) {
                 </Link>
               </TableCell>
               <TableCell>
-                <Badge variant="secondary">{agent.journeyStage}</Badge>
+                <Badge variant="secondary">{journeyStageLabel(tj, agent.journeyStage)}</Badge>
               </TableCell>
-              <TableCell className="text-sm">{agent.currentCheckpoint}</TableCell>
+              <TableCell className="text-sm">{journeyCheckpointLabel(tj, agent.currentCheckpoint)}</TableCell>
             </TableRow>
           ))}
         </TableBody>

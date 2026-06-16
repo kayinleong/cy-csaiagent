@@ -239,6 +239,25 @@
     "next": "Seterusnya",
     "pageOf": "Halaman {page} daripada {total}"
   },
+  "journey": {
+    "stages": {
+      "onboarding": "Permulaan",
+      "training": "Latihan",
+      "qualified": "Layak"
+    },
+    "checkpoints": {
+      "start": "Belum bermula",
+      "day-one-pairing": "Pasangan hari pertama",
+      "product-foundations": "Asas produk",
+      "channel-playbooks": "Buku panduan saluran",
+      "first-meta-ad": "Iklan Meta pertama",
+      "onboarding-complete": "Permulaan selesai",
+      "advanced-negotiation": "Rundingan lanjutan",
+      "compliance-and-pdpa": "Pematuhan & PDPA",
+      "training-complete": "Latihan selesai",
+      "qualified-agent": "Ejen layak"
+    }
+  },
   "home": {
     "title": "Laman Utama",
     "subtitleAdmin": "Gambaran keseluruhan organisasi",

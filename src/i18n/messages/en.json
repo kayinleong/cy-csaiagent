@@ -237,6 +237,25 @@
     "next": "Next",
     "pageOf": "Page {page} of {total}"
   },
+  "journey": {
+    "stages": {
+      "onboarding": "Onboarding",
+      "training": "Training",
+      "qualified": "Qualified"
+    },
+    "checkpoints": {
+      "start": "Not started",
+      "day-one-pairing": "Day-one pairing",
+      "product-foundations": "Product foundations",
+      "channel-playbooks": "Channel playbooks",
+      "first-meta-ad": "First Meta ad",
+      "onboarding-complete": "Onboarding complete",
+      "advanced-negotiation": "Advanced negotiation",
+      "compliance-and-pdpa": "Compliance & PDPA",
+      "training-complete": "Training complete",
+      "qualified-agent": "Qualified agent"
+    }
+  },
   "home": {
     "title": "Home",
     "subtitleAdmin": "Org overview",

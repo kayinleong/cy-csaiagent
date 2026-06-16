@@ -24,11 +24,17 @@
 import { getTranslations } from 'next-intl/server'
 import { requireRole } from '../../../_lib/require-role'
 import { getAgentProfile, NotInDownlineError, type AgentProfile } from '@/src/dashboard/queries'
+import { adminAuth } from '@/src/firebase/admin'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from '@/components/ui/empty'
 import { RecordFirstClose } from './record-first-close'
+import {
+  journeyStageLabel,
+  journeyCheckpointLabel,
+  type JourneyTranslator,
+} from '../../../_components/journey-label'
 
 interface PageProps {
   params: Promise<{ lang: string; uid: string }>
@@ -83,19 +89,34 @@ export default async function AgentProfilePage({ params }: PageProps) {
   const daysToClose = profile.daysToFirstClose
   const canRecordClose = !profile.firstCloseAt
 
+  // Resolve the agent's email for the header (Auth-only PII; never logged). A
+  // resolution failure falls back to the truncated UID. Mirrors the index/dashboard.
+  let email: string | null = null
+  try {
+    const { users } = await adminAuth.getUsers([{ uid: profile.id }])
+    email = users[0]?.email ?? null
+  } catch {
+    email = null
+  }
+
+  // Journey labels resolved in the active locale (humanized fallback if unknown).
+  const tj = (await getTranslations('journey')) as unknown as JourneyTranslator
+
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
-      {/* Header — display ref only (PDPA: no raw name) */}
+      {/* Header — email when resolvable; truncated UID is the fallback. */}
       <div className="mb-8 flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-mono text-2xl font-semibold tracking-tight">
-            {profile.id.slice(0, 8)}…
+          <h1
+            className={`text-2xl font-semibold tracking-tight ${email ? '' : 'font-mono'}`}
+          >
+            {email ?? `${profile.id.slice(0, 8)}…`}
           </h1>
           <div className="mt-2 flex items-center gap-2">
-            <Badge variant="secondary">{stage}</Badge>
-            <span className="text-sm text-muted-foreground">{checkpoint}</span>
+            <Badge variant="secondary">{journeyStageLabel(tj, stage)}</Badge>
+            <span className="text-sm text-muted-foreground">{journeyCheckpointLabel(tj, checkpoint)}</span>
             {profile.cohortId ? (
-              <Badge variant="outline">{t('cohortBadge', { id: profile.cohortId.slice(0, 8) })}</Badge>
+              <Badge variant="outline">{t('cohortBadge', { cohort: profile.cohortId.slice(0, 8) })}</Badge>
             ) : null}
           </div>
         </div>

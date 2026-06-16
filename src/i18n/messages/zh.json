@@ -239,6 +239,25 @@
     "next": "下一页",
     "pageOf": "第 {page} 页，共 {total} 页"
   },
+  "journey": {
+    "stages": {
+      "onboarding": "入职",
+      "training": "培训",
+      "qualified": "已认证"
+    },
+    "checkpoints": {
+      "start": "尚未开始",
+      "day-one-pairing": "首日配对",
+      "product-foundations": "产品基础",
+      "channel-playbooks": "渠道手册",
+      "first-meta-ad": "首个 Meta 广告",
+      "onboarding-complete": "入职完成",
+      "advanced-negotiation": "进阶谈判",
+      "compliance-and-pdpa": "合规与 PDPA",
+      "training-complete": "培训完成",
+      "qualified-agent": "合格代理"
+    }
+  },
   "home": {
     "title": "主页",
     "subtitleAdmin": "机构概览",
