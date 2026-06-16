@@ -207,6 +207,7 @@
     "signedInAs": "Signed in as {role}",
     "conversations": "Conversations",
     "roles": "Roles",
+    "users": "Add user",
     "usage": "Usage",
     "erasure": "Erasure",
     "sectionHome": "Home",
@@ -633,5 +634,38 @@
     "policyTitle": "Data-protection policy",
     "policyDescription": "Personal data is pseudonymized at the AI boundary and never logged. The audit log stores hashes only. Use the erasure flow to permanently delete a data subject's personal data.",
     "openErasureCta": "Open erasure flow"
+  },
+  "adminUsers": {
+    "pageTitle": "Add User",
+    "pageSubtitle": "Create a new account and assign a role. New agents can be added to a cohort.",
+    "emailLabel": "Email",
+    "emailPlaceholder": "name@example.com",
+    "passwordLabel": "Temporary password",
+    "passwordPlaceholder": "At least 6 characters",
+    "passwordHint": "The user can change this after their first sign-in.",
+    "nameLabel": "Display name (optional)",
+    "namePlaceholder": "e.g. Aisha Rahman",
+    "roleLabel": "Role",
+    "rolePlaceholder": "Select a role",
+    "roleNewAgent": "New Agent",
+    "roleSeniorCoach": "Senior Coach",
+    "roleAdmin": "Admin",
+    "roleReadOnly": "Read-only",
+    "cohortLabel": "Cohort (optional)",
+    "cohortPlaceholder": "Select a cohort",
+    "cohortNone": "No cohort",
+    "cohortHint": "Assign this new agent to an intake batch to track ramp and performance together.",
+    "cohortEmptyHint": "No cohorts yet — create one on the Cohorts page first.",
+    "submit": "Create user",
+    "created": "User created.",
+    "errors": {
+      "unauthorized": "Your session expired. Please sign in again.",
+      "forbidden": "You don't have permission to add users.",
+      "invalid-email": "Enter a valid email address.",
+      "weak-password": "Password must be at least 6 characters.",
+      "invalid-role": "Select a valid role.",
+      "email-exists": "An account with this email already exists. Use the Roles page to change their role.",
+      "unknown": "Couldn't create the user. Please try again."
+    }
   }
 }

@@ -209,6 +209,7 @@
     "signedInAs": "Log masuk sebagai {role}",
     "conversations": "Perbualan",
     "roles": "Peranan",
+    "users": "Tambah pengguna",
     "usage": "Penggunaan",
     "erasure": "Pemadaman",
     "sectionHome": "Laman Utama",
@@ -635,5 +636,38 @@
     "policyTitle": "Dasar perlindungan data",
     "policyDescription": "Data peribadi dinyahkenalpasti pada sempadan AI dan tidak pernah dilog. Log audit menyimpan hash sahaja. Gunakan aliran pemadaman untuk memadam data peribadi subjek data secara kekal.",
     "openErasureCta": "Buka aliran pemadaman"
+  },
+  "adminUsers": {
+    "pageTitle": "Tambah Pengguna",
+    "pageSubtitle": "Cipta akaun baharu dan tetapkan peranan. Ejen baharu boleh ditambah ke dalam kohort.",
+    "emailLabel": "E-mel",
+    "emailPlaceholder": "nama@contoh.com",
+    "passwordLabel": "Kata laluan sementara",
+    "passwordPlaceholder": "Sekurang-kurangnya 6 aksara",
+    "passwordHint": "Pengguna boleh menukarnya selepas log masuk pertama.",
+    "nameLabel": "Nama paparan (pilihan)",
+    "namePlaceholder": "cth. Aisha Rahman",
+    "roleLabel": "Peranan",
+    "rolePlaceholder": "Pilih peranan",
+    "roleNewAgent": "Ejen Baharu",
+    "roleSeniorCoach": "Jurulatih Kanan",
+    "roleAdmin": "Pentadbir",
+    "roleReadOnly": "Baca sahaja",
+    "cohortLabel": "Kohort (pilihan)",
+    "cohortPlaceholder": "Pilih kohort",
+    "cohortNone": "Tiada kohort",
+    "cohortHint": "Tetapkan ejen baharu ini ke kumpulan kemasukan untuk menjejaki kemajuan dan prestasi bersama.",
+    "cohortEmptyHint": "Tiada kohort lagi — cipta satu di halaman Kohort dahulu.",
+    "submit": "Cipta pengguna",
+    "created": "Pengguna dicipta.",
+    "errors": {
+      "unauthorized": "Sesi anda tamat. Sila log masuk semula.",
+      "forbidden": "Anda tidak mempunyai kebenaran untuk menambah pengguna.",
+      "invalid-email": "Masukkan alamat e-mel yang sah.",
+      "weak-password": "Kata laluan mesti sekurang-kurangnya 6 aksara.",
+      "invalid-role": "Pilih peranan yang sah.",
+      "email-exists": "Akaun dengan e-mel ini sudah wujud. Gunakan halaman Peranan untuk menukar peranan mereka.",
+      "unknown": "Tidak dapat mencipta pengguna. Sila cuba lagi."
+    }
   }
 }

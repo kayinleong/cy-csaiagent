@@ -35,6 +35,7 @@ import {
   Boxes,
   UserCircle,
   UserCog,
+  UserPlus,
   Flag,
   ScrollText,
   SlidersHorizontal,
@@ -54,6 +55,7 @@ export type NavItemKey =
   | 'conversations'
   | 'usage'
   | 'roles'
+  | 'users'
   | 'integrations'
   | 'erasure'
   // ── Phase-7 net-new surfaces (NAV-01 / D-25) ──────────────────────────────
@@ -163,6 +165,9 @@ export function buildSections(lang: string): Section[] {
       labelKey: 'sectionSystem',
       items: [
         { key: 'roles', href: `/${lang}/roles`, icon: ShieldCheck, roles: ['admin'] },
+        // Add-user provisioning surface (create a Firebase Auth account + grant a role).
+        // Admin-only; sits next to Roles (assign a role to an existing user).
+        { key: 'users', href: `/${lang}/users`, icon: UserPlus, roles: ['admin'] },
         // Integrations shell route is built in plan 06-07; the nav entry references it now.
         { key: 'integrations', href: `/${lang}/integrations`, icon: Plug, roles: ['admin'] },
         { key: 'erasure', href: `/${lang}/erasure`, icon: Trash2, roles: ['admin'] },

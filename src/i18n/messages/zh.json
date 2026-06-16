@@ -209,6 +209,7 @@
     "signedInAs": "登录身份：{role}",
     "conversations": "对话记录",
     "roles": "权限角色",
+    "users": "添加用户",
     "usage": "使用情况",
     "erasure": "数据删除",
     "sectionHome": "主页",
@@ -635,5 +636,38 @@
     "policyTitle": "数据保护政策",
     "policyDescription": "个人数据在AI边界处进行假名化，绝不记录。审计日志仅存储哈希值。使用删除工作流可永久删除数据主体的个人数据。",
     "openErasureCta": "打开删除工作流"
+  },
+  "adminUsers": {
+    "pageTitle": "添加用户",
+    "pageSubtitle": "创建新账户并分配角色。可将新代理加入团队批次。",
+    "emailLabel": "电子邮箱",
+    "emailPlaceholder": "name@example.com",
+    "passwordLabel": "临时密码",
+    "passwordPlaceholder": "至少6个字符",
+    "passwordHint": "用户首次登录后可自行更改。",
+    "nameLabel": "显示名称（可选）",
+    "namePlaceholder": "例如：Aisha Rahman",
+    "roleLabel": "角色",
+    "rolePlaceholder": "选择角色",
+    "roleNewAgent": "新代理",
+    "roleSeniorCoach": "高级教练",
+    "roleAdmin": "管理员",
+    "roleReadOnly": "只读",
+    "cohortLabel": "团队批次（可选）",
+    "cohortPlaceholder": "选择团队批次",
+    "cohortNone": "无团队批次",
+    "cohortHint": "将此新代理分配到入职批次，以便统一跟踪成长与表现。",
+    "cohortEmptyHint": "尚无团队批次——请先在团队批次页面创建。",
+    "submit": "创建用户",
+    "created": "用户已创建。",
+    "errors": {
+      "unauthorized": "您的会话已过期，请重新登录。",
+      "forbidden": "您没有添加用户的权限。",
+      "invalid-email": "请输入有效的电子邮箱地址。",
+      "weak-password": "密码至少需要6个字符。",
+      "invalid-role": "请选择有效的角色。",
+      "email-exists": "该邮箱的账户已存在。请使用权限角色页面更改其角色。",
+      "unknown": "无法创建用户，请重试。"
+    }
   }
 }
