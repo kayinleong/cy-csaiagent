@@ -30,6 +30,8 @@ import {
 
 export interface AgentIndexRow {
   id: string
+  /** Resolved Firebase Auth email; null falls back to a truncated UID. */
+  email: string | null
   journeyStage: string
   currentCheckpoint: string
 }
@@ -63,9 +65,9 @@ export function AgentList({ agents, lang }: AgentListProps) {
                 {/* Deep-link to the read-only [uid] profile drill-in (NAV-01). */}
                 <Link
                   href={`/${lang}/agents/${agent.id}`}
-                  className="font-mono text-xs text-primary underline-offset-4 hover:underline"
+                  className={`${agent.email ? 'text-sm' : 'font-mono text-xs'} text-primary underline-offset-4 hover:underline`}
                 >
-                  {agent.id.slice(0, 8)}…
+                  {agent.email ?? `${agent.id.slice(0, 8)}…`}
                 </Link>
               </TableCell>
               <TableCell>

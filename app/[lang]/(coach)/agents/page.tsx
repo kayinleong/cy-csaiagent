@@ -23,6 +23,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
+import { adminAuth } from '@/src/firebase/admin'
 import { getDownline, type DownlineAgent } from '@/src/dashboard/queries'
 import { AgentList } from './agent-list'
 
@@ -74,9 +75,29 @@ export default async function AgentsIndexPage({ params }: PageProps) {
     agents = []
   }
 
-  // Plain serializable rows — display refs only (PDPA: no raw names).
+  // Resolve each agent's email for display. Email lives ONLY in Firebase Auth
+  // (the agentProfiles/users docs carry none), so resolve it server-side via
+  // adminAuth.getUsers (chunked at 100 — the getUsers cap). PII: resolved here,
+  // never logged; a resolution failure falls back to the truncated UID.
+  // Mirrors roles/actions.ts:194-207.
+  const uids = agents.map((a) => a.id)
+  const emailByUid = new Map<string, string | null>()
+  try {
+    for (let i = 0; i < uids.length; i += 100) {
+      const chunk = uids.slice(i, i + 100)
+      const { users: records } = await adminAuth.getUsers(chunk.map((uid) => ({ uid })))
+      for (const rec of records) {
+        emailByUid.set(rec.uid, rec.email ?? null)
+      }
+    }
+  } catch {
+    // Leave emailByUid empty — every row falls back to its truncated UID.
+  }
+
+  // Plain serializable rows. Email shown when resolvable; UID is the fallback.
   const rows = agents.map((a) => ({
     id: a.id,
+    email: emailByUid.get(a.id) ?? null,
     journeyStage: a.data.journeyStage,
     currentCheckpoint: a.data.currentCheckpoint,
   }))

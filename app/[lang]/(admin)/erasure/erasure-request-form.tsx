@@ -49,6 +49,14 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandGroup,
+  CommandItem,
+  CommandEmpty,
+} from '@/components/ui/command'
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -62,13 +70,22 @@ import {
 } from '@/components/ui/alert-dialog'
 import { eraseDataSubjectAction, getBlastRadius, type BlastRadiusResult } from './actions'
 
+/** An agent the admin can find by email in the lookup dropdown (agent subject only). */
+export interface AgentLookupOption {
+  id: string
+  email: string | null
+  displayRef: string
+}
+
 interface ErasureRequestFormProps {
   lang: string
+  /** Roster for the agent email-lookup dropdown. Empty disables the dropdown. */
+  agentOptions: AgentLookupOption[]
 }
 
 type SubjectType = 'lead' | 'agent'
 
-export function ErasureRequestForm({ lang: _lang }: ErasureRequestFormProps) {
+export function ErasureRequestForm({ lang: _lang, agentOptions }: ErasureRequestFormProps) {
   const t = useTranslations('adminErasure')
 
   // Stage A state
@@ -86,15 +103,33 @@ export function ErasureRequestForm({ lang: _lang }: ErasureRequestFormProps) {
   const subjectRef = subjectId.trim()
   const tokenMatches = typedToken === subjectRef && subjectRef.length > 0
 
-  function handleSearch() {
-    if (!subjectRef) return
+  // The email of the currently-selected agent (for the "selected" hint). The
+  // subject id is still the UID — the type-to-confirm gate is unchanged (HR-9).
+  const selectedAgentEmail =
+    subjectType === 'agent'
+      ? (agentOptions.find((a) => a.id === subjectRef)?.email ?? null)
+      : null
+
+  // Accepts an explicit id so a dropdown pick can search immediately (the
+  // subjectId state update is async and not yet visible in this tick).
+  function handleSearch(idArg?: string) {
+    const ref = (idArg ?? subjectId).trim()
+    if (!ref) return
     setIsLoadingBlast(true)
     setBlastRadius(null)
     void (async () => {
-      const result = await getBlastRadius({ subjectType, id: subjectRef })
+      const result = await getBlastRadius({ subjectType, id: ref })
       setBlastRadius(result)
       setIsLoadingBlast(false)
     })()
+  }
+
+  // Pick an agent from the email-lookup dropdown: the subject id becomes the
+  // agent's UID (what erasure keys on), then load the blast-radius preview.
+  function handlePickAgent(uid: string) {
+    setSubjectId(uid)
+    setBlastRadius(null)
+    handleSearch(uid)
   }
 
   function handleOpenDialog() {
@@ -131,7 +166,7 @@ export function ErasureRequestForm({ lang: _lang }: ErasureRequestFormProps) {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => { setSubjectType('lead'); setBlastRadius(null) }}
+                onClick={() => { setSubjectType('lead'); setSubjectId(''); setBlastRadius(null) }}
                 className={`rounded-md border px-4 py-2 text-sm transition-colors ${
                   subjectType === 'lead'
                     ? 'border-primary bg-primary text-primary-foreground'
@@ -142,7 +177,7 @@ export function ErasureRequestForm({ lang: _lang }: ErasureRequestFormProps) {
               </button>
               <button
                 type="button"
-                onClick={() => { setSubjectType('agent'); setBlastRadius(null) }}
+                onClick={() => { setSubjectType('agent'); setSubjectId(''); setBlastRadius(null) }}
                 className={`rounded-md border px-4 py-2 text-sm transition-colors ${
                   subjectType === 'agent'
                     ? 'border-primary bg-primary text-primary-foreground'
@@ -154,7 +189,41 @@ export function ErasureRequestForm({ lang: _lang }: ErasureRequestFormProps) {
             </div>
           </div>
 
-          {/* Subject ID search */}
+          {/* Agent email lookup (suggestion dropdown). Agents have an email in
+              Firebase Auth; leads do not — so this shows for the agent subject only.
+              Picking sets the subject id to the agent's UID and loads the preview;
+              the type-to-confirm gate still types that UID (HR-9 unchanged). */}
+          {subjectType === 'agent' && agentOptions.length > 0 && (
+            <div className="mb-4 space-y-2">
+              <Label className="block text-sm font-medium">{t('agentLookupLabel')}</Label>
+              <Command className="rounded-md border">
+                <CommandInput placeholder={t('agentLookupPlaceholder')} />
+                <CommandList className="max-h-56">
+                  <CommandEmpty>{t('agentLookupEmpty')}</CommandEmpty>
+                  <CommandGroup>
+                    {agentOptions.map((a) => (
+                      <CommandItem
+                        key={a.id}
+                        value={`${a.email ?? ''} ${a.id}`}
+                        onSelect={() => handlePickAgent(a.id)}
+                      >
+                        <span className={a.email ? 'truncate' : 'truncate font-mono text-xs'}>
+                          {a.email ?? `${a.displayRef}…`}
+                        </span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+              {selectedAgentEmail && (
+                <p className="text-xs text-muted-foreground">
+                  {t('agentLookupSelected', { email: selectedAgentEmail })}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Subject ID search (lead id, or the agent UID populated by the lookup) */}
           <div className="flex gap-2">
             <Input
               value={subjectId}
@@ -165,7 +234,7 @@ export function ErasureRequestForm({ lang: _lang }: ErasureRequestFormProps) {
             />
             <Button
               variant="secondary"
-              onClick={handleSearch}
+              onClick={() => handleSearch()}
               disabled={!subjectRef || isLoadingBlast}
             >
               Search

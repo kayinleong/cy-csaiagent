@@ -48,11 +48,12 @@ export default async function CoachAssignmentPage({ params }: PageProps) {
   }
 
   // Candidate agents (anyone with a coach can be reassigned) and the coaches they
-  // may move to. Plain serializable rows — no PII (display refs only).
-  const agents = users.map((u) => ({ id: u.id, displayRef: u.displayRef, role: u.role }))
+  // may move to. Email is resolved server-side by listUsersWithRoles (Auth-only PII,
+  // never logged); the UI shows it with the truncated UID as fallback.
+  const agents = users.map((u) => ({ id: u.id, email: u.email, displayRef: u.displayRef, role: u.role }))
   const coaches = users
     .filter((u) => u.role === 'senior-coach')
-    .map((u) => ({ id: u.id, displayRef: u.displayRef }))
+    .map((u) => ({ id: u.id, email: u.email, displayRef: u.displayRef }))
 
   const t = await getTranslations('adminCoachAssignment')
 

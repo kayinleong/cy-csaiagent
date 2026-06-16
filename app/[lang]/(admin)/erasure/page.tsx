@@ -23,7 +23,8 @@ import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
 import { listErasureRequests, type ErasureRequestRow } from './actions'
-import { ErasureRequestForm } from './erasure-request-form'
+import { listUsersWithRoles } from '../roles/actions'
+import { ErasureRequestForm, type AgentLookupOption } from './erasure-request-form'
 import { ErasureStatusList } from './erasure-status-list'
 
 interface PageProps {
@@ -77,6 +78,24 @@ export default async function ErasureAdminPage({ params }: PageProps) {
     initialRequests = []
   }
 
+  // ── Agent roster for the email-lookup picker (agent subject type) ───────────
+  // Reuses the admin-gated listUsersWithRoles, which resolves each user's email
+  // server-side (Auth-only PII, never logged). Non-blocking — an empty roster
+  // just disables the suggestion dropdown; the admin can still type a UID.
+  let agentOptions: AgentLookupOption[] = []
+  try {
+    const result = await listUsersWithRoles()
+    if (result.ok) {
+      agentOptions = result.users.map((u) => ({
+        id: u.id,
+        email: u.email,
+        displayRef: u.displayRef,
+      }))
+    }
+  } catch {
+    agentOptions = []
+  }
+
   const t = await getTranslations('adminErasure')
 
   return (
@@ -89,7 +108,7 @@ export default async function ErasureAdminPage({ params }: PageProps) {
 
       {/* Erasure request form (Stage A: subject search + Stage B: type-to-confirm dialog) */}
       <div className="mb-10">
-        <ErasureRequestForm lang={lang} />
+        <ErasureRequestForm lang={lang} agentOptions={agentOptions} />
       </div>
 
       {/* Request status list (Stage C) */}

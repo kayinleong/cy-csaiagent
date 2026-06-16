@@ -42,13 +42,20 @@ import { assignCoach } from './actions'
 
 interface AgentOption {
   id: string
+  email: string | null
   displayRef: string
   role: string
 }
 
 interface CoachOption {
   id: string
+  email: string | null
   displayRef: string
+}
+
+/** Email when resolvable; truncated UID otherwise. */
+function userLabel(u: { email: string | null; displayRef: string }): string {
+  return u.email ?? `${u.displayRef}…`
 }
 
 interface CoachReassignProps {
@@ -95,8 +102,10 @@ export function CoachReassign({ agents, coaches, lang: _lang }: CoachReassignPro
     )
   }
 
-  const agentLabel = agents.find((a) => a.id === selectedAgent)?.displayRef ?? ''
-  const coachLabel = coaches.find((c) => c.id === selectedCoach)?.displayRef ?? ''
+  const selectedAgentOption = agents.find((a) => a.id === selectedAgent)
+  const selectedCoachOption = coaches.find((c) => c.id === selectedCoach)
+  const agentLabel = selectedAgentOption ? userLabel(selectedAgentOption) : ''
+  const coachLabel = selectedCoachOption ? userLabel(selectedCoachOption) : ''
 
   return (
     <div className="space-y-6">
@@ -111,7 +120,7 @@ export function CoachReassign({ agents, coaches, lang: _lang }: CoachReassignPro
             <SelectContent>
               {agents.map((a) => (
                 <SelectItem key={a.id} value={a.id}>
-                  <span className="font-mono text-xs">{a.displayRef}…</span>
+                  <span className={a.email ? 'text-sm' : 'font-mono text-xs'}>{userLabel(a)}</span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -128,7 +137,7 @@ export function CoachReassign({ agents, coaches, lang: _lang }: CoachReassignPro
             <SelectContent>
               {coaches.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
-                  <span className="font-mono text-xs">{c.displayRef}…</span>
+                  <span className={c.email ? 'text-sm' : 'font-mono text-xs'}>{userLabel(c)}</span>
                 </SelectItem>
               ))}
             </SelectContent>
