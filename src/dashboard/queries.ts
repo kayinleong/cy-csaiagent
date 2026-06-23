@@ -48,6 +48,29 @@ function toDate(value: unknown): Date {
   return new Date(value as string | number)
 }
 
+// Normalize any Firestore Timestamp values nested inside an escalation's
+// contextBundle to plain Dates. The bundle is a flat Record<string, unknown>
+// (e.g. { lastActiveAt } for stalls, { topic, lang, conversationId } for kb_miss)
+// that page.tsx passes straight into the StallInbox client island — and a raw
+// Timestamp is a class instance that cannot cross the RSC→Client boundary
+// ("Only plain objects… can be passed to Client Components"). A Timestamp is
+// detected by its toDate() method and converted via toDate(); every non-Timestamp
+// value (strings/numbers/booleans) is preserved verbatim. `Date` is a supported
+// serializable built-in, so the returned bundle is fully serializable.
+function serializeContextBundle(
+  bundle: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!bundle) return {}
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(bundle)) {
+    out[key] =
+      value && typeof (value as { toDate?: () => Date }).toDate === 'function'
+        ? (value as { toDate: () => Date }).toDate()
+        : value
+  }
+  return out
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 /** A resolved agent profile document with its Firestore document ID. */
@@ -174,7 +197,11 @@ export async function getOpenStalls(
     const data = doc.data() as StallEscalation['data']
     return {
       id: doc.id,
-      data: { ...data, openedAt: toDate(data.openedAt) },
+      data: {
+        ...data,
+        openedAt: toDate(data.openedAt),
+        contextBundle: serializeContextBundle(data.contextBundle),
+      },
     }
   })
 }

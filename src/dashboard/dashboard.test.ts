@@ -296,6 +296,41 @@ describe('Firestore Timestamp normalization', () => {
     expect(result[0]!.data.openedAt.toISOString()).toBe('2026-05-28T08:00:00.000Z')
   })
 
+  it('getOpenStalls.contextBundle.lastActiveAt is a real Date (not a Timestamp) and preserves non-date fields', async () => {
+    // The stall-detect/escalate jobs persist contextBundle: { lastActiveAt } —
+    // read back as a Firestore Timestamp. page.tsx passes the bundle straight into
+    // the StallInbox client island, so a raw Timestamp throws "Only plain objects…
+    // can be passed to Client Components" at the RSC→Client boundary.
+    mockEscalationsRef.get.mockResolvedValueOnce(
+      makeQueryResult([
+        {
+          id: 'esc-bundle-ts',
+          data: {
+            tenantId: 'd2',
+            agentUid: 'agent-1',
+            seniorCoachId: COACH_A,
+            reason: 'stall',
+            status: 'open',
+            openedAt: fakeTimestamp('2026-05-28T08:00:00Z'),
+            contextBundle: {
+              lastActiveAt: fakeTimestamp('2026-05-26T08:00:00Z'),
+              conversationId: 'conv-123', // non-date field must survive untouched
+            },
+          },
+        },
+      ]),
+    )
+    const result = (await getOpenStalls(COACH_A)) as Array<{
+      data: { contextBundle: { lastActiveAt: Date; conversationId: string } }
+    }>
+    const bundle = result[0]!.data.contextBundle
+    expect(bundle.lastActiveAt).toBeInstanceOf(Date)
+    expect(() => bundle.lastActiveAt.toISOString()).not.toThrow()
+    expect(bundle.lastActiveAt.toISOString()).toBe('2026-05-26T08:00:00.000Z')
+    // Non-date values pass through verbatim
+    expect(bundle.conversationId).toBe('conv-123')
+  })
+
   it('getKnowledgeGaps.lastSeenAt is a real Date with a valid toISOString()', async () => {
     mockKnowledgeGapsRef.get.mockResolvedValueOnce(
       makeQueryResult([
