@@ -32,7 +32,22 @@ import { ProjectForm } from './project-form'
 import { CollateralForm } from './collateral-form'
 import { hideProjectAction, unhideProjectAction } from './actions'
 import { Paginator, usePagination } from '../../_components/paginator'
-import type { ProjectWithId } from '@/src/inventory/list'
+import type { ProjectDoc } from '@/src/firebase/collections'
+
+// ─── Client-serializable project ────────────────────────────────────────────────
+
+/**
+ * The RSC→Client boundary only accepts plain objects. A project's `vpDate` is a
+ * Firestore `Timestamp` (a class instance) — passing it raw throws "Only plain
+ * objects… can be passed to Client Components". The server shell (inventory/page.tsx)
+ * converts it to a plain `Date` (or null) first. `Date` is a supported serializable
+ * built-in, and keeping it a `Date` preserves the `instanceof Date` checks here and
+ * in ProjectForm. (`embedding` is a plain number[] and stays serializable as-is.)
+ */
+export interface SerializableProjectWithId {
+  id: string
+  data: Omit<ProjectDoc, 'vpDate'> & { vpDate: Date | null }
+}
 
 // ─── Status badge helper ──────────────────────────────────────────────────────
 
@@ -45,7 +60,7 @@ function StatusBadge({ status }: { status: 'active' | 'sold_out' | 'hidden' | un
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface ProjectListProps {
-  projects: ProjectWithId[]
+  projects: SerializableProjectWithId[]
   lang: string
 }
 
