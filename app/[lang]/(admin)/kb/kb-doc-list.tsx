@@ -43,7 +43,23 @@ import { Button } from '@/components/ui/button'
 import { PublishToggle } from './publish-toggle'
 import { deleteKbDocAction } from './actions'
 import { Paginator, usePagination } from '../../_components/paginator'
-import type { KbDocWithId } from '@/src/kb/crud'
+import type { KbDocDoc } from '@/src/firebase/collections'
+
+// ─── Client-serializable KB doc ─────────────────────────────────────────────────
+
+/**
+ * The RSC→Client boundary only accepts plain objects. A KB doc's `publishedAt` is
+ * a Firestore `Timestamp` (a class instance) — passing it raw throws "Only plain
+ * objects… can be passed to Client Components". The server shell (kb/page.tsx)
+ * serializes it to epoch millis (or null) before handing the docs to this list.
+ * `publishedAt` is the only non-serializable field on KbDocDoc; this component
+ * never renders it, but it is kept on the type so the shape stays a faithful,
+ * type-checked projection of KbDocDoc.
+ */
+export interface SerializedKbDocWithId {
+  id: string
+  data: Omit<KbDocDoc, 'publishedAt'> & { publishedAt: number | null }
+}
 
 // ─── Status badge helper ──────────────────────────────────────────────────────
 
@@ -79,7 +95,7 @@ type PillarFilter = 'all' | 'coach' | 'reply'
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface KbDocListProps {
-  docs: KbDocWithId[]
+  docs: SerializedKbDocWithId[]
   lang: string
 }
 

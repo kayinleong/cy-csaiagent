@@ -25,10 +25,26 @@ import { getTranslations } from 'next-intl/server'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
 import { listDocs } from '@/src/kb/crud'
 import { KbDocForm } from './kb-doc-form'
-import { KbDocList } from './kb-doc-list'
+import { KbDocList, type SerializedKbDocWithId } from './kb-doc-list'
 
 interface PageProps {
   params: Promise<{ lang: string }>
+}
+
+/**
+ * Firestore `Timestamp` → epoch millis (or null). A Timestamp is a class instance
+ * and cannot cross the RSC→Client boundary unserialized — passing it raw throws
+ * "Only plain objects… can be passed to Client Components". Mirrors the toMillis
+ * helper in (admin)/audit-log/actions.ts. Returns null for missing/unknown values
+ * (e.g. legacy docs written before publishedAt existed).
+ */
+function toMillis(value: unknown): number | null {
+  if (value == null) return null
+  if (value instanceof Date) return value.getTime()
+  const t = value as { toMillis?: () => number; toDate?: () => Date }
+  if (typeof t.toMillis === 'function') return t.toMillis()
+  if (typeof t.toDate === 'function') return t.toDate().getTime()
+  return null
 }
 
 export async function generateMetadata() {
@@ -77,6 +93,13 @@ export default async function KbAdminPage({ params }: PageProps) {
     kbDocs = []
   }
 
+  // Serialize the Firestore Timestamp before the docs cross into the KbDocList
+  // client component — the RSC→Client boundary only accepts plain objects.
+  const serializedDocs: SerializedKbDocWithId[] = kbDocs.map(({ id, data }) => ({
+    id,
+    data: { ...data, publishedAt: toMillis(data.publishedAt) },
+  }))
+
   const t = await getTranslations('kb')
 
   return (
@@ -101,7 +124,7 @@ export default async function KbAdminPage({ params }: PageProps) {
         <h2 className="mb-4 text-lg font-semibold">
           {t('existingDocuments')} ({kbDocs.length})
         </h2>
-        <KbDocList docs={kbDocs} lang={lang} />
+        <KbDocList docs={serializedDocs} lang={lang} />
       </div>
     </div>
   )
