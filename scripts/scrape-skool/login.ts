@@ -46,7 +46,7 @@ async function launch(): Promise<BrowserContext> {
     timezoneId: "Asia/Kuala_Lumpur",
     args: ["--disable-blink-features=AutomationControlled"],
     ignoreDefaultArgs: ["--enable-automation"],
-  } as const;
+  };
   try {
     return await chromium.launchPersistentContext(USERDATA, { ...opts, channel: "chrome" });
   } catch (e) {

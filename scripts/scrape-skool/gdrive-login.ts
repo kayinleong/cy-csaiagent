@@ -30,7 +30,7 @@ async function launch(): Promise<BrowserContext> {
     viewport: { width: 1440, height: 1000 },
     args: ["--disable-blink-features=AutomationControlled"],
     ignoreDefaultArgs: ["--enable-automation"],
-  } as const;
+  };
   try {
     return await chromium.launchPersistentContext(USERDATA, { ...opts, channel: "chrome" });
   } catch (e) {
