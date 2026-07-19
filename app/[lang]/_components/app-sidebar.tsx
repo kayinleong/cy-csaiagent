@@ -36,7 +36,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { buildSections, visibleSectionsForRole, type Section } from './app-sidebar-nav'
+import { buildSections, visibleSectionsForRole, isNavItemActive, type Section } from './app-sidebar-nav'
 import { LanguageSwitcher } from './language-switcher'
 import { SignOutButton } from './sign-out-button'
 
@@ -67,12 +67,6 @@ export function AppSidebar({ role, lang }: AppSidebarProps) {
 
   const sections = visibleSections(role, lang)
 
-  function isActive(href: string): boolean {
-    // Anchor-style deep links (#stalls) key off the base route only.
-    const base = href.split('#')[0]
-    return pathname === base || pathname.startsWith(`${base}/`)
-  }
-
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
@@ -90,7 +84,7 @@ export function AppSidebar({ role, lang }: AppSidebarProps) {
                   const Icon = item.icon
                   return (
                     <SidebarMenuItem key={item.key}>
-                      <SidebarMenuButton asChild isActive={isActive(item.href)} tooltip={t(item.key)}>
+                      <SidebarMenuButton asChild isActive={isNavItemActive(pathname, item.href)} tooltip={t(item.key)}>
                         <Link href={item.href}>
                           <Icon />
                           <span>{t(item.key)}</span>

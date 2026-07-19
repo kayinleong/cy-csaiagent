@@ -202,3 +202,30 @@ export function visibleSectionsForRole(role: Role, lang: string): Section[] {
     }))
     .filter((section) => section.items.length > 0)
 }
+
+/**
+ * Whether a nav item is the active route, given the current pathname (locale-prefixed).
+ *
+ * Bug (quick-033): the Home item's href is the locale ROOT (`/${lang}`, e.g. `/en`),
+ * which is a prefix of every console route. A naive `pathname.startsWith(href + '/')`
+ * therefore kept Home highlighted on `/en/dashboard`, `/en/kb`, etc. A locale-root
+ * href (exactly one path segment) must match EXACTLY; deeper hrefs match themselves
+ * or any descendant path (so a parent highlights on its child routes, e.g.
+ * `/en/agents` on `/en/agents/{uid}`).
+ *
+ * Trailing slashes and `#anchor` deep-links are normalized off before comparing.
+ *
+ * @param pathname The current pathname from `usePathname()` (locale-prefixed).
+ * @param href     The nav item's href (may carry a `#anchor`).
+ */
+export function isNavItemActive(pathname: string, href: string): boolean {
+  const stripTrailing = (s: string) => (s.length > 1 ? s.replace(/\/+$/, '') : s)
+  const base = stripTrailing(href.split('#')[0])
+  const path = stripTrailing(pathname)
+
+  // Locale-root href (one segment, e.g. `/en`) → exact match only.
+  const isLocaleRoot = base.split('/').filter(Boolean).length <= 1
+  if (isLocaleRoot) return path === base
+
+  return path === base || path.startsWith(`${base}/`)
+}

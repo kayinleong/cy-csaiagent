@@ -215,3 +215,48 @@ describe('Phase-7 nav — 8 net-new items, placement + read-only blindness (NAV-
     }
   })
 })
+
+// ─── isNavItemActive (quick-033 — Home no longer highlighted everywhere) ──────
+
+describe('isNavItemActive — locale-root href matches exactly (quick-033)', () => {
+  async function loadIsActive(): Promise<(pathname: string, href: string) => boolean> {
+    const mod = (await import('./app-sidebar-nav')) as {
+      isNavItemActive?: (pathname: string, href: string) => boolean
+    }
+    return mod.isNavItemActive!
+  }
+
+  it('Home (/en) is active ONLY on the locale root — NOT on child routes (the bug)', async () => {
+    const isActive = await loadIsActive()
+    expect(isActive('/en', '/en')).toBe(true)
+    expect(isActive('/en/', '/en')).toBe(true)
+    expect(isActive('/en/dashboard', '/en')).toBe(false)
+    expect(isActive('/en/kb', '/en')).toBe(false)
+    expect(isActive('/en/usage', '/en')).toBe(false)
+  })
+
+  it('a deep item is active on its own route and descendant routes', async () => {
+    const isActive = await loadIsActive()
+    expect(isActive('/en/dashboard', '/en/dashboard')).toBe(true)
+    expect(isActive('/en/agents/uid-123', '/en/agents')).toBe(true) // parent highlights on child
+    expect(isActive('/en/dashboard', '/en/kb')).toBe(false)
+  })
+
+  it('does NOT false-match a sibling that shares a prefix but not a path boundary', async () => {
+    const isActive = await loadIsActive()
+    // '/en/agent-log' must NOT match '/en/agents' (no '/' boundary)
+    expect(isActive('/en/agent-log', '/en/agents')).toBe(false)
+  })
+
+  it('strips #anchor deep-links before comparing', async () => {
+    const isActive = await loadIsActive()
+    expect(isActive('/en/dashboard', '/en/dashboard#stalls')).toBe(true)
+  })
+
+  it('works for non-en locales (root is exact per locale)', async () => {
+    const isActive = await loadIsActive()
+    expect(isActive('/zh', '/zh')).toBe(true)
+    expect(isActive('/zh/kb', '/zh')).toBe(false)
+    expect(isActive('/zh/kb', '/zh/kb')).toBe(true)
+  })
+})
