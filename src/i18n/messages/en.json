@@ -18,6 +18,16 @@
     "send": "Send",
     "thinking": "Thinking…",
     "emptyState": "Hi! I'm your D2 Agent Assistant. Ask me anything about D2 properties, onboarding steps, or sales SOPs.",
+    "heroGreeting": "Hi {name}, ready to close your first deal?",
+    "heroGreetingNoName": "Ready to close your first deal?",
+    "heroSubtitle": "Ask about D2 projects, sales SOPs, or your onboarding journey. Or paste a client message and I'll draft a reply in your voice.",
+    "footerDisclosure": "You're chatting with AI. Escalate to your coach any time.",
+    "suggestions": {
+      "finder": "Find me a 2-bedroom in Cheras, budget 800k",
+      "coachAd": "Walk me through my first Meta ad campaign",
+      "reply": "Draft: loan eligibility for Bangsahill Park",
+      "coachPricing": "What's the pricing structure for Royal Suites?"
+    },
     "citationLabel": "Source",
     "citations": "Sources",
     "copyReply": "Copy draft",

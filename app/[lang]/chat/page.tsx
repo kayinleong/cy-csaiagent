@@ -53,7 +53,6 @@ export default async function ChatPage({
   const t = await getTranslations('chat')
   const placeholder = t('placeholder')
   const sendLabel = t('send')
-  const emptyState = t('emptyState')
 
   return (
     /**
@@ -69,7 +68,6 @@ export default async function ChatPage({
       <ChatShell
         placeholder={placeholder}
         sendLabel={sendLabel}
-        emptyStateMessage={emptyState}
       />
     </main>
   )

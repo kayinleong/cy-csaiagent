@@ -20,6 +20,16 @@
     "send": "Hantar",
     "thinking": "Sedang berfikir…",
     "emptyState": "Hai! Saya Pembantu Ejen D2 anda. Tanya saya apa sahaja tentang hartanah D2, langkah onboarding, atau SOP jualan.",
+    "heroGreeting": "Hai {name}, bersedia untuk menutup jualan pertama anda?",
+    "heroGreetingNoName": "Bersedia untuk menutup jualan pertama anda?",
+    "heroSubtitle": "Tanya tentang projek D2, SOP jualan, atau perjalanan onboarding anda. Atau tampal mesej pelanggan dan saya akan draf balasan dalam gaya anda.",
+    "footerDisclosure": "Anda sedang berbual dengan AI. Hubungi jurulatih anda pada bila-bila masa.",
+    "suggestions": {
+      "finder": "Cari saya unit 2 bilik di Cheras, bajet 800k",
+      "coachAd": "Pandu saya melalui kempen iklan Meta pertama saya",
+      "reply": "Draf: kelayakan pinjaman untuk Bangsahill Park",
+      "coachPricing": "Apakah struktur harga untuk Royal Suites?"
+    },
     "citationLabel": "Sumber",
     "citations": "Sumber-sumber",
     "copyReply": "Salin draf",

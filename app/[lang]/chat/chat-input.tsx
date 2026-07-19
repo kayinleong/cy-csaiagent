@@ -8,7 +8,7 @@
  * the page.tsx remains a server component.
  *
  * Chat protocol:
- *   1. User types a message and presses Send or Enter.
+ *   1. User types a message and presses Send or Enter (or taps a suggestion card).
  *   2. The ID token is fetched from Firebase Auth (getIdToken()).
  *   3. A POST request is sent to /api/chat with Bearer auth + messages array.
  *   4. The response body is a ReadableStream; tokens are decoded and appended
@@ -20,22 +20,30 @@
  * + fetch + ReadableStream. The stream protocol parses UIMessageChunk format
  * by extracting text delta events from the SSE data lines.
  *
+ * Redesign (quick-kayinleong-032): unified rounded input + lime icon send button
+ * + footer AI-disclosure microcopy; `submittedSuggestion` seeds+sends a hero card.
+ *
  * References: 01-PATTERNS.md Tier-A chat-input (lines 110-132).
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { clientAuth } from '@/src/firebase/client'
-import { onAuthStateChanged } from 'firebase/auth'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { useIsMobile } from '@/hooks/use-mobile'
 import type { ChatMessage } from './message-list'
 import { decodeReplyOutput, decodeFinderOutput } from './decode-structured-output'
 import { parseTextDelta, isHandoffChunk } from './decode-stream-chunk'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+/** A one-shot suggestion send from the hero cards. `id` de-dupes re-fires. */
+export interface SubmittedSuggestion {
+  id: number
+  text: string
+}
 
 interface ChatInputProps {
   /** Callback: when messages update (the server page re-renders the list) */
@@ -67,6 +75,11 @@ interface ChatInputProps {
    * text is preserved in the input so dispatch can resume after a lead is picked.
    */
   onBeforeSend?: (text: string) => boolean
+  /**
+   * One-shot suggestion send (redesign). When this changes to a new id, the input
+   * seeds the text and dispatches it (subject to the same onBeforeSend gate).
+   */
+  submittedSuggestion?: SubmittedSuggestion
   /** i18n copy */
   placeholder?: string
   sendLabel?: string
@@ -82,7 +95,18 @@ function useChatStream({
   pillarOverride,
   leadId,
   onBeforeSend,
-}: Pick<ChatInputProps, 'onMessagesChange' | 'initialMessages' | 'conversationId' | 'langOverride' | 'pillarOverride' | 'leadId' | 'onBeforeSend'>) {
+  submittedSuggestion,
+}: Pick<
+  ChatInputProps,
+  | 'onMessagesChange'
+  | 'initialMessages'
+  | 'conversationId'
+  | 'langOverride'
+  | 'pillarOverride'
+  | 'leadId'
+  | 'onBeforeSend'
+  | 'submittedSuggestion'
+>) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [isStreaming, setIsStreaming] = useState(false)
   const [input, setInput] = useState('')
@@ -98,7 +122,6 @@ function useChatStream({
       // will create/look up the stable coach-${uid} thread (D-01 / Pitfall 2 fix).
       cidRef.current = ''
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId])
 
   // Re-seed the visible transcript when the SELECTED conversation changes —
@@ -119,8 +142,10 @@ function useChatStream({
     onMessagesChange(messages)
   }, [messages, onMessagesChange])
 
-  const sendMessage = useCallback(async () => {
-    const text = input.trim()
+  const sendMessage = useCallback(async (textOverride?: string) => {
+    // textOverride lets a suggestion card dispatch its prompt without waiting on
+    // the async setInput state to settle (avoids a stale-input race).
+    const text = (textOverride ?? input).trim()
     if (!text || isStreaming) return
 
     // Reply lead gate (D-07): give the parent a chance to BLOCK dispatch — e.g. a
@@ -309,6 +334,19 @@ function useChatStream({
     }
   }, [input, isStreaming, messages, langOverride, pillarOverride, leadId, onBeforeSend])
 
+  // ── Suggestion-card dispatch (redesign) ──────────────────────────────────────
+  // When a hero card is tapped, chat-shell pins the pillar override then bumps
+  // submittedSuggestion. Seed the input (so a blocked Reply keeps its text for
+  // re-send after a lead is picked) and dispatch with an explicit text argument.
+  const lastSuggestionId = useRef<number>(0)
+  useEffect(() => {
+    if (submittedSuggestion && submittedSuggestion.id !== lastSuggestionId.current) {
+      lastSuggestionId.current = submittedSuggestion.id
+      setInput(submittedSuggestion.text)
+      void sendMessage(submittedSuggestion.text)
+    }
+  }, [submittedSuggestion, sendMessage])
+
   return { messages, isStreaming, input, setInput, sendMessage }
 }
 
@@ -317,9 +355,8 @@ function useChatStream({
 /**
  * Chat input component — the "use client" island for the chat surface.
  *
- * Composes vendored Textarea + Button; uses useIsMobile for responsive sizing.
- * Sends a POST to /api/chat with a Firebase Bearer token on submit.
- * Streams the response incrementally via ReadableStream.
+ * Composes the vendored Textarea + Button into a single rounded input bar with a
+ * lime icon send button, plus a persistent AI-disclosure microcopy line.
  */
 export function ChatInput({
   onMessagesChange,
@@ -329,10 +366,11 @@ export function ChatInput({
   pillarOverride,
   leadId,
   onBeforeSend,
+  submittedSuggestion,
   placeholder = 'Ask anything about D2 properties, SOPs, or your onboarding journey…',
   sendLabel = 'Send',
 }: ChatInputProps) {
-  const isMobile = useIsMobile()
+  const t = useTranslations('chat')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { input, setInput, sendMessage, isStreaming } = useChatStream({
     onMessagesChange,
@@ -342,6 +380,7 @@ export function ChatInput({
     pillarOverride,
     leadId,
     onBeforeSend,
+    submittedSuggestion,
   })
 
   // Handle keyboard submit: Enter = send (Shift+Enter = new line)
@@ -355,59 +394,65 @@ export function ChatInput({
   return (
     <div
       data-slot="chat-input-bar"
-      className={cn(
-        // shrink-0: the input bar must always reserve its full height at the
-        // bottom of the chat column so the scroll area above can never grow into
-        // it / paint the last message behind it (quick-022).
-        'shrink-0 border-t bg-background/95 backdrop-blur px-3 py-3',
-        'flex items-end gap-2 max-w-2xl mx-auto w-full',
-      )}
+      className="shrink-0 bg-background px-3 pb-3 pt-2"
     >
-      <Textarea
-        ref={textareaRef}
-        data-slot="chat-textarea"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        disabled={isStreaming}
-        rows={1}
-        className={cn(
-          'flex-1 resize-none min-h-10 max-h-40 field-sizing-content',
-          // Mobile-readable text size (per 01-PATTERNS.md textarea pattern)
-          'text-base md:text-sm',
-        )}
-        aria-label="Chat message"
-      />
+      <div className="mx-auto w-full max-w-2xl">
+        {/* Unified rounded input surface — textarea + lime send button */}
+        <div
+          className={cn(
+            'flex items-end gap-2 rounded-2xl border border-border bg-card p-2 shadow-sm',
+            'transition-colors focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-ring/40',
+          )}
+        >
+          <Textarea
+            ref={textareaRef}
+            data-slot="chat-textarea"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={placeholder}
+            disabled={isStreaming}
+            rows={1}
+            className={cn(
+              'flex-1 resize-none border-0 bg-transparent px-2 py-1.5 shadow-none',
+              'min-h-9 max-h-40 field-sizing-content',
+              'focus-visible:border-0 focus-visible:ring-0',
+              // Mobile-readable text size (per 01-PATTERNS.md textarea pattern)
+              'text-base md:text-sm',
+            )}
+            aria-label="Chat message"
+          />
 
-      <Button
-        data-slot="send-button"
-        size={isMobile ? 'icon' : 'default'}
-        onClick={() => void sendMessage()}
-        disabled={isStreaming || !input.trim()}
-        aria-label={sendLabel}
-        className="shrink-0 self-end mb-0.5"
-      >
-        {isMobile ? (
-          // Mobile: icon-only send button
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-4 w-4"
-            aria-hidden="true"
+          <Button
+            data-slot="send-button"
+            size="icon"
+            onClick={() => void sendMessage()}
+            disabled={isStreaming || !input.trim()}
+            aria-label={sendLabel}
+            className="size-9 shrink-0 self-end rounded-xl"
           >
-            <path d="m22 2-7 20-4-9-9-4Z" />
-            <path d="M22 2 11 13" />
-          </svg>
-        ) : (
-          sendLabel
-        )}
-      </Button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden="true"
+            >
+              <path d="m22 2-7 20-4-9-9-4Z" />
+              <path d="M22 2 11 13" />
+            </svg>
+          </Button>
+        </div>
+
+        {/* Persistent AI-disclosure microcopy (CHAT-05) */}
+        <p className="mt-2 text-center text-xs text-muted-foreground">
+          {t('footerDisclosure')}
+        </p>
+      </div>
     </div>
   )
 }

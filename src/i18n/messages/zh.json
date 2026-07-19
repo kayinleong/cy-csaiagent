@@ -20,6 +20,16 @@
     "send": "发送",
     "thinking": "思考中…",
     "emptyState": "您好！我是您的D2经纪助手。请随时询问有关D2房产、入职步骤或销售SOP的问题。",
+    "heroGreeting": "你好 {name}，准备好完成你的第一单交易了吗？",
+    "heroGreetingNoName": "准备好完成你的第一单交易了吗？",
+    "heroSubtitle": "询问 D2 项目、销售 SOP 或你的入职培训旅程。或粘贴客户消息，我会用你的语气起草回复。",
+    "footerDisclosure": "你正在与 AI 对话。随时可升级联系你的教练。",
+    "suggestions": {
+      "finder": "帮我找 Cheras 一间两房单位，预算 80 万",
+      "coachAd": "带我了解我的第一个 Meta 广告活动",
+      "reply": "起草：Bangsahill Park 的贷款资格",
+      "coachPricing": "Royal Suites 的价格结构是怎样的？"
+    },
     "citationLabel": "来源",
     "citations": "参考来源",
     "copyReply": "复制草稿",

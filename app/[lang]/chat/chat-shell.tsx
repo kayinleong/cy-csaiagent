@@ -25,21 +25,21 @@
 
 import { useState } from 'react'
 import { MessageList } from './message-list'
-import { ChatInput } from './chat-input'
+import { ChatInput, type SubmittedSuggestion } from './chat-input'
 import { ChatHeader, type LangOverride, type PillarOverride } from './chat-header'
 import { DisclosureModal } from './disclosure-modal'
 import { ConversationList } from './conversation-list'
 import { LeadSelector } from './lead-selector'
+import { HeroEmptyState } from './hero-empty-state'
 import { loadConversationMessages } from './load-conversation-messages'
 import type { ChatMessage } from './message-list'
 
 interface ChatShellProps {
   placeholder: string
   sendLabel: string
-  emptyStateMessage: string
 }
 
-export function ChatShell({ placeholder, sendLabel, emptyStateMessage }: ChatShellProps) {
+export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
   // ── Disclosure gate (CHAT-05) ────────────────────────────────────────────────
   // disclosureAcked: starts false; set to true once the modal is dismissed or
   // localStorage already contains the ack flag (handled inside DisclosureModal).
@@ -80,6 +80,12 @@ export function ChatShell({ placeholder, sendLabel, emptyStateMessage }: ChatShe
   // canonical message state from it whenever the selected conversationId changes.
   const [historyMessages, setHistoryMessages] = useState<ChatMessage[]>([])
 
+  // ── Suggestion-card dispatch (redesign quick-032) ────────────────────────────
+  // A hero card tap pins its pillar then bumps this one-shot signal; ChatInput
+  // seeds the text and sends. A monotonic id de-dupes React re-renders.
+  const [submittedSuggestion, setSubmittedSuggestion] =
+    useState<SubmittedSuggestion | undefined>(undefined)
+
   const isStreaming = messages.length > 0 &&
     messages[messages.length - 1]?.role === 'assistant' &&
     messages[messages.length - 1]?.content === ''
@@ -99,6 +105,13 @@ export function ChatShell({ placeholder, sendLabel, emptyStateMessage }: ChatShe
     setActiveCid('')
     setHistoryMessages([])
     setMessages([])
+  }
+
+  // Tapping a hero suggestion card: pin the card's pillar, then dispatch its
+  // prompt. Reply cards with no active lead flow through the lead-selector gate.
+  const handleSuggestion = (prompt: string, pillar: PillarOverride) => {
+    setPillarOverride(pillar)
+    setSubmittedSuggestion({ id: Date.now(), text: prompt })
   }
 
   // ── Reply lead gate (D-07) ────────────────────────────────────────────────────
@@ -162,13 +175,9 @@ export function ChatShell({ placeholder, sendLabel, emptyStateMessage }: ChatShe
         onOpenHistory={() => setHistoryOpen(true)}
       />
 
-      {/* ── Message list — flex-1, scrollable ───────────────────────────────── */}
+      {/* ── Message list — flex-1, scrollable (hero when empty) ─────────────── */}
       {messages.length === 0 && !isStreaming ? (
-        <div className="flex-1 flex items-center justify-center text-center px-6">
-          <p className="text-muted-foreground text-sm max-w-xs">
-            {emptyStateMessage}
-          </p>
-        </div>
+        <HeroEmptyState onSuggestion={handleSuggestion} />
       ) : (
         <MessageList
           messages={messages}
@@ -186,6 +195,7 @@ export function ChatShell({ placeholder, sendLabel, emptyStateMessage }: ChatShe
         pillarOverride={pillarOverride}
         leadId={leadId}
         onBeforeSend={handleBeforeSend}
+        submittedSuggestion={submittedSuggestion}
         placeholder={placeholder}
         sendLabel={sendLabel}
       />
