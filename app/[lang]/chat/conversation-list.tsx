@@ -41,6 +41,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Skeleton } from '@/components/ui/skeleton'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,10 +88,15 @@ export function ConversationList({
 
   // Load conversations when the drawer opens
   const loadConversations = useCallback(async () => {
-    const currentUser = clientAuth.currentUser
-    if (!currentUser) return
-
+    // Set loading first (before the auth check) so the skeleton shows immediately
+    // and clears on the unauthenticated early return (quick-035).
     setIsLoading(true)
+    const currentUser = clientAuth.currentUser
+    if (!currentUser) {
+      setIsLoading(false)
+      return
+    }
+
     try {
       const q = query(
         collection(clientDb, 'conversations'),
@@ -117,7 +123,9 @@ export function ConversationList({
           createdAt: data.createdAt?.toDate?.() ?? null,
         }
       })
-      setThreads(sortConversationsByCreatedAtDesc(items))
+      // Hide legacy coach-* primary threads — all conversations are chat-* now (quick-035).
+      const chatThreads = items.filter((item) => !item.id.startsWith('coach-'))
+      setThreads(sortConversationsByCreatedAtDesc(chatThreads))
     } catch (err) {
       // Load failure is non-fatal — the user can still chat in the current thread.
       // Log the error OBJECT only (Firestore error carries a code like
@@ -194,9 +202,14 @@ export function ConversationList({
         {/* Conversation list */}
         <ScrollArea className="flex-1">
           {isLoading ? (
-            <div className="px-4 py-6 text-center text-sm text-muted-foreground animate-pulse">
-              {t('thinking')}
-            </div>
+            <ul className="py-1" data-slot="conversation-list-loading" aria-busy="true">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <li key={i} className="px-4 py-3">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="mt-1.5 h-3 w-1/3" />
+                </li>
+              ))}
+            </ul>
           ) : filteredThreads.length === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-muted-foreground">
               {t('historyEmpty')}

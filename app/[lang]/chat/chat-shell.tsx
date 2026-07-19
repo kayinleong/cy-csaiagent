@@ -54,10 +54,12 @@ export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
   // localStorage already contains the ack flag (handled inside DisclosureModal).
   const [disclosureAcked, setDisclosureAcked] = useState(false)
 
-  // ── Conversation state (D-01 / CHAT-07) ─────────────────────────────────────
-  // activeCid: empty string = use the server-resolved primary thread (coach-${uid}).
-  // When the user selects a thread from history, this is set to that thread's cid.
-  const [activeCid, setActiveCid] = useState<string>('')
+  // ── Conversation state (CHAT-07 / quick-033 / quick-035) ────────────────────
+  // activeCid starts as a fresh chat-<uuid> session so EVERY conversation is a
+  // chat-* thread — never the legacy empty-cid → coach-${uid} primary thread.
+  // Lazy initializer: runs once; the id is internal state (not rendered), so the
+  // server/client values differ harmlessly with no hydration mismatch.
+  const [activeCid, setActiveCid] = useState<string>(() => newConversationId())
 
   // ── Language override (CHAT-08) ──────────────────────────────────────────────
   // undefined = auto-detect (franc-min per-message detection in the route).
