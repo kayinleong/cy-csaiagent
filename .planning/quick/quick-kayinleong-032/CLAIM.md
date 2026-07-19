@@ -4,7 +4,7 @@
 - session: claude-code
 - branch: quick-kayinleong-032-chat-redesign
 - started: 2026-07-19
-- status: in-progress
+- status: done
 - summary: Redesign the agent chat surface to the provided screenshot (lime accent, warm bg, serif hero, suggestion cards) with the new visual language propagated app-wide; verify the PDF's Phase 1 (Coach MVP) scope against the codebase; deliver a Phase 1 test table.
 
 ## Context
@@ -36,8 +36,40 @@ Explicitly **out of scope** for this claim (surfaced as findings, recommended as
 
 ## What has changed
 
-_(filled as work completes)_
+**UI redesign (delivered):**
+- `app/layout.tsx` — added Fraunces serif via `next/font` (`--font-fraunces`), applied on `<html>`.
+- `app/globals.css` — new light/dark tokens: warm off-white `--background`, vivid lime `--primary`/`--ring`/accent with near-black `--primary-foreground`, warm neutrals + borders, `--radius` 0.625→0.75rem, `--chart-1` → lime; fixed `--font-sans` (was self-referential) to an explicit Geist stack and `--font-heading` → Fraunces. Propagates app-wide.
+- `app/[lang]/chat/chat-header.tsx` — rewritten as the top nav (history · D2 logo · name · AI badge · centered Auto/Coach/Finder/Reply segmented control · EN/BM/中文 text toggles · lime "Talk to my coach"). All props, handoff logic, `data-slot="chat-header"`, `data-slot`/`data-testid="ai-badge"`, and pillar `aria-label`s preserved.
+- `app/[lang]/chat/hero-empty-state.tsx` (new) — serif hero (agent first name via Firebase Auth, name-less fallback), subtitle, 2×2 suggestion cards.
+- `app/[lang]/chat/chat-input.tsx` — unified rounded input + lime icon send button + footer AI-disclosure microcopy; `submittedSuggestion` one-shot send path (explicit-text arg avoids input-state race). SSE streaming logic unchanged; removed one unused import + one stale eslint-disable.
+- `app/[lang]/chat/chat-shell.tsx` — renders `HeroEmptyState`; suggestion→send handler (pins pillar, then dispatches); dropped now-unused `emptyStateMessage` prop.
+- `app/[lang]/chat/page.tsx` — stopped passing `emptyStateMessage`.
+- `src/i18n/messages/{en,ms,zh}.json` — added `chat.heroGreeting`, `heroGreetingNoName`, `heroSubtitle`, `footerDisclosure`, `suggestions.*` (at parity).
+- `.claude/launch.json` (new) — `next dev` config used for visual verification.
+
+**Scope verification + test table (delivered):**
+- `PHASE-1-TEST-TABLE.md` — UI acceptance + 12 Coach-MVP scope items, with the 4 audit gaps flagged.
+
+**Deferred (surfaced, not done):** wiring the Coach journey/stall/escalation seams into `app/api/chat/route.ts` (4 gaps). Recommended as `quick-kayinleong-033`.
 
 ## Verification
 
-_(Regression Report — filled before status: done)_
+**Automated**
+- `tsc --noEmit` — clean.
+- `eslint` (all changed files) — 0 errors, 0 warnings.
+- `vitest run` — 691 passed, 188 skipped, **1 failed**: `src/agents/reply/reply.test.ts` "hit → non-empty sopDocIds" — a 5s timeout in `replyAgent.run()` (live-model generation). Pre-existing + environmental: the file is in `src/agents/reply/` (not in the import graph of any changed file; `src/` never imports `app/`, and the reply agent does not import the i18n JSON), and it is a network/model timeout, not an assertion failure.
+- i18n parity test — passes (en/ms/zh identical key trees).
+
+**Visual (dev server + browser)**
+- `/en/chat` renders the redesign at desktop and narrow widths (matches the target screenshot: nav, serif hero, 2×2 cards, lime send, footer).
+- Computed styles confirm: "Talk to my coach" bg = lime `lab(87.9 -34.3 79.2)` with near-black text; hero `font-family` includes `Fraunces` at 48px.
+- Segmented control interactive (Auto→Coach active pill moves).
+- Whole-app token propagation confirmed on `/en/sign-in` (lime "Sign in" button).
+
+**Regression Report**
+- *Regression surface:* every `bg-primary`/`primary-foreground` consumer app-wide (buttons, sidebar-primary, active states), charts, radius, body/heading fonts, and the chat surface (header, input, empty state, disclosure, lead gate, SSE stream).
+- *Global tokens:* lime primary + near-black foreground verified legible (chat + sign-in). Only `--chart-1` changed (chart-2..5 unchanged → multi-series contrast preserved). Radius +0.125rem and the `--font-sans` fix are cosmetic. `--font-heading` (Fraunces) only applies where `font-heading` is used (the hero) — other headings keep their existing sans styling.
+- *Chat surface:* SSE stream/decoding preserved verbatim; suggestion send is additive (default typing path unchanged). Reply lead-gate still fires (A6). Language toggle keeps set/clear (toggle-off) semantics.
+- *e2e selectors preserved:* `[data-slot="chat-header"]` (finder-flow), `getByTestId('ai-badge')` text "AI" (disclosure), pillar `[aria-label="…"]`.
+- *Ruled out:* no `src/` behavior changed → agent/route/rules/eval suites unaffected (all green except the unrelated live-model timeout). `emptyState` i18n key retained in catalogs (parity intact) though unused in code.
+- *Not exhaustively exercised (recommended human spot-check):* full admin/coach console click-through under the new tokens; BM/中文 native copy review of the new strings.
