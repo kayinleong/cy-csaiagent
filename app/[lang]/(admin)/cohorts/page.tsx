@@ -16,8 +16,9 @@
 
 import { getTranslations } from 'next-intl/server'
 import { requireRole } from '../../_lib/require-role'
-import { listCohorts, type CohortSummary } from './actions'
-import { CohortManagement } from './cohort-management'
+import { listCohorts, listAgentCohorts, type CohortSummary } from './actions'
+import { listUsersWithRoles } from '../roles/actions'
+import { CohortManagement, type CohortAgent } from './cohort-management'
 
 interface PageProps {
   params: Promise<{ lang: string }>
@@ -46,6 +47,31 @@ export default async function CohortsAdminPage({ params }: PageProps) {
     initialCohorts = []
   }
 
+  // Membership management (quick-036): the agent roster + the uid→cohortId map.
+  // Both are admin-gated; failures are non-blocking (the CRUD table still renders).
+  let agents: CohortAgent[] = []
+  let cohortMap: Record<string, string> = {}
+  try {
+    const [rosterResult, mapResult] = await Promise.all([
+      listUsersWithRoles(),
+      listAgentCohorts(),
+    ])
+    if (rosterResult.ok) {
+      agents = rosterResult.users.map((u) => ({
+        id: u.id,
+        displayRef: u.displayRef,
+        email: u.email,
+        role: u.role,
+      }))
+    }
+    if (mapResult.ok) {
+      cohortMap = mapResult.map
+    }
+  } catch {
+    agents = []
+    cohortMap = {}
+  }
+
   const t = await getTranslations('adminCohorts')
 
   return (
@@ -55,7 +81,12 @@ export default async function CohortsAdminPage({ params }: PageProps) {
         <p className="mt-1 text-sm text-muted-foreground">{t('pageSubtitle')}</p>
       </div>
 
-      <CohortManagement initialCohorts={initialCohorts} lang={lang} />
+      <CohortManagement
+        initialCohorts={initialCohorts}
+        agents={agents}
+        initialCohortMap={cohortMap}
+        lang={lang}
+      />
     </div>
   )
 }

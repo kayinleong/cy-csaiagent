@@ -22,7 +22,7 @@
 import { cookies } from 'next/headers'
 import { FieldValue } from 'firebase-admin/firestore'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
-import { cohortsRef, TENANT_ID } from '@/src/firebase/collections'
+import { cohortsRef, agentProfilesRef, TENANT_ID } from '@/src/firebase/collections'
 import * as audit from '@/src/audit'
 
 // ─── Session helper ───────────────────────────────────────────────────────────
@@ -243,6 +243,119 @@ export async function listCohorts(): Promise<ListCohortsResult | ListCohortsErro
     return { ok: true, cohorts }
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Failed to list cohorts'
+    return { ok: false, error: msg }
+  }
+}
+
+// ─── listAgentCohorts (membership map) ──────────────────────────────────────────
+
+export interface ListAgentCohortsResult {
+  ok: true
+  /** Map of agent uid → the cohort id they belong to (only agents WITH a cohort). */
+  map: Record<string, string>
+}
+
+export type ListAgentCohortsError = { ok: false; error: string }
+
+/**
+ * Bounded read of every agent's cohort membership (quick-036). Admin-only.
+ *
+ * Membership is the denormalized `agentProfiles/{uid}.cohortId` (one cohort per
+ * agent — no member array). Returns only agents that HAVE a cohort; the client
+ * combines this with the user roster to render members + who's available to add.
+ */
+export async function listAgentCohorts(): Promise<ListAgentCohortsResult | ListAgentCohortsError> {
+  let user: Awaited<ReturnType<typeof requireUser>>
+  try {
+    user = await getSessionUser()
+  } catch {
+    return { ok: false, error: 'Unauthorized' }
+  }
+
+  if (user.role !== 'admin') {
+    return { ok: false, error: 'Forbidden' }
+  }
+
+  try {
+    // Bounded read — pilot org is a few hundred agents. Filter to docs that carry
+    // a cohortId in memory (avoids an inequality query + composite index).
+    const snap = await agentProfilesRef().limit(1000).get()
+    const map: Record<string, string> = {}
+    for (const doc of snap.docs) {
+      const cohortId = doc.data().cohortId
+      if (typeof cohortId === 'string' && cohortId.length > 0) {
+        map[doc.id] = cohortId
+      }
+    }
+    return { ok: true, map }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to list agent cohorts'
+    return { ok: false, error: msg }
+  }
+}
+
+// ─── setAgentCohort (add / remove membership) ───────────────────────────────────
+
+/**
+ * Add an agent to a cohort (`cohortId` non-null) or remove them (`cohortId` null).
+ * Admin-only; audited (quick-036).
+ *
+ * Writes the denormalized `agentProfiles/{agentUid}.cohortId` (one cohort per agent
+ * — adding an agent already in another cohort MOVES them). Removal deletes the field
+ * so cohort filters (`where('cohortId','==',…)`) no longer match. The cohort's
+ * existence is checked on add to avoid a dangling pointer.
+ *
+ * @param agentUid  The agent to add/remove.
+ * @param cohortId  Target cohort id, or null to remove from any cohort.
+ */
+export async function setAgentCohort(
+  agentUid: string,
+  cohortId: string | null,
+): Promise<CohortResult> {
+  let user: Awaited<ReturnType<typeof requireUser>>
+  try {
+    user = await getSessionUser()
+  } catch {
+    return { ok: false, error: 'Unauthorized' }
+  }
+
+  // D-03 / T-07-10: membership writes are admin-only — role from the verified token.
+  if (user.role !== 'admin') {
+    return { ok: false, error: 'Forbidden' }
+  }
+
+  if (!agentUid) {
+    return { ok: false, error: 'Missing agent' }
+  }
+
+  try {
+    if (cohortId) {
+      // Add / move: verify the cohort exists first (no dangling pointer).
+      const cohortSnap = await cohortsRef().doc(cohortId).get()
+      if (!cohortSnap.exists) {
+        return { ok: false, error: 'Cohort not found' }
+      }
+      await agentProfilesRef()
+        .doc(agentUid)
+        .set({ tenantId: TENANT_ID, cohortId }, { merge: true })
+    } else {
+      // Remove: clear the denormalized pointer.
+      await agentProfilesRef()
+        .doc(agentUid)
+        .set({ cohortId: FieldValue.delete() }, { merge: true })
+    }
+
+    await audit.log({
+      actorUid: user.uid,
+      action: cohortId ? 'cohort-member-add' : 'cohort-member-remove',
+      targetRef: `agentProfiles/${agentUid}`,
+      // uid + cohortId only — never email/PII (D-03).
+      raw: { agentUid, cohortId: cohortId ?? null },
+    })
+
+    return { ok: true, id: agentUid }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to update cohort membership'
     return { ok: false, error: msg }
   }
 }
