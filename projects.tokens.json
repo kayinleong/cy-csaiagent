@@ -1,0 +1,755 @@
+{
+  "meteredAt": "2026-07-19T07:41:44.010Z",
+  "method": "exact API usage",
+  "extractionModel": "claude-haiku-4-5-20251001",
+  "extractionSource": "mostly exact (some estimated on error)",
+  "embeddingModel": "gemini-embedding-001",
+  "embeddingSource": "exact (Gemini countTokens)",
+  "totals": {
+    "extractionInputTokens": 168706,
+    "extractionOutputTokens": 15675,
+    "embeddingTokens": 67657,
+    "totalTokens": 252038,
+    "avgTokensPerProject": 3074
+  },
+  "perProject": [
+    {
+      "name": "Damansara City Residency (DC Residensi)",
+      "extractionInputTokens": 1920,
+      "extractionOutputTokens": 215,
+      "extractionExact": true,
+      "embeddingTokens": 668,
+      "embeddingExact": true,
+      "totalTokens": 2803
+    },
+    {
+      "name": "Aetas Seputeh",
+      "extractionInputTokens": 1752,
+      "extractionOutputTokens": 168,
+      "extractionExact": true,
+      "embeddingTokens": 536,
+      "embeddingExact": true,
+      "totalTokens": 2456
+    },
+    {
+      "name": "PDH: Imperial Residences RA",
+      "extractionInputTokens": 2203,
+      "extractionOutputTokens": 187,
+      "extractionExact": true,
+      "embeddingTokens": 950,
+      "embeddingExact": true,
+      "totalTokens": 3340
+    },
+    {
+      "name": "Bangsar Hill Park",
+      "extractionInputTokens": 2958,
+      "extractionOutputTokens": 198,
+      "extractionExact": true,
+      "embeddingTokens": 1567,
+      "embeddingExact": true,
+      "totalTokens": 4723
+    },
+    {
+      "name": "ViiA Residences",
+      "extractionInputTokens": 1794,
+      "extractionOutputTokens": 214,
+      "extractionExact": true,
+      "embeddingTokens": 575,
+      "embeddingExact": true,
+      "totalTokens": 2583
+    },
+    {
+      "name": "Enlace Suites @ Pantai Sentral Park",
+      "extractionInputTokens": 2381,
+      "extractionOutputTokens": 211,
+      "extractionExact": true,
+      "embeddingTokens": 1073,
+      "embeddingExact": true,
+      "totalTokens": 3665
+    },
+    {
+      "name": "The Lantern Bangsar",
+      "extractionInputTokens": 2977,
+      "extractionOutputTokens": 173,
+      "extractionExact": true,
+      "embeddingTokens": 1605,
+      "embeddingExact": true,
+      "totalTokens": 4755
+    },
+    {
+      "name": "One Eleven Menerung @ Bangsar",
+      "extractionInputTokens": 2438,
+      "extractionOutputTokens": 190,
+      "extractionExact": true,
+      "embeddingTokens": 1113,
+      "embeddingExact": true,
+      "totalTokens": 3741
+    },
+    {
+      "name": "Pavilion Damansara Heights",
+      "extractionInputTokens": 1775,
+      "extractionOutputTokens": 169,
+      "extractionExact": true,
+      "embeddingTokens": 565,
+      "embeddingExact": true,
+      "totalTokens": 2509
+    },
+    {
+      "name": "Pavilion Damansara Heights: Royal Suites(RC)",
+      "extractionInputTokens": 1770,
+      "extractionOutputTokens": 169,
+      "extractionExact": true,
+      "embeddingTokens": 543,
+      "embeddingExact": true,
+      "totalTokens": 2482
+    },
+    {
+      "name": "Setia Sky Seputeh",
+      "extractionInputTokens": 1755,
+      "extractionOutputTokens": 181,
+      "extractionExact": true,
+      "embeddingTokens": 552,
+      "embeddingExact": true,
+      "totalTokens": 2488
+    },
+    {
+      "name": "Pinnacle Bangsar Residence",
+      "extractionInputTokens": 2222,
+      "extractionOutputTokens": 193,
+      "extractionExact": true,
+      "embeddingTokens": 944,
+      "embeddingExact": true,
+      "totalTokens": 3359
+    },
+    {
+      "name": "Parkside Residences",
+      "extractionInputTokens": 2832,
+      "extractionOutputTokens": 202,
+      "extractionExact": true,
+      "embeddingTokens": 1465,
+      "embeddingExact": true,
+      "totalTokens": 4499
+    },
+    {
+      "name": "Rhombus",
+      "extractionInputTokens": 1497,
+      "extractionOutputTokens": 165,
+      "extractionExact": true,
+      "embeddingTokens": 293,
+      "embeddingExact": true,
+      "totalTokens": 1955
+    },
+    {
+      "name": "Riana Trees Residences",
+      "extractionInputTokens": 1687,
+      "extractionOutputTokens": 183,
+      "extractionExact": true,
+      "embeddingTokens": 505,
+      "embeddingExact": true,
+      "totalTokens": 2375
+    },
+    {
+      "name": "Residensi 38 Bangsar",
+      "extractionInputTokens": 2094,
+      "extractionOutputTokens": 184,
+      "extractionExact": true,
+      "embeddingTokens": 885,
+      "embeddingExact": true,
+      "totalTokens": 3163
+    },
+    {
+      "name": "Lunar Seputeh",
+      "extractionInputTokens": 3214,
+      "extractionOutputTokens": 224,
+      "extractionExact": true,
+      "embeddingTokens": 1759,
+      "embeddingExact": true,
+      "totalTokens": 5197
+    },
+    {
+      "name": "Sentral Suites @ KL Sentral",
+      "extractionInputTokens": 2392,
+      "extractionOutputTokens": 204,
+      "extractionExact": true,
+      "embeddingTokens": 1098,
+      "embeddingExact": true,
+      "totalTokens": 3694
+    },
+    {
+      "name": "The Cedar Damansara Heights",
+      "extractionInputTokens": 1798,
+      "extractionOutputTokens": 169,
+      "extractionExact": true,
+      "embeddingTokens": 549,
+      "embeddingExact": true,
+      "totalTokens": 2516
+    },
+    {
+      "name": "Tria Seputeh",
+      "extractionInputTokens": 1987,
+      "extractionOutputTokens": 189,
+      "extractionExact": true,
+      "embeddingTokens": 782,
+      "embeddingExact": true,
+      "totalTokens": 2958
+    },
+    {
+      "name": "d'Brightton titiwangsa",
+      "extractionInputTokens": 1664,
+      "extractionOutputTokens": 200,
+      "extractionExact": true,
+      "embeddingTokens": 478,
+      "embeddingExact": true,
+      "totalTokens": 2342
+    },
+    {
+      "name": "IJM Sierra Hijauan",
+      "extractionInputTokens": 1718,
+      "extractionOutputTokens": 186,
+      "extractionExact": true,
+      "embeddingTokens": 534,
+      "embeddingExact": true,
+      "totalTokens": 2438
+    },
+    {
+      "name": "Puncak Wangsamas Phase 2",
+      "extractionInputTokens": 2755,
+      "extractionOutputTokens": 218,
+      "extractionExact": true,
+      "embeddingTokens": 1364,
+      "embeddingExact": true,
+      "totalTokens": 4337
+    },
+    {
+      "name": "The Reya",
+      "extractionInputTokens": 2017,
+      "extractionOutputTokens": 189,
+      "extractionExact": true,
+      "embeddingTokens": 811,
+      "embeddingExact": true,
+      "totalTokens": 3017
+    },
+    {
+      "name": "Padang Residences",
+      "extractionInputTokens": 2043,
+      "extractionOutputTokens": 173,
+      "extractionExact": true,
+      "embeddingTokens": 859,
+      "embeddingExact": true,
+      "totalTokens": 3075
+    },
+    {
+      "name": "Tangen Residences",
+      "extractionInputTokens": 1793,
+      "extractionOutputTokens": 199,
+      "extractionExact": true,
+      "embeddingTokens": 581,
+      "embeddingExact": true,
+      "totalTokens": 2573
+    },
+    {
+      "name": "Miranda Hill @ north kiara by BRDB",
+      "extractionInputTokens": 1901,
+      "extractionOutputTokens": 194,
+      "extractionExact": true,
+      "embeddingTokens": 678,
+      "embeddingExact": true,
+      "totalTokens": 2773
+    },
+    {
+      "name": "Alstonia Hilltop Homes",
+      "extractionInputTokens": 1532,
+      "extractionOutputTokens": 178,
+      "extractionExact": true,
+      "embeddingTokens": 321,
+      "embeddingExact": true,
+      "totalTokens": 2031
+    },
+    {
+      "name": "Eden BRDB, Taman Duta",
+      "extractionInputTokens": 2023,
+      "extractionOutputTokens": 179,
+      "extractionExact": true,
+      "embeddingTokens": 755,
+      "embeddingExact": true,
+      "totalTokens": 2957
+    },
+    {
+      "name": "Majestic @ Kiara Reserve",
+      "extractionInputTokens": 2300,
+      "extractionOutputTokens": 185,
+      "extractionExact": true,
+      "embeddingTokens": 1016,
+      "embeddingExact": true,
+      "totalTokens": 3501
+    },
+    {
+      "name": "St. Regis Residences Kuala Lumpur",
+      "extractionInputTokens": 1884,
+      "extractionOutputTokens": 186,
+      "extractionExact": true,
+      "embeddingTokens": 638,
+      "embeddingExact": true,
+      "totalTokens": 2708
+    },
+    {
+      "name": "Aster Hill Sri Petaling",
+      "extractionInputTokens": 1672,
+      "extractionOutputTokens": 167,
+      "extractionExact": true,
+      "embeddingTokens": 460,
+      "embeddingExact": true,
+      "totalTokens": 2299
+    },
+    {
+      "name": "Exsim Project",
+      "extractionInputTokens": 2081,
+      "extractionOutputTokens": 205,
+      "extractionExact": true,
+      "embeddingTokens": 847,
+      "embeddingExact": true,
+      "totalTokens": 3133
+    },
+    {
+      "name": "Kensho @ Taman Desa",
+      "extractionInputTokens": 1718,
+      "extractionOutputTokens": 170,
+      "extractionExact": true,
+      "embeddingTokens": 516,
+      "embeddingExact": true,
+      "totalTokens": 2404
+    },
+    {
+      "name": "Aetas Taman Desa",
+      "extractionInputTokens": 1664,
+      "extractionOutputTokens": 190,
+      "extractionExact": true,
+      "embeddingTokens": 459,
+      "embeddingExact": true,
+      "totalTokens": 2313
+    },
+    {
+      "name": "Southpoint Residences (IGB )",
+      "extractionInputTokens": 1812,
+      "extractionOutputTokens": 180,
+      "extractionExact": true,
+      "embeddingTokens": 621,
+      "embeddingExact": true,
+      "totalTokens": 2613
+    },
+    {
+      "name": "Park Green at Pavilion Bukit Jalil",
+      "extractionInputTokens": 1949,
+      "extractionOutputTokens": 187,
+      "extractionExact": true,
+      "embeddingTokens": 732,
+      "embeddingExact": true,
+      "totalTokens": 2868
+    },
+    {
+      "name": "OAKA Residences, Bukit Jalil",
+      "extractionInputTokens": 2066,
+      "extractionOutputTokens": 215,
+      "extractionExact": true,
+      "embeddingTokens": 828,
+      "embeddingExact": true,
+      "totalTokens": 3109
+    },
+    {
+      "name": "Senja The Jewel Collection",
+      "extractionInputTokens": 1875,
+      "extractionOutputTokens": 182,
+      "extractionExact": true,
+      "embeddingTokens": 651,
+      "embeddingExact": true,
+      "totalTokens": 2708
+    },
+    {
+      "name": "18 Madge Uthant",
+      "extractionInputTokens": 1771,
+      "extractionOutputTokens": 189,
+      "extractionExact": true,
+      "embeddingTokens": 551,
+      "embeddingExact": true,
+      "totalTokens": 2511
+    },
+    {
+      "name": "Aria Luxury Residence @ KLCC",
+      "extractionInputTokens": 1475,
+      "extractionOutputTokens": 178,
+      "extractionExact": true,
+      "embeddingTokens": 280,
+      "embeddingExact": true,
+      "totalTokens": 1933
+    },
+    {
+      "name": "AT6 Residensi @ Ampang Tengah",
+      "extractionInputTokens": 1590,
+      "extractionOutputTokens": 189,
+      "extractionExact": true,
+      "embeddingTokens": 381,
+      "embeddingExact": true,
+      "totalTokens": 2160
+    },
+    {
+      "name": "Clouthaus KLCC",
+      "extractionInputTokens": 1912,
+      "extractionOutputTokens": 180,
+      "extractionExact": true,
+      "embeddingTokens": 674,
+      "embeddingExact": true,
+      "totalTokens": 2766
+    },
+    {
+      "name": "Conlay by E&O",
+      "extractionInputTokens": 2199,
+      "extractionOutputTokens": 209,
+      "extractionExact": true,
+      "embeddingTokens": 931,
+      "embeddingExact": true,
+      "totalTokens": 3339
+    },
+    {
+      "name": "Core Residence @ TRX",
+      "extractionInputTokens": 1983,
+      "extractionOutputTokens": 196,
+      "extractionExact": true,
+      "embeddingTokens": 701,
+      "embeddingExact": true,
+      "totalTokens": 2880
+    },
+    {
+      "name": "Dawn KLCC",
+      "extractionInputTokens": 2267,
+      "extractionOutputTokens": 209,
+      "extractionExact": true,
+      "embeddingTokens": 1031,
+      "embeddingExact": true,
+      "totalTokens": 3507
+    },
+    {
+      "name": "Eaton Residences by Sutera @ KLCC",
+      "extractionInputTokens": 2191,
+      "extractionOutputTokens": 183,
+      "extractionExact": true,
+      "embeddingTokens": 907,
+      "embeddingExact": true,
+      "totalTokens": 3281
+    },
+    {
+      "name": "Platinum Face Suite 2 KLCC",
+      "extractionInputTokens": 1825,
+      "extractionOutputTokens": 186,
+      "extractionExact": true,
+      "embeddingTokens": 584,
+      "embeddingExact": true,
+      "totalTokens": 2595
+    },
+    {
+      "name": "Armani Hallson @ Jalan Ampang",
+      "extractionInputTokens": 2059,
+      "extractionOutputTokens": 178,
+      "extractionExact": true,
+      "embeddingTokens": 834,
+      "embeddingExact": true,
+      "totalTokens": 3071
+    },
+    {
+      "name": "Orion Residence",
+      "extractionInputTokens": 2441,
+      "extractionOutputTokens": 234,
+      "extractionExact": true,
+      "embeddingTokens": 1148,
+      "embeddingExact": true,
+      "totalTokens": 3823
+    },
+    {
+      "name": "PSQ Pavilion Square",
+      "extractionInputTokens": 2420,
+      "extractionOutputTokens": 203,
+      "extractionExact": true,
+      "embeddingTokens": 1129,
+      "embeddingExact": true,
+      "totalTokens": 3752
+    },
+    {
+      "name": "Katana 2 Residence",
+      "extractionInputTokens": 2217,
+      "extractionOutputTokens": 198,
+      "extractionExact": true,
+      "embeddingTokens": 955,
+      "embeddingExact": true,
+      "totalTokens": 3370
+    },
+    {
+      "name": "The Centrix",
+      "extractionInputTokens": 1937,
+      "extractionOutputTokens": 221,
+      "extractionExact": true,
+      "embeddingTokens": 725,
+      "embeddingExact": true,
+      "totalTokens": 2883
+    },
+    {
+      "name": "Quill Residences KLCC",
+      "extractionInputTokens": 1841,
+      "extractionOutputTokens": 183,
+      "extractionExact": true,
+      "embeddingTokens": 612,
+      "embeddingExact": true,
+      "totalTokens": 2636
+    },
+    {
+      "name": "Royal Lexis KL",
+      "extractionInputTokens": 3142,
+      "extractionOutputTokens": 212,
+      "extractionExact": true,
+      "embeddingTokens": 1991,
+      "embeddingExact": true,
+      "totalTokens": 5345
+    },
+    {
+      "name": "SO Sofitel Residences KLCC",
+      "extractionInputTokens": 2275,
+      "extractionOutputTokens": 201,
+      "extractionExact": true,
+      "embeddingTokens": 889,
+      "embeddingExact": true,
+      "totalTokens": 3365
+    },
+    {
+      "name": "Le Nouvel KLCC",
+      "extractionInputTokens": 2126,
+      "extractionOutputTokens": 194,
+      "extractionExact": true,
+      "embeddingTokens": 838,
+      "embeddingExact": true,
+      "totalTokens": 3158
+    },
+    {
+      "name": "Star Residences KLCC",
+      "extractionInputTokens": 2084,
+      "extractionOutputTokens": 190,
+      "extractionExact": true,
+      "embeddingTokens": 820,
+      "embeddingExact": true,
+      "totalTokens": 3094
+    },
+    {
+      "name": "Jewel by Oxley KLCC",
+      "extractionInputTokens": 1705,
+      "extractionOutputTokens": 182,
+      "extractionExact": true,
+      "embeddingTokens": 482,
+      "embeddingExact": true,
+      "totalTokens": 2369
+    },
+    {
+      "name": "Golden Crown Residence",
+      "extractionInputTokens": 3408,
+      "extractionOutputTokens": 208,
+      "extractionExact": true,
+      "embeddingTokens": 1961,
+      "embeddingExact": true,
+      "totalTokens": 5577
+    },
+    {
+      "name": "SWNK Houze @ BBCC (Bukit Bintang City Centre)",
+      "extractionInputTokens": 1990,
+      "extractionOutputTokens": 259,
+      "extractionExact": true,
+      "embeddingTokens": 738,
+      "embeddingExact": true,
+      "totalTokens": 2987
+    },
+    {
+      "name": "Times Square 2 Residences Kuala Lumpur",
+      "extractionInputTokens": 1380,
+      "extractionOutputTokens": 181,
+      "extractionExact": true,
+      "embeddingTokens": 222,
+      "embeddingExact": true,
+      "totalTokens": 1783
+    },
+    {
+      "name": "The Manor KLCC",
+      "extractionInputTokens": 1450,
+      "extractionOutputTokens": 169,
+      "extractionExact": true,
+      "embeddingTokens": 257,
+      "embeddingExact": true,
+      "totalTokens": 1876
+    },
+    {
+      "name": "TRX Residences",
+      "extractionInputTokens": 2165,
+      "extractionOutputTokens": 193,
+      "extractionExact": true,
+      "embeddingTokens": 916,
+      "embeddingExact": true,
+      "totalTokens": 3274
+    },
+    {
+      "name": "The Oval Kuala Lumpur",
+      "extractionInputTokens": 2001,
+      "extractionOutputTokens": 205,
+      "extractionExact": true,
+      "embeddingTokens": 763,
+      "embeddingExact": true,
+      "totalTokens": 2969
+    },
+    {
+      "name": "The Ritz- Carlton Residences",
+      "extractionInputTokens": 2564,
+      "extractionOutputTokens": 186,
+      "extractionExact": true,
+      "embeddingTokens": 1160,
+      "embeddingExact": true,
+      "totalTokens": 3910
+    },
+    {
+      "name": "The Stride Office @ BBCC",
+      "extractionInputTokens": 1827,
+      "extractionOutputTokens": 237,
+      "extractionExact": true,
+      "embeddingTokens": 619,
+      "embeddingExact": true,
+      "totalTokens": 2683
+    },
+    {
+      "name": "Rimbun Saujana Residency",
+      "extractionInputTokens": 2017,
+      "extractionOutputTokens": 177,
+      "extractionExact": true,
+      "embeddingTokens": 781,
+      "embeddingExact": true,
+      "totalTokens": 2975
+    },
+    {
+      "name": "Luminar Residence Subang by BRDB",
+      "extractionInputTokens": 3256,
+      "extractionOutputTokens": 206,
+      "extractionExact": true,
+      "embeddingTokens": 1863,
+      "embeddingExact": true,
+      "totalTokens": 5325
+    },
+    {
+      "name": "Accent PJ",
+      "extractionInputTokens": 1461,
+      "extractionOutputTokens": 65,
+      "extractionExact": false,
+      "embeddingTokens": 1631,
+      "embeddingExact": true,
+      "totalTokens": 3157
+    },
+    {
+      "name": "26 Araville PJ",
+      "extractionInputTokens": 1611,
+      "extractionOutputTokens": 214,
+      "extractionExact": true,
+      "embeddingTokens": 440,
+      "embeddingExact": true,
+      "totalTokens": 2265
+    },
+    {
+      "name": "The Atera, PJ by Paramount Property",
+      "extractionInputTokens": 1975,
+      "extractionOutputTokens": 198,
+      "extractionExact": true,
+      "embeddingTokens": 776,
+      "embeddingExact": true,
+      "totalTokens": 2949
+    },
+    {
+      "name": "Anyara Hills",
+      "extractionInputTokens": 2324,
+      "extractionOutputTokens": 176,
+      "extractionExact": true,
+      "embeddingTokens": 1052,
+      "embeddingExact": true,
+      "totalTokens": 3552
+    },
+    {
+      "name": "Yanu Hills @ Bon Estates",
+      "extractionInputTokens": 1546,
+      "extractionOutputTokens": 204,
+      "extractionExact": true,
+      "embeddingTokens": 379,
+      "embeddingExact": true,
+      "totalTokens": 2129
+    },
+    {
+      "name": "Rafflesia @ Hill 2, 3 & 4",
+      "extractionInputTokens": 2573,
+      "extractionOutputTokens": 204,
+      "extractionExact": true,
+      "embeddingTokens": 1274,
+      "embeddingExact": true,
+      "totalTokens": 4051
+    },
+    {
+      "name": "DAYA Residence",
+      "extractionInputTokens": 2285,
+      "extractionOutputTokens": 180,
+      "extractionExact": true,
+      "embeddingTokens": 1006,
+      "embeddingExact": true,
+      "totalTokens": 3471
+    },
+    {
+      "name": "Vila Setara Happy Garden",
+      "extractionInputTokens": 1750,
+      "extractionOutputTokens": 195,
+      "extractionExact": true,
+      "embeddingTokens": 570,
+      "embeddingExact": true,
+      "totalTokens": 2515
+    },
+    {
+      "name": "E&O – City of Elmina (Laman Embun Commercial)",
+      "extractionInputTokens": 1857,
+      "extractionOutputTokens": 211,
+      "extractionExact": true,
+      "embeddingTokens": 646,
+      "embeddingExact": true,
+      "totalTokens": 2714
+    },
+    {
+      "name": "Aspire office @ KL ecocity",
+      "extractionInputTokens": 2833,
+      "extractionOutputTokens": 206,
+      "extractionExact": true,
+      "embeddingTokens": 1482,
+      "embeddingExact": true,
+      "totalTokens": 4521
+    },
+    {
+      "name": "The MET, Corporate Tower",
+      "extractionInputTokens": 1876,
+      "extractionOutputTokens": 178,
+      "extractionExact": true,
+      "embeddingTokens": 671,
+      "embeddingExact": true,
+      "totalTokens": 2725
+    },
+    {
+      "name": "Sierra Hijau (Landed)",
+      "extractionInputTokens": 1694,
+      "extractionOutputTokens": 177,
+      "extractionExact": true,
+      "embeddingTokens": 497,
+      "embeddingExact": true,
+      "totalTokens": 2368
+    },
+    {
+      "name": "Melbourne Square",
+      "extractionInputTokens": 1490,
+      "extractionOutputTokens": 160,
+      "extractionExact": true,
+      "embeddingTokens": 314,
+      "embeddingExact": true,
+      "totalTokens": 1964
+    }
+  ]
+}

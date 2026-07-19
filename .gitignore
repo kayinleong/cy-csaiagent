@@ -53,6 +53,12 @@ firebase-adminsdk-*.json
 *.pem
 *.key
 
+# quick-kayinleong-039 scraped data dumps — contain agent contact info (PIC names,
+# WhatsApp numbers) + are large + regenerable; the data lives in Firestore inventory.
+/projects.json
+/projects.inventory.json
+/drive-documents.json
+
 # vercel
 .vercel
 
