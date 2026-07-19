@@ -34,6 +34,15 @@ import { HeroEmptyState } from './hero-empty-state'
 import { loadConversationMessages } from './load-conversation-messages'
 import type { ChatMessage } from './message-list'
 
+/** Generate a unique conversation id for a brand-new session (quick-033). */
+function newConversationId(): string {
+  const rand =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  return `chat-${rand}`
+}
+
 interface ChatShellProps {
   placeholder: string
   sendLabel: string
@@ -101,8 +110,12 @@ export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
     setActiveCid(cid)
   }
 
+  // New conversation = a genuinely SEPARATE session (quick-033). Generate a fresh
+  // unique cid and switch to it; the route creates the owned thread doc on the first
+  // message. Previously this set activeCid='' which re-resolved to the single primary
+  // thread (coach-${uid}), so "new" chats concatenated into the previous one.
   const handleNewConversation = () => {
-    setActiveCid('')
+    setActiveCid(newConversationId())
     setHistoryMessages([])
     setMessages([])
   }

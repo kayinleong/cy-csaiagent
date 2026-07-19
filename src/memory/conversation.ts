@@ -114,6 +114,75 @@ export async function ensurePrimaryThread(
 }
 
 /**
+ * Truncate a first-message string into a short, single-line thread title.
+ * Owner-facing display only (quick-033). Collapses whitespace; ellipsizes at `max`.
+ */
+export function truncateTitle(text: string, max = 80): string {
+  const clean = text.trim().replace(/\s+/g, ' ')
+  if (!clean) return ''
+  return clean.length > max ? `${clean.slice(0, max - 1).trimEnd()}…` : clean
+}
+
+/**
+ * Resolve the conversation thread to write to for a chat turn (quick-033).
+ *
+ * This is what makes "New conversation" a SEPARATE thread instead of concatenating
+ * into the single primary thread:
+ *   - `cid` empty  → the stable primary thread (`ensurePrimaryThread`, D-01). Preserves
+ *     the default-thread behavior for first-ever / cid-less turns.
+ *   - `cid` given, doc MISSING → a brand-new session: create the conversation doc owned
+ *     by the caller (so the thread is listable in history AND its messages are
+ *     client-readable — the messages rules key on the PARENT doc's ownerUid). Sets a
+ *     `title` from the first user message when provided.
+ *   - `cid` given, doc owned by CALLER → use it (history navigation / continued session).
+ *   - `cid` given, doc owned by SOMEONE ELSE (or an ownerless non-primary doc) → NEVER
+ *     write into it; fall back to the caller's primary thread (server-side ownership
+ *     hardening — the streaming route uses the Admin SDK, which bypasses Firestore rules).
+ *
+ * @param uid       Authenticated agent UID.
+ * @param cid       Client-supplied conversation id (may be empty).
+ * @param lang      Language for a newly-created thread.
+ * @param pillar    Pillar label for a newly-created thread (default 'coach').
+ * @param titleHint First user message — used to set the new thread's title.
+ * @returns         The conversation id to persist this turn under.
+ */
+export async function ensureConversationOwned(
+  uid: string,
+  cid: string,
+  lang: 'en' | 'ms' | 'zh',
+  pillar: ConversationDoc['pillar'] = 'coach',
+  titleHint?: string,
+): Promise<string> {
+  if (!cid) return ensurePrimaryThread(uid, lang)
+
+  const docRef = conversationsRef().doc(cid)
+  const snap = await docRef.get()
+
+  if (!snap.exists) {
+    // Brand-new session — create it owned by the caller.
+    const title = titleHint ? truncateTitle(titleHint) : ''
+    await docRef.set(
+      {
+        ownerUid: uid,
+        pillar,
+        lang,
+        createdAt: FieldValue.serverTimestamp(),
+        summary: '',
+        ...(title ? { title } : {}),
+        tenantId: 'd2' as const,
+      },
+      { merge: true },
+    )
+    return cid
+  }
+
+  // Existing doc: only the owner may write into it. Anything else falls back to the
+  // caller's own primary thread (never leak/append into another agent's transcript).
+  if (snap.data()?.ownerUid === uid) return cid
+  return ensurePrimaryThread(uid, lang)
+}
+
+/**
  * List the agent's conversations, ordered by createdAt DESC (most recent first).
  *
  * Uses the composite index `(ownerUid, createdAt DESC)` declared in

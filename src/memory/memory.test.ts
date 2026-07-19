@@ -835,3 +835,75 @@ describe('mergeDiscussed (discussed-accumulation dedup FIND-06, 03-06)', () => {
     expect(result).toEqual(['proj-x', 'proj-y'])
   })
 })
+
+// ─── ensureConversationOwned (quick-033 — separate chat sessions + ownership) ──
+
+describe('ensureConversationOwned (quick-033 — separate chat sessions)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockConversationsDocSet.mockResolvedValue(undefined)
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('empty cid → falls back to the primary thread (coach-{uid})', async () => {
+    mockConversationsDocGet.mockResolvedValue({ exists: false })
+    const { ensureConversationOwned } = await import('./conversation')
+
+    const cid = await ensureConversationOwned('uid-001', '', 'en')
+
+    expect(cid).toBe('coach-uid-001')
+  })
+
+  it('provided cid with NO existing doc → creates an owned thread with a title, returns the cid', async () => {
+    mockConversationsDocGet.mockResolvedValue({ exists: false })
+    const { ensureConversationOwned } = await import('./conversation')
+
+    const cid = await ensureConversationOwned(
+      'uid-001',
+      'chat-abc',
+      'en',
+      'coach',
+      '  Walk me through   my first Meta ad campaign  ',
+    )
+
+    expect(cid).toBe('chat-abc')
+    expect(mockConversationsDocSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerUid: 'uid-001',
+        pillar: 'coach',
+        lang: 'en',
+        summary: '',
+        title: 'Walk me through my first Meta ad campaign',
+      }),
+      { merge: true },
+    )
+  })
+
+  it('provided cid owned by the caller → uses it, no write', async () => {
+    mockConversationsDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ ownerUid: 'uid-001', createdAt: new Date('2026-01-01') }),
+    })
+    const { ensureConversationOwned } = await import('./conversation')
+
+    const cid = await ensureConversationOwned('uid-001', 'chat-mine', 'en')
+
+    expect(cid).toBe('chat-mine')
+    expect(mockConversationsDocSet).not.toHaveBeenCalled()
+  })
+
+  it('provided cid owned by ANOTHER agent → never writes into it; falls back to primary', async () => {
+    // Single shared doc mock: both the ownership get() and the primary-thread get()
+    // resolve here. ownerUid !== caller → fall back to coach-{uid}, never chat-not-mine.
+    mockConversationsDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ ownerUid: 'someone-else', createdAt: new Date('2026-01-01') }),
+    })
+    const { ensureConversationOwned } = await import('./conversation')
+
+    const cid = await ensureConversationOwned('uid-001', 'chat-not-mine', 'en')
+
+    expect(cid).toBe('coach-uid-001')
+    expect(cid).not.toBe('chat-not-mine')
+  })
+})

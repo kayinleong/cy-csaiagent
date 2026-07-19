@@ -40,6 +40,9 @@ const mocks = vi.hoisted(() => {
   const mockAppendMessage = vi.fn(async () => 'msg-id-001')
   const mockAfter = vi.fn((fn: () => void) => fn()) // execute inline for test assertions
   const mockEnsurePrimaryThread = vi.fn(async () => 'coach-uid-001')
+  // quick-033: a provided cid is resolved via ensureConversationOwned (creates/owns
+  // the thread). The mock echoes the cid so downstream appendMessage(cid) assertions hold.
+  const mockEnsureConversationOwned = vi.fn(async (_uid: string, cid: string) => cid)
   // 03-07: Finder-specific mocks
   const mockFinderBuildSystemPrompt = vi.fn(() => 'You are a D2 Property Finder.')
   const mockFinderMakeTools = vi.fn(() => ({ searchProjects: {}, queryInventory: {}, fetchCollateral: {} }))
@@ -72,6 +75,7 @@ const mocks = vi.hoisted(() => {
     mockAppendMessage,
     mockAfter,
     mockEnsurePrimaryThread,
+    mockEnsureConversationOwned,
     mockFinderBuildSystemPrompt,
     mockFinderMakeTools,
     mockReadFinderSlot,
@@ -134,6 +138,7 @@ vi.mock('ai', () => ({
 vi.mock('@/src/memory', () => ({
   appendMessage: mocks.mockAppendMessage,
   ensurePrimaryThread: mocks.mockEnsurePrimaryThread,
+  ensureConversationOwned: mocks.mockEnsureConversationOwned,
   // 03-07: leadContext exports re-exported from the barrel
   readFinderSlot: mocks.mockReadFinderSlot,
   mergeFinderCriteria: mocks.mockMergeFinderCriteria,
@@ -443,6 +448,23 @@ describe('Test 8 (02-03): ensurePrimaryThread called when no cid provided', () =
     await POST(req)
 
     expect(mocks.mockEnsurePrimaryThread).not.toHaveBeenCalled()
+  })
+
+  it('resolves a provided cid via ensureConversationOwned (separate session, quick-033)', async () => {
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'Hello from a new session' }],
+      cid: 'chat-new-session-xyz',
+    })
+
+    await POST(req)
+
+    expect(mocks.mockEnsureConversationOwned).toHaveBeenCalledWith(
+      'uid-001',
+      'chat-new-session-xyz',
+      expect.any(String),
+      'coach',
+      expect.any(String),
+    )
   })
 })
 

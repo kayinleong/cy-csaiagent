@@ -46,6 +46,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 
 interface ConversationItem {
   id: string
+  title: string
   summary: string
   lang: string
   createdAt: Date | null
@@ -110,6 +111,7 @@ export function ConversationList({
         const data = doc.data()
         return {
           id: doc.id,
+          title: (data.title as string) || '',
           summary: (data.summary as string) || '',
           lang: (data.lang as string) || 'en',
           createdAt: data.createdAt?.toDate?.() ?? null,
@@ -137,9 +139,11 @@ export function ConversationList({
   }, [open, loadConversations])
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  // Client-side substring search (CHAT-07)
+  // Client-side substring search (CHAT-07) — over the visible label (title + summary).
   const filteredThreads = searchTerm
-    ? threads.filter((t) => t.summary.toLowerCase().includes(searchTerm.toLowerCase()))
+    ? threads.filter((t) =>
+        `${t.title} ${t.summary}`.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
     : threads
 
   const handleSelect = (cid: string) => {
@@ -199,28 +203,36 @@ export function ConversationList({
             </div>
           ) : (
             <ul className="py-1">
-              {filteredThreads.map((thread) => (
-                <li key={thread.id}>
-                  <button
-                    type="button"
-                    className="w-full text-left px-4 py-3 hover:bg-accent transition-colors group"
-                    onClick={() => handleSelect(thread.id)}
-                  >
-                    <p className="text-sm font-medium truncate group-hover:text-accent-foreground">
-                      {thread.summary || thread.id}
-                    </p>
-                    {thread.createdAt && (
-                      <p className="text-[0.6875rem] text-muted-foreground mt-0.5">
-                        {thread.createdAt.toLocaleDateString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
+              {filteredThreads.map((thread) => {
+                // Prefer the thread title (first message), then the rolling summary,
+                // then the date — never surface the raw cid to the user (quick-033).
+                const label = thread.title || thread.summary
+                const dateStr = thread.createdAt
+                  ? thread.createdAt.toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })
+                  : ''
+                return (
+                  <li key={thread.id}>
+                    <button
+                      type="button"
+                      className="w-full text-left px-4 py-3 hover:bg-accent transition-colors group"
+                      onClick={() => handleSelect(thread.id)}
+                    >
+                      <p className="text-sm font-medium truncate group-hover:text-accent-foreground">
+                        {label || dateStr || thread.id}
                       </p>
-                    )}
-                  </button>
-                </li>
-              ))}
+                      {label && dateStr && (
+                        <p className="text-[0.6875rem] text-muted-foreground mt-0.5">
+                          {dateStr}
+                        </p>
+                      )}
+                    </button>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </ScrollArea>

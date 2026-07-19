@@ -48,6 +48,7 @@ import { modelFor } from '@/src/llm/provider'
 import {
   appendMessage,
   ensurePrimaryThread,
+  ensureConversationOwned,
   readFinderSlot,
   readReplySlot,
   mergeFinderCriteria,
@@ -323,10 +324,16 @@ export async function POST(req: Request): Promise<Response> {
   const lastUserMessage = messages.filter((m) => m.role === 'user').at(-1)
   const userLang: 'en' | 'ms' | 'zh' = langOverride ?? (lastUserMessage ? detectLang(lastUserMessage.content) : 'en')
 
-  // Resolve the stable primary thread cid (D-01 / Pitfall 2 fix).
-  // If no cid was provided, create/look up the persistent coach-${uid} thread.
+  // Resolve the conversation thread (quick-033 — separate sessions).
+  //   - No cid → the stable primary thread coach-${uid} (D-01 / Pitfall 2 fix).
+  //   - A client-supplied cid identifies a specific session (a NEW chat or history
+  //     navigation): ensureConversationOwned creates the doc for a brand-new session
+  //     (so it is listable + its messages are client-readable) and verifies ownership,
+  //     falling back to the primary thread if the cid belongs to another agent.
   if (!cid) {
     cid = await ensurePrimaryThread(uid, userLang)
+  } else {
+    cid = await ensureConversationOwned(uid, cid, userLang, 'coach', lastUserMessage?.content)
   }
 
   // ── GATE 3: PDPA pseudonymization + assertRedacted ──────────────────────────

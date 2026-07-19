@@ -98,6 +98,9 @@ vi.mock('@/src/memory', () => ({
   appendMessage: mocks.mockAppendMessage,
   // 02-03: ensurePrimaryThread needed by the updated route (stable cid lifecycle)
   ensurePrimaryThread: vi.fn(async () => 'coach-uid-001'),
+  // quick-033: a provided cid resolves via ensureConversationOwned (separate sessions);
+  // echo the cid so the route persists under it.
+  ensureConversationOwned: vi.fn(async (_uid: string, cid: string) => cid),
   // 03-07: finder-slot helpers imported by the route (only called on the finder path)
   readFinderSlot: vi.fn(async () => null),
   mergeFinderCriteria: vi.fn((_a, _b) => ({})),

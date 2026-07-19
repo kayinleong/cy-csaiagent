@@ -112,6 +112,12 @@ export interface ConversationDoc {
   createdAt: Date | FieldValue
   /** Rolling summary updated by memory module */
   summary: string
+  /**
+   * Human-readable thread title for the history drawer (quick-033) — the truncated
+   * first user message, set once on thread creation. Owner-read only; never sent to
+   * the model, handoff bundle, or logs (those use `summary`/hashes).
+   */
+  title?: string
 }
 
 /**
