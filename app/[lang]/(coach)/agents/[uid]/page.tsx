@@ -25,6 +25,7 @@ import { getTranslations } from 'next-intl/server'
 import { requireRole } from '../../../_lib/require-role'
 import { getAgentProfile, NotInDownlineError, type AgentProfile } from '@/src/dashboard/queries'
 import { adminAuth } from '@/src/firebase/admin'
+import { cohortsRef } from '@/src/firebase/collections'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -99,6 +100,18 @@ export default async function AgentProfilePage({ params }: PageProps) {
     email = null
   }
 
+  // Resolve the cohort's display NAME (quick-038 — the badge showed the raw id).
+  // Falls back to the truncated id if the cohort was deleted (dangling pointer).
+  let cohortName: string | null = null
+  if (profile.cohortId) {
+    try {
+      const snap = await cohortsRef().doc(profile.cohortId).get()
+      cohortName = snap.exists ? (snap.data()?.name ?? null) : null
+    } catch {
+      cohortName = null
+    }
+  }
+
   // Journey labels resolved in the active locale (humanized fallback if unknown).
   const tj = (await getTranslations('journey')) as unknown as JourneyTranslator
 
@@ -116,7 +129,9 @@ export default async function AgentProfilePage({ params }: PageProps) {
             <Badge variant="secondary">{journeyStageLabel(tj, stage)}</Badge>
             <span className="text-sm text-muted-foreground">{journeyCheckpointLabel(tj, checkpoint)}</span>
             {profile.cohortId ? (
-              <Badge variant="outline">{t('cohortBadge', { cohort: profile.cohortId.slice(0, 8) })}</Badge>
+              <Badge variant="outline">
+                {t('cohortBadge', { cohort: cohortName ?? `${profile.cohortId.slice(0, 8)}…` })}
+              </Badge>
             ) : null}
           </div>
         </div>

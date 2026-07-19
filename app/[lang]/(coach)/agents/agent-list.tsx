@@ -74,7 +74,7 @@ export function AgentList({ agents, lang }: AgentListProps) {
                 {/* Deep-link to the read-only [uid] profile drill-in (NAV-01). */}
                 <Link
                   href={`/${lang}/agents/${agent.id}`}
-                  className={`${agent.email ? 'text-sm' : 'font-mono text-xs'} text-primary underline-offset-4 hover:underline`}
+                  className={`${agent.email ? 'text-sm' : 'font-mono text-xs'} font-medium text-foreground underline underline-offset-4 hover:opacity-70`}
                 >
                   {agent.email ?? `${agent.id.slice(0, 8)}…`}
                 </Link>
