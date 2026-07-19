@@ -213,7 +213,12 @@ export async function listUsersWithRoles(): Promise<ListUsersResult | ListUsersE
         role: data.role,
         displayRef: doc.id.slice(0, 8),
         email: emailByUid.get(doc.id) ?? null,
-        seniorCoachId: (data as typeof data & { seniorCoachId?: string }).seniorCoachId ?? null,
+        // The users doc stores the coach pointer as `uplineCoachId` (UserDoc has no
+        // `seniorCoachId`). Provisioning (auth.ts) and coach reassignment
+        // (coach-assignment/actions.ts) both write `uplineCoachId`; reading it here
+        // is what makes /users reflect a reassignment (quick-037). Property name on
+        // UserWithRole stays `seniorCoachId` — consumers are unchanged.
+        seniorCoachId: data.uplineCoachId ?? null,
       }
     })
 
