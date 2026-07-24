@@ -50,7 +50,14 @@
  */
 
 import { FieldValue } from 'firebase-admin/firestore'
-import { kbDocsRef, kbChunksRef, TENANT_ID, type KbDocDoc } from '@/src/firebase/collections'
+import {
+  kbDocsRef,
+  kbChunksRef,
+  kbIngestionJobsRef,
+  TENANT_ID,
+  type KbDocDoc,
+  type KbIngestionJobDoc,
+} from '@/src/firebase/collections'
 import type { AuthenticatedUser } from '@/src/firebase/auth'
 import { shardJob, type ShardJobResult } from '@/src/kb/ingest/pipeline'
 import { log as auditLog } from '@/src/audit/log'
@@ -390,6 +397,96 @@ export async function listDocsForViewer(user: AuthenticatedUser): Promise<KbDocW
 
   const snap = await kbDocsRef().get()
   return snap.docs.map((doc) => ({ id: doc.id, data: doc.data() }))
+}
+
+// ─── readIngestedContent ───────────────────────────────────────────────────────
+
+/**
+ * A read-only, RSC-serializable view of what a KB document actually ingested
+ * (quick-kayinleong-042). The KB doc stores only metadata — the ingested text lives
+ * in `kbChunks`. This reconstructs it so an admin can VERIFY ingestion on the edit page.
+ *
+ * All fields are plain JSON (strings / numbers / null) — safe across the RSC→Client
+ * boundary (no Firestore Timestamps leak out).
+ */
+export interface IngestedContentView {
+  /** Reconstructed document text: every chunk's `text`, ordered by chunkIndex, blank-line joined. */
+  text: string
+  /** Number of chunks currently stored for this docId (0 = nothing indexed). */
+  chunkCount: number
+  /** Sum of `tokens` across chunks — a rough "how much was indexed" signal. */
+  totalTokens: number
+  /** Status of the latest ingestion job for this doc, or null if no job doc exists. */
+  jobStatus: 'pending' | 'processing' | 'complete' | 'error' | null
+  /** Chunks still to embed in the latest job (progress), or null. */
+  jobRemaining: number | null
+  /** Total chunks the latest job will produce, or null. */
+  jobTotal: number | null
+}
+
+/** Coerce a Firestore createdAt (Timestamp on read) to epoch millis for in-memory sort. */
+function createdAtMillis(value: KbIngestionJobDoc['createdAt']): number {
+  if (value instanceof Date) return value.getTime()
+  // On read the field is a Firestore Timestamp (has toMillis); the declared FieldValue
+  // union member only exists on the write path — go via unknown to probe safely.
+  const maybe = value as unknown as { toMillis?: () => number }
+  if (maybe && typeof maybe.toMillis === 'function') {
+    return maybe.toMillis()
+  }
+  return 0
+}
+
+/**
+ * Read the reconstructed ingested content + ingestion status for one KB document.
+ *
+ * Authz mirrors `listDocsForViewer`: admin OR read-only may READ (pure read, no mutation).
+ * KB WRITE/CRUD stays admin-only via `assertAdmin` on the mutating paths.
+ *
+ * Queries are equality-only (`docId ==`) so NO composite index is required; ordering
+ * (chunkIndex, job createdAt) is done in-memory — consistent with the rest of this module.
+ *
+ * @param user   Verified user — must be 'admin' or 'read-only'.
+ * @param docId  The kbDocs document ID to reconstruct content for.
+ */
+export async function readIngestedContent(
+  user: AuthenticatedUser,
+  docId: string,
+): Promise<IngestedContentView> {
+  if (user.role !== 'admin' && user.role !== 'read-only') {
+    throw new Error('Forbidden: admin or read-only role required to read ingested KB content')
+  }
+
+  // Chunks — equality-only filter; order by chunkIndex in-memory (no composite index).
+  const chunksSnap = await kbChunksRef().where('docId', '==', docId).get()
+  const chunks = chunksSnap.docs
+    .map((d) => d.data())
+    .sort((a, b) => (a.chunkIndex ?? 0) - (b.chunkIndex ?? 0))
+
+  const text = chunks.map((c) => c.text).join('\n\n')
+  const chunkCount = chunks.length
+  const totalTokens = chunks.reduce((sum, c) => sum + (c.tokens ?? 0), 0)
+
+  // Latest ingestion job for this doc — pick newest by createdAt in-memory.
+  const jobsSnap = await kbIngestionJobsRef().where('docId', '==', docId).get()
+  let latest: KbIngestionJobDoc | null = null
+  let latestMs = -1
+  for (const doc of jobsSnap.docs) {
+    const job = doc.data()
+    const ms = createdAtMillis(job.createdAt)
+    if (ms >= latestMs) {
+      latestMs = ms
+      latest = job
+    }
+  }
+
+  return {
+    text,
+    chunkCount,
+    totalTokens,
+    jobStatus: latest?.status ?? null,
+    jobRemaining: latest?.remaining ?? null,
+    jobTotal: latest?.total ?? null,
+  }
 }
 
 // ─── deleteDoc ───────────────────────────────────────────────────────────────

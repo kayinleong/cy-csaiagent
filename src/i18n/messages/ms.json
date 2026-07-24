@@ -139,7 +139,13 @@
     "noReplySops": "Belum ada SOP Balas. Tambah satu di atas.",
     "pillarSelectLabel": "Digunakan oleh",
     "versionViewerTitle": "Sejarah versi",
-    "readOnlyNotice": "Melihat sejarah versi (baca sahaja)."
+    "readOnlyNotice": "Melihat sejarah versi (baca sahaja).",
+    "ingestedContent": "Kandungan yang dimasukkan",
+    "ingestedSummary": "{count} bahagian · {tokens} token diindeks",
+    "ingestedPreviewNote": "Ini teks tepat yang diambil oleh AI. Ia baca sahaja di sini — untuk mengubahnya, muat naik fail baharu atau tampal kandungan baharu di bawah.",
+    "ingestProcessing": "Pemasukan sedang berjalan — {remaining} daripada {total} bahagian berbaki. Muat semula halaman ini untuk kemas kini.",
+    "ingestFailed": "Pemasukan gagal — tiada kandungan diindeks. Muat naik semula fail atau tampal kandungan di bawah untuk cuba lagi.",
+    "ingestEmpty": "Tiada kandungan telah dimasukkan untuk dokumen ini lagi."
   },
   "inventory": {
     "title": "Pengurus Inventori",

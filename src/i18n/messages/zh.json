@@ -139,7 +139,13 @@
     "noReplySops": "暂无回复SOP。请在上方添加一个。",
     "pillarSelectLabel": "使用方",
     "versionViewerTitle": "版本历史",
-    "readOnlyNotice": "正在查看版本历史（只读）。"
+    "readOnlyNotice": "正在查看版本历史（只读）。",
+    "ingestedContent": "已导入的内容",
+    "ingestedSummary": "已索引 {count} 个片段 · {tokens} 个 token",
+    "ingestedPreviewNote": "这是 AI 实际检索的文本。此处为只读 — 如需修改，请在下方上传新文件或粘贴新内容。",
+    "ingestProcessing": "正在导入 — 剩余 {remaining}/{total} 个片段。请重新加载此页面以刷新。",
+    "ingestFailed": "导入失败 — 未索引任何内容。请重新上传文件或在下方粘贴内容以重试。",
+    "ingestEmpty": "此文档尚未导入任何内容。"
   },
   "inventory": {
     "title": "库存管理器",

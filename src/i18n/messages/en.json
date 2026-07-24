@@ -137,7 +137,13 @@
     "noReplySops": "No Reply SOPs yet. Add one above.",
     "pillarSelectLabel": "Used by",
     "versionViewerTitle": "Version history",
-    "readOnlyNotice": "Viewing version history (read-only)."
+    "readOnlyNotice": "Viewing version history (read-only).",
+    "ingestedContent": "Ingested content",
+    "ingestedSummary": "{count} chunks · {tokens} tokens indexed",
+    "ingestedPreviewNote": "This is the exact text the AI retrieves from. It is read-only here — to change it, upload a new file or paste new content below.",
+    "ingestProcessing": "Ingestion in progress — {remaining} of {total} chunks remaining. Reload this page to refresh.",
+    "ingestFailed": "Ingestion failed — no content was indexed. Re-upload the file or paste the content below to retry.",
+    "ingestEmpty": "No content has been ingested for this document yet."
   },
   "inventory": {
     "title": "Inventory Manager",

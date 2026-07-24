@@ -22,7 +22,7 @@ import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
-import { listDocsForViewer, type KbDocWithId } from '@/src/kb/crud'
+import { listDocsForViewer, readIngestedContent, type KbDocWithId, type IngestedContentView } from '@/src/kb/crud'
 import { KbDocForm } from '../kb-doc-form'
 
 interface PageProps {
@@ -124,6 +124,19 @@ export default async function KbDocDetailPage({ params }: PageProps) {
   // Build version lineage chain
   const chain = buildVersionChain(docId, allDocs)
 
+  // ── Ingested content (quick-042) ────────────────────────────────────────────
+  // Reconstruct what actually got indexed into kbChunks so an admin can verify
+  // ingestion. Admin-only surface (rendered in the edit section); a read failure
+  // must never break the page — fall back to null and show nothing.
+  let ingested: IngestedContentView | null = null
+  if (isAdmin) {
+    try {
+      ingested = await readIngestedContent(user, docId)
+    } catch {
+      ingested = null
+    }
+  }
+
   const t = await getTranslations('kb')
 
   const LANG_LABEL: Record<string, string> = { en: 'EN', ms: 'BM', zh: '中文' }
@@ -217,6 +230,54 @@ export default async function KbDocDetailPage({ params }: PageProps) {
           version-history timeline above with NO mutating affordance (T-06-21). */}
       {isAdmin ? (
         <section>
+          {/* Ingested content preview (quick-042) — lets the admin verify what was
+              actually indexed into kbChunks before editing. Read-only. */}
+          <div className="mb-8">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="text-lg font-semibold">{t('ingestedContent')}</h2>
+              {ingested && ingested.chunkCount > 0 && (
+                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                  {t('ingestedSummary', {
+                    count: ingested.chunkCount,
+                    tokens: ingested.totalTokens.toLocaleString(),
+                  })}
+                </span>
+              )}
+            </div>
+
+            {/* Still processing — show progress whether or not partial chunks exist. */}
+            {ingested &&
+              (ingested.jobStatus === 'processing' || ingested.jobStatus === 'pending') && (
+                <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
+                  {t('ingestProcessing', {
+                    remaining: ingested.jobRemaining ?? 0,
+                    total: ingested.jobTotal ?? 0,
+                  })}
+                </p>
+              )}
+
+            {ingested && ingested.chunkCount > 0 ? (
+              <>
+                <p className="mb-2 text-sm text-muted-foreground">{t('ingestedPreviewNote')}</p>
+                <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-lg border bg-muted/40 px-4 py-3 font-sans text-sm leading-relaxed text-foreground">
+                  {ingested.text}
+                </pre>
+              </>
+            ) : ingested && ingested.jobStatus === 'error' ? (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                {t('ingestFailed')}
+              </p>
+            ) : (
+              ingested &&
+              ingested.jobStatus !== 'processing' &&
+              ingested.jobStatus !== 'pending' && (
+                <p className="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                  {t('ingestEmpty')}
+                </p>
+              )
+            )}
+          </div>
+
           <h2 className="mb-4 text-lg font-semibold">{t('editDocument')}</h2>
           {target.data.status === 'superseded' && (
             <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
