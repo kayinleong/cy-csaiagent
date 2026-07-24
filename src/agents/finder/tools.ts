@@ -27,6 +27,62 @@ import { collateralRef } from '@/src/firebase/collections'
 import type { SearchResult, InventoryFilters } from '@/src/inventory/search'
 import type { ProjectDoc } from '@/src/firebase/collections'
 
+// ─── Infra-failure guard (quick-kayinleong-040) ───────────────────────────────
+
+/**
+ * Structured failure a read-only Finder tool returns when an underlying infra
+ * dependency (Gemini embedding, Firestore, network) throws.
+ *
+ * This is NOT a business refusal (no_match / ineligible) — those are legitimate
+ * grounded results from searchProjects. This signals the tool could not run at all.
+ * The system prompt instructs the agent to surface a "temporarily unavailable"
+ * message and retry — never to invent a project or emit raw technical jargon.
+ */
+export interface ToolFailure {
+  error: 'inventory_unavailable'
+  message: string
+}
+
+/** The single user-facing message for any infra failure — no technical detail leaks to the model. */
+const INVENTORY_UNAVAILABLE_MESSAGE =
+  'The D2 inventory system is temporarily unavailable. This is a transient backend issue — ' +
+  'no project information could be retrieved for this request. Please try again shortly.'
+
+/**
+ * Redact anything that could carry a secret before logging.
+ *
+ * The AI SDK's Gemini errors can embed the request URL (which may contain the API
+ * key as a `?key=...` query param) or an `x-goog-api-key` header echo. We log only
+ * the error name plus a key-stripped message so the global secrets-hygiene rule
+ * (never log the Gemini key) holds even for caught provider errors.
+ */
+function redactedErrorLabel(err: unknown): string {
+  const raw = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+  return raw
+    .replace(/key=[^&\s"']+/gi, 'key=<redacted>')
+    .replace(/(x-goog-api-key[":\s]*)[^&\s"']+/gi, '$1<redacted>')
+}
+
+/**
+ * Run a read-only tool body, converting any thrown infra error into a structured
+ * ToolFailure. Success values pass through unchanged.
+ *
+ * @param toolName  Short label for the log line (no secrets).
+ * @param body      The tool's original execute logic.
+ */
+async function runReadOnly<T>(
+  toolName: string,
+  body: () => Promise<T>,
+): Promise<T | ToolFailure> {
+  try {
+    return await body()
+  } catch (err) {
+    // console.error is intentional (server logs); message is secret-redacted.
+    console.error(`[finder:${toolName}] tool execution failed — ${redactedErrorLabel(err)}`)
+    return { error: 'inventory_unavailable', message: INVENTORY_UNAVAILABLE_MESSAGE }
+  }
+}
+
 // ─── 1. makeSearchProjectsTool ────────────────────────────────────────────────
 
 /**
@@ -73,21 +129,23 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh') {
       bedrooms: z.number().nullable().describe('Preferred number of bedrooms. null if not stated.'),
       freeText: z.string().describe('Raw pasted criteria text — feeds the semantic re-rank vector.'),
     }),
-    execute: async (input): Promise<SearchResult> => {
-      // READ-ONLY: calls searchProjects, no Firestore writes
-      const result = await searchProjects({
-        segment: input.segment,
-        priceMin: input.priceMin,
-        priceMax: input.priceMax,
-        monthlyIncome: input.monthlyIncome,
-        nationality: input.nationality,
-        bumiputera: input.bumiputera,
-        locationPref: input.locationPref,
-        bedrooms: input.bedrooms,
-        freeText: input.freeText,
-      })
-      return result
-    },
+    execute: async (input): Promise<SearchResult | ToolFailure> =>
+      // READ-ONLY: calls searchProjects, no Firestore writes.
+      // Infra errors (Gemini embed auth, Firestore, network) are caught and returned
+      // as a grounded inventory_unavailable signal instead of a raw provider error.
+      runReadOnly('searchProjects', () =>
+        searchProjects({
+          segment: input.segment,
+          priceMin: input.priceMin,
+          priceMax: input.priceMax,
+          monthlyIncome: input.monthlyIncome,
+          nationality: input.nationality,
+          bumiputera: input.bumiputera,
+          locationPref: input.locationPref,
+          bedrooms: input.bedrooms,
+          freeText: input.freeText,
+        }),
+      ),
   })
 }
 
@@ -135,25 +193,27 @@ export function makeQueryInventoryTool(userLang: 'en' | 'ms' | 'zh') {
         .optional()
         .describe('Filter by VP completion status. Omit for all statuses.'),
     }),
-    execute: async (input): Promise<Array<ProjectDoc & { projectId: string }>> => {
-      // READ-ONLY: calls queryInventory, no Firestore writes
-      const filters: InventoryFilters = {}
+    execute: async (input): Promise<Array<ProjectDoc & { projectId: string }> | ToolFailure> =>
+      // READ-ONLY: calls queryInventory, no Firestore writes.
+      // Infra errors are caught and returned as a grounded inventory_unavailable signal.
+      runReadOnly('queryInventory', () => {
+        const filters: InventoryFilters = {}
 
-      if (input.vpDateFrom) {
-        filters.vpDateFrom = new Date(input.vpDateFrom)
-      }
-      if (input.vpDateTo) {
-        filters.vpDateTo = new Date(input.vpDateTo)
-      }
-      if (input.priceBand) {
-        filters.priceBand = input.priceBand
-      }
-      if (input.vpStatus !== undefined) {
-        filters.vpStatus = input.vpStatus
-      }
+        if (input.vpDateFrom) {
+          filters.vpDateFrom = new Date(input.vpDateFrom)
+        }
+        if (input.vpDateTo) {
+          filters.vpDateTo = new Date(input.vpDateTo)
+        }
+        if (input.priceBand) {
+          filters.priceBand = input.priceBand
+        }
+        if (input.vpStatus !== undefined) {
+          filters.vpStatus = input.vpStatus
+        }
 
-      return queryInventory(filters)
-    },
+        return queryInventory(filters)
+      }),
   })
 }
 
@@ -189,25 +249,27 @@ export function makeFetchCollateralTool(userLang: 'en' | 'ms' | 'zh') {
         .min(1)
         .describe('The Firestore projects/{pid} document ID from the searchProjects result.'),
     }),
-    execute: async ({ projectId }): Promise<Array<{ type: string; url: string }>> => {
-      // READ-ONLY: reads the collateral collection — no Firestore writes
-      // D-09/C2: NEVER calls the Google Drive API; returns Storage path or externalUrl only
-      const snap = await collateralRef().where('projectId', '==', projectId).get()
+    execute: async ({ projectId }): Promise<Array<{ type: string; url: string }> | ToolFailure> =>
+      // READ-ONLY: reads the collateral collection — no Firestore writes.
+      // D-09/C2: NEVER calls the Google Drive API; returns Storage path or externalUrl only.
+      // Infra errors are caught and returned as a grounded inventory_unavailable signal.
+      runReadOnly('fetchCollateral', async () => {
+        const snap = await collateralRef().where('projectId', '==', projectId).get()
 
-      if (snap.empty) {
-        return []
-      }
-
-      return snap.docs.map((doc) => {
-        const data = doc.data()
-        // externalUrl takes precedence (plain share link);
-        // storagePath is the fallback (Firebase Storage object path)
-        const url = data.externalUrl ?? data.storagePath
-        return {
-          type: data.type,
-          url,
+        if (snap.empty) {
+          return []
         }
-      })
-    },
+
+        return snap.docs.map((doc) => {
+          const data = doc.data()
+          // externalUrl takes precedence (plain share link);
+          // storagePath is the fallback (Firebase Storage object path)
+          const url = data.externalUrl ?? data.storagePath
+          return {
+            type: data.type,
+            url,
+          }
+        })
+      }),
   })
 }

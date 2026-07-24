@@ -593,3 +593,58 @@ describe('Test 6: read-only — tools never write Firestore; finderSlot write is
     expect('fetchCollateral' in tools).toBe(true)
   })
 })
+
+// ─── Test 7: infra-failure guard (quick-kayinleong-040) ───────────────────────
+
+describe('Test 7: tool execute() catches infra errors → grounded inventory_unavailable', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('searchProjects tool returns inventory_unavailable when the underlying call throws (e.g. Gemini auth)', async () => {
+    const { makeSearchProjectsTool } = await import('./tools')
+
+    // Simulate the exact production failure: a Google auth error bubbling from embedText.
+    mocks.mockSearchProjects.mockRejectedValue(
+      new Error(
+        'Request had invalid authentication credentials. Expected OAuth 2 access token.',
+      ),
+    )
+
+    const tool = makeSearchProjectsTool('en')
+    const executeImpl = tool.execute as NonNullable<typeof tool.execute>
+    const result = await executeImpl(
+      {
+        segment: 'own_stay',
+        priceMin: null,
+        priceMax: 800000,
+        monthlyIncome: null,
+        financingNote: null,
+        nationality: 'malaysian',
+        bumiputera: null,
+        locationPref: 'Cheras, KL',
+        tenurePref: null,
+        bedrooms: 2,
+        freeText: '2-bedroom in Cheras, budget 800k, own stay, Malaysian',
+      },
+      {} as never,
+    )
+
+    // Structured failure — NOT a thrown error, NOT a fabricated match.
+    expect(result).toMatchObject({ error: 'inventory_unavailable' })
+    // Message must not leak raw provider/auth technical detail.
+    expect(JSON.stringify(result).toLowerCase()).not.toContain('oauth')
+  })
+
+  it('fetchCollateral tool returns inventory_unavailable when the Firestore read throws', async () => {
+    const { makeFetchCollateralTool } = await import('./tools')
+
+    mocks.mockCollateralGet.mockRejectedValue(new Error('Firestore UNAVAILABLE'))
+
+    const tool = makeFetchCollateralTool('en')
+    const executeImpl = tool.execute as NonNullable<typeof tool.execute>
+    const result = await executeImpl({ projectId: SEED_PROJECT_ID }, {} as never)
+
+    expect(result).toMatchObject({ error: 'inventory_unavailable' })
+  })
+})

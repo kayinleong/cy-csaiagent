@@ -3,7 +3,7 @@
 - session: claude-code
 - branch: quick-kayinleong-040-finder-tool-errors
 - started: 2026-07-24
-- status: in-progress
+- status: done
 - summary: Finder tools swallow infra errors and return a grounded "inventory unavailable" signal instead of leaking a raw Google auth error the model hallucinates over.
 
 ## Context / Symptom
@@ -49,8 +49,49 @@ Two separate problems:
 
 ## What has changed
 
-_(filled during execution)_
+- `src/agents/finder/tools.ts`:
+  - Added `ToolFailure` interface (`{ error: 'inventory_unavailable', message }`),
+    exported for downstream typing.
+  - Added `runReadOnly(toolName, body)` guard: runs the tool body, catches any thrown
+    error, logs a secret-redacted category via `console.error`, and returns
+    `ToolFailure`.
+  - Added `redactedErrorLabel()` — strips `key=...` and `x-goog-api-key` before logging
+    so a caught Gemini error can never leak the API key (URL/header).
+  - Wrapped all three `execute()` bodies (searchProjects, queryInventory,
+    fetchCollateral) in `runReadOnly`; return types widened to `T | ToolFailure`.
+    Success paths unchanged.
+- `src/agents/finder/prompt.ts`: added a "Tool Unavailable (infra failure — NOT a
+  refusal)" section instructing the agent to surface a transient-unavailable message,
+  keep captured lead details, and never invent a project or emit raw error /
+  "contact IT" text.
+- `src/agents/finder/finder.test.ts`: added Test 7 (2 cases) — searchProjects and
+  fetchCollateral tools return `inventory_unavailable` (no throw, no leaked "oauth"
+  text) when the underlying call rejects.
 
 ## Verification
 
-_(filled before done)_
+**Regression surface:** the three Finder tools (searchProjects / queryInventory /
+fetchCollateral), the Finder streaming path (route passes tools to `streamText`),
+`finderAgent.run` offline path, and any static consumer of the tool return types.
+
+**What was tested / ruled out:**
+- `npx tsc --noEmit` → exit 0 (widened union types compile; no downstream break — tool
+  outputs are consumed by the model as JSON, not statically typed in the route).
+- `npx vitest run src/agents/finder` → 19 passed (17 existing + 2 new). Success paths
+  (fetchCollateral array return, read-only assertions) unchanged.
+- `npx vitest run src/inventory app/api/chat/route.test.ts tests/chat-route.test.ts`
+  → 98 passed. Routing + inventory search behavior unaffected.
+- `npx eslint src/agents/finder/{tools,prompt}.ts` → 0.
+- Secrets gate `grep -rE "console\.(log|info).*GOOGLE|console.*api.?key" src/agents/finder/`
+  → clean. New logging is `console.error` with a key-redacted label only.
+- Read-only gate: no `.set(`/`.add(`/`.update(` introduced in tools.ts (only the
+  pre-existing doc comment mentions them).
+
+**Not in scope (owner action):** the root-cause credential fix — the deployed App
+Hosting runtime's `GOOGLE_GENERATIVE_AI_API_KEY` Secret Manager binding must be
+valid and granted to the backend service account. This claim only stops the tool from
+surfacing that failure as a hallucinated "contact IT" reply. Not verifiable here
+(no live App Hosting access).
+
+- status: done
+
