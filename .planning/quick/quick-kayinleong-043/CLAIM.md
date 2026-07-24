@@ -41,8 +41,51 @@ was handled in quick-kayinleong-041.)
 
 ## What has changed
 
-_(filled during execution)_
+- `app/api/chat/route.ts`:
+  - Changed `stopWhen` from `pillar === 'finder' || pillar === 'reply' ? stepCountIs(5)
+    : stepCountIs(1)` to `stepCountIs(5)` for ALL pillars. Coach can now complete
+    retrieve→answer (and chain getCurrentCheckpoint → getCheckpointContent →
+    retrieveKnowledge → answer) instead of halting after the first tool call.
+  - Rewrote the `stopWhen` comment to explain all three pillars are retrieve-then-answer
+    and need ≥2 steps; noted the quick-043 root cause inline.
+  - Updated the token-accounting REGRESSION-NOTE: all pillars are now multi-step, so the
+    last-step rate-limit decrement undercounts Coach too (pre-existing TOKEN_CAP issue,
+    still a separate claim); clarified usage CAPTURE uses `final.totalUsage` (accurate).
+- `app/api/chat/route.test.ts`: added Test 4b — asserts the Coach path is handed
+  `stopWhen = stepCountIs(n)` with `n >= 2` (regression guard against re-capping Coach
+  to a single step).
 
 ## Verification
 
-_(filled before done)_
+**Regression surface:** the single `streamText` call (shared by all three pillars), the
+Coach dispatch branch, Coach onFinish citation extraction (iterates all steps — unaffected
+/ now captures the answer step too), and per-pillar step budgets (Finder/Reply were
+already 5 — behavior unchanged; only Coach 1→5 changed).
+
+**What was tested / ruled out:**
+- `npx vitest run app/api/chat/route.test.ts` → 40 passed (incl. new Test 4b). Coach path
+  now receives a ≥2-step budget.
+- `npx vitest run tests/chat-route.test.ts src/agents/coach` → 37 passed. Coach agent +
+  integration behavior unaffected.
+- `npx tsc --noEmit` → 0. `npx eslint app/api/chat/route.ts(+test)` → 0 errors (4
+  pre-existing warnings in the test file: makeStreamResponse/_opts unused + 2 unused
+  eslint-disable directives — none in my diff).
+- Finder/Reply ruled out as regressed: they were already `stepCountIs(5)`; unifying the
+  ternary to `stepCountIs(5)` leaves their budget identical.
+- Citation extraction ruled index/loop-safe: `extractCitationChunkIds` already iterates
+  every `final.steps[*].toolResults`, so a multi-step Coach turn's citations are still
+  collected (now alongside a real answer step).
+
+**Not verifiable here:** the live Coach answer render needs an auth'd chat session + a
+real tool-calling model + ingested Coach KB (the streaming path is admin/auth-gated;
+`next dev` only 307→sign-in). The empty-response → answers-after-retrieval fix is proven
+by the step-budget regression test; a production smoke-test (ask Coach a D2-training
+question, confirm it retrieves AND answers with [KB:…] citations) is the final check.
+
+NOTE (out of scope, optional follow-up): for an out-of-scope question in Coach mode (e.g.
+a property query → kb_miss), Coach will now respond with a grounded "not in training
+materials" message. A softer "this looks like a Finder question — switch to Finder" nudge
+on kb_miss is a possible UX enhancement, deferred (the user chose router-accuracy in
+quick-041 over a redirect/fallback approach).
+
+- status: done

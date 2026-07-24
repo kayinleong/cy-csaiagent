@@ -496,10 +496,17 @@ export async function POST(req: Request): Promise<Response> {
     system: agentSystemPrompt,
     messages: redactedMessages,
     tools: agentTools,
-    // Finder uses a multi-step tool loop (parse→search→collateral) and Reply uses one
-    // (retrieve SOP → maybe voice → draft): both bounded at 5 steps to prevent unbounded
-    // cost (T-03-30 / T-04-COST / D-05). Coach keeps the default (1 step).
-    stopWhen: pillar === 'finder' || pillar === 'reply' ? stepCountIs(5) : stepCountIs(1),
+    // All three pillars run a multi-step tool loop and MUST be allowed to answer AFTER
+    // a tool call (retrieve/search → answer), so every pillar needs at least 2 steps:
+    //   - Finder: parse → search → collateral → answer.
+    //   - Reply:  retrieve SOP → maybe voice → draft.
+    //   - Coach:  getCurrentCheckpoint → getCheckpointContent/retrieveKnowledge → answer.
+    // Bounded at 5 steps to prevent unbounded cost (T-03-30 / T-04-COST / D-05).
+    // (quick-kayinleong-043: Coach was previously capped at stepCountIs(1), which halted
+    //  the loop the instant it called retrieveKnowledge — so every retrieval-triggering
+    //  Coach turn returned an EMPTY response. Coach is a retrieve-then-answer agent, so a
+    //  1-step budget is a bug, not a default.)
+    stopWhen: stepCountIs(5),
     onFinish: async (final) => {
       // ── Persist user message (Pitfall 2 fix — CHAT-02) ────────────────────
       // The user message is persisted AFTER the stream to avoid blocking the
@@ -615,9 +622,11 @@ export async function POST(req: Request): Promise<Response> {
       // REGRESSION-NOTE: pre-Phase-5 :607/:522 undercount multi-step turns;
       // documented in PERF-COST.md (05-06/05-08), NOT changed here.
       // final.usage.totalTokens at :522 (messages.tokens) and here (rate-limit decrement)
-      // is the LAST step only — Finder/Reply run stepCountIs(5) so multi-step turns are
-      // undercounted. Changing this is a SEPARATE behavioral change (TOKEN_CAP=50_000)
-      // requiring its own claim + Derek sign-off.
+      // is the LAST step only — ALL pillars now run stepCountIs(5) (quick-043 fixed Coach's
+      // erroneous 1-step cap), so any multi-step turn is undercounted for the rate-limit
+      // decrement. Changing this is a SEPARATE behavioral change (TOKEN_CAP=50_000)
+      // requiring its own claim + Derek sign-off. (Usage CAPTURE below already uses
+      // final.totalUsage — the sum across ALL steps — so usage stats stay accurate.)
       await ratelimit.decrement(uid, final.usage.totalTokens ?? 0)
 
       // Append-only audit write — fire-and-forget via after()

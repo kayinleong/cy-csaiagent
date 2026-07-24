@@ -375,6 +375,26 @@ describe('Test 4: modelFor called with coach pillar — no hard-coded model ID',
   })
 })
 
+// ─── Test 4b (quick-043): Coach gets a multi-step budget so it can answer after a tool ─
+//
+// Regression guard: Coach is a retrieve-then-answer agent — it MUST be allowed a step 2
+// after calling retrieveKnowledge, or it returns an empty response (finishReason
+// "tool-calls", no text). Previously the route capped Coach at stepCountIs(1). This
+// asserts the Coach path is given stopWhen = stepCountIs(n) with n >= 2.
+describe('Test 4b (quick-043): Coach streamText gets stopWhen allowing >= 2 steps', () => {
+  it('passes a multi-step stopWhen for the coach pillar (retrieve → answer)', async () => {
+    // Default route is coach (mockRouteAsync → coach).
+    const req = buildRequest({ messages: [{ role: 'user', content: 'tell me about the onboarding journey' }] })
+    await POST(req)
+
+    expect(mocks.mockStreamText).toHaveBeenCalled()
+    const opts = mocks.mockStreamText.mock.calls[0][0] as { stopWhen?: { _type?: string; n?: number } }
+    // stepCountIs is mocked as (n) => ({ _type: 'stepCountIs', n })
+    expect(opts.stopWhen?._type).toBe('stepCountIs')
+    expect(opts.stopWhen?.n ?? 0).toBeGreaterThanOrEqual(2)
+  })
+})
+
 // ─── Test 5: Unauthenticated request returns 401 ─────────────────────────────
 
 describe('Test 5: Auth gate returns 401 for unauthenticated requests', () => {
