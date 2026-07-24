@@ -209,6 +209,63 @@ describe('heuristicPillar() — content keyword classifier', () => {
   })
 })
 
+// ─── quick-kayinleong-041: expanded Finder vocabulary (Auto-mode misroute fix) ──────
+//
+// These phrasings previously had NO finder keyword → heuristicPillar returned null →
+// routeAsync fell to the coach-biased LLM classifier → misrouted to coach in Auto mode.
+// The widened FINDER_PATTERNS now catch property-type nouns, tenure, standalone price
+// shapes, size units, and bedroom shorthand so they route deterministically to finder.
+
+describe('heuristicPillar() — expanded Finder vocabulary (quick-041)', () => {
+  const FINDER_PHRASINGS: Array<[label: string, content: string]> = [
+    ['condo (no budget word)', 'Find me a condo in TRX'],
+    ['apartment', 'any apartment in Mont Kiara for my client'],
+    ['penthouse', 'looking for a penthouse near KLCC'],
+    ['studio', 'a small studio in Cyberjaya'],
+    ['landed', 'landed only, Petaling Jaya'],
+    ['terrace', 'double storey terrace in Setia Alam'],
+    ['semi-d', 'semi-d in Kajang please'],
+    ['bungalow', 'a bungalow in Damansara Heights'],
+    ['townhouse', 'townhouse near the LRT'],
+    ['soho', 'a soho unit in Cheras'],
+    ['unit', 'any 2 room unit available in KL'],
+    ['freehold', 'must be freehold, KL city'],
+    ['leasehold', 'leasehold is fine, Subang'],
+    ['RM no-space amount', 'something around RM800000'],
+    ['standalone 800k', 'find me a place, 800k max, TRX'],
+    ['1.2m million shape', 'around 1.2m in Bangsar'],
+    ['sqft', 'at least 1000 sqft, KL'],
+    ['psf', 'below 900 psf in Cheras'],
+    ['bedroom shorthand 2BR', '2BR in TRX please'],
+  ]
+
+  it.each(FINDER_PHRASINGS)('routes "%s" to finder without the classifier', (_label, content) => {
+    const result = heuristicPillar([{ role: 'user', content }])
+    expect(result).not.toBeNull()
+    expect(result?.pillar).toBe('finder')
+  })
+
+  // Coach-regression guard: the new price/property patterns must NOT steal coach traffic.
+  it('coach regression: "in-house training this week" still routes to coach', () => {
+    const result = heuristicPillar([{ role: 'user', content: 'is there in-house training this week?' }])
+    expect(result?.pillar).toBe('coach')
+  })
+
+  it('coach regression: "I finished my onboarding checkpoint" still routes to coach', () => {
+    const result = heuristicPillar([{ role: 'user', content: 'I finished my onboarding checkpoint' }])
+    expect(result?.pillar).toBe('coach')
+  })
+
+  // Reply precedence guard: a pasted inbound mentioning a NEW finder keyword ("unit")
+  // must still route to reply (structural Reply signals run before the Finder scan).
+  it('reply precedence: "draft a reply: still keen on the unit?" stays reply, not finder', () => {
+    const result = heuristicPillar([
+      { role: 'user', content: 'draft a reply to this: hi, still keen on the unit?' },
+    ])
+    expect(result?.pillar).toBe('reply')
+  })
+})
+
 // ─── REPLY-10 (Phase 4) — Reply heuristic patterns + precedence (GREEN, Plan 04-04) ──
 //
 // Plan 04-04 added REPLY_PATTERNS (e.g. /draft (a )?repl/i, /reply to (this|him|her)/i,

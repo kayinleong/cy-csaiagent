@@ -74,6 +74,40 @@ const FINDER_PATTERNS: RegExp[] = [
   /\beligib/i,                      // "eligible", "eligibility", "ineligible"
   /\bcollateral\b/i,                // "collateral attached", "project collateral"
   /\bpriceBand\b/i,                 // schema field name (tool/API context)
+
+  // ── quick-kayinleong-041: property vocabulary that previously missed the fast-path
+  //    and fell through to the coach-biased LLM classifier (Auto-mode misroute → coach).
+  //    Every pattern below is chosen NOT to overlap the COACH vocabulary
+  //    (onboarding / training / playbook / checkpoint / journey / meta-ad / escalation);
+  //    Reply STRUCTURAL signals still run FIRST in heuristicPillar, so a pasted inbound
+  //    that mentions "unit"/"condo" stays a Reply-draft (precedence preserved).
+  // Property-type nouns:
+  /\bcondo(?:minium)?\b/i,          // "condo", "condominium"
+  /\bapartment\b/i,                 // "apartment", "serviced apartment"
+  /\bpenthouse\b/i,                 // "penthouse"
+  /\bstudio\b/i,                    // "studio unit"
+  /\blanded\b/i,                    // "landed property"
+  /\bterrace(?:d)?\b/i,             // "terrace", "terraced house"
+  /\bsemi[- ]?d\b/i,                // "semi-d", "semi d", "semid"
+  /\bbungalow\b/i,                  // "bungalow"
+  /\bduplex\b/i,                    // "duplex"
+  /\btownhouse\b/i,                 // "townhouse"
+  /\bso[fh]o\b/i,                   // "soho", "sofo" (small/home-office units)
+  /\bunits?\b/i,                    // "unit", "units" — property inventory noun
+  // Tenure (strong Finder signal):
+  /\bfreehold\b/i,                  // "freehold"
+  /\bleasehold\b/i,                 // "leasehold"
+  // Standalone price shapes (affordability signal without the word "budget"):
+  /\bRM\s?\d/i,                     // "RM800000", "RM 800k" (no-space case \bRM\b misses)
+  /\b\d{2,4}k\b/i,                  // "800k", "500k" standalone (not only "under 800k")
+  /\b\d+(?:\.\d+)?\s?(?:m|mil|million)\b/i, // "1.2m", "1.2 million", "1m"
+  // Size units:
+  /\bsq\s?ft\b/i,                   // "sqft", "sq ft"
+  /\bsquare\s+feet\b/i,             // "square feet"
+  /\bpsf\b/i,                       // "psf" (price per square foot)
+  // Bedroom shorthand:
+  /\b\d+\s?br\b/i,                  // "2BR", "3 BR"
+  /\b\d+\s?bhk\b/i,                 // "2BHK"
 ]
 
 /**
