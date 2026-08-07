@@ -40,6 +40,7 @@ import {
   ScrollText,
   SlidersHorizontal,
   ShieldAlert,
+  MessageSquareText,
 } from 'lucide-react'
 import type { Role } from '@/src/firebase/auth'
 
@@ -51,6 +52,7 @@ export type NavItemKey =
   | 'home'
   | 'kb'
   | 'inventory'
+  | 'whatsappImport'
   | 'dashboard'
   | 'conversations'
   | 'usage'
@@ -120,6 +122,8 @@ export function buildSections(lang: string): Section[] {
         // read-only lands on the read-only version-history viewer; admin gets full edit.
         { key: 'kb', href: `/${lang}/kb`, icon: BookOpen, roles: ['admin', 'read-only'] },
         { key: 'inventory', href: `/${lang}/inventory`, icon: Building2, roles: ['admin'] },
+        // Admin-only WhatsApp-export ingest: parse a chat .zip → KB + collateral.
+        { key: 'whatsappImport', href: `/${lang}/whatsapp-import`, icon: MessageSquareText, roles: ['admin'] },
       ],
     },
     {

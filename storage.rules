@@ -1,0 +1,38 @@
+rules_version = '2';
+
+// Cloud Storage Security Rules.
+//
+// Mirrors the Firestore custom-claim model (see firestore.rules): the
+// server-set custom claims `role` ('new-agent' | 'senior-coach' | 'admin' |
+// 'read-only') and `tenantId` are the source of truth. Claims are set only
+// via adminAuth.setCustomUserClaims() — never client-writable.
+//
+// Only `collateral/{projectId}/…` is writable, and only by admins. This backs
+// the admin collateral uploads (inventory + WhatsApp-import media). Everything
+// else is denied by the catch-all.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.role == 'admin';
+    }
+
+    // Collateral assets (brochures, floor plans, WhatsApp media) keyed by project.
+    match /collateral/{projectId}/{allPaths=**} {
+      // Any signed-in tenant user may read collateral (single-tenant 'd2' now).
+      allow read: if isSignedIn();
+      // Only admins may upload/overwrite, capped at 200 MB per object.
+      allow write: if isAdmin()
+                   && request.resource.size < 200 * 1024 * 1024;
+    }
+
+    // Deny everything not explicitly matched above.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

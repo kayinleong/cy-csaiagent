@@ -16,6 +16,7 @@
 import { getApps, initializeApp, getApp } from 'firebase/app'
 import { getAuth, type Auth } from 'firebase/auth'
 import { getFirestore, type Firestore } from 'firebase/firestore'
+import { getStorage, type FirebaseStorage } from 'firebase/storage'
 
 /**
  * Public Firebase config — safe for the browser.
@@ -66,3 +67,13 @@ export const clientAuth: Auth = getAuth(clientApp)
  * '@/src/firebase/admin' instead.
  */
 export const clientDb: Firestore = getFirestore(clientApp)
+
+/**
+ * Cloud Storage web SDK — client-side uploads/downloads.
+ *
+ * Used by admin surfaces that upload collateral (e.g. WhatsApp-import media) to
+ * `collateral/{projectId}/…`. Writes are gated by Storage Security Rules
+ * (see storage.rules): only users whose custom-claim `role == 'admin'` may write.
+ * Bucket comes from NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET (already in firebaseConfig).
+ */
+export const clientStorage: FirebaseStorage = getStorage(clientApp)

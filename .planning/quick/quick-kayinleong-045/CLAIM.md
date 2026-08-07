@@ -3,7 +3,7 @@
 - session: claude-code
 - branch: quick-kayinleong-045-whatsapp-ingest
 - started: 2026-08-06
-- status: in-progress
+- status: done
 - summary: Admin page to ingest a WhatsApp group-chat export (.zip). Browser parses the zip (JSZip), an AI Server Action matches the conversation to an existing inventory project (or proposes a new one), the chat text is ingested into the KB, and media uploads to Firebase Storage as collateral. BUILD ONLY — no live ingestion is executed in this claim.
 
 ## What will change
@@ -13,7 +13,31 @@
 - Firebase Storage security rule for admin media uploads; EN/BM/ZH i18n copy; types.
 
 ## What has changed
-- _(filled as work completes)_
+- `src/whatsapp/parse.ts` — portable WhatsApp-export parser (Android format; system-line strip, multi-line fold, 3 media-ref forms) + `toTranscript` / `toClassificationSample`. **New.**
+- `src/whatsapp/parse.test.ts` — 8 unit tests over a synthetic transcript (no PII). **New.**
+- `app/[lang]/(admin)/whatsapp-import/actions.ts` — `classifyWhatsAppProjectAction` (admin-gated; `modelFor('finder')` + `generateObject`; matches an existing project or proposes a new one) + `listProjectOptionsAction`. **New.**
+- `app/[lang]/(admin)/whatsapp-import/page.tsx` — RSC shell (`requireRole` admin gate + `listProjects` seed). **New.**
+- `app/[lang]/(admin)/whatsapp-import/whatsapp-import-form.tsx` — client island: in-browser JSZip parse → classify → confirm/override → ingest (createProject HIDDEN for new + createKbDoc + poll `/api/kb/ingest/process` + upload media to Storage + attachCollateral), with progress UI. **New.**
+- `src/firebase/client.ts` — added `clientStorage` (`getStorage`) export. **Modified (additive).**
+- `storage.rules` — **created** (firebase.json already referenced it; file was missing). Admin-only write to `collateral/**` (≤200 MB), signed-in read, deny-all catch-all.
+- `src/i18n/messages/{en,ms,zh}.json` — new `adminWhatsapp` namespace (53 keys ×3) + `nav.whatsappImport`. **Modified (additive; parity held).**
+- `app/[lang]/_components/app-sidebar-nav.ts` — new admin-only `whatsappImport` nav item under Knowledge Management. **Modified (additive).**
+
+BUILD ONLY — no live ingestion was executed (no createDoc/embed/Storage write ran against Firebase; no Claude/Gemini call made).
 
 ## Verification
-- Build-only: `npm run typecheck` + `npm run build` must pass. AI-matching + live ingest are NOT executed here (the app's Anthropic account is out of credits; runtime ingest is deferred to the operator). Regression report before done.
+**Gates (all green):**
+- `npm run typecheck` — clean (tsc --noEmit).
+- `npm run build` — succeeds; `/[lang]/whatsapp-import` route registered (ƒ dynamic).
+- `npx vitest run` on `src/whatsapp/parse.test.ts` (8), `src/i18n/__tests__/i18n-parity.test.ts` (6), `app/[lang]/_components/app-sidebar-nav.test.ts` (13) — 27 passed.
+
+**Regression surface + self-audit:**
+- **i18n parity** — most likely break; adding keys to one catalog only would fail CI. Added identical `adminWhatsapp` (53) + `nav.whatsappImport` to en/ms/zh; parity test green.
+- **Sidebar nav** — the new item is `roles: ['admin']`, placed under Knowledge. Verified `app-sidebar.tsx` renders `item.icon` directly + `t(item.key)` (no separate icon map to extend); label present in all 3 catalogs. Nav test asserts section-key order + per-role `toContain`/`not.toContain` on named keys — none reference the new key; read-only/senior-coach visibility unaffected (admin-only). Green.
+- **`src/firebase/client.ts`** — additive `clientStorage` export only (diff verified); existing `clientAuth`/`clientDb` consumers untouched. Bucket already in `firebaseConfig`.
+- **`storage.rules`** — net-new; the deploy previously had no storage rules file at all (firebase.json pointed at a missing path). Mirrors the Firestore custom-claim model. Does not affect app runtime, only Storage deploy.
+- **New route/actions** — all under a net-new folder; no existing file's behavior changed. Every mutation routes through existing admin-gated Server Actions (createProjectAction / createKbDocAction / attachCollateralAction) — no new privileged surface; three independent admin gates preserved.
+
+**Deferred to operator (runtime, out of scope for build-only):** the AI classify call needs Anthropic credits (currently exhausted); live KB ingest + Storage upload need a signed-in admin session. New projects are created **hidden** so a $0/blank placeholder can never be recommended by Finder until enriched + activated.
+
+Status: **done** (build-only scope).
