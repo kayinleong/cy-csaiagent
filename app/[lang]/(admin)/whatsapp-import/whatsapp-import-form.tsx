@@ -253,7 +253,7 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
         projectId = selectedProjectId
         projectName = projects.find((p) => p.id === selectedProjectId)?.name ?? selectedProjectId
         prog.projectStep = 'done'
-        pushLog(t('logProjectMatched').replace('{name}', projectName))
+        pushLog(t('logProjectMatched', { name: projectName }))
       }
 
       // 4b. Ingest the transcript into the KB.
@@ -279,14 +279,22 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
           { headers: { Authorization: `Bearer ${token}` } },
         )
         if (!res.ok) {
-          throw new Error(`${t('kbIngestFailed')} (HTTP ${res.status})`)
+          // Surface the route's error body (e.g. a Gemini embed failure) — not just the status.
+          let detail = `HTTP ${res.status}`
+          try {
+            const errBody = (await res.json()) as { error?: string }
+            if (errBody?.error) detail = errBody.error
+          } catch {
+            /* non-JSON error body — keep the status */
+          }
+          throw new Error(`${t('kbIngestFailed')}: ${detail}`)
         }
         const body = (await res.json()) as { remaining?: number }
         remaining = body.remaining ?? 0
         iterations += 1
       }
       prog.kbStep = 'done'
-      pushLog(t('logKbDone').replace('{chunks}', String(kb.total ?? 0)))
+      pushLog(t('logKbDone', { chunks: kb.total ?? 0 }))
 
       // 4c. Upload media → Storage, record each as collateral.
       const zip = zipRef.current
@@ -295,7 +303,7 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
           const file = zip?.file(entryName)
           if (!file) {
             prog.mediaErrors += 1
-            pushLog(t('logMediaMissing').replace('{name}', entryName))
+            pushLog(t('logMediaMissing', { name: entryName }))
             continue
           }
           const blob = await file.async('blob')
@@ -308,17 +316,13 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
           })
           if (!att.ok) {
             prog.mediaErrors += 1
-            pushLog(t('logMediaError').replace('{name}', entryName).replace('{error}', att.error ?? ''))
+            pushLog(t('logMediaError', { name: entryName, error: att.error ?? '' }))
           } else {
             prog.mediaDone += 1
           }
         } catch (err) {
           prog.mediaErrors += 1
-          pushLog(
-            t('logMediaError')
-              .replace('{name}', entryName)
-              .replace('{error}', err instanceof Error ? err.message : ''),
-          )
+          pushLog(t('logMediaError', { name: entryName, error: err instanceof Error ? err.message : '' }))
         }
         setProgress({ ...prog })
       }
@@ -327,17 +331,16 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
       if (prog.mediaErrors === 0) {
         toast.success(t('ingestSuccess'))
       } else {
-        toast.warning(
-          t('ingestPartial')
-            .replace('{done}', String(prog.mediaDone))
-            .replace('{errors}', String(prog.mediaErrors)),
-        )
+        toast.warning(t('ingestPartial', { done: prog.mediaDone, errors: prog.mediaErrors }))
       }
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
       if (prog.kbStep === 'running') prog.kbStep = 'error'
       if (prog.projectStep === 'running') prog.projectStep = 'error'
+      // Persist the failure in the log panel (the toast is transient) so it stays diagnosable.
+      pushLog(`✗ ${msg}`)
       setProgress({ ...prog })
-      toast.error(err instanceof Error ? err.message : t('ingestError'))
+      toast.error(msg || t('ingestError'))
       setPhase('classified') // allow a retry from the confirm step
     } finally {
       setBusy(false)
@@ -391,10 +394,11 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
           <CardHeader>
             <h2 className="text-base font-semibold">{t('decisionTitle')}</h2>
             <p className="text-sm text-muted-foreground">
-              {t('decisionSummary')
-                .replace('{decision}', classification.decision === 'match' ? t('decisionMatch') : t('decisionNew'))
-                .replace('{name}', classification.suggestedName ?? '')
-                .replace('{confidence}', Math.round((classification.confidence ?? 0) * 100) + '%')}
+              {t('decisionSummary', {
+                decision: classification.decision === 'match' ? t('decisionMatch') : t('decisionNew'),
+                name: classification.suggestedName ?? '',
+                confidence: Math.round((classification.confidence ?? 0) * 100) + '%',
+              })}
             </p>
             {classification.reasoning && (
               <p className="mt-1 text-xs text-muted-foreground italic">{classification.reasoning}</p>
