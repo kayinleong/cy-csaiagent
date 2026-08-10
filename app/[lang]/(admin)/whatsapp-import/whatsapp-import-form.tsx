@@ -59,9 +59,14 @@ interface ParsedZip {
   sample: string
 }
 
+type StepStatus = 'pending' | 'running' | 'done' | 'error'
+
 interface Progress {
-  projectStep: 'pending' | 'running' | 'done' | 'error'
-  kbStep: 'pending' | 'running' | 'done' | 'error'
+  projectStep: StepStatus
+  kbStep: StepStatus
+  mediaStep: StepStatus
+  /** Basename of the file currently uploading (shown while mediaStep === 'running'). */
+  mediaCurrent: string
   mediaDone: number
   mediaTotal: number
   mediaErrors: number
@@ -71,6 +76,16 @@ interface Progress {
 const MAX_TRANSCRIPT_CHARS = 900_000 // soft guard against the Server Action body cap (~1 MB)
 const POLL_LIMIT = 5
 const POLL_MAX_ITERATIONS = 5_000
+const UPLOAD_TIMEOUT_MS = 30_000 // a single media upload should never take longer; a hang → logged error
+const MAX_CONSECUTIVE_MEDIA_FAILURES = 5 // fail-fast: stop after this many in a row (Storage misconfigured)
+
+/** Reject after `ms` if `p` hasn't settled — turns a hanging upload into a surfaced error. */
+function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
+  ])
+}
 
 /** Keep the basename and strip characters that would complicate a Storage path. */
 function safeStorageName(name: string): string {
@@ -210,6 +225,8 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
     const prog: Progress = {
       projectStep: 'pending',
       kbStep: 'pending',
+      mediaStep: 'pending',
+      mediaCurrent: '',
       mediaDone: 0,
       mediaTotal: parsed.mediaEntries.length,
       mediaErrors: 0,
@@ -297,38 +314,73 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
       pushLog(t('logKbDone', { chunks: kb.total ?? 0 }))
 
       // 4c. Upload media → Storage, record each as collateral.
+      // This is the app's first browser→Storage upload path. A misconfigured bucket
+      // (rules not deployed / CORS unset) makes uploadBytes HANG rather than fail fast,
+      // which would freeze the bar at 0/total. Guard each upload with a timeout and
+      // fail-fast after repeated failures so the step can never sit silently stuck.
       const zip = zipRef.current
+      prog.mediaStep = parsed.mediaEntries.length > 0 ? 'running' : 'done'
+      setProgress({ ...prog })
+      let consecutiveFailures = 0
       for (const entryName of parsed.mediaEntries) {
+        prog.mediaCurrent = entryName.split('/').pop() ?? entryName
+        setProgress({ ...prog })
         try {
           const file = zip?.file(entryName)
           if (!file) {
             prog.mediaErrors += 1
+            consecutiveFailures += 1
             pushLog(t('logMediaMissing', { name: entryName }))
-            continue
-          }
-          const blob = await file.async('blob')
-          const path = `collateral/${projectId}/whatsapp/${safeStorageName(entryName)}`
-          await uploadBytes(storageRef(clientStorage, path), blob)
-          const att = await attachCollateralAction(projectId, {
-            type: 'whatsapp-media',
-            lang: kbLang,
-            storagePath: path,
-          })
-          if (!att.ok) {
-            prog.mediaErrors += 1
-            pushLog(t('logMediaError', { name: entryName, error: att.error ?? '' }))
           } else {
-            prog.mediaDone += 1
+            const blob = await file.async('blob')
+            const path = `collateral/${projectId}/whatsapp/${safeStorageName(entryName)}`
+            await withTimeout(
+              uploadBytes(storageRef(clientStorage, path), blob),
+              UPLOAD_TIMEOUT_MS,
+              t('mediaTimedOut'),
+            )
+            const att = await attachCollateralAction(projectId, {
+              type: 'whatsapp-media',
+              lang: kbLang,
+              storagePath: path,
+            })
+            if (!att.ok) {
+              prog.mediaErrors += 1
+              consecutiveFailures += 1
+              pushLog(t('logMediaError', { name: entryName, error: att.error ?? '' }))
+            } else {
+              prog.mediaDone += 1
+              consecutiveFailures = 0
+            }
           }
         } catch (err) {
           prog.mediaErrors += 1
+          consecutiveFailures += 1
           pushLog(t('logMediaError', { name: entryName, error: err instanceof Error ? err.message : '' }))
         }
+        setProgress({ ...prog })
+
+        // Uploads are clearly not working — stop hammering (would be N × timeout) and
+        // point the operator at the likely cause instead of grinding to a frozen halt.
+        if (consecutiveFailures >= MAX_CONSECUTIVE_MEDIA_FAILURES) {
+          prog.mediaStep = 'error'
+          prog.mediaCurrent = ''
+          pushLog(t('logMediaStopped', { n: consecutiveFailures }))
+          setProgress({ ...prog })
+          break
+        }
+      }
+      if (prog.mediaStep === 'running') {
+        prog.mediaStep = 'done'
+        prog.mediaCurrent = ''
         setProgress({ ...prog })
       }
 
       setPhase('done')
-      if (prog.mediaErrors === 0) {
+      if (prog.mediaStep === 'error') {
+        // KB (the primary value) succeeded; media upload is the secondary step that stalled.
+        toast.warning(t('ingestKbOkMediaFailed'))
+      } else if (prog.mediaErrors === 0) {
         toast.success(t('ingestSuccess'))
       } else {
         toast.warning(t('ingestPartial', { done: prog.mediaDone, errors: prog.mediaErrors }))
@@ -501,16 +553,26 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
                 {t('stepKb')}: <StatusText status={progress.kbStep} t={t} />
               </li>
               <li>
-                {t('stepMedia')}: {progress.mediaDone}/{progress.mediaTotal}
+                {t('stepMedia')}: <StatusText status={progress.mediaStep} t={t} /> — {progress.mediaDone}/
+                {progress.mediaTotal}
                 {progress.mediaErrors > 0 && ` (${progress.mediaErrors} ${t('errorsLabel')})`}
               </li>
+              {progress.mediaStep === 'running' && progress.mediaCurrent && (
+                <li className="truncate pl-4 text-xs text-muted-foreground">
+                  {t('mediaUploadingNow', { name: progress.mediaCurrent })}
+                </li>
+              )}
             </ul>
 
             {progress.mediaTotal > 0 && (
               <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full bg-primary transition-all"
-                  style={{ width: `${Math.round((progress.mediaDone / progress.mediaTotal) * 100)}%` }}
+                  style={{
+                    width: `${Math.round(
+                      ((progress.mediaDone + progress.mediaErrors) / progress.mediaTotal) * 100,
+                    )}%`,
+                  }}
                 />
               </div>
             )}
