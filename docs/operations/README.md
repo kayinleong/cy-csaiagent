@@ -14,7 +14,7 @@ This directory contains the complete operator documentation for the D2 AI Agent 
 - `<PROJECT_ID>` — your Firebase project ID (e.g. `cy-csaiagent`)
 - `<API_KEY>` — a secret key (retrieve from Firebase Console → App Hosting → Secrets)
 - `<APP_HOSTING_URL>` — your App Hosting deployment URL (e.g. `https://cy-csaiagent.web.app`)
-- `<BUCKET_NAME>` — your Cloud Storage bucket (e.g. `cy-csaiagent.appspot.com`)
+- `<BUCKET_NAME>` — your Cloud Storage bucket (e.g. `cy-csaiagent.firebasestorage.app`)
 - Never paste real secret values into these docs — always use placeholders
 
 ---
@@ -65,6 +65,36 @@ There is no external uptime monitor in v1 (constraint: no external scheduler). T
 - **Secrets**: All API keys in Firebase Secret Manager (App Hosting integration). Never in environment variables visible to clients.
 - **PDPA**: All PII pseudonymized before reaching the AI model. Erasure completes within 72 hours. See `pdpa-erasure-runbook.md`.
 - **Audit log**: Every admin action is logged (hashes-only, no PII). Audit log is permanent — never erased.
+
+---
+
+## Cloud Storage (collateral uploads)
+
+Collateral (brochures, floor plans, WhatsApp-import media) is uploaded from the
+browser to Firebase Storage under `collateral/{projectId}/…`. Provisioning is
+NOT fully managed by `firebase deploy` — two steps are manual per bucket:
+
+1. **Security rules** (managed via `firebase.json` → `storage.rules`):
+   ```bash
+   firebase deploy --only storage --project <PROJECT_ID>
+   ```
+   Rules gate `collateral/**` to admin-only writes (≤200 MB) + signed-in reads.
+
+2. **CORS** (NOT managed by `firebase deploy` — a `gsutil` setting on the bucket).
+   Browser `uploadBytes` **hangs and times out** if the bucket has no CORS policy,
+   because the SDK can't read the upload response headers. Apply the committed policy:
+   ```bash
+   gsutil cors set docs/operations/storage.cors.json gs://<BUCKET_NAME>
+   gsutil cors get gs://<BUCKET_NAME>   # verify
+   ```
+   `origin` is `*` — this is safe because Storage **Security Rules** (not CORS) are
+   the authorization boundary; a random origin still needs a valid admin ID token to write.
+
+> ⚠️ **Region deviation (accepted):** the default bucket `cy-csaiagent.firebasestorage.app`
+> was created in **US-EAST1**, not the project-standard `asia-southeast1`. A bucket's
+> region is permanent. This was explicitly accepted by the project owner; moving to
+> `asia-southeast1` later means a new bucket + repointing `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+> + re-running both steps above + migrating objects. Note the PDPA data-residency implication.
 
 ---
 

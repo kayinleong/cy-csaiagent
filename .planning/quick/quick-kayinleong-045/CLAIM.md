@@ -41,3 +41,13 @@ BUILD ONLY — no live ingestion was executed (no createDoc/embed/Storage write 
 **Deferred to operator (runtime, out of scope for build-only):** the AI classify call needs Anthropic credits (currently exhausted); live KB ingest + Storage upload need a signed-in admin session. New projects are created **hidden** so a $0/blank placeholder can never be recommended by Finder until enriched + activated.
 
 Status: **done** (build-only scope).
+
+## Operational addendum (post-build runtime bring-up)
+The operator subsequently ran the feature against live Firebase, surfacing runtime fixes + infra provisioning (all committed on this branch):
+- **i18n interpolation** — `t(key).replace('{x}', …)` rendered raw key paths (no custom next-intl error handler → missing-arg fallback). Switched to native `t(key, { …args })`. (commit 0850821)
+- **Media step UX + robustness** — real status (pending/running/done/error), current-file display, bar advances on `done+errors`, per-file 30 s timeout, fail-fast after 5 consecutive failures, KB success decoupled from media. (commit ce3af01)
+- **Storage provisioning** (see `docs/operations/README.md` → *Cloud Storage*):
+  - `storage.rules` deployed to `cy-csaiagent` (`firebase deploy --only storage`).
+  - Default bucket `cy-csaiagent.firebasestorage.app` was created in **US-EAST1** (not `asia-southeast1`) — permanent; **explicitly accepted by the owner** (PDPA/region deviation recorded).
+  - Bucket had **no CORS** → browser uploads hung/timed out; applied `docs/operations/storage.cors.json` via `gsutil cors set`. Verified.
+- Runtime status: KB ingest confirmed working (255 chunks on the sample export); media uploads unblocked once CORS was set.
