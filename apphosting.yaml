@@ -65,3 +65,12 @@ env:
 
   - variable: NEXT_PUBLIC_APP_URL
     value: $(env:NEXT_PUBLIC_APP_URL)  # App Hosting sets this automatically
+
+  # Cloud Storage bucket for browser uploads (collateral / WhatsApp-import media).
+  # MUST be the bucket that actually exists. Firebase's newer projects use the
+  # `<project>.firebasestorage.app` naming; the legacy `<project>.appspot.com`
+  # bucket does NOT exist on this project — pointing at it makes every browser
+  # upload 404 and hang until it times out (quick-kayinleong-045).
+  # NEXT_PUBLIC_* is inlined at BUILD time, so changing it requires a redeploy.
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: cy-csaiagent.firebasestorage.app

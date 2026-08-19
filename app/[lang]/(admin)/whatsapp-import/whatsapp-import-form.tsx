@@ -321,6 +321,14 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
       const zip = zipRef.current
       prog.mediaStep = parsed.mediaEntries.length > 0 ? 'running' : 'done'
       setProgress({ ...prog })
+      // Surface the target bucket up front. A build inlined with the wrong
+      // NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET points at a bucket that does not exist,
+      // which makes uploadBytes 404-and-retry until the timeout instead of failing
+      // loudly — logging the bucket makes that misconfiguration obvious immediately.
+      const bucket = clientStorage.app.options.storageBucket ?? '(unset)'
+      if (parsed.mediaEntries.length > 0) {
+        pushLog(t('logMediaTarget', { count: parsed.mediaEntries.length, bucket }))
+      }
       let consecutiveFailures = 0
       for (const entryName of parsed.mediaEntries) {
         prog.mediaCurrent = entryName.split('/').pop() ?? entryName
@@ -337,7 +345,7 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
             await withTimeout(
               uploadBytes(storageRef(clientStorage, path), blob),
               UPLOAD_TIMEOUT_MS,
-              t('mediaTimedOut'),
+              t('mediaTimedOut', { bucket }),
             )
             const att = await attachCollateralAction(projectId, {
               type: 'whatsapp-media',
