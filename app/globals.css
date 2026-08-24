@@ -339,3 +339,48 @@
     }
   }
 }
+
+/* ── Nav pending affordance — quick-kayinleong-047 ───────────────────────────
+   app/[lang]/_components/nav-pending.tsx (useLinkStatus). Clicking a console nav
+   item used to leave the user on the old page for a second or more with NO
+   feedback, because a loading.tsx fallback only renders for the segment being
+   entered — sibling navigations inside the same (admin)/(coach) route group never
+   re-suspend that boundary.
+
+   Two animations on one element, both starting after a 180ms delay:
+     1. a fade in, so a fast or prefetched navigation never FLASHES a spinner
+        (the loading-affordance smell `review-animations` calls out);
+     2. the spin itself.
+   The delay is what makes this feel intentional rather than twitchy — under ~180ms
+   the eye reads the navigation as instant and any indicator is pure noise.
+
+   opacity + transform only (compositor-only). The prefers-reduced-motion guard
+   above collapses animation-duration and iteration-count but NOT animation-delay,
+   so under reduced motion the glyph still appears (statically, no spin) — feedback
+   is preserved, motion is not. */
+/* opacity ONLY — deliberately no transform. nav-pending-spin below also drives
+   `transform`, and when two animations on one element target the same property the
+   later one in the animation list wins, so a scale here would be silently dead. */
+@keyframes nav-pending-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes nav-pending-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@layer components {
+  [data-slot='nav-pending'] {
+    opacity: 0;
+    animation:
+      nav-pending-in var(--duration-press) var(--ease-out-strong) 180ms forwards,
+      nav-pending-spin 700ms linear 180ms infinite;
+  }
+}

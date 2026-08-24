@@ -21,6 +21,7 @@
  */
 
 import Link from 'next/link'
+import { NavPending } from './nav-pending'
 import { usePathname } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import type { Role } from '@/src/firebase/auth'
@@ -88,6 +89,9 @@ export function AppSidebar({ role, lang }: AppSidebarProps) {
                         <Link href={item.href}>
                           <Icon />
                           <span>{t(item.key)}</span>
+                          {/* Pending affordance — see nav-pending.tsx. Must be a
+                              descendant of <Link> for useLinkStatus to work. */}
+                          <NavPending />
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
