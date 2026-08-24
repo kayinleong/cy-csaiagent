@@ -7,14 +7,12 @@
  * error.tsx files, so an unhandled render error anywhere under /[lang] fell
  * through to Next's bare "Application error" page.
  *
- * ⚠ INTENTIONALLY COPY-FREE — follow-up required.
- * This track does not own src/i18n/messages/* (Track LEADS does), and D2 ships
- * EN/BM/中文 from day one, so no user-facing prose could be added without either
- * hard-coding English or referencing catalogue keys that do not exist yet. The
- * visible surface is therefore icon-only; the retry affordance carries an sr-only
- * English label so it is not unlabelled for assistive tech. FOLLOW-UP: add
- * `error.title` / `error.body` / `error.retry` to en/ms/zh.json and render them
- * here via useTranslations.
+ * Copy comes from the `errors.routeError*` keys, at EN/BM/中文 parity.
+ *
+ * useTranslations is safe HERE specifically: an error.tsx boundary cannot catch a
+ * throw from its OWN layout, so by the time this renders `app/[lang]/layout.tsx`
+ * (and therefore NextIntlClientProvider) has already rendered successfully. A throw
+ * in the layout itself escalates past this boundary to global-error instead.
  *
  * PDPA: only `error.digest` is logged. Never log the message or stack — a server
  * component error can carry query values or user identifiers, and the project rule
@@ -28,6 +26,7 @@
  */
 
 import { useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import { OctagonAlert, RotateCcwIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -38,6 +37,8 @@ export default function LangError({
   error: Error & { digest?: string }
   reset: () => void
 }) {
+  const t = useTranslations('errors')
+
   useEffect(() => {
     // Digest only — see the PDPA note above.
     console.error('[route-error]', error.digest ?? 'no-digest')
@@ -54,11 +55,9 @@ export default function LangError({
       >
         <OctagonAlert className="size-8 text-destructive" aria-hidden="true" />
 
-        {/* Placeholder for the not-yet-translated title + body. Rendered as neutral
-            blocks rather than English prose so no untranslated copy ships. */}
-        <div className="flex w-48 flex-col items-center gap-2">
-          <div className="h-3 w-full rounded-full bg-muted" />
-          <div className="h-3 w-2/3 rounded-full bg-muted" />
+        <div className="flex max-w-xs flex-col items-center gap-2 text-center">
+          <p className="text-sm font-medium">{t('routeErrorTitle')}</p>
+          <p className="text-sm text-muted-foreground">{t('routeErrorBody')}</p>
         </div>
 
         {/* size-11 = 44px: the mobile minimum touch target. The vendored
@@ -70,7 +69,7 @@ export default function LangError({
           onClick={() => reset()}
         >
           <RotateCcwIcon aria-hidden="true" />
-          <span className="sr-only">Retry</span>
+          <span className="sr-only">{t('routeErrorRetry')}</span>
         </Button>
       </div>
     </div>

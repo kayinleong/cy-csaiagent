@@ -298,7 +298,10 @@
   "errors": {
     "notFound": "页面未找到。",
     "serverError": "我们这边出现了错误。",
-    "unauthorized": "您没有权限查看此页面。"
+    "unauthorized": "您没有权限查看此页面。",
+    "routeErrorTitle": "出了点问题",
+    "routeErrorBody": "此页面未能正常加载。请重试 — 您的对话已保存。",
+    "routeErrorRetry": "重试"
   },
   "dashboard": {
     "title": "教练仪表板",

@@ -296,7 +296,10 @@
   "errors": {
     "notFound": "Page not found.",
     "serverError": "Something went wrong on our end.",
-    "unauthorized": "You don't have permission to view this page."
+    "unauthorized": "You don't have permission to view this page.",
+    "routeErrorTitle": "Something went wrong",
+    "routeErrorBody": "This page didn't load properly. Try again — your conversation is saved.",
+    "routeErrorRetry": "Try again"
   },
   "dashboard": {
     "title": "Coach Dashboard",

@@ -298,7 +298,10 @@
   "errors": {
     "notFound": "Halaman tidak dijumpai.",
     "serverError": "Berlaku ralat di pihak kami.",
-    "unauthorized": "Anda tidak mempunyai kebenaran untuk melihat halaman ini."
+    "unauthorized": "Anda tidak mempunyai kebenaran untuk melihat halaman ini.",
+    "routeErrorTitle": "Ada sesuatu yang tidak betul",
+    "routeErrorBody": "Halaman ini tidak dimuatkan dengan betul. Cuba lagi — perbualan anda telah disimpan.",
+    "routeErrorRetry": "Cuba lagi"
   },
   "dashboard": {
     "title": "Papan Pemuka Jurulatih",
