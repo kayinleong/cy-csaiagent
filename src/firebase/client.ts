@@ -9,6 +9,40 @@
  *
  * Import pattern (always use the @/ alias):
  *   import { clientAuth, clientDb } from '@/src/firebase/client'
+ *
+ * ─── ⚡ BUNDLE COST — READ BEFORE ADDING AN IMPORT OF THIS MODULE (quick-046) ──────
+ *
+ * The four `firebase/*` imports below all run at MODULE SCOPE, so any client component
+ * that touches ANY export here drags app + auth + firestore + storage into its route as
+ * a single ~461 KB (uncompressed) chunk — even when it only needs `signOut`.
+ *
+ * quick-kayinleong-046 removed the worst offender: the shared console shell
+ * (sign-out-button → app-sidebar → console-shell, rendered by (admin)/layout.tsx,
+ * (coach)/layout.tsx and [lang]/page.tsx) now imports this module DYNAMICALLY inside
+ * its click handler, so ~19 console routes no longer pay 461 KB on first load.
+ *
+ * RULE: a component reachable from `console-shell.tsx` must NEVER import this module
+ * at module scope. Use `await import('@/src/firebase/client')` inside the handler /
+ * effect that needs it.
+ *
+ * STILL OUTSTANDING (deliberately NOT done in quick-046 — it changes this module's
+ * public surface and therefore needs the three call sites migrated in the same commit,
+ * which sit outside that claim's file ownership):
+ *   Convert `clientDb` / `clientStorage` from eager consts into async accessors
+ *   (`getClientDb()` / `getClientStorage()` that `await import('firebase/firestore')`
+ *   / `await import('firebase/storage')`), leaving only `clientApp` + `clientAuth`
+ *   eager. Call sites to migrate:
+ *     - app/[lang]/chat/conversation-list.tsx           (clientDb)
+ *     - app/[lang]/chat/load-conversation-messages.ts   (clientDb)
+ *     - app/[lang]/(admin)/whatsapp-import/whatsapp-import-form.tsx (clientStorage)
+ *   Expected further win: /[lang]/(auth)/sign-in stops shipping Firestore + Storage
+ *   (it needs Auth only), /[lang]/chat stops shipping Storage, and whatsapp-import
+ *   stops shipping Firestore.
+ *
+ * Persistence NOTE for whoever does that work: `clientAuth` MUST stay eagerly
+ * initialized. LOCAL (IndexedDB) persistence rehydration starts when `getAuth()` runs,
+ * and `clientAuth.currentUser` is read by the chat + whatsapp-import surfaces (AUTH-05).
+ * Making Auth lazy would change auth-readiness timing that other code depends on.
  */
 
 'use client'

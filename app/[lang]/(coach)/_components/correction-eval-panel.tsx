@@ -19,6 +19,10 @@
  * recharts conventions VERBATIM (HR-3). All strings from dashboard.v2.* (HR-2).
  * Empty state: centered muted p.py-8 with dashboard.v2.noData.
  *
+ * ⚡ PERF (quick-046): the chart renders through ../../_components/charts/lazy-chart,
+ * the single `next/dynamic` boundary for recharts (375 KB). Do NOT import `recharts`
+ * here again.
+ *
  * References:
  *   - CDASH-08 (coach dashboard v2 panels)
  *   - 05-UI-SPEC.md Surface 1, panel 3
@@ -27,15 +31,7 @@
  */
 
 import { useTranslations } from 'next-intl'
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from 'recharts'
+import { LazyLineChart, CHART_PRIMARY } from '../../_components/charts/lazy-chart'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import {
   Table,
@@ -134,28 +130,12 @@ export function CorrectionEvalPanel({ corrections, evalTrend }: CorrectionEvalPa
               {t('noData')}
             </p>
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart
-                data={evalTrend}
-                margin={{ top: 4, right: 8, left: -16, bottom: 4 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="suite" tick={{ fontSize: 12 }} />
-                <YAxis
-                  tick={{ fontSize: 12 }}
-                  allowDecimals={false}
-                  domain={[0, 100]}
-                />
-                <Tooltip />
-                <Line
-                  type="monotone"
-                  dataKey="score"
-                  stroke="#6366f1"
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <LazyLineChart
+              data={evalTrend}
+              xKey="suite"
+              yDomain={[0, 100]}
+              series={[{ dataKey: 'score', color: CHART_PRIMARY }]}
+            />
           )}
         </CardContent>
       </Card>

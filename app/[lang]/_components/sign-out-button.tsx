@@ -11,6 +11,29 @@
  * Rendered inside <SidebarMenu> in the AppSidebar footer, so it inherits the
  * sidebar's icon-collapse + tooltip behavior like the nav items above it.
  *
+ * ⚡ PERF — quick-kayinleong-046. The Firebase web SDK is imported DYNAMICALLY inside
+ * the click handler, never at module scope. WHY: this file is the single transitive
+ * edge that put Firebase on EVERY console page —
+ *     sign-out-button.tsx → app-sidebar.tsx → console-shell.tsx
+ * and ConsoleShell is rendered by (admin)/layout.tsx, (coach)/layout.tsx and
+ * [lang]/page.tsx. Because `@/src/firebase/client` initializes app + auth + firestore
+ * + storage at module scope, those four collapse into ONE ~461 KB client chunk, so a
+ * page like (admin)/pdpa-settings shipped 461 KB of Firebase while importing zero
+ * Firebase itself (762 KB total, ~60% waste). Deferring the import to the handler
+ * removes that chunk from the FIRST LOAD of every console route; it is fetched only
+ * when a user actually signs out.
+ *
+ * ⚠️ DO NOT re-add a module-scope `import … from 'firebase/*'` or
+ * `from '@/src/firebase/client'` to this file (or to app-sidebar / console-shell) —
+ * that silently regresses every console route by ~461 KB.
+ *
+ * Auth semantics are UNCHANGED: the same signOut() runs first, on the same Auth
+ * instance (`initClient()` guards on getApps().length, so the dynamic import resolves
+ * to the same singleton the chat/sign-in surfaces use), failures are still swallowed,
+ * and the server cookie is still deleted afterwards. If the chunk itself fails to load
+ * (offline), the catch below still falls through to the cookie deletion — the
+ * fail-safe sign-out contract is preserved.
+ *
  * SECURITY: never logs the session cookie / token. A client signOut failure is
  * swallowed so the server cookie is still cleared (fail-safe sign-out).
  */
@@ -18,9 +41,7 @@
 import { useTransition } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import { signOut } from 'firebase/auth'
 import { LogOut } from 'lucide-react'
-import { clientAuth } from '@/src/firebase/client'
 import { SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar'
 
 export function SignOutButton() {
@@ -34,7 +55,13 @@ export function SignOutButton() {
     startTransition(async () => {
       // Clear the client (IndexedDB) auth state. Swallow failure — the server
       // cookie deletion below is what actually ends the privileged session.
+      // The Firebase SDK is loaded HERE, on demand (see the perf note above); a
+      // chunk-load failure lands in the same catch as a signOut() failure.
       try {
+        const [{ clientAuth }, { signOut }] = await Promise.all([
+          import('@/src/firebase/client'),
+          import('firebase/auth'),
+        ])
         await signOut(clientAuth)
       } catch {
         // ignore — still clear the server cookie

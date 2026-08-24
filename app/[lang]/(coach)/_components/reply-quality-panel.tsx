@@ -22,6 +22,10 @@
  * data is already downline-locked server-side (AUTH-06) — this component only
  * displays counts; it never re-queries.
  *
+ * ⚡ PERF (quick-046): both charts render through ../../_components/charts/lazy-chart,
+ * the single `next/dynamic` boundary for recharts (375 KB). Do NOT import `recharts`
+ * here again.
+ *
  * References:
  *   - REPLY-11 / ADMIN-06 (reply quality analytics, thumbs-down rate KPI)
  *   - D-20 (read-time aggregation, no rollup job)
@@ -32,16 +36,11 @@
 
 import { useTranslations } from 'next-intl'
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  CartesianGrid,
-} from 'recharts'
+  LazyBarChart,
+  LazyLineChart,
+  CHART_PRIMARY,
+  CHART_SECONDARY,
+} from '../../_components/charts/lazy-chart'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 
 /** Mirror of SopEditRate in dashboard/actions.ts (plain serializable). */
@@ -123,24 +122,12 @@ export function ReplyQualityPanel({
                 {t('replyQuality.noData')}
               </p>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart
-                  data={editRateData}
-                  margin={{ top: 4, right: 8, left: -16, bottom: 4 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="sop" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} allowDecimals={false} unit="%" />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="editRate"
-                    stroke="#6366f1"
-                    strokeWidth={2}
-                    dot={{ r: 4 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <LazyLineChart
+                data={editRateData}
+                xKey="sop"
+                yUnit="%"
+                series={[{ dataKey: 'editRate', color: CHART_PRIMARY }]}
+              />
             )}
           </CardContent>
         </Card>
@@ -156,17 +143,12 @@ export function ReplyQualityPanel({
                 {t('replyQuality.noData')}
               </p>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart
-                  data={topEditedData}
-                  margin={{ top: 4, right: 8, left: -16, bottom: 4 }}
-                >
-                  <XAxis dataKey="sop" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} allowDecimals={false} unit="%" />
-                  <Tooltip />
-                  <Bar dataKey="editRate" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <LazyBarChart
+                data={topEditedData}
+                xKey="sop"
+                yUnit="%"
+                series={[{ dataKey: 'editRate', color: CHART_SECONDARY }]}
+              />
             )}
           </CardContent>
         </Card>

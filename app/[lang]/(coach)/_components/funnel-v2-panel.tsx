@@ -14,12 +14,14 @@
  * productive vs the 7–10 day target). Does NOT duplicate the existing MetricsPanel;
  * it is appended as a new section (D-07 grow, don't fork).
  *
- * recharts conventions VERBATIM (HR-3):
- *   - ResponsiveContainer width="100%" height={220}
- *   - margin={{ top: 4, right: 8, left: -16, bottom: 4 }}
- *   - tick fontSize: 12
- *   - primary series #6366f1 / secondary #f59e0b
- *   - Bar radius [4, 4, 0, 0]
+ * recharts conventions VERBATIM (HR-3) — now enforced centrally by
+ * ../../_components/charts/chart-canvas.tsx (height 220, margin
+ * { top: 4, right: 8, left: -16, bottom: 4 }, tick fontSize 12, primary #6366f1 /
+ * secondary #f59e0b, Bar radius [4, 4, 0, 0]).
+ *
+ * ⚡ PERF (quick-046): the chart renders through ../../_components/charts/lazy-chart,
+ * the single `next/dynamic` boundary for recharts (375 KB). Do NOT import `recharts`
+ * here again.
  *
  * All strings from dashboard.v2.* (HR-2). Empty state: centered muted p.py-8.
  *
@@ -31,14 +33,7 @@
  */
 
 import { useTranslations } from 'next-intl'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
+import { LazyBarChart, CHART_PRIMARY } from '../../_components/charts/lazy-chart'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 
 export interface FunnelV2Stage {
@@ -92,17 +87,11 @@ export function FunnelV2Panel({
               {t('noData')}
             </p>
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart
-                data={stages}
-                margin={{ top: 4, right: 8, left: -16, bottom: 4 }}
-              >
-                <XAxis dataKey="stage" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <LazyBarChart
+              data={stages}
+              xKey="stage"
+              series={[{ dataKey: 'count', color: CHART_PRIMARY }]}
+            />
           )}
         </CardContent>
       </Card>

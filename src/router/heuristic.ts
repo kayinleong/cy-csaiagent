@@ -124,6 +124,96 @@ const COACH_PATTERNS: RegExp[] = [
   /\bcoach\b/i,                  // "my coach", "senior coach"
   /\bescalat/i,                  // "escalate", "escalation"
   /\bcomprehension\b/i,          // "comprehension check", "comprehension gate"
+
+  // ── quick-kayinleong-046: widened coach vocabulary (a LATENCY fix, not a routing
+  //    redesign).
+  //    WHY: with only the 9 regexes above (vs 51 finder patterns), an ordinary coach
+  //    question matched NOTHING, heuristicPillar() returned null, and routeAsync()
+  //    fell through to `await classifyIntent()` — a blocking generateObject round-trip
+  //    (~400–1200 ms of dead air) BEFORE streamText() emits its first token.
+  //    Coach is already the safe default on BOTH the sync path (`route()` step 3) and
+  //    the low-confidence classifier branch (index.ts), so catching these
+  //    deterministically changes the LATENCY, not the destination — and it upgrades
+  //    `reason` from `classifier:*` to `heuristic-coach:*`, which keeps routeDecision
+  //    observability (D-02) intact.
+  //
+  //    SAFETY RULES every pattern below obeys:
+  //      1. Zero overlap with FINDER vocabulary (condo / apartment / unit / landed /
+  //         sqft / psf / freehold / leasehold / RM + price shapes / BR-BHK shorthand /
+  //         budget / bedroom / property / lead-criteria / financing / eligib /
+  //         collateral / own-stay). FINDER_PATTERNS are scanned BEFORE these, so an
+  //         inventory query keeps winning even when it also says "commission".
+  //      2. REPLY structural signals are scanned FIRST (Pitfall C) — unchanged. A
+  //         pasted inbound stays a Reply draft even if it mentions "objection" or
+  //         "script".
+  //      3. No catch-all shapes (no bare /how do i/, no bare /\bclient\b/, no bare
+  //         /\bbuyer\b/) — those would steal genuinely finder-intent traffic that
+  //         carries no finder keyword, which must stay with the LLM classifier.
+
+  // Onboarding / training / mentorship lifecycle:
+  /\bonboard/i,                  // "onboard", "onboarded" (broadens \bonboarding\b)
+  /\bmentor/i,                   // "mentor", "mentorship", "mentoring"
+  /\bupline\b/i,                 // D2 hierarchy vocabulary
+  /\bdownline\b/i,
+  /\bnew\s+agent\b/i,            // "as a new agent", "new agent guide"
+  /\bprobation\b/i,
+  /\bramp[- ]?up\b/i,            // "ramp up", "ramp-up plan"
+  /\bget(?:ting)?\s+started\b/i, // "how do I get started"
+  /\bfirst\s+(?:day|week|month|deal|sale|closing|listing)\b/i,
+  /\bmodules?\b/i,               // "training module"
+  /\bquiz(?:zes)?\b/i,
+  /\bassessment\b/i,
+  /\bcertific/i,                 // "certificate", "certification", "certified"
+  /\bworkshop\b/i,
+  /\bwebinar\b/i,
+  /\bbootcamp\b/i,
+  /\bkpi\b/i,
+  /\bcpd\b/i,                    // continuing professional development (REN upkeep)
+
+  // Process / SOP / policy questions — the "how does D2 do X" shape:
+  /\bsop\b/i,
+  /\bstandard\s+operating\s+procedure/i,
+  /\bcheck\s?list\b/i,           // "checklist", "check list"
+  /\bguideline/i,
+  /\bpolic(?:y|ies)\b/i,
+  /\bcompliance\b/i,
+  /\bpdpa\b/i,
+  /\bbest\s+practice/i,
+  /\bstep[- ]by[- ]step\b/i,
+  /\bthe\s+(?:process|procedure|steps?)\b/i,
+  /\b(?:process|procedure)\s+(?:for|of|to)\b/i,
+  /\b(?:what|which)\s+documents?\b/i,
+  /\bdocuments?\s+(?:needed|required|checklist|to\s+prepare)\b/i,
+  /\bhow\s+do\s+i\s+(?:handle|deal\s+with|start|begin|prepare)\b/i,
+  /\btips?\b/i,
+  /\btemplates?\b/i,
+
+  // Malaysian real-estate regulatory / transaction SOP (agent-facing, never inventory).
+  //    REN / REA / SPA are matched CASE-SENSITIVELY so they cannot fire on the
+  //    substrings "ren" / "rea" / "spa" inside ordinary lowercase prose.
+  /\bREN\b/,                     // Real Estate Negotiator tag
+  /\bREA\b/,                     // Real Estate Agent licence
+  /\b(?:BOVAEA|BOVEA|LPPEH)\b/i, // the regulator
+  /\bSPA\b/,                     // sale & purchase agreement
+  /\bstamp\s+duty\b/i,
+  /\bRPGT\b/i,                   // real property gains tax
+  /\bMM2H\b/i,                   // Malaysia My Second Home
+  /\bbumi(?:putera)?\b/i,        // bumiputera quota / discount rules
+  /\bforeign\s+(?:buyer|purchaser|ownership|owner)\b/i,
+  /\bforeigner/i,                // "can foreigners buy…"
+  /\bloan\s+(?:application|approval|reject|document)/i,
+  /\bco[- ]?brok/i,              // "co-broke", "co-broking", "cobroking"
+  /\bcommission\b/i,
+
+  // Sales-skills training (REPLY structural signals still win — they run first):
+  /\bobjection/i,                // "objection handling", "price objections"
+  /\bcold\s+(?:call|calling|message|dm)/i,
+  /\bprospecting\b/i,
+  /\bscripts?\b/i,
+  /\blisting\s+(?:presentation|agreement)\b/i,
+  /\b(?:facebook|fb|google|tiktok|instagram|ig)\s+ads?\b/i,
+  /\blead\s+gen(?:eration)?\b/i,
+  /\bviewing\b/i,                // "how do I arrange a viewing"
 ]
 
 /**

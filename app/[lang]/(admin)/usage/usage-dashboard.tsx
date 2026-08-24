@@ -17,12 +17,15 @@
  * perAgentRows for read-only; this component additionally hides the whole section
  * so no empty-state placeholder hints at per-agent data.
  *
- * Charts follow the VERBATIM metrics-panel.tsx recharts conventions (HR-3):
- *   - ResponsiveContainer width="100%" height={220}
- *   - margin={{ top: 4, right: 8, left: -16, bottom: 4 }}
- *   - tick fontSize: 12
- *   - primary series #6366f1 / secondary #f59e0b
- *   - Bar radius [4, 4, 0, 0]
+ * Charts follow the VERBATIM metrics-panel.tsx recharts conventions (HR-3) — now
+ * enforced centrally by ../../_components/charts/chart-canvas.tsx (height 220, margin
+ * { top: 4, right: 8, left: -16, bottom: 4 }, tick fontSize 12, primary #6366f1 /
+ * secondary #f59e0b, Bar radius [4, 4, 0, 0]).
+ *
+ * ⚡ PERF (quick-046): both charts render through ../../_components/charts/lazy-chart,
+ * the single `next/dynamic` boundary for recharts (375 KB). This route was the second
+ * heaviest in the app (1174 KB) purely because of the eager recharts chunk. Do NOT
+ * import `recharts` here again.
  *
  * Empty state: centered muted p.py-8 with adminUsage.noRollups copy (HR-3, expected
  * on a fresh deploy before the lazy-cron usage-rollup window fires).
@@ -38,16 +41,11 @@ import { useTranslations } from 'next-intl'
 import { useRouter } from 'next/navigation'
 import type { Role } from '@/src/firebase/auth'
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  CartesianGrid,
-} from 'recharts'
+  LazyBarChart,
+  LazyLineChart,
+  CHART_PRIMARY,
+  CHART_SECONDARY,
+} from '../../_components/charts/lazy-chart'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
@@ -296,24 +294,11 @@ export function UsageDashboard({
                 {t('noRollups')}
               </p>
             ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart
-                  data={volumeTrend}
-                  margin={{ top: 4, right: 8, left: -16, bottom: 4 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
-                  <Tooltip />
-                  <Line
-                    type="monotone"
-                    dataKey="count"
-                    stroke="#6366f1"
-                    strokeWidth={2}
-                    dot={{ r: 4 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <LazyLineChart
+                data={volumeTrend}
+                xKey="day"
+                series={[{ dataKey: 'count', color: CHART_PRIMARY }]}
+              />
             )}
           </CardContent>
         </Card>
@@ -333,18 +318,14 @@ export function UsageDashboard({
                   {t('noRollups')}
                 </p>
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart
-                    data={tokenByPillar}
-                    margin={{ top: 4, right: 8, left: -16, bottom: 4 }}
-                  >
-                    <XAxis dataKey="pillar" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="inputTokens" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="outputTokens" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <LazyBarChart
+                  data={tokenByPillar}
+                  xKey="pillar"
+                  series={[
+                    { dataKey: 'inputTokens', color: CHART_PRIMARY },
+                    { dataKey: 'outputTokens', color: CHART_SECONDARY },
+                  ]}
+                />
               )}
             </CardContent>
           </Card>

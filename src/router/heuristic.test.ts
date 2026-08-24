@@ -311,3 +311,136 @@ describe('heuristicPillar() — Reply patterns (REPLY-10, GREEN since Plan 04-04
     expect(result?.pillar).toBe('finder')
   })
 })
+
+// ─── quick-kayinleong-046: widened Coach vocabulary (pre-stream latency fix) ─────────
+//
+// Before quick-046, COACH_PATTERNS held only 9 regexes against 51 finder patterns, so an
+// ordinary coach question matched nothing → heuristicPillar() returned null → routeAsync()
+// awaited `classifyIntent()`, a blocking generateObject round-trip (~400–1200 ms of dead
+// air) BEFORE streamText() produced its first token. Coach was ALREADY the destination on
+// both fallback branches, so these assertions lock in the fast path, not a new behaviour.
+//
+// One case per pattern added. `reason` must carry the `heuristic-coach:` prefix so the
+// routeDecision observability contract (D-02) still distinguishes heuristic from classifier.
+
+describe('heuristicPillar() — widened Coach vocabulary (quick-046)', () => {
+  const COACH_PHRASINGS: Array<[label: string, content: string]> = [
+    // Onboarding / training / mentorship lifecycle
+    ['onboard (verb form)', 'when do I get onboarded?'],
+    ['mentor', 'who is my mentor here?'],
+    ['upline', 'who is my upline?'],
+    ['downline', 'how do I see my downline?'],
+    ['new agent', 'what should a new agent do on day one?'],
+    ['probation', 'how long is probation?'],
+    ['ramp up', 'how fast should I ramp up?'],
+    ['getting started', 'how do I get started at D2?'],
+    ['first day', 'what happens on my first day?'],
+    ['first deal', 'what do I do after my first deal?'],
+    ['module', 'which module comes after this one?'],
+    ['quiz', 'is there a quiz at the end?'],
+    ['assessment', 'when is the assessment?'],
+    ['certification', 'do I need certification for this?'],
+    ['workshop', 'is there a workshop this week?'],
+    ['webinar', 'when is the next webinar?'],
+    ['bootcamp', 'sign me up for the bootcamp'],
+    ['kpi', 'what is my KPI for this month?'],
+    ['cpd', 'how many CPD hours do I need?'],
+    // Process / SOP / policy
+    ['sop', 'is there an SOP for this?'],
+    ['standard operating procedure', 'where is the standard operating procedure kept?'],
+    ['checklist', 'send me the checklist'],
+    ['guideline', 'what are the guidelines here?'],
+    ['policy', 'what is the leave policy?'],
+    ['compliance', 'any compliance concerns with this?'],
+    ['pdpa', 'how does PDPA apply to me?'],
+    ['best practice', 'best practices for follow ups'],
+    ['step-by-step', 'give me a step-by-step version'],
+    ['the process', 'walk me through the process'],
+    ['process for', 'what is the process for a booking?'],
+    ['what documents (research example)', 'what documents does a foreign buyer need?'],
+    ['documents required', 'which documents are required at booking?'],
+    ['how do I handle', 'how do I handle a difficult situation?'],
+    ['tips', 'any tips for me?'],
+    ['template', 'is there a template for this?'],
+    // Malaysian real-estate regulatory / transaction SOP
+    ['REN (uppercase)', 'how do I renew my REN tag?'],
+    ['REA (uppercase)', 'do I need an REA licence?'],
+    ['BOVAEA', 'is this a BOVAEA requirement?'],
+    ['SPA (uppercase)', 'when is the SPA signed?'],
+    ['stamp duty', 'who pays stamp duty?'],
+    ['RPGT', 'how is RPGT calculated?'],
+    ['MM2H', 'does MM2H change anything?'],
+    ['bumiputera', 'explain the bumiputera quota to me'],
+    ['foreign ownership', 'what is the foreign ownership rule?'],
+    ['foreigner', 'can foreigners buy here?'],
+    ['loan application', 'walk me through a loan application'],
+    ['co-broking', 'what are the co-broking rules?'],
+    ['commission', 'how is commission split?'],
+    // Sales-skills training
+    ['objection', 'how do I handle objections?'],
+    ['cold calling', 'any advice on cold calling?'],
+    ['prospecting', 'what is a good prospecting routine?'],
+    ['script', 'do we have a script for that?'],
+    ['listing presentation', 'how do I do a listing presentation?'],
+    ['facebook ads', 'should I run facebook ads?'],
+    ['lead generation', 'advice on lead generation?'],
+    ['viewing', 'how do I arrange a viewing?'],
+  ]
+
+  it.each(COACH_PHRASINGS)('routes "%s" to coach without the classifier', (_label, content) => {
+    const result = heuristicPillar([{ role: 'user', content }])
+    expect(result).not.toBeNull()
+    expect(result?.pillar).toBe('coach')
+  })
+
+  // The latency win itself: a non-null heuristic is exactly what stops routeAsync()
+  // from awaiting classifyIntent(). Proven once over the whole set rather than per case.
+  it('none of the widened coach phrasings reach classifyIntent via route()', () => {
+    vi.clearAllMocks()
+    for (const [, content] of COACH_PHRASINGS) {
+      const decision = route([{ role: 'user', content }])
+      expect(decision.pillar).toBe('coach')
+      expect(decision.reason).not.toBe('heuristic-ambiguous-default-coach')
+    }
+    expect(classifyIntent).not.toHaveBeenCalled()
+  })
+
+  it('D-02 observability: the widened patterns still emit a heuristic-coach: reason prefix', () => {
+    const result = heuristicPillar([{ role: 'user', content: 'who pays stamp duty?' }])
+    expect(result?.reason.startsWith('heuristic-coach:')).toBe(true)
+  })
+
+  // ── Precedence guards: the widened coach set must NOT steal finder or reply traffic ──
+
+  it('finder precedence: a condo query that also says "commission" stays finder', () => {
+    const result = heuristicPillar([
+      { role: 'user', content: 'find me a condo in TRX — what commission do I get?' },
+    ])
+    expect(result?.pillar).toBe('finder')
+  })
+
+  it('finder precedence: "800k freehold, any tips?" stays finder', () => {
+    const result = heuristicPillar([
+      { role: 'user', content: '800k freehold in Cheras, any tips?' },
+    ])
+    expect(result?.pillar).toBe('finder')
+  })
+
+  it('reply precedence: "draft a reply … any tips?" stays reply', () => {
+    const result = heuristicPillar([
+      { role: 'user', content: 'draft a reply to this: hi, is it still available? any tips?' },
+    ])
+    expect(result?.pillar).toBe('reply')
+  })
+
+  // ── No catch-all: genuinely ambiguous text must STILL defer to the LLM classifier ──
+
+  it.each([
+    ['bare greeting', 'hello there'],
+    ['small talk', 'good morning'],
+    ['open-ended', 'what do you think'],
+    ['single word', 'help'],
+  ])('stays ambiguous (null) for %s — the classifier remains the safety net', (_label, content) => {
+    expect(heuristicPillar([{ role: 'user', content }])).toBeNull()
+  })
+})

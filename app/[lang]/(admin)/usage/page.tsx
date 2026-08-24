@@ -59,6 +59,32 @@ function nDaysAgo(n: number): string {
   return dayKey(new Date(Date.now() - n * 86400000))
 }
 
+/**
+ * ⚡ PERF (quick-kayinleong-046) — safety cap for the usageRollups window scan.
+ *
+ * `usageRollups` is keyed `${day}__${uid}__${pillar}`, so a windowed scan grows as
+ * days x agents x pillars and had NO `limit()` at all: a 7-day window over 100 agents
+ * is already ~2100 documents read and summed in JS on EVERY page load, and it is
+ * unbounded by design as the agent roster grows.
+ *
+ * The cap is deliberately sized ABOVE any realistic roster (a 250-agent ceiling, 2.5x
+ * the documented 100-agent target) so it never truncates in practice — it exists to
+ * bound the worst case, not to change what this surface reports. `orderBy('day','asc')`
+ * is kept exactly as it was so the result set is byte-identical below the cap.
+ *
+ * If the cap ever binds, the aggregates below become PARTIAL (the newest days are the
+ * ones dropped, because the scan is ascending) and the call site logs a warning. The
+ * real fix is to pre-aggregate an ORG-LEVEL daily doc inside the existing usage-rollup
+ * job (src/jobs/runDueJobs.ts) so this page reads O(days) instead of O(days x agents x
+ * pillars) — that is a separate change and is NOT done here.
+ */
+const ROLLUP_PILLARS = 3          // coach | finder | reply — one rollup doc per pillar/day/uid
+const ROLLUP_AGENT_CEILING = 250  // 2.5x the 100-agent target this window was sized for
+
+function rollupScanLimit(windowDays: number): number {
+  return windowDays * ROLLUP_PILLARS * ROLLUP_AGENT_CEILING
+}
+
 export default async function UsagePage({ params, searchParams }: PageProps) {
   const { lang } = await params
   const { window: windowParam } = await searchParams
@@ -115,10 +141,18 @@ export default async function UsagePage({ params, searchParams }: PageProps) {
   let latestUpdatedAt: Date | null = null
 
   try {
+    const scanLimit = rollupScanLimit(windowDays)
     const snap = await usageRollupsRef()
       .where('day', '>=', windowStart)
       .orderBy('day', 'asc')
+      .limit(scanLimit)
       .get()
+    if (snap.size >= scanLimit) {
+      // Counts only — never PII. Surfaced instead of silently under-reporting a total.
+      console.warn(
+        `[admin/usage] usageRollups scan hit its safety cap (${scanLimit} docs, ${windowDays}d window). The KPIs, volume trend and per-agent rows below are PARTIAL — pre-aggregate an org-level daily rollup in the usage-rollup job.`,
+      )
+    }
 
     rollupDocs = snap.docs.map((d) => {
       const data = d.data()

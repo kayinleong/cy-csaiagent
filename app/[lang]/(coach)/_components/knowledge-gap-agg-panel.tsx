@@ -16,6 +16,10 @@
  * recharts conventions VERBATIM (HR-3). All strings from dashboard.v2.* (HR-2).
  * Empty state: centered muted p.py-8 with dashboard.v2.noData.
  *
+ * ⚡ PERF (quick-046): the chart renders through ../../_components/charts/lazy-chart,
+ * the single `next/dynamic` boundary for recharts (375 KB). Do NOT import `recharts`
+ * here again.
+ *
  * References:
  *   - CDASH-08 (coach dashboard v2 panels)
  *   - 05-UI-SPEC.md Surface 1, panel 2
@@ -25,14 +29,7 @@
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
+import { LazyBarChart, CHART_PRIMARY } from '../../_components/charts/lazy-chart'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
@@ -103,17 +100,11 @@ export function KnowledgeGapAggPanel({ gapsByTopic, scope }: KnowledgeGapAggPane
                     {t('noData')}
                   </p>
                 ) : (
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart
-                      data={chartData}
-                      margin={{ top: 4, right: 8, left: -16, bottom: 4 }}
-                    >
-                      <XAxis dataKey="topic" tick={{ fontSize: 12 }} />
-                      <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
-                      <Tooltip />
-                      <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <LazyBarChart
+                    data={chartData}
+                    xKey="topic"
+                    series={[{ dataKey: 'count', color: CHART_PRIMARY }]}
+                  />
                 )}
               </TabsContent>
             ))}

@@ -17,6 +17,10 @@
  * If recharts fails to render under React 19, add overrides.react-is pin to
  * package.json (recharts#4558 fix). No changes needed here in that case.
  *
+ * ⚡ PERF (quick-046): both charts render through ../../_components/charts/lazy-chart,
+ * the single `next/dynamic` boundary for recharts (375 KB). Do NOT import `recharts`
+ * here again — that re-eagerises the chunk on /[lang]/(coach)/dashboard.
+ *
  * References:
  *   - D-10 (recharts for dashboard metrics)
  *   - CDASH-05 (training-stage funnel)
@@ -27,17 +31,11 @@
 
 import { useTranslations } from 'next-intl'
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  CartesianGrid,
-  Legend,
-} from 'recharts'
+  LazyBarChart,
+  LazyLineChart,
+  CHART_PRIMARY,
+  CHART_SECONDARY,
+} from '../../_components/charts/lazy-chart'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import type { AgentRow } from './downline-table'
 
@@ -85,14 +83,11 @@ export function MetricsPanel({ funnel, agentRows }: MetricsPanelProps) {
               {t('noAgents')}
             </p>
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={funnelData} margin={{ top: 4, right: 8, left: -16, bottom: 4 }}>
-                <XAxis dataKey="stage" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
-                <Tooltip />
-                <Bar dataKey="count" fill="#6366f1" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <LazyBarChart
+              data={funnelData}
+              xKey="stage"
+              series={[{ dataKey: 'count', color: CHART_PRIMARY }]}
+            />
           )}
         </CardContent>
       </Card>
@@ -109,30 +104,15 @@ export function MetricsPanel({ funnel, agentRows }: MetricsPanelProps) {
               {t('noAgents')}
             </p>
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={rampData} margin={{ top: 4, right: 8, left: -16, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
-                <Tooltip />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="checkpoint"
-                  stroke="#6366f1"
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="days"
-                  stroke="#f59e0b"
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                  strokeDasharray="5 5"
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <LazyLineChart
+              data={rampData}
+              xKey="name"
+              showLegend
+              series={[
+                { dataKey: 'checkpoint', color: CHART_PRIMARY },
+                { dataKey: 'days', color: CHART_SECONDARY, dashed: true },
+              ]}
+            />
           )}
         </CardContent>
       </Card>
