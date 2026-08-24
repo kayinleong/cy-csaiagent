@@ -165,9 +165,16 @@ export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
     }
   }, [storedCid])
 
-  const isStreaming = messages.length > 0 &&
-    messages[messages.length - 1]?.role === 'assistant' &&
-    messages[messages.length - 1]?.content === ''
+  // Real streaming state, reported by ChatInput's useChatStream (quick-kayinleong-048).
+  //
+  // This was previously DERIVED as "last message is an assistant with content === ''",
+  // which is only true before the first token arrives. Mid-turn tool calls — Finder's
+  // parseCriteria → searchProjects → getCollateral, Coach's retrieveKnowledge — happen
+  // AFTER some text has already streamed, so the indicator vanished and the bubble sat
+  // half-written with no feedback for the entire tool round-trip. That is the reported
+  // "stops here without loading indicator, then appends the rest once it got the
+  // response". Only the hook that owns the fetch knows the turn is still in flight.
+  const [isStreaming, setIsStreaming] = useState(false)
 
   // Selecting a past thread (quick-018): load its persisted transcript, then set
   // activeCid + the loaded messages together so ChatInput re-seeds with history.
@@ -284,6 +291,7 @@ export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
       {/* ── Chat input — sticky bottom ───────────────────────────────────────── */}
       <ChatInput
         onMessagesChange={setMessages}
+        onStreamingChange={setIsStreaming}
         initialMessages={historyMessages}
         conversationId={activeCid || undefined}
         langOverride={langOverride}

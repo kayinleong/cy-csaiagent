@@ -13,6 +13,8 @@ import {
   isHandoffChunk,
   parseStreamError,
   parseMessageMetadata,
+  parseTextChunk,
+  TEXT_BLOCK_SEPARATOR,
 } from './decode-stream-chunk'
 
 describe('parseTextDelta', () => {
@@ -144,5 +146,87 @@ describe('isHandoffChunk (deprecated)', () => {
     // Documents the flaw: it could only ever fire because the Coach's JSON envelope was
     // leaking into the stream as literal text, and it fired on innocent prose too.
     expect(isHandoffChunk('{"type":"text-delta","delta":"the handoff went well"}')).toBe(true)
+  })
+})
+
+// ─── quick-kayinleong-048: step-boundary paragraph breaks ─────────────────────
+
+describe('parseTextChunk', () => {
+  it('returns the delta together with its text-block id', () => {
+    expect(parseTextChunk('{"type":"text-delta","id":"b1","delta":"Hello"}')).toEqual({
+      id: 'b1',
+      delta: 'Hello',
+    })
+  })
+
+  it('defaults a missing id to empty string rather than dropping the delta', () => {
+    // Losing the text would be far worse than losing the boundary hint.
+    expect(parseTextChunk('{"type":"text-delta","delta":"Hi"}')).toEqual({ id: '', delta: 'Hi' })
+  })
+
+  it('returns null for non-text-delta chunks and malformed lines', () => {
+    expect(parseTextChunk('{"type":"text-start","id":"b1"}')).toBeNull()
+    expect(parseTextChunk('{"type":"finish"}')).toBeNull()
+    expect(parseTextChunk('garbage')).toBeNull()
+  })
+
+  it('stays consistent with parseTextDelta on the delta itself', () => {
+    const line = '{"type":"text-delta","id":"b2","delta":" world"}'
+    expect(parseTextChunk(line)?.delta).toBe(parseTextDelta(line))
+  })
+})
+
+describe('step-boundary joining (the "now.The search" bug)', () => {
+  /**
+   * Mirrors the accumulation rule in chat-input.tsx: insert TEXT_BLOCK_SEPARATOR when
+   * the block id changes mid-turn, and never at the very start.
+   */
+  function accumulate(lines: string[]): string {
+    let content = ''
+    let currentId: string | null = null
+    for (const line of lines) {
+      const c = parseTextChunk(line)
+      if (!c) continue
+      const isNewBlock = currentId !== null && c.id !== currentId
+      currentId = c.id
+      content += isNewBlock && content.length > 0 ? TEXT_BLOCK_SEPARATOR + c.delta : c.delta
+    }
+    return content
+  }
+
+  const d = (id: string, delta: string) =>
+    JSON.stringify({ type: 'text-delta', id, delta })
+
+  it('separates two steps instead of welding them together', () => {
+    // The real Finder turn: step 1 narrates, calls searchProjects, step 2 continues.
+    const out = accumulate([
+      d('b1', 'Got it. Let me search now.'),
+      d('b2', 'The search returned results'),
+    ])
+    expect(out).toBe('Got it. Let me search now.\n\nThe search returned results')
+    expect(out).not.toContain('now.The search')
+  })
+
+  it('does NOT insert a separator between deltas of the same block', () => {
+    // Mid-block newlines are the model's own formatting and must survive untouched.
+    expect(accumulate([d('b1', 'Hello'), d('b1', ' there'), d('b1', '!')])).toBe(
+      'Hello there!',
+    )
+  })
+
+  it('never opens the message with a blank line', () => {
+    expect(accumulate([d('b1', 'First')])).toBe('First')
+    // Even if the very first chunk somehow arrives under a fresh id after an empty one.
+    expect(accumulate([d('b1', ''), d('b2', 'First')])).toBe('First')
+  })
+
+  it('handles three or more steps', () => {
+    expect(accumulate([d('a', 'one'), d('b', 'two'), d('c', 'three')])).toBe(
+      'one\n\ntwo\n\nthree',
+    )
+  })
+
+  it('uses a blank line, not a soft break — markdown would still run it together', () => {
+    expect(TEXT_BLOCK_SEPARATOR).toBe('\n\n')
   })
 })

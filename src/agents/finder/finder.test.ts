@@ -648,3 +648,33 @@ describe('Test 7: tool execute() catches infra errors → grounded inventory_una
     expect(result).toMatchObject({ error: 'inventory_unavailable' })
   })
 })
+
+// ─── quick-kayinleong-048: no tool-use narration ──────────────────────────────
+//
+// A live Finder turn rendered "Got it. Let me search now.The search returned results…"
+// as a raw prose bubble instead of the MatchList card: the prompt never forbade
+// narrating tool use or required the bare JSON object, so decodeFinderOutput could not
+// parse the output. Same gap the Coach prompt had before quick-046.
+
+describe('quick-048: finder prompt forbids tool-use narration', () => {
+  it('requires the bare JSON object and bans running commentary', async () => {
+    const { buildFinderSystemPrompt } = await import('./prompt')
+    const prompt = buildFinderSystemPrompt()
+
+    expect(prompt).toContain('Return ONLY the bare JSON object')
+    expect(prompt).toContain('Do NOT narrate your tool use')
+    expect(prompt).toContain('Let me search now')
+
+    // The rules must live inside the Output Format section, after the field list,
+    // so the model reads the schema first and the constraints last.
+    const outputAt = prompt.indexOf('## Output Format')
+    expect(outputAt).toBeGreaterThan(-1)
+    expect(prompt.indexOf('Do NOT narrate your tool use')).toBeGreaterThan(outputAt)
+  })
+
+  it('still keeps the grounding mandate intact', async () => {
+    // The added rules must not have displaced FIND-01/D-05 grounding.
+    const { FINDER_SYSTEM_PROMPT } = await import('./prompt')
+    expect(FINDER_SYSTEM_PROMPT).toContain('## Grounding (MANDATORY)')
+  })
+})

@@ -132,3 +132,52 @@ export function parseMessageMetadata(line: string): StreamMessageMetadata | null
     return null
   }
 }
+
+/** One text delta plus the id of the text BLOCK it belongs to. */
+export interface TextChunk {
+  /** The `text-start` block id this delta belongs to. */
+  id: string
+  delta: string
+}
+
+/**
+ * Parse a `text-delta` chunk, keeping the block id (quick-kayinleong-048).
+ *
+ * A multi-step turn emits ONE text block per step: `text-start` opens a block with an
+ * `id`, every `text-delta` carries that same id, `text-end` closes it, and the next step
+ * opens a fresh block with a NEW id (ai@5.0.193 uiMessageChunkSchema,
+ * ai/dist/index.d.ts:1730-1736).
+ *
+ * `parseTextDelta` discards the id, so a caller that simply concatenates every delta
+ * welds the last character of step 1 onto the first character of step 2 — which is how a
+ * Finder turn rendered "Got it. Let me search now.The search returned results…". Keeping
+ * the id lets the caller insert a paragraph break exactly at a block boundary, and
+ * nowhere else (mid-block newlines must stay untouched, or markdown breaks).
+ *
+ * Returns null for every non-`text-delta` chunk and for malformed lines.
+ */
+export function parseTextChunk(line: string): TextChunk | null {
+  try {
+    const chunk = JSON.parse(line) as unknown
+    if (
+      chunk !== null &&
+      typeof chunk === 'object' &&
+      (chunk as { type?: unknown }).type === 'text-delta' &&
+      typeof (chunk as { delta?: unknown }).delta === 'string'
+    ) {
+      const c = chunk as { id?: unknown; delta: string }
+      return { id: typeof c.id === 'string' ? c.id : '', delta: c.delta }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Separator inserted between two adjacent text blocks of the same assistant turn.
+ *
+ * A blank line, not a single newline: the bubble renders through MarkdownMessage, where a
+ * lone newline is only a soft break and would still read as one run-on paragraph.
+ */
+export const TEXT_BLOCK_SEPARATOR = '\n\n'

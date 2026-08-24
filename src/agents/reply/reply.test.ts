@@ -268,3 +268,12 @@ describe('quick-047: reply prompt handles a non-inbound message', () => {
     expect(prompt).toContain('NEVER invent a SOP')
   })
 })
+
+describe('quick-048: reply prompt forbids tool-use narration', () => {
+  it('requires the bare JSON object and bans running commentary', async () => {
+    const { buildReplySystemPrompt } = await import('./prompt')
+    const prompt = buildReplySystemPrompt()
+    expect(prompt).toContain('Return ONLY the bare JSON object')
+    expect(prompt).toContain('Do NOT narrate your tool use')
+  })
+})

@@ -36,9 +36,10 @@ import { cn } from '@/lib/utils'
 import type { ChatMessage } from './message-list'
 import { decodeReplyOutput, decodeFinderOutput } from './decode-structured-output'
 import {
-  parseTextDelta,
+  parseTextChunk,
   parseStreamError,
   parseMessageMetadata,
+  TEXT_BLOCK_SEPARATOR,
 } from './decode-stream-chunk'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -62,6 +63,16 @@ export interface SubmittedSuggestion {
 interface ChatInputProps {
   /** Callback: when messages update (the server page re-renders the list) */
   onMessagesChange: (messages: ChatMessage[]) => void
+  /**
+   * Report the REAL streaming state upward (quick-kayinleong-048).
+   *
+   * chat-shell used to infer it as "last message is an assistant with content === ''",
+   * which goes false the instant the first token lands — so the whole tool-call
+   * round-trip mid-turn (e.g. Finder's searchProjects) showed no indicator at all and
+   * the bubble appeared frozen half-written. Only this hook knows when the turn is
+   * actually still in flight.
+   */
+  onStreamingChange?: (isStreaming: boolean) => void
   /** Initial messages (from server-loaded conversation history) */
   initialMessages?: ChatMessage[]
   /** The conversation ID for persistence */
@@ -103,6 +114,7 @@ interface ChatInputProps {
 
 function useChatStream({
   onMessagesChange,
+  onStreamingChange,
   initialMessages = [],
   conversationId,
   langOverride,
@@ -113,6 +125,7 @@ function useChatStream({
 }: Pick<
   ChatInputProps,
   | 'onMessagesChange'
+  | 'onStreamingChange'
   | 'initialMessages'
   | 'conversationId'
   | 'langOverride'
@@ -158,6 +171,11 @@ function useChatStream({
   useEffect(() => {
     onMessagesChange(messages)
   }, [messages, onMessagesChange])
+
+  // Keep parent in sync with the real streaming state (quick-kayinleong-048).
+  useEffect(() => {
+    onStreamingChange?.(isStreaming)
+  }, [isStreaming, onStreamingChange])
 
   const sendMessage = useCallback(async (
     textOverride?: string,
@@ -282,6 +300,10 @@ function useChatStream({
       let serverCitations: string[] = []
       let kbMiss = false
       let streamError: string | null = null
+      // Which text block the deltas are currently landing in. A multi-step turn opens a
+      // NEW block per step, and the boundary is where the paragraph break belongs
+      // (quick-kayinleong-048).
+      let currentTextBlockId: string | null = null
       let buffer = ''
       // Accumulate the full assistant text so we can decode a Reply/Finder turn's
       // structured-output JSON on completion (the card-variant decode bridge).
@@ -321,14 +343,26 @@ function useChatStream({
           const errText = parseStreamError(dataLine)
           if (errText) streamError = errText
 
-          // Extract text delta
-          const delta = parseTextDelta(dataLine)
-          if (delta) {
-            assistantContent += delta
+          // Extract text delta, separating step boundaries.
+          const textChunk = parseTextChunk(dataLine)
+          if (textChunk) {
+            // A new block id mid-turn means the model finished a step (usually to call a
+            // tool) and has started writing again. Without this the two steps weld
+            // together: "Let me search now.The search returned results…". Only inserted
+            // when there is already text, so a turn never opens with a blank line.
+            const isNewBlock =
+              currentTextBlockId !== null && textChunk.id !== currentTextBlockId
+            currentTextBlockId = textChunk.id
+            const addition =
+              isNewBlock && assistantContent.length > 0
+                ? TEXT_BLOCK_SEPARATOR + textChunk.delta
+                : textChunk.delta
+
+            assistantContent += addition
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMsgId
-                  ? { ...m, content: m.content + delta }
+                  ? { ...m, content: m.content + addition }
                   : m,
               ),
             )
@@ -452,6 +486,7 @@ function useChatStream({
  */
 export function ChatInput({
   onMessagesChange,
+  onStreamingChange,
   initialMessages,
   conversationId,
   langOverride,
@@ -466,6 +501,7 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { input, setInput, sendMessage, isStreaming } = useChatStream({
     onMessagesChange,
+    onStreamingChange,
     initialMessages,
     conversationId,
     langOverride,

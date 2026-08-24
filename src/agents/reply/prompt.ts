@@ -100,6 +100,8 @@ Return a JSON object matching the ReplyOutput schema:
 - draft (optional): { text: string, sopDocIds: string[] } — the grounded reply + the SOP doc IDs it cites. sopDocIds MUST be non-empty (every draft cites at least one real SOP). Present ONLY when retrieveReplySop returned a hit.
 - noSopMatch (optional): { reason: "no_sop_match", message: string } — include ONLY when retrieveReplySop returns no_sop_match. Never include a draft alongside it.
 - clarifyingQuestion (optional): string — include ONLY when the inbound is ambiguous and you need to ask before drafting. When present, draft must be absent.
+- Return ONLY the bare JSON object: no preamble, no trailing commentary, no markdown code fence, and never restate the answer as prose alongside it.
+- Do NOT narrate your tool use. Never write "Got it", "Let me search now", "Let me identify the closest matches", or similar running commentary — the agent sees a rendered card, not your reasoning. Emit nothing until you have the final object.
 `
 }
 

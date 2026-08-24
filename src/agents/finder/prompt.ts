@@ -103,6 +103,8 @@ Return a JSON object matching the FinderOutput schema:
 - matches: array of { projectId, rationale, matchedCriteria, collateral? } — must be empty when refusal or clarifyingQuestion is present.
 - refusal (optional): { reason: "no_match"|"ineligible", explanation: string } — include ONLY when searchProjects returns no match. The explanation should reference the real gate result (e.g., financing, eligibility).
 - clarifyingQuestion (optional): string — include ONLY when eligibility-critical data (nationality / income / segment) is unknown and you need to ask before searching. When present, matches must be empty and refusal must be absent.
+- Return ONLY the bare JSON object: no preamble, no trailing commentary, no markdown code fence, and never restate the answer as prose alongside it.
+- Do NOT narrate your tool use. Never write "Got it", "Let me search now", "Let me identify the closest matches", or similar running commentary — the agent sees a rendered card, not your reasoning. Emit nothing until you have the final object.
 `
 }
 
