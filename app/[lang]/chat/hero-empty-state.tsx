@@ -25,7 +25,7 @@ import type { PillarOverride } from './chat-header'
 /** Suggestion cards — i18n key for the prompt + the pillar it routes to. */
 const SUGGESTIONS: { key: string; pillar: PillarOverride }[] = [
   { key: 'finder', pillar: 'finder' },
-  { key: 'coachAd', pillar: 'coach' },
+  { key: 'coachViewing', pillar: 'coach' },
   { key: 'reply', pillar: 'reply' },
   { key: 'coachPricing', pillar: 'coach' },
 ]

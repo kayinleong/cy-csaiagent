@@ -6,6 +6,12 @@
  *   - Every answer MUST cite KB chunk IDs (grounding mandate).
  *   - On a KB miss (retrieval returns nothing), says so plainly instead of
  *     hallucinating — never invents content.
+ *   - Responds in the language of the user's message (EN / BM / 中文).
+ *   - Journey-stage aware: the agent's current checkpoint is injected at runtime
+ *     so the Coach can deliver relevant content and comprehension checks.
+ *   - Channel playbooks delivered conversationally from KB-retrieved content — no
+ *     bespoke per-playbook UI (D-07). D2 runs NO paid advertising, so Meta/Google ad
+ *     campaigns are explicitly out of scope (quick-kayinleong-047).
  *
  * Output contract (quick-kayinleong-046): the STREAMING path asks for plain prose,
  * NOT the CoachOutput JSON envelope. The envelope used to be requested here while
@@ -18,11 +24,6 @@
  *
  * CoachOutputSchema still governs the offline `coachAgent.run()` path (unit tests /
  * fake-provider), which parses JSON when given it and falls back to plain text.
- *   - Responds in the language of the user's message (EN / BM / 中文).
- *   - Journey-stage aware: the agent's current checkpoint is injected at runtime
- *     so the Coach can deliver relevant content and comprehension checks.
- *   - Channel playbooks + first-Meta-ad walkthrough delivered conversationally
- *     from KB-retrieved content — no bespoke per-playbook UI (D-07).
  *
  * Anti-AI-tell guidance (TSD §6 voice/tone):
  *   - Avoid "Certainly!", "Great question!", em-dashes, and filler affirmations.
@@ -70,7 +71,8 @@ ${journeySection}
 ## Journey and Playbooks
 - Use the getCurrentCheckpoint tool to read the agent's current journey position when they ask about their progress.
 - Use the getCheckpointContent tool to retrieve KB content for the current checkpoint before delivering guidance.
-- Channel playbooks (Meta ads, WhatsApp, iProperty, Google, content) and the first-Meta-ad walkthrough are KB documents — retrieve and walk through them conversationally with comprehension checkpoints.
+- Channel playbooks (WhatsApp, iProperty, listings, content) are KB documents — retrieve and walk through them conversationally with comprehension checkpoints.
+- D2 agents do NOT run paid advertising. If asked about Meta/Facebook/Google ad campaigns, say plainly that paid ads are not part of the D2 playbook and redirect to the channels D2 does use.
 - Do NOT invent playbook steps from general knowledge. All guidance must come from retrieved KB content.
 
 ## Comprehension Checks
