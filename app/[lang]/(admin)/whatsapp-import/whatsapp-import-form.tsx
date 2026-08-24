@@ -32,12 +32,14 @@ import { useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import JSZip from 'jszip'
-import { ref as storageRef, uploadBytes } from 'firebase/storage'
 import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { clientAuth, clientStorage } from '@/src/firebase/client'
+// firebase/storage is imported lazily at the upload site below — it shares a ~353 KB
+// chunk with firebase/firestore, which every route touching this module used to pay for
+// on first load (quick-kayinleong-046). clientAuth stays eager (AUTH-05 timing).
+import { clientAuth, getClientStorage } from '@/src/firebase/client'
 import { parseWhatsApp, toTranscript, toClassificationSample } from '@/src/whatsapp/parse'
 import {
   classifyWhatsAppProjectAction,
@@ -325,7 +327,11 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
       // NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET points at a bucket that does not exist,
       // which makes uploadBytes 404-and-retry until the timeout instead of failing
       // loudly — logging the bucket makes that misconfiguration obvious immediately.
-      const bucket = clientStorage.app.options.storageBucket ?? '(unset)'
+      const [{ ref: storageRef, uploadBytes }, storage] = await Promise.all([
+        import('firebase/storage'),
+        getClientStorage(),
+      ])
+      const bucket = storage.app.options.storageBucket ?? '(unset)'
       if (parsed.mediaEntries.length > 0) {
         pushLog(t('logMediaTarget', { count: parsed.mediaEntries.length, bucket }))
       }
@@ -343,7 +349,7 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
             const blob = await file.async('blob')
             const path = `collateral/${projectId}/whatsapp/${safeStorageName(entryName)}`
             await withTimeout(
-              uploadBytes(storageRef(clientStorage, path), blob),
+              uploadBytes(storageRef(storage, path), blob),
               UPLOAD_TIMEOUT_MS,
               t('mediaTimedOut', { bucket }),
             )

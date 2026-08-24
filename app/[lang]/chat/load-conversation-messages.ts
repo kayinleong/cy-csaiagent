@@ -19,8 +19,10 @@
  * References: quick-018, CHAT-07, firestore.rules messages block.
  */
 
-import { collection, query, limit, getDocs } from 'firebase/firestore'
-import { clientDb } from '@/src/firebase/client'
+// firebase/firestore is imported lazily inside the function below — it compiles into a
+// ~353 KB chunk that the chat route would otherwise pay for on first load
+// (quick-kayinleong-046). `import type` erases, so these cost nothing.
+import { getClientDb } from '@/src/firebase/client'
 import type { ChatMessage } from './message-list'
 import { mapConversationMessages, type RawMessageRecord } from './conversation-messages-map'
 
@@ -37,8 +39,12 @@ const MAX_MESSAGES = 200
 export async function loadConversationMessages(cid: string): Promise<ChatMessage[]> {
   if (!cid) return []
   try {
+    const [{ collection, query, limit, getDocs }, db] = await Promise.all([
+      import('firebase/firestore'),
+      getClientDb(),
+    ])
     const q = query(
-      collection(clientDb, 'conversations', cid, 'messages'),
+      collection(db, 'conversations', cid, 'messages'),
       limit(MAX_MESSAGES),
     )
     const snap = await getDocs(q)

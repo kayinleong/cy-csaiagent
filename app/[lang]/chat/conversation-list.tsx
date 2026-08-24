@@ -29,8 +29,11 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslations } from 'next-intl'
-import { collection, query, where, limit, getDocs } from 'firebase/firestore'
-import { clientAuth, clientDb } from '@/src/firebase/client'
+// firebase/firestore is imported lazily inside the loader below — it compiles into a
+// ~353 KB chunk the chat route would otherwise pay for on first load, even though the
+// drawer is only opened on demand (quick-kayinleong-046). clientAuth stays eager: its
+// LOCAL-persistence rehydration is load-bearing timing (AUTH-05).
+import { clientAuth, getClientDb } from '@/src/firebase/client'
 import { sortConversationsByCreatedAtDesc } from './conversation-sort'
 import {
   Sheet,
@@ -98,8 +101,12 @@ export function ConversationList({
     }
 
     try {
+      const [{ collection, query, where, limit, getDocs }, db] = await Promise.all([
+        import('firebase/firestore'),
+        getClientDb(),
+      ])
       const q = query(
-        collection(clientDb, 'conversations'),
+        collection(db, 'conversations'),
         where('ownerUid', '==', currentUser.uid),
         // tenantId is REQUIRED here, not optional: the conversations `list` rule
         // grants reads only when `sameTenant()` holds (resource.data.tenantId ==

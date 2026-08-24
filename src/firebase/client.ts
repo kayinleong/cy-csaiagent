@@ -25,32 +25,33 @@
  * at module scope. Use `await import('@/src/firebase/client')` inside the handler /
  * effect that needs it.
  *
- * STILL OUTSTANDING (deliberately NOT done in quick-046 — it changes this module's
- * public surface and therefore needs the three call sites migrated in the same commit,
- * which sit outside that claim's file ownership):
- *   Convert `clientDb` / `clientStorage` from eager consts into async accessors
- *   (`getClientDb()` / `getClientStorage()` that `await import('firebase/firestore')`
- *   / `await import('firebase/storage')`), leaving only `clientApp` + `clientAuth`
- *   eager. Call sites to migrate:
- *     - app/[lang]/chat/conversation-list.tsx           (clientDb)
- *     - app/[lang]/chat/load-conversation-messages.ts   (clientDb)
- *     - app/[lang]/(admin)/whatsapp-import/whatsapp-import-form.tsx (clientStorage)
- *   Expected further win: /[lang]/(auth)/sign-in stops shipping Firestore + Storage
- *   (it needs Auth only), /[lang]/chat stops shipping Storage, and whatsapp-import
- *   stops shipping Firestore.
+ * DONE in quick-046: `clientDb` / `clientStorage` are now async accessors
+ * (`getClientDb()` / `getClientStorage()`), leaving only `clientApp` + `clientAuth`
+ * eager. firebase/firestore + firebase/storage compile into ONE ~353 KB chunk, so as
+ * eager consts they were pulled onto every route touching this module — including
+ * /[lang]/chat (the most-visited surface, which needs Firestore only on history-drawer
+ * open or transcript restore, and needs Storage never) and /[lang]/sign-in (Auth only).
+ * Migrated call sites:
+ *   - app/[lang]/chat/conversation-list.tsx                        (getClientDb)
+ *   - app/[lang]/chat/load-conversation-messages.ts                (getClientDb)
+ *   - app/[lang]/(admin)/whatsapp-import/whatsapp-import-form.tsx  (getClientStorage)
  *
- * Persistence NOTE for whoever does that work: `clientAuth` MUST stay eagerly
- * initialized. LOCAL (IndexedDB) persistence rehydration starts when `getAuth()` runs,
- * and `clientAuth.currentUser` is read by the chat + whatsapp-import surfaces (AUTH-05).
- * Making Auth lazy would change auth-readiness timing that other code depends on.
+ * Persistence NOTE: `clientAuth` MUST stay eagerly initialized. LOCAL (IndexedDB)
+ * persistence rehydration starts when `getAuth()` runs, and `clientAuth.currentUser` is
+ * read by the chat + whatsapp-import surfaces (AUTH-05). Making Auth lazy would change
+ * auth-readiness timing that other code depends on — chat-input already has to
+ * `await clientAuth.authStateReady()` before its first read for exactly this reason.
  */
 
 'use client'
 
 import { getApps, initializeApp, getApp } from 'firebase/app'
 import { getAuth, type Auth } from 'firebase/auth'
-import { getFirestore, type Firestore } from 'firebase/firestore'
-import { getStorage, type FirebaseStorage } from 'firebase/storage'
+// firebase/firestore and firebase/storage are deliberately NOT imported at module
+// scope — see getClientDb() / getClientStorage() below. `import type` erases at
+// compile time, so these cost nothing in the bundle.
+import type { Firestore } from 'firebase/firestore'
+import type { FirebaseStorage } from 'firebase/storage'
 
 /**
  * Public Firebase config — safe for the browser.
@@ -92,22 +93,38 @@ const clientApp = initClient()
 export const clientAuth: Auth = getAuth(clientApp)
 
 /**
- * Firestore web SDK — client-side reads.
+ * Firestore web SDK — client-side reads. **Async accessor, not a const**
+ * (quick-kayinleong-046).
  *
- * Use for realtime subscriptions (onSnapshot) and reads that the Firestore
- * Security Rules permit. All client writes also go through Security Rules.
+ * Use for reads the Firestore Security Rules permit. All client writes also go
+ * through Security Rules. For server-side writes (audit logs, admin SDK paths), use
+ * adminDb from '@/src/firebase/admin' instead.
  *
- * For server-side writes (audit logs, admin SDK paths), use adminDb from
- * '@/src/firebase/admin' instead.
+ * Why async: `firebase/firestore` + `firebase/storage` compile into a single ~353 KB
+ * chunk. As eager module-scope consts they were pulled onto every route that touched
+ * this module — including /[lang]/chat, the most-visited surface in the app, which
+ * needs Firestore only when the agent opens the history drawer or restores a
+ * transcript, and needs Storage never. Callers await this at their call site, so the
+ * chunk downloads off the critical path.
+ *
+ * `getFirestore()` is idempotent per app, so repeated calls return the same instance
+ * and the dynamic import resolves from module cache after the first await.
  */
-export const clientDb: Firestore = getFirestore(clientApp)
+export async function getClientDb(): Promise<Firestore> {
+  const { getFirestore } = await import('firebase/firestore')
+  return getFirestore(clientApp)
+}
 
 /**
- * Cloud Storage web SDK — client-side uploads/downloads.
+ * Cloud Storage web SDK — client-side uploads/downloads. **Async accessor** for the
+ * same reason as getClientDb().
  *
  * Used by admin surfaces that upload collateral (e.g. WhatsApp-import media) to
  * `collateral/{projectId}/…`. Writes are gated by Storage Security Rules
  * (see storage.rules): only users whose custom-claim `role == 'admin'` may write.
  * Bucket comes from NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET (already in firebaseConfig).
  */
-export const clientStorage: FirebaseStorage = getStorage(clientApp)
+export async function getClientStorage(): Promise<FirebaseStorage> {
+  const { getStorage } = await import('firebase/storage')
+  return getStorage(clientApp)
+}
