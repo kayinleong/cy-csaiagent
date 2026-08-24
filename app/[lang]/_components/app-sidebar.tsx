@@ -22,6 +22,7 @@
 
 import Link from 'next/link'
 import { NavPending } from './nav-pending'
+import { RouteProgress } from './route-progress'
 import { usePathname } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import type { Role } from '@/src/firebase/auth'
@@ -92,6 +93,10 @@ export function AppSidebar({ role, lang }: AppSidebarProps) {
                           {/* Pending affordance — see nav-pending.tsx. Must be a
                               descendant of <Link> for useLinkStatus to work. */}
                           <NavPending />
+                          {/* Viewport-anchored bar — the inline spinner above is
+                              invisible on mobile, where this sidebar is a closed
+                              Sheet (quick-kayinleong-048). */}
+                          <RouteProgress />
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

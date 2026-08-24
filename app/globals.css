@@ -384,3 +384,65 @@
       nav-pending-spin 700ms linear 180ms infinite;
   }
 }
+
+/* ── Global route progress bar — quick-kayinleong-048 ────────────────────────
+   app/[lang]/_components/route-progress.tsx. Completes the nav feedback started
+   in 047: that claim's inline sidebar spinner is invisible on mobile (the
+   sidebar is a Sheet, closed during navigation) and absent from the home-surface
+   tiles entirely. This bar is viewport-anchored via a portal, so it shows
+   wherever the click came from.
+
+   INDETERMINATE on purpose — a sliding segment, not a width-to-90% fill. The
+   duration is genuinely unknown (an uncached dynamic RSC round-trip), and a
+   filling bar implies progress the app cannot measure.
+
+   Same 180ms delay as the other pending affordances so a fast or prefetched
+   navigation never flashes it. z-index sits above the Sheet (z-50) and the chat
+   header (z-20).
+
+   The container animates OPACITY and the ::after segment animates TRANSFORM —
+   deliberately on separate elements, so the two animations never contend for the
+   same property (the bug caught in 047's first draft). Collapsed by the
+   prefers-reduced-motion guard above, which leaves the delay intact, so under
+   reduced motion a static bar still appears: feedback preserved, motion dropped. */
+@keyframes route-progress-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes route-progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(500%);
+  }
+}
+
+@layer components {
+  [data-slot='route-progress'] {
+    position: fixed;
+    inset-block-start: 0;
+    inset-inline: 0;
+    block-size: 2px;
+    z-index: 60;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    animation: route-progress-in var(--duration-press) var(--ease-out-strong) 180ms
+      forwards;
+  }
+
+  [data-slot='route-progress']::after {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inline-size: 20%;
+    background-color: var(--primary);
+    animation: route-progress-slide 1.1s var(--ease-in-out-strong) 180ms infinite;
+  }
+}

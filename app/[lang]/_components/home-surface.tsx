@@ -29,6 +29,7 @@
  */
 
 import Link from 'next/link'
+import { RouteProgress } from './route-progress'
 import { useTranslations } from 'next-intl'
 import type { Role } from '@/src/firebase/auth'
 import { Card, CardHeader, CardContent } from '@/components/ui/card'
@@ -186,6 +187,7 @@ export function HomeSurface({
                   <span className="text-xs text-muted-foreground">
                     {t('alertsTitle')}
                   </span>
+                  <RouteProgress />
                 </Link>
                 <Link
                   href={`/${lang}/dashboard`}
@@ -195,6 +197,7 @@ export function HomeSurface({
                   <span className="text-xs text-muted-foreground">
                     {t('recentActivityTitle')}
                   </span>
+                  <RouteProgress />
                 </Link>
               </CardContent>
             </Card>
@@ -239,7 +242,12 @@ export function HomeSurface({
                   variant="outline"
                   className="h-auto justify-start py-4"
                 >
-                  <Link href={action.href}>{`Open ${action.label}`}</Link>
+                  <Link href={action.href}>
+                    {`Open ${action.label}`}
+                    {/* quick-kayinleong-048: these tiles are the main mobile nav path
+                        and had no pending feedback at all. */}
+                    <RouteProgress />
+                  </Link>
                 </Button>
               ))}
             </div>
