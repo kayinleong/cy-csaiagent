@@ -44,6 +44,7 @@ import { routeAsync } from '@/src/router'
 import { coachAgent } from '@/src/agents/coach'
 import { finderAgent } from '@/src/agents/finder'
 import { replyAgent } from '@/src/agents/reply'
+import { ReplyOutputSchema } from '@/src/agents/reply/schema'
 import { modelFor } from '@/src/llm/provider'
 import {
   appendMessage,
@@ -225,6 +226,61 @@ export function replyHadNoSopMatch(
     }
     // A hit anywhere in the turn means the draft was grounded — not a gap.
     return sawMiss && !sawHit
+  } catch {
+    return false
+  }
+}
+
+// ─── Reply "agent concluded a real SOP gap" helper ────────────────────────────
+
+/**
+ * Did the Reply agent itself conclude this was a genuine SOP gap?
+ *
+ * quick-kayinleong-047. `replyHadNoSopMatch` above reads the TOOL result, which answers
+ * a different question: "did retrieveReplySop miss?" Those diverge whenever the turn was
+ * never a client inbound at all. Typing "hi" with the Reply chip pinned made the agent
+ * search for a greeting SOP, miss, and the route recorded a `knowledgeGaps` row with the
+ * topic "hi" — polluting the very feed that is supposed to tell the senior coach which
+ * SOPs to write. The more anyone tested Reply, the worse that signal got.
+ *
+ * A knowledge gap is only real when the AGENT decided it lacked an SOP for a genuine
+ * client message. The Reply agent signals that by emitting `noSopMatch` in its output;
+ * for a non-inbound it now emits `clarifyingQuestion` instead (src/agents/reply/prompt.ts
+ * "Not an inbound message"). So gate the gap write on the agent's own conclusion.
+ *
+ * Fails CLOSED (returns false) when the output cannot be parsed: a malformed turn is not
+ * evidence of a missing SOP, and a missed gap row is far cheaper than a false one.
+ */
+export function replyAgentReportedSopGap(final: { text?: string }): boolean {
+  try {
+    const text = final.text
+    if (typeof text !== 'string' || text.trim().length === 0) return false
+
+    const unfenced = text
+      .trim()
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/, '')
+      .trim()
+
+    const first = unfenced.indexOf('{')
+    const last = unfenced.lastIndexOf('}')
+    const candidates = [unfenced]
+    if (first !== -1 && last > first) candidates.push(unfenced.slice(first, last + 1))
+
+    for (const candidate of candidates) {
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(candidate)
+      } catch {
+        continue
+      }
+      const result = ReplyOutputSchema.safeParse(parsed)
+      if (!result.success) continue
+      // A clarifyingQuestion turn is the agent asking for the client's message — not a gap.
+      if (result.data.clarifyingQuestion) return false
+      return result.data.noSopMatch?.reason === 'no_sop_match'
+    }
+    return false
   } catch {
     return false
   }
@@ -662,7 +718,10 @@ export async function POST(req: Request): Promise<Response> {
         // recordKnowledgeGap further hashes/truncates it to a topicHash + short label.
         // The route never hands raw client paste content to the gap feed. Wrapped in
         // try/catch so a gap-write failure never breaks stream completion (count only).
-        if (replyHadNoSopMatch(final)) {
+        // BOTH must hold (quick-kayinleong-047): the tool missed AND the agent itself
+        // concluded a real SOP gap. The tool alone fired for greetings and coach
+        // questions typed with the Reply chip pinned, recording false gaps.
+        if (replyHadNoSopMatch(final) && replyAgentReportedSopGap(final)) {
           try {
             // seniorCoachId scopes the gap row to the agent's coach (same lookup the
             // dashboard / captureReplyEdit use). Fallback to '' on a missing profile —

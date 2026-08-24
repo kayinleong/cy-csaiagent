@@ -199,7 +199,7 @@ vi.mock('@/src/escalation', () => ({
 
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
-import { POST } from './route'
+import { POST, replyAgentReportedSopGap } from './route'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1142,6 +1142,14 @@ describe('04-01 (D-11): no_sop_match reply turn records a kb-miss knowledgeGap t
     mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
       const finish = {
         ...mockFinalResult,
+        // quick-kayinleong-047: the gap write now ALSO requires the agent's own
+        // conclusion, so the fixture carries the ReplyOutput envelope a real
+        // no_sop_match turn actually emits. Without it this asserted a gap row for a
+        // turn the agent never called a gap — which is exactly the false-positive the
+        // guard exists to stop.
+        text: JSON.stringify({
+          noSopMatch: { reason: 'no_sop_match', message: "I don't have a D2 reply SOP for this" },
+        }),
         steps: [
           {
             toolResults: [
@@ -1309,5 +1317,117 @@ describe('quick-046: server-authoritative message metadata', () => {
   it('returns undefined for chunk types that carry no metadata', async () => {
     const meta = await captureMetadata({ pillar: 'coach', reason: 'heuristic-coach:keyword' }, [])
     expect(meta?.({ part: { type: 'text-delta' } })).toBeUndefined()
+  })
+})
+
+// ─── quick-kayinleong-047: false reply-SOP gaps ───────────────────────────────
+//
+// With the Reply chip pinned, typing "hi" made the agent search for a greeting SOP,
+// miss, and the route recorded a knowledgeGaps row with the topic "hi" — corrupting the
+// feed that tells the senior coach which SOPs to write. The gap write now requires the
+// AGENT's own conclusion, not just a tool miss.
+
+describe('quick-047: replyAgentReportedSopGap', () => {
+  it('is true when the agent emitted noSopMatch', () => {
+    expect(
+      replyAgentReportedSopGap({
+        text: JSON.stringify({
+          noSopMatch: { reason: 'no_sop_match', message: 'no D2 reply SOP for this' },
+        }),
+      }),
+    ).toBe(true)
+  })
+
+  it('tolerates a ```json fence and surrounding prose', () => {
+    expect(
+      replyAgentReportedSopGap({
+        text: '```json\n{"noSopMatch":{"reason":"no_sop_match","message":"m"}}\n```',
+      }),
+    ).toBe(true)
+  })
+
+  it('is FALSE for a clarifying question — the non-inbound path, not a gap', () => {
+    // This is the whole point: "hi" now yields a clarifyingQuestion, which must never
+    // be recorded as a missing SOP.
+    expect(
+      replyAgentReportedSopGap({
+        text: JSON.stringify({
+          clarifyingQuestion: "Paste the client's message and I'll draft a reply.",
+        }),
+      }),
+    ).toBe(false)
+  })
+
+  it('is FALSE when a clarifying question and noSopMatch both appear', () => {
+    // Ambiguous output must not create a gap row — clarifyingQuestion wins.
+    expect(
+      replyAgentReportedSopGap({
+        text: JSON.stringify({
+          clarifyingQuestion: 'Which lead is this about?',
+          noSopMatch: { reason: 'no_sop_match', message: 'm' },
+        }),
+      }),
+    ).toBe(false)
+  })
+
+  it('is FALSE for a grounded draft', () => {
+    expect(
+      replyAgentReportedSopGap({
+        text: JSON.stringify({ draft: { text: 'Hi there', sopDocIds: ['sop-1'] } }),
+      }),
+    ).toBe(false)
+  })
+
+  it('fails CLOSED on unparseable, empty, or missing output', () => {
+    // A malformed turn is not evidence of a missing SOP. A missed gap row is far
+    // cheaper than a false one.
+    expect(replyAgentReportedSopGap({ text: 'I could not parse this' })).toBe(false)
+    expect(replyAgentReportedSopGap({ text: '' })).toBe(false)
+    expect(replyAgentReportedSopGap({ text: '   ' })).toBe(false)
+    expect(replyAgentReportedSopGap({})).toBe(false)
+  })
+})
+
+describe('quick-047: a non-inbound reply turn records NO knowledge gap', () => {
+  it('a clarifying-question turn does not call recordKnowledgeGap even though the tool missed', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'reply', reason: 'manual-override' })
+
+    let resolveOnFinish: () => void
+    const onFinishDone = new Promise<void>((r) => { resolveOnFinish = r })
+
+    // The shape a greeting produces once the prompt's "Not an inbound message" branch
+    // is honoured: the tool may still have been called and missed, but the agent asks
+    // for the client's message instead of declaring an SOP gap.
+    mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
+      const finish = {
+        ...mockFinalResult,
+        text: JSON.stringify({
+          clarifyingQuestion: "Paste the client's WhatsApp message and I'll draft a reply.",
+        }),
+        steps: [
+          {
+            toolResults: [
+              { toolName: 'retrieveReplySop', result: { found: false, reason: 'no_sop_match' } },
+            ],
+          },
+        ],
+      }
+      void onFinish(finish).then(resolveOnFinish)
+      return {
+        consumeStream: vi.fn(async () => {}),
+        toUIMessageStreamResponse: vi.fn(() => new Response('stream')),
+      }
+    })
+
+    await POST(buildRequest({
+      messages: [{ role: 'user', content: 'hi' }],
+      cid: 'conv-reply-047',
+      leadId: 'lead-001',
+    }))
+    await onFinishDone
+
+    // The bug: "hi" used to write a knowledgeGaps row with the topic "hi", polluting
+    // the feed that tells the senior coach which SOPs to write.
+    expect(mocks.mockRecordKnowledgeGap).not.toHaveBeenCalled()
   })
 })

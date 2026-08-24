@@ -232,3 +232,39 @@ describe('Reply parallel-lead isolation (REPLY-03 / SC2, RED until Plan 04-05)',
     void leadA
   })
 })
+
+// ─── quick-kayinleong-047: the "not an inbound" branch ────────────────────────
+//
+// Reply had no branch for "this is not a client message", unlike the Coach prompt's
+// greeting section. So a greeting typed with the Reply chip pinned ran mandatory
+// grounding, missed, and returned "I don't have a D2 reply SOP for this" — which also
+// recorded a false SOP gap for the senior coach.
+
+describe('quick-047: reply prompt handles a non-inbound message', () => {
+  it('instructs the agent to ask for the paste instead of grounding', async () => {
+    const { buildReplySystemPrompt } = await import('./prompt')
+    const prompt = buildReplySystemPrompt()
+
+    // The branch must come BEFORE the mandatory-grounding section, or the model
+    // reaches "call retrieveReplySop first" and the escape hatch never applies.
+    const branchAt = prompt.indexOf('Not an inbound message')
+    const groundingAt = prompt.indexOf('## Grounding')
+    expect(branchAt).toBeGreaterThan(-1)
+    expect(groundingAt).toBeGreaterThan(-1)
+    expect(branchAt).toBeLessThan(groundingAt)
+
+    // It must name the escape hatch the schema already provides…
+    expect(prompt).toContain('clarifyingQuestion')
+    // …and forbid both the tool call and the false gap signal.
+    expect(prompt).toContain('do NOT call retrieveReplySop')
+    expect(prompt).toContain('do NOT emit noSopMatch')
+  })
+
+  it('still keeps grounding mandatory for a real inbound', async () => {
+    // The branch must not have weakened the grounding mandate (D-06 / REPLY-01).
+    const { REPLY_SYSTEM_PROMPT } = await import('./prompt')
+    const prompt = REPLY_SYSTEM_PROMPT
+    expect(prompt).toContain('Call the retrieveReplySop tool BEFORE drafting any reply')
+    expect(prompt).toContain('NEVER invent a SOP')
+  })
+})
