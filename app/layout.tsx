@@ -37,8 +37,14 @@ export const metadata: Metadata = {
  * Locale-specific wiring (NextIntlClientProvider, <html lang={locale}>) lives in
  * app/[lang]/layout.tsx so it has access to the [lang] segment param.
  *
- * <Toaster /> is mounted here so toast() works from any descendant, including
- * the KB-miss handoff signal and ingestion progress toasts (D-10).
+ * <Toaster /> is mounted here — ONCE, and only here (quick-kayinleong-046).
+ * Sonner's own guidance: "Never render it per-page or conditionally; a second
+ * mounted Toaster duplicates every toast." app/[lang]/chat/page.tsx used to mount
+ * a second one, so every chat toast fired twice; its richColors + top-center props
+ * moved onto this instance. top-center is the mobile-correct position: D2 agents
+ * are on phones and the bottom of the chat surface is the composer + keyboard.
+ * toast() works from any descendant, including the KB-miss handoff signal and
+ * ingestion progress toasts (D-10).
  */
 export default function RootLayout({
   children,
@@ -47,7 +53,7 @@ export default function RootLayout({
     <html className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         {children}
-        <Toaster />
+        <Toaster richColors position="top-center" />
       </body>
     </html>
   )

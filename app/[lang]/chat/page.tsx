@@ -23,7 +23,6 @@
 
 import type { Metadata } from 'next'
 import { getTranslations } from 'next-intl/server'
-import { Toaster } from '@/components/ui/sonner'
 import { ChatShell } from './chat-shell'
 import { triggerDueJobs } from '@/app/_actions/jobs'
 
@@ -61,9 +60,6 @@ export default async function ChatPage({
      * overflow-hidden prevents double scroll bars.
      */
     <main className="flex flex-col h-[100dvh] bg-background overflow-hidden">
-      {/* Sonner toaster for handoff signals + error notifications */}
-      <Toaster richColors position="top-center" />
-
       {/* Chat shell: message list (flex-1) + input bar (sticky bottom) */}
       <ChatShell
         placeholder={placeholder}

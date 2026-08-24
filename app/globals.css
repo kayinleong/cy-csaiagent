@@ -4,6 +4,22 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Hover gating — quick-kayinleong-046 (RESEARCH-motion A3).
+   Emil Kowalski's rule is `@media (hover: hover) and (pointer: fine)`: a touch
+   device fires a false :hover on tap, and D2 agents are on phones. Tailwind 4
+   already wraps the built-in `hover` variant in `@media (hover: hover)` — this
+   override adds the missing `and (pointer: fine)` so hybrid devices that report
+   hover capability with a coarse primary pointer are excluded too. Overriding the
+   variant here covers every `hover:`, `group-hover:`, `peer-hover:` and
+   responsive combination app-wide without touching a single component file. */
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -46,6 +62,30 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* ── Motion easing — quick-kayinleong-046 ──────────────────────────────────
+     Emil Kowalski's three canonical curves (animations.dev), verbatim. Built-in
+     CSS easings are too weak for deliberate UI motion; do NOT hand-roll variants
+     of these. Tailwind 4 turns the `--ease-*` namespace into utilities, so these
+     are usable as `ease-out-strong` / `ease-in-out-strong` / `ease-drawer` and as
+     `var(--ease-*)` from hand-written CSS.
+       entering / exiting  → ease-out-strong
+       moving on screen    → ease-in-out-strong
+       drawers / sheets    → ease-drawer
+     Never `ease-in` on UI. */
+  --ease-out-strong: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* ── tw-animate-css retune — quick-kayinleong-046 (RESEARCH-motion A10) ────
+     Upstream defaults both shorthands to `.15s var(--tw-ease, ease)`, so every
+     vendored component that enters via `animate-in` (dialog, sheet, popover,
+     dropdown, tooltip, select, …) uses the weakest possible curve at the exact
+     moment the user is watching most. Same shorthand as upstream with only the
+     `--tw-ease` fallback swapped; an explicit `ease-*` utility on a component
+     still wins, because that utility sets `--tw-ease` itself. */
+  --animate-in: enter var(--tw-animation-duration, var(--tw-duration, 0.15s)) var(--tw-ease, var(--ease-out-strong)) var(--tw-animation-delay, 0s) var(--tw-animation-iteration-count, 1) var(--tw-animation-direction, normal) var(--tw-animation-fill-mode, none);
+  --animate-out: exit var(--tw-animation-duration, var(--tw-duration, 0.15s)) var(--tw-ease, var(--ease-out-strong)) var(--tw-animation-delay, 0s) var(--tw-animation-iteration-count, 1) var(--tw-animation-direction, normal) var(--tw-animation-fill-mode, none);
 }
 
 :root {
@@ -84,6 +124,21 @@
   --sidebar-accent-foreground: oklch(0.24 0.04 128);
   --sidebar-border: oklch(0.9 0.008 95);
   --sidebar-ring: oklch(0.88 0.21 124);
+
+  /* ── Motion durations — quick-kayinleong-046 ───────────────────────────────
+     Named after Emil Kowalski's duration budget so intent is legible at the call
+     site rather than encoded in a number. UI motion stays under 300ms;
+     --duration-drawer is the one documented exception (a sheet travels its own
+     full height, and Vaul's own curve is tuned for it).
+     NOTE: Tailwind 4 has no `--duration-*` theme namespace (verified against
+     tailwindcss@4.3.0 — a `duration-popover` utility is NOT generated), so these
+     live in :root rather than @theme. Consume them as `var(--duration-popover)`
+     from CSS or as `duration-(--duration-popover)` from a utility. */
+  --duration-press: 140ms; /* button press feedback     — budget 100-160ms */
+  --duration-tooltip: 150ms; /* tooltips, small popovers  — budget 125-200ms */
+  --duration-popover: 200ms; /* dropdowns, selects        — budget 150-250ms */
+  --duration-modal: 250ms; /* modals                    — budget 200-500ms */
+  --duration-drawer: 400ms; /* drawers, sheets           — budget 200-500ms */
 }
 
 .dark {
@@ -131,5 +186,87 @@
   }
   html {
     @apply font-sans;
+  }
+}
+/* ── Route-level loading skeletons — quick-kayinleong-046 ────────────────────
+   A `loading.tsx` fallback mounts the instant a navigation starts. Emil's
+   skeleton decision table is explicit that a sub-200ms wait should show NOTHING:
+   "A flash of skeleton is worse than nothing — it's a jarring change we
+   introduced." So the fallback is held at opacity 0 for 180ms and only then
+   fades in; a navigation that resolves inside that window never renders a
+   visible skeleton. Opacity only — no layout, no paint, compositor-safe.
+   Under `prefers-reduced-motion` the guard below collapses the fade while
+   leaving the 180ms anti-flash delay intact, which is the desired behaviour. */
+@keyframes route-skeleton-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@layer components {
+  [data-slot='route-skeleton'] {
+    animation: route-skeleton-in var(--duration-popover) var(--ease-out-strong)
+      180ms both;
+  }
+}
+
+/* ── Reduced motion — quick-kayinleong-046 (RESEARCH-motion A2) ──────────────
+   There was previously ZERO `prefers-reduced-motion` handling anywhere in the
+   repo, which is the highest-severity accessibility finding on the motion audit.
+   This is the app-wide floor: collapse every animation and transition, and stop
+   smooth scrolling. Radix / base-ui presence detection still works because the
+   animation events continue to fire, just immediately.
+
+   Emil is explicit that a blanket kill is not the ideal end state — "reduced
+   motion means fewer and gentler animations, not zero" — so `data-motion-keep-fade`
+   is the opt-back-in hook: it restores an element's opacity/colour crossfade
+   (which aids comprehension) while the rule above keeps its movement suppressed.
+   Unlayered and `!important` so it wins over both Tailwind utilities and the
+   vendored component styles regardless of layer order.
+
+   NOT handled here: `prefers-reduced-transparency` and `prefers-contrast`
+   (apple-design §14). Killing `backdrop-filter` app-wide would leave the four
+   `supports-backdrop-filter:backdrop-blur-xs` overlays translucent but unblurred,
+   which reads WORSE, not better — those need per-component opaque backgrounds and
+   therefore belong to whoever owns `components/ui/`. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  [data-motion-keep-fade] {
+    transition-duration: 200ms !important;
+  }
+}
+
+/* ── Route error boundary entrance — quick-kayinleong-046 ────────────────────
+   app/[lang]/error.tsx. Fires once, on mount, with no JS state — Emil's tool
+   ladder puts `@starting-style` at exactly this rung. transform + opacity only,
+   entering from scale(0.97) (never scale(0): "nothing in the real world appears
+   from nothing"), on the strong ease-out curve at the modal duration, because an
+   error card is a rare surface and reads as a modal-weight arrival.
+   transform-origin stays centered — a modal-weight surface is not anchored to a
+   trigger, which is the documented exemption to the origin rule.
+   Collapsed by the prefers-reduced-motion guard above. */
+@layer components {
+  [data-slot='route-error'] {
+    opacity: 1;
+    transform: scale(1);
+    transition:
+      opacity var(--duration-modal) var(--ease-out-strong),
+      transform var(--duration-modal) var(--ease-out-strong);
+
+    @starting-style {
+      opacity: 0;
+      transform: scale(0.97);
+    }
   }
 }
