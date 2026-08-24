@@ -80,6 +80,38 @@ export interface RetrieveOpts {
 const FIND_NEAREST_LIMIT = 8
 
 /**
+ * Minimum similarity a chunk must reach to be returned (quick-kayinleong-046).
+ *
+ * Embeddings are L2-normalized 1024-d vectors (src/rag/embed.ts), so with
+ * `distanceMeasure: 'DOT_PRODUCT'` the "distance" IS the cosine similarity in
+ * [-1, 1] — and for DOT_PRODUCT Firestore's threshold semantics are
+ * `WHERE dot_product_distance >= distanceThreshold` (higher = more similar; see
+ * @google-cloud/firestore firestore.d.ts:3293-3294). So this is a similarity FLOOR,
+ * not a distance ceiling.
+ *
+ * Why this exists: without a threshold, `findNearest` returns up to
+ * FIND_NEAREST_LIMIT rows whenever the equality pre-filter set is non-empty —
+ * regardless of relevance. That made an honest "no results" impossible: once the KB
+ * is populated, every query would return 8 chunks and the Coach would cite whatever
+ * came back, turning a truthful `kb_miss` into a confidently-wrong grounded answer.
+ *
+ * ⚠ NEEDS EMPIRICAL TUNING. This floor was chosen conservatively (low) to avoid
+ * false negatives and has NOT been validated against real content, because no
+ * `pillar:'coach'` chunks have ever been ingested (see the claim's Verification
+ * section). Re-tune once the KB is loaded: `_vectorDistance` is now returned on every
+ * result via `score`, so log the score distribution for known-good and known-bad
+ * queries and raise this until noise is excluded without dropping true matches.
+ */
+export const MIN_SIMILARITY = 0.35
+
+/**
+ * Field name Firestore writes the computed similarity into on each returned doc.
+ * Must be set explicitly — previously unset, which is why `score` below was always
+ * the `1` fallback and the similarity distribution was unobservable.
+ */
+const DISTANCE_RESULT_FIELD = '_vectorDistance'
+
+/**
  * Firestore `findNearest` retrieval (the DEFAULT adapter).
  *
  * Steps:
@@ -144,6 +176,13 @@ export async function firestoreRetrieve(
       queryVector: FieldValue.vector(q),
       limit: FIND_NEAREST_LIMIT,
       distanceMeasure: 'DOT_PRODUCT',
+      // Similarity FLOOR — see MIN_SIMILARITY. Without this, a non-empty pre-filter
+      // set always yields FIND_NEAREST_LIMIT rows regardless of relevance, so a real
+      // retrieval miss could never be distinguished from an irrelevant match.
+      distanceThreshold: MIN_SIMILARITY,
+      // Surface the computed similarity so `score` below is real (and MIN_SIMILARITY
+      // is tunable against observed data instead of guessed).
+      distanceResultField: DISTANCE_RESULT_FIELD,
     })
     .get()
 
@@ -159,9 +198,16 @@ export async function firestoreRetrieve(
       docId: (data.docId as string) ?? '',
       text: (data.text as string) ?? '',
       lang: (data.lang as 'en' | 'ms' | 'zh') ?? 'en',
-      // Firestore DOT_PRODUCT distance: lower distance = more similar.
-      // We store as-is; buildCitations handles ranking by position.
-      score: typeof data._distance === 'number' ? (data._distance as number) : 1,
+      // Firestore DOT_PRODUCT with L2-normalized vectors: the value IS cosine
+      // similarity, so HIGHER = more similar (the old comment here said the
+      // opposite). Read from DISTANCE_RESULT_FIELD; `_distance` was never populated
+      // because distanceResultField was unset, so this silently fell back to 1 on
+      // every row. buildCitations still ranks by position (findNearest returns
+      // most-similar-first), so this is for observability and threshold tuning.
+      score:
+        typeof data[DISTANCE_RESULT_FIELD] === 'number'
+          ? (data[DISTANCE_RESULT_FIELD] as number)
+          : 1,
       pillar: data.pillar as 'coach' | 'finder' | 'reply' | undefined,
       category: typeof data.category === 'string' ? (data.category as string) : undefined,
     }

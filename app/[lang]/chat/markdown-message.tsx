@@ -10,6 +10,7 @@
  * partial/streaming markdown — react-markdown renders whatever parses on each tick.
  */
 
+import { memo } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
@@ -78,8 +79,21 @@ interface MarkdownMessageProps {
   className?: string
 }
 
-/** Render Markdown `content` with compact, chat-bubble-friendly element styling. */
-export function MarkdownMessage({ content, className }: MarkdownMessageProps) {
+/**
+ * Render Markdown `content` with compact, chat-bubble-friendly element styling.
+ *
+ * memo'd (quick-kayinleong-046). Every streamed SSE token calls setMessages, and
+ * chat-shell mirrors that state, so the whole message tree re-rendered TWICE per token
+ * — re-running the full remark/micromark pipeline for EVERY message in the transcript
+ * each time. Cost per token was O(conversation length), i.e. quadratic over a turn,
+ * which is the single biggest contributor to the chat surface feeling laggy. Only the
+ * final assistant bubble's `content` actually changes mid-stream; with this memo every
+ * other bubble re-parses zero times.
+ */
+export const MarkdownMessage = memo(function MarkdownMessage({
+  content,
+  className,
+}: MarkdownMessageProps) {
   return (
     <div data-slot="markdown-message" className={cn('break-words', className)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
@@ -87,4 +101,4 @@ export function MarkdownMessage({ content, className }: MarkdownMessageProps) {
       </ReactMarkdown>
     </div>
   )
-}
+})

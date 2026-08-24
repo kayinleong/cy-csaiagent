@@ -35,7 +35,11 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { ChatMessage } from './message-list'
 import { decodeReplyOutput, decodeFinderOutput } from './decode-structured-output'
-import { parseTextDelta, isHandoffChunk } from './decode-stream-chunk'
+import {
+  parseTextDelta,
+  parseStreamError,
+  parseMessageMetadata,
+} from './decode-stream-chunk'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,6 +47,16 @@ import { parseTextDelta, isHandoffChunk } from './decode-stream-chunk'
 export interface SubmittedSuggestion {
   id: number
   text: string
+  /**
+   * Pillar this card is FOR, applied to this dispatch only (quick-kayinleong-046).
+   *
+   * Hero cards used to call setPillarOverride, which pinned the pillar for the rest of
+   * the session and was never cleared — so after tapping a Finder card, a follow-up
+   * coaching question ("walk me through my first Meta ad") was still routed to Finder
+   * and answered with "that's outside what I'm set up to assist with". Carrying the
+   * pillar on the suggestion keeps the card deterministic without making it sticky.
+   */
+  pillar?: 'coach' | 'finder' | 'reply'
 }
 
 interface ChatInputProps {
@@ -74,7 +88,7 @@ interface ChatInputProps {
    * the lead-selector). Return `true` (or omit the prop) to proceed. The blocked
    * text is preserved in the input so dispatch can resume after a lead is picked.
    */
-  onBeforeSend?: (text: string) => boolean
+  onBeforeSend?: (text: string, pillar?: 'coach' | 'finder' | 'reply') => boolean
   /**
    * One-shot suggestion send (redesign). When this changes to a new id, the input
    * seeds the text and dispatches it (subject to the same onBeforeSend gate).
@@ -107,6 +121,9 @@ function useChatStream({
   | 'onBeforeSend'
   | 'submittedSuggestion'
 >) {
+  // Localized copy for the failed-turn bubble. Reuses the existing `chat.error` key
+  // rather than adding one, so this claim does not touch the i18n catalogs.
+  const t = useTranslations('chat')
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [isStreaming, setIsStreaming] = useState(false)
   const [input, setInput] = useState('')
@@ -142,17 +159,26 @@ function useChatStream({
     onMessagesChange(messages)
   }, [messages, onMessagesChange])
 
-  const sendMessage = useCallback(async (textOverride?: string) => {
+  const sendMessage = useCallback(async (
+    textOverride?: string,
+    pillarForTurn?: 'coach' | 'finder' | 'reply',
+  ) => {
     // textOverride lets a suggestion card dispatch its prompt without waiting on
     // the async setInput state to settle (avoids a stale-input race).
     const text = (textOverride ?? input).trim()
     if (!text || isStreaming) return
 
+    // Pillar for THIS dispatch only: a hero card's pillar wins for its own send, then
+    // routing reverts to the header chip (or Auto). quick-kayinleong-046 — see
+    // SubmittedSuggestion.pillar.
+    const effectivePillar = pillarForTurn ?? pillarOverride
+
     // Reply lead gate (D-07): give the parent a chance to BLOCK dispatch — e.g. a
     // Reply turn with no leadId opens the lead-selector instead of sending. The
     // input text is intentionally NOT cleared here so dispatch can resume after a
-    // lead is picked.
-    if (onBeforeSend && onBeforeSend(text) === false) {
+    // lead is picked. The effective pillar is passed so the gate sees the pillar this
+    // turn will ACTUALLY use, not just the persistent chip.
+    if (onBeforeSend && onBeforeSend(text, effectivePillar) === false) {
       return
     }
 
@@ -168,7 +194,13 @@ function useChatStream({
     setIsStreaming(true)
 
     try {
-      // Get a fresh Firebase ID token for the Bearer auth header
+      // Get a fresh Firebase ID token for the Bearer auth header.
+      // authStateReady() first (quick-kayinleong-046 / RC-5): Firebase restores LOCAL
+      // persistence asynchronously, so immediately after a page reload `currentUser` is
+      // still null for a beat. Reading it synchronously made the FIRST send after a
+      // refresh bail out with a bogus "You are not signed in" — one of the two halves of
+      // the reported "refreshed and it stopped responding".
+      await clientAuth.authStateReady()
       const currentUser = clientAuth.currentUser
       if (!currentUser) {
         toast.error('You are not signed in. Please sign in to continue.')
@@ -194,8 +226,8 @@ function useChatStream({
       if (langOverride) {
         requestBody.langOverride = langOverride
       }
-      if (pillarOverride) {
-        requestBody.override = pillarOverride
+      if (effectivePillar) {
+        requestBody.override = effectivePillar
       }
       if (leadId) {
         requestBody.leadId = leadId
@@ -215,7 +247,10 @@ function useChatStream({
         if (status === 401) {
           toast.error('Session expired. Please sign in again.')
         } else if (status === 429) {
-          toast.warning("You've reached your hourly limit. Please wait a few minutes.")
+          // TOKEN_CAP is a 24-HOUR window (src/ratelimit/window.ts), not hourly — the
+          // old copy told agents to "wait a few minutes" for a limit that resets
+          // tomorrow (quick-kayinleong-046).
+          toast.warning("You've reached your daily usage limit. It resets in 24 hours.")
         } else {
           toast.error('Something went wrong. Please try again.')
         }
@@ -241,7 +276,12 @@ function useChatStream({
       }
 
       const decoder = new TextDecoder()
-      let handoffDetected = false
+      // Server-authoritative per-turn signal (quick-kayinleong-046). The client used to
+      // infer all of this itself and got it wrong in Auto mode.
+      let serverPillar: 'coach' | 'finder' | 'reply' | undefined
+      let serverCitations: string[] = []
+      let kbMiss = false
+      let streamError: string | null = null
       let buffer = ''
       // Accumulate the full assistant text so we can decode a Reply/Finder turn's
       // structured-output JSON on completion (the card-variant decode bridge).
@@ -264,10 +304,22 @@ function useChatStream({
           // Strip "data: " prefix if present (SSE format)
           const dataLine = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed
 
-          // Check for handoff signal
-          if (isHandoffChunk(dataLine)) {
-            handoffDetected = true
+          // Server-reported metadata: pillar arrives on the `start` chunk (before any
+          // text, so the decoder below is never a guess); citations + kbMiss arrive on
+          // `finish`. Replaces the old isHandoffChunk substring sniff, which only
+          // worked while the Coach's JSON envelope was leaking as literal text.
+          const meta = parseMessageMetadata(dataLine)
+          if (meta) {
+            if (meta.pillar) serverPillar = meta.pillar
+            if (meta.citations) serverCitations = meta.citations
+            if (meta.kbMiss !== undefined) kbMiss = meta.kbMiss
           }
+
+          // A mid-stream failure arrives as an `error` chunk on an already-200 response.
+          // Capturing it is what turns "empty bubble, spinner stuck forever" into a real
+          // error state (RC-3).
+          const errText = parseStreamError(dataLine)
+          if (errText) streamError = errText
 
           // Extract text delta
           const delta = parseTextDelta(dataLine)
@@ -284,14 +336,38 @@ function useChatStream({
         }
       }
 
+      // ── Stream-level failure → visible error state (RC-3) ────────────────────
+      // Must run BEFORE the decoders: a failed turn has no structured output to decode,
+      // and leaving the placeholder bubble empty is what latched chat-shell's
+      // `isStreaming` derivation (last message is an assistant with content === '').
+      if (streamError || assistantContent.length === 0) {
+        toast.error('The assistant could not finish that response. Please try again.')
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId && m.content.length === 0
+              ? { ...m, content: t('error') }
+              : m,
+          ),
+        )
+        return
+      }
+
       // ── Decode structured pillar output → card variant (gap-closure) ─────────
       // Reply/Finder agents emit their output as a JSON object in the final text
       // (src/agents/*/prompt.ts "Output Format"); the route streams it as text. On
       // completion, decode the accumulated text and attach the structured output so
       // message-list renders the interactive card (ReplyDraftCard / MatchList) instead
-      // of a raw-JSON bubble. Gated by pillarOverride — the UI reaches Reply/Finder only
-      // via the header chip — so the shared clarifyingQuestion field never cross-renders.
-      if (pillarOverride === 'reply') {
+      // of a raw-JSON bubble.
+      //
+      // Gated on the SERVER's pillar (quick-kayinleong-046). It used to be gated on
+      // `pillarOverride`, which is `undefined` in Auto mode — so in Auto NO decoder ran
+      // and the Finder/Reply JSON envelope rendered raw in the bubble; and it was stale
+      // after a hero-card tap, so a coach turn could render as a Finder card. The
+      // if/else-if chain is deliberately exclusive (never "try every decoder"), because
+      // ReplyOutput and FinderOutput share an all-optional `clarifyingQuestion` field
+      // that would otherwise let one pillar's output render as the other's card.
+      const decodePillar = serverPillar ?? effectivePillar
+      if (decodePillar === 'reply') {
         const replyOutput = decodeReplyOutput(assistantContent)
         if (replyOutput) {
           setMessages((prev) =>
@@ -308,7 +384,7 @@ function useChatStream({
             ),
           )
         }
-      } else if (pillarOverride === 'finder') {
+      } else if (decodePillar === 'finder') {
         const finderOutput = decodeFinderOutput(assistantContent)
         if (finderOutput) {
           setMessages((prev) =>
@@ -319,8 +395,22 @@ function useChatStream({
         }
       }
 
-      // Surface KB-miss handoff as a toast (D-10)
-      if (handoffDetected) {
+      // Attach the server's citation chunk IDs to the rendered message (grounding
+      // mandate, D-09). These come from the real retrieval tool results, not from the
+      // model restating them — see app/api/chat/route.ts messageMetadata.
+      if (serverCitations.length > 0) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? { ...m, citations: serverCitations.map((chunkId) => ({ chunkId })) }
+              : m,
+          ),
+        )
+      }
+
+      // Surface KB-miss as a toast (D-10). Now driven by the server's tool-result-derived
+      // signal instead of a substring match on the leaked JSON envelope.
+      if (kbMiss) {
         toast.info(
           "I couldn't find a D2 knowledge base article for this. Your senior coach has been notified.",
           { duration: 6000 },
@@ -332,7 +422,7 @@ function useChatStream({
     } finally {
       setIsStreaming(false)
     }
-  }, [input, isStreaming, messages, langOverride, pillarOverride, leadId, onBeforeSend])
+  }, [input, isStreaming, messages, langOverride, pillarOverride, leadId, onBeforeSend, t])
 
   // ── Suggestion-card dispatch (redesign) ──────────────────────────────────────
   // When a hero card is tapped, chat-shell pins the pillar override then bumps
@@ -343,7 +433,9 @@ function useChatStream({
     if (submittedSuggestion && submittedSuggestion.id !== lastSuggestionId.current) {
       lastSuggestionId.current = submittedSuggestion.id
       setInput(submittedSuggestion.text)
-      void sendMessage(submittedSuggestion.text)
+      // Pass the card's pillar for THIS dispatch only — it is deliberately not pinned
+      // into pillarOverride (quick-kayinleong-046).
+      void sendMessage(submittedSuggestion.text, submittedSuggestion.pillar)
     }
   }, [submittedSuggestion, sendMessage])
 

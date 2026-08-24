@@ -193,6 +193,7 @@ beforeEach(() => {
 
   // Default: streamText returns a stream result with toUIMessageStreamResponse
   const streamResult = {
+    consumeStream: vi.fn(async () => {}),
     toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) => {
       return new Response('data: mock stream\n\n', {
         headers: {
@@ -276,6 +277,7 @@ describe('Test 3: assertRedacted called before streamText (PDPA gate before mode
       callOrder.push('streamText')
       setTimeout(() => onFinish(mockFinalResult), 0)
       return {
+        consumeStream: vi.fn(async () => {}),
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
         ),

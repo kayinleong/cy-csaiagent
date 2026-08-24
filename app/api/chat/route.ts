@@ -410,6 +410,36 @@ export async function POST(req: Request): Promise<Response> {
   // the Reply dispatch branch's buildSystemPrompt and by onFinish persistence).
   const userMessageContent = lastUserMessage?.content ?? ''
 
+  // ── Persist the user message BEFORE the model call (quick-kayinleong-046) ───
+  // Was inside onFinish. onFinish is invoked from the UI-message stream's
+  // TransformStream `flush`, which the AI SDK SKIPS when the consumer cancels — so a
+  // browser refresh mid-stream dropped the entire turn (user message included) and the
+  // transcript came back empty. The user's message is a fact the moment it passes the
+  // gates, and it does not depend on the model succeeding, so it is written here.
+  //
+  // Tradeoff accepted: a turn whose model call then fails leaves a user message with no
+  // assistant reply. That is honest (they did send it), the PDPA erasure sweep already
+  // walks this subcollection, and stall-detect tolerates it. See the claim's Regression
+  // Report.
+  await appendMessage(cid, {
+    tenantId: TENANT_ID,
+    role: 'user',
+    content: userMessageContent,
+    citations: [],
+    routeDecision, // D-02: pillar:reason on every message
+    tokens: 0, // user turns have no model token cost
+    redacted: true, // PDPA gate (GATE 3) already ran
+  } satisfies MessageDoc)
+
+  // ── Grounding signal for the client (quick-kayinleong-046) ──────────────────
+  // Accumulated across steps because messageMetadata's `finish` part does not carry the
+  // step history. The Coach prompt no longer asks the model for a {answer,citations,
+  // handoff} JSON envelope (that envelope was being streamed to the browser verbatim,
+  // fence and all — defect A). The authoritative citations + kb-miss signal are derived
+  // HERE from the real tool results and shipped as stream metadata, which is strictly
+  // more trustworthy than asking the model to restate chunk IDs it can get wrong.
+  const grounding = { citations: [] as string[], retrievalAttempted: false }
+
   // ── Dispatch: build agent system prompt + tools based on pillar ──────────────
   // Phase 3 adds the Finder branch alongside the existing Coach branch.
   // Phase 4 (Plan 04-06) adds the Reply branch as a third dispatch arm.
@@ -507,21 +537,38 @@ export async function POST(req: Request): Promise<Response> {
     //  Coach turn returned an EMPTY response. Coach is a retrieve-then-answer agent, so a
     //  1-step budget is a bug, not a default.)
     stopWhen: stepCountIs(5),
-    onFinish: async (final) => {
-      // ── Persist user message (Pitfall 2 fix — CHAT-02) ────────────────────
-      // The user message is persisted AFTER the stream to avoid blocking the
-      // response, but before the assistant message (order is stable).
-      const userMsg: MessageDoc = {
-        tenantId: TENANT_ID,
-        role: 'user',
-        content: userMessageContent,
-        citations: [],
-        routeDecision,  // D-02: pillar:reason on every message
-        tokens: 0, // user turns have no model token cost
-        redacted: true, // PDPA gate was applied
+    // Track tool-derived grounding as each step lands, so the response's
+    // messageMetadata can report the authoritative citations + kb-miss signal to the
+    // client (quick-kayinleong-046). Bookkeeping only — never fails a turn.
+    onStepFinish: (step) => {
+      try {
+        const toolResults = (step.toolResults ?? []) as Array<{
+          toolName?: string
+          result?: unknown
+        }>
+        for (const tr of toolResults) {
+          // Any KB lookup counts as "retrieval was attempted" — that is what makes a
+          // zero-citation Coach turn a genuine kb_miss rather than a chat reply.
+          if (tr.toolName === 'retrieveKnowledge' || tr.toolName === 'getCheckpointContent') {
+            grounding.retrievalAttempted = true
+          }
+        }
+        grounding.citations.push(...extractCitationChunkIds({ steps: [{ toolResults }] }))
+      } catch {
+        // Grounding bookkeeping is best-effort — never break the stream.
       }
-      await appendMessage(cid, userMsg)
-
+    },
+    // Surface model/stream failures. The AI SDK reports these as an `error` chunk on a
+    // 200 response, so without this they were invisible server-side too (defect RC-3).
+    // Log the error only — never message content or PII (CLAUDE.md).
+    onError: ({ error }) => {
+      console.error('[chat] stream error', {
+        pillar,
+        name: error instanceof Error ? error.name : typeof error,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    },
+    onFinish: async (final) => {
       // ── Extract citation chunk IDs from tool results (Coach path) ─────────
       // AI SDK v5 exposes tool results on the finish payload via `steps[*].toolResults`.
       // For the Coach path: map retrieveKnowledge tool results into citationIds.
@@ -563,11 +610,22 @@ export async function POST(req: Request): Promise<Response> {
           freeText: userMessageContent,
         })
 
-        await writeLeadSlot(leadId, 'finderSlot', {
-          criteria: criteriaToWrite,
-          discussedProjectIds,
-          lastRankedAt: Date.now(),
-        })
+        // Wrapped (quick-kayinleong-046): writeLeadSlot uses .update(), which THROWS
+        // NOT_FOUND when leadContext/{leadId} does not exist. An uncaught throw here
+        // skipped everything below it in onFinish — the ratelimit decrement, the audit
+        // row and the usage event — for the whole turn. A missing context doc is a data
+        // problem, not a reason to lose accounting.
+        try {
+          await writeLeadSlot(leadId, 'finderSlot', {
+            criteria: criteriaToWrite,
+            discussedProjectIds,
+            lastRankedAt: Date.now(),
+          })
+        } catch (err) {
+          console.error('[chat] finderSlot write failed', {
+            name: err instanceof Error ? err.name : typeof err,
+          })
+        }
       }
 
       // ── Reply: write replySlot in onFinish (REPLY-09 / D-06) ─────────────
@@ -577,12 +635,21 @@ export async function POST(req: Request): Promise<Response> {
       // stored is the REDACTED model output (final.text — GATE 3 already ran).
       if (pillar === 'reply' && leadId) {
         const sopDocIds = extractReplySopIds(final)
-        await writeLeadSlot(leadId, 'replySlot', {
-          classification: replyClassification,
-          latestDraft: final.text, // already PDPA-redacted (GATE 3 ran before streamText)
-          sopDocIds,
-          lastDraftedAt: Date.now(),
-        })
+        // Wrapped (quick-kayinleong-046) — same reason as the finderSlot write above:
+        // .update() throws NOT_FOUND on a lead with no leadContext doc, which used to
+        // take the rest of onFinish (ratelimit/audit/usage) down with it.
+        try {
+          await writeLeadSlot(leadId, 'replySlot', {
+            classification: replyClassification,
+            latestDraft: final.text, // already PDPA-redacted (GATE 3 ran before streamText)
+            sopDocIds,
+            lastDraftedAt: Date.now(),
+          })
+        } catch (err) {
+          console.error('[chat] replySlot write failed', {
+            name: err instanceof Error ? err.name : typeof err,
+          })
+        }
 
         // ── Reply no_sop_match → knowledgeGaps kb-miss write (D-11) ─────────
         // When the Reply turn resolved to no_sop_match, record a PDPA-safe gap row
@@ -683,10 +750,47 @@ export async function POST(req: Request): Promise<Response> {
   // Cache-Control and X-Accel-Buffering are added manually (SPIKE-DEPLOY headers).
   //
   // X-Accel-Buffering: no — disables nginx buffering on App Hosting (CRITICAL for SSE)
+  // Force the stream to completion server-side even if the browser goes away
+  // (quick-kayinleong-046 / RC-2). onFinish runs from the UI-message stream's
+  // TransformStream `flush`, which is SKIPPED on consumer cancel — so a refresh
+  // mid-stream previously lost the assistant message, the ratelimit decrement, the
+  // audit row and the usage event. consumeStream() removes the backpressure so flush
+  // still fires. Deliberately NOT combined with abortSignal + onAbort: only one of the
+  // two may own the assistant write, or the turn gets persisted twice.
+  void result.consumeStream()
+
   return result.toUIMessageStreamResponse({
     headers: {
       'Cache-Control': 'no-store',
       'X-Accel-Buffering': 'no',
+    },
+    // Tell the client which pillar actually answered, plus the grounding signal.
+    // Before this, chat-input.tsx guessed the pillar from the sticky `pillarOverride`
+    // chip: `undefined` in Auto mode, so no decoder ran and Finder/Reply JSON leaked
+    // into the bubble (defect A); and stale after a hero-card tap, so a coaching
+    // question rendered as a Finder card (defect C). The server is the only thing that
+    // knows the real answer — so it says so.
+    messageMetadata: ({ part }) => {
+      // `start` fires before any text, so the client can pick its renderer up front.
+      if (part.type === 'start') {
+        return { pillar, routeDecision }
+      }
+      if (part.type === 'finish') {
+        return {
+          pillar,
+          routeDecision,
+          citations: Array.from(new Set(grounding.citations)),
+          // A Coach turn that looked something up and came back with nothing is a real
+          // KB miss (D-10). Greetings/meta questions never call a retrieval tool, so
+          // they can't trip this. Replaces the old substring sniff for 'kb_miss' in the
+          // raw stream text, which only worked while the JSON envelope was leaking.
+          kbMiss:
+            pillar === 'coach' &&
+            grounding.retrievalAttempted &&
+            grounding.citations.length === 0,
+        }
+      }
+      return undefined
     },
   })
 }

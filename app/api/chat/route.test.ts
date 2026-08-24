@@ -211,6 +211,7 @@ function makeStreamResponse(extraHeaders: Record<string, string> = {}) {
   })
   return {
     headers,
+    consumeStream: vi.fn(async () => {}),
     toUIMessageStreamResponse: vi.fn(() => new Response('stream', { headers })),
   }
 }
@@ -266,6 +267,7 @@ beforeEach(() => {
   // NOTE: onFinish is called synchronously to prevent async leakage between tests.
   // Tests that need the onFinish result use mockImplementationOnce with their own await.
   const streamResult = {
+    consumeStream: vi.fn(async () => {}),
     toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) => {
       return new Response('data: mock stream\n\n', {
         headers: {
@@ -349,6 +351,7 @@ describe('Test 3: assertRedacted called before streamText (PDPA gate before mode
       callOrder.push('streamText')
       setTimeout(() => onFinish(mockFinalResult), 0)
       return {
+        consumeStream: vi.fn(async () => {}),
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
         ),
@@ -542,6 +545,7 @@ describe('Test 10 (02-03): both user and assistant messages persisted in onFinis
     mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
       void onFinish({ ...mockFinalResult, steps: [] })
       return {
+        consumeStream: vi.fn(async () => {}),
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
         ),
@@ -625,6 +629,7 @@ describe('Test 13 (03-07): routeDecision persisted as "pillar:reason" (D-02)', (
       // Call onFinish and resolve when it completes
       void onFinish({ ...mockFinalResult, steps: [] }).then(resolveOnFinish)
       return {
+        consumeStream: vi.fn(async () => {}),
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
         ),
@@ -660,6 +665,7 @@ describe('Test 13 (03-07): routeDecision persisted as "pillar:reason" (D-02)', (
     mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
       void onFinish({ ...mockFinalResult, steps: [] }).then(resolveOnFinish)
       return {
+        consumeStream: vi.fn(async () => {}),
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
         ),
@@ -699,6 +705,7 @@ describe('Test 14 (03-07): assertRedacted called before streamText on FINDER pat
       callOrder.push('streamText')
       setTimeout(() => onFinish(mockFinalResult), 0)
       return {
+        consumeStream: vi.fn(async () => {}),
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
         ),
@@ -765,6 +772,7 @@ describe('Test 15 (03-07): finderSlot written in onFinish for finder+leadId; NOT
     mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
       void onFinish({ ...mockFinalResult, steps: finderSteps }).then(resolveOnFinish)
       return {
+        consumeStream: vi.fn(async () => {}),
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
         ),
@@ -803,6 +811,7 @@ describe('Test 15 (03-07): finderSlot written in onFinish for finder+leadId; NOT
     mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
       void onFinish({ ...mockFinalResult, steps: [] }).then(resolveOnFinish)
       return {
+        consumeStream: vi.fn(async () => {}),
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
         ),
@@ -830,6 +839,7 @@ describe('Test 15 (03-07): finderSlot written in onFinish for finder+leadId; NOT
     mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
       void onFinish({ ...mockFinalResult, steps: [] }).then(resolveOnFinish)
       return {
+        consumeStream: vi.fn(async () => {}),
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
         ),
@@ -1081,6 +1091,7 @@ describe('04-01 (REPLY-09): replySlot written in onFinish for a reply turn with 
     mocks.mockStreamText.mockImplementationOnce(({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
       void onFinish({ ...mockFinalResult, steps: [] }).then(resolveOnFinish)
       return {
+        consumeStream: vi.fn(async () => {}),
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
         ),
@@ -1141,6 +1152,7 @@ describe('04-01 (D-11): no_sop_match reply turn records a kb-miss knowledgeGap t
       }
       void onFinish(finish).then(resolveOnFinish)
       return {
+        consumeStream: vi.fn(async () => {}),
         toUIMessageStreamResponse: vi.fn(({ headers }: { headers: Record<string, string> }) =>
           new Response('stream', { headers: { ...headers, 'Content-Type': 'text/event-stream' } })
         ),
@@ -1159,5 +1171,143 @@ describe('04-01 (D-11): no_sop_match reply turn records a kb-miss knowledgeGap t
     expect(mocks.mockRecordKnowledgeGap).toHaveBeenCalled()
     const arg = (mocks.mockRecordKnowledgeGap.mock.calls as unknown as unknown[][]).at(-1)?.[0] as { pillar?: string } | undefined
     expect(arg?.pillar).toBe('reply')
+  })
+})
+
+// ─── quick-kayinleong-046: durability + server-authoritative turn metadata ────
+//
+// Three reported defects converge on this route:
+//   - the Coach's {answer,citations,handoff} JSON envelope rendering raw in the chat
+//     bubble, because the client guessed the pillar from its own override chip;
+//   - a refresh mid-stream losing the whole turn, because both message writes lived in
+//     onFinish, which the AI SDK skips when the consumer cancels;
+//   - a KB miss detected by substring-sniffing 'kb_miss' out of the leaking envelope.
+
+describe('quick-046: turn durability', () => {
+  it('persists the user message BEFORE the model call, not in onFinish', async () => {
+    const order: string[] = []
+    mocks.mockAppendMessage.mockImplementation((async (
+      _cid: string,
+      msg: { role: string },
+    ) => {
+      order.push(`append:${msg.role}`)
+      return 'msg-id'
+    }) as unknown as () => Promise<string>)
+    mocks.mockStreamText.mockImplementationOnce(() => {
+      order.push('streamText')
+      return {
+        consumeStream: vi.fn(async () => {}),
+        toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+      }
+    })
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'hi' }], cid: 'c-046a' }))
+
+    // The user's message is a fact the moment it clears the gates — it must not depend
+    // on the model succeeding, or on the browser staying connected.
+    expect(order[0]).toBe('append:user')
+    expect(order).toContain('streamText')
+    expect(order.indexOf('append:user')).toBeLessThan(order.indexOf('streamText'))
+  })
+
+  it('calls consumeStream() so onFinish still runs if the client disconnects', async () => {
+    const consumeStream = vi.fn(async () => {})
+    mocks.mockStreamText.mockImplementationOnce(() => ({
+      consumeStream,
+      toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+    }))
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'hi' }], cid: 'c-046b' }))
+
+    // Without this, a browser refresh mid-stream skipped the TransformStream flush and
+    // took the assistant message, the ratelimit decrement, the audit row and the usage
+    // event down with it.
+    expect(consumeStream).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('quick-046: server-authoritative message metadata', () => {
+  /** Drive the route, then return the messageMetadata callback + a step-feeder. */
+  async function captureMetadata(
+    routeTo: { pillar: string; reason: string },
+    steps: Array<{ toolResults?: Array<{ toolName?: string; result?: unknown }> }>,
+  ) {
+    mocks.mockRouteAsync.mockResolvedValue(routeTo)
+    let metaFn:
+      | ((a: { part: { type: string } }) => Record<string, unknown> | undefined)
+      | undefined
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onStepFinish }: { onStepFinish?: (s: unknown) => void }) => {
+        for (const s of steps) onStepFinish?.(s)
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn((opts: { messageMetadata?: typeof metaFn }) => {
+            metaFn = opts.messageMetadata
+            return new Response('s')
+          }),
+        }
+      },
+    )
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-046m' }))
+    return metaFn
+  }
+
+  it('reports the resolved pillar on the start chunk, before any text', async () => {
+    const meta = await captureMetadata({ pillar: 'coach', reason: 'heuristic-coach:keyword' }, [])
+    // The client needs the pillar up front to pick a renderer. It previously inferred it
+    // from pillarOverride, which is undefined in Auto mode — so no decoder ran and the
+    // Finder/Reply JSON envelope reached the bubble verbatim.
+    expect(meta?.({ part: { type: 'start' } })).toMatchObject({
+      pillar: 'coach',
+      routeDecision: 'coach:heuristic-coach:keyword',
+    })
+  })
+
+  it('flags kbMiss when a Coach turn ran retrieval and got nothing', async () => {
+    const meta = await captureMetadata({ pillar: 'coach', reason: 'heuristic-coach:keyword' }, [
+      { toolResults: [{ toolName: 'retrieveKnowledge', result: { found: false } }] },
+    ])
+    expect(meta?.({ part: { type: 'finish' } })).toMatchObject({ kbMiss: true, citations: [] })
+  })
+
+  it('reports real citations and no kbMiss when retrieval hit', async () => {
+    const meta = await captureMetadata({ pillar: 'coach', reason: 'heuristic-coach:keyword' }, [
+      {
+        toolResults: [
+          {
+            toolName: 'retrieveKnowledge',
+            result: { found: true, citations: [{ chunkId: 'k1' }, { chunkId: 'k2' }] },
+          },
+        ],
+      },
+    ])
+    // Citations come from the tool results the server actually saw — not from the model
+    // restating chunk IDs, which it can get wrong or fabricate.
+    expect(meta?.({ part: { type: 'finish' } })).toMatchObject({
+      citations: ['k1', 'k2'],
+      kbMiss: false,
+    })
+  })
+
+  it('does NOT flag kbMiss on a greeting that never called a retrieval tool', async () => {
+    const meta = await captureMetadata({ pillar: 'coach', reason: 'heuristic-coach:keyword' }, [
+      { toolResults: [] },
+    ])
+    // Greetings and "what can you do" answer directly with no retrieval. Firing the
+    // senior-coach handoff toast for those would be noise.
+    expect(meta?.({ part: { type: 'finish' } })).toMatchObject({ kbMiss: false })
+  })
+
+  it('never flags kbMiss for non-coach pillars', async () => {
+    const meta = await captureMetadata({ pillar: 'finder', reason: 'heuristic-finder:keyword' }, [
+      { toolResults: [{ toolName: 'retrieveKnowledge', result: { found: false } }] },
+    ])
+    // Finder/Reply have their own miss signals (refusal / no_sop_match).
+    expect(meta?.({ part: { type: 'finish' } })).toMatchObject({ pillar: 'finder', kbMiss: false })
+  })
+
+  it('returns undefined for chunk types that carry no metadata', async () => {
+    const meta = await captureMetadata({ pillar: 'coach', reason: 'heuristic-coach:keyword' }, [])
+    expect(meta?.({ part: { type: 'text-delta' } })).toBeUndefined()
   })
 })

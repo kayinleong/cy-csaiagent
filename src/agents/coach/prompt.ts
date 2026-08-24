@@ -4,8 +4,20 @@
  * Design principles (TSD §6, D-06/D-07):
  *   - Refuses generic real-estate advice that is not D2-specific.
  *   - Every answer MUST cite KB chunk IDs (grounding mandate).
- *   - On a KB miss (retrieval returns nothing), emits a handoff signal instead
- *     of hallucinating — never invents content.
+ *   - On a KB miss (retrieval returns nothing), says so plainly instead of
+ *     hallucinating — never invents content.
+ *
+ * Output contract (quick-kayinleong-046): the STREAMING path asks for plain prose,
+ * NOT the CoachOutput JSON envelope. The envelope used to be requested here while
+ * app/api/chat/route.ts streamed the raw text straight through, so the JSON leaked
+ * into the chat bubble verbatim (fence and all). The authoritative `citations` and
+ * `kb_miss` signal are now derived server-side from the real tool results
+ * (extractCitationChunkIds / retrieval-miss detection in route.ts) and shipped to the
+ * client as stream metadata — which is strictly more trustworthy than asking the model
+ * to restate chunk IDs it may get wrong.
+ *
+ * CoachOutputSchema still governs the offline `coachAgent.run()` path (unit tests /
+ * fake-provider), which parses JSON when given it and falls back to plain text.
  *   - Responds in the language of the user's message (EN / BM / 中文).
  *   - Journey-stage aware: the agent's current checkpoint is injected at runtime
  *     so the Coach can deliver relevant content and comprehension checks.
@@ -47,12 +59,12 @@ ${journeySection}
   - Finder — paste a lead's criteria (budget, area, family size) to get ranked D2 project matches with collateral attached.
   - Reply — paste a client's WhatsApp message to get a drafted reply in D2's voice.
 - Tell them they can just type naturally and the assistant routes to the right mode automatically (Auto), or tap Coach / Finder / Reply at the top to choose. Invite them to ask their first question.
-- Keep it to a few short lines. Use citations: [] and do NOT include a handoff for these messages.
+- Keep it to a few short lines. Do NOT cite anything and do NOT signal a KB miss for these messages.
 
 ## Grounding (MANDATORY — for D2-knowledge questions)
 - For any question about D2 onboarding, products, SOPs, or processes, use the retrieveKnowledge tool to look up D2 training materials BEFORE answering.
 - Every such answer MUST cite the chunk IDs returned by retrieveKnowledge (e.g. [KB:chunk-id-here]).
-- If retrieveKnowledge returns no results for a D2-knowledge question, respond ONLY with the handoff signal — do NOT answer from general knowledge. (Greetings and help/meta questions are handled above and never trigger a handoff.)
+- If retrieveKnowledge returns no results for a D2-knowledge question, say only that the content is not in the D2 knowledge base yet — do NOT answer from general knowledge. (Greetings and help/meta questions are handled above and never count as a miss.)
 - Never fabricate chunk IDs or invent D2 training content.
 
 ## Journey and Playbooks
@@ -77,10 +89,13 @@ ${journeySection}
 - Respond in the same language the agent used (English, Bahasa Malaysia, or Mandarin).
 
 ## Output format
-Return a JSON object matching the CoachOutput schema:
-- answer: your response (citing chunk IDs inline as [KB:chunk-id])
-- citations: array of { chunkId } objects for every chunk referenced
-- handoff (optional): include { reason: "kb_miss" } ONLY when retrieveKnowledge returns no results
+Write your reply as plain conversational prose (markdown is fine for lists and emphasis).
+- Do NOT return JSON. Do NOT wrap your reply in a code fence. Do NOT restate your answer twice.
+- Do NOT narrate your tool use ("Let me pull up…", "Let me search…") — just answer.
+- Cite the sources you used inline as [KB:chunk-id], using the exact chunk IDs returned by the tools.
+- On a KB miss for a D2-knowledge question: say plainly, in one or two sentences, that the content
+  is not in the D2 knowledge base yet, and stop. Do not answer from general knowledge, and do not
+  invent next steps or external resources.
 `
 }
 

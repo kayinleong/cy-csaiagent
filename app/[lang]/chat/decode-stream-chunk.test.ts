@@ -8,7 +8,12 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { parseTextDelta, isHandoffChunk } from './decode-stream-chunk'
+import {
+  parseTextDelta,
+  isHandoffChunk,
+  parseStreamError,
+  parseMessageMetadata,
+} from './decode-stream-chunk'
 
 describe('parseTextDelta', () => {
   it('extracts the delta string from a v5 text-delta chunk', () => {
@@ -64,5 +69,80 @@ describe('isHandoffChunk', () => {
 
   it('returns false for ordinary text chunks', () => {
     expect(isHandoffChunk('{"type":"text-delta","id":"0","delta":"Hello"}')).toBe(false)
+  })
+})
+
+// ─── quick-kayinleong-046 ─────────────────────────────────────────────────────
+
+describe('parseStreamError', () => {
+  it('extracts errorText from an error chunk', () => {
+    // A model failure mid-stream arrives on an already-200 response, so the client's
+    // `!response.ok` check never sees it. Dropping this chunk is what produced the
+    // reported "it didn't respond": empty bubble, no toast, spinner stuck.
+    expect(parseStreamError('{"type":"error","errorText":"overloaded_error"}')).toBe(
+      'overloaded_error',
+    )
+  })
+
+  it('falls back to a generic label when errorText is empty or missing', () => {
+    expect(parseStreamError('{"type":"error","errorText":""}')).toBe('stream error')
+    expect(parseStreamError('{"type":"error"}')).toBe('stream error')
+  })
+
+  it('returns null for non-error chunks and malformed lines', () => {
+    expect(parseStreamError('{"type":"text-delta","id":"0","delta":"hi"}')).toBeNull()
+    expect(parseStreamError('{"type":"finish"}')).toBeNull()
+    expect(parseStreamError('not json')).toBeNull()
+    expect(parseStreamError('')).toBeNull()
+  })
+})
+
+describe('parseMessageMetadata', () => {
+  it('reads the pillar off the start chunk', () => {
+    expect(
+      parseMessageMetadata('{"type":"start","messageMetadata":{"pillar":"finder"}}'),
+    ).toEqual({ pillar: 'finder' })
+  })
+
+  it('reads citations and kbMiss off the finish chunk', () => {
+    expect(
+      parseMessageMetadata(
+        '{"type":"finish","messageMetadata":{"pillar":"coach","citations":["a","b"],"kbMiss":false}}',
+      ),
+    ).toEqual({ pillar: 'coach', citations: ['a', 'b'], kbMiss: false })
+  })
+
+  it('accepts a standalone message-metadata chunk', () => {
+    expect(
+      parseMessageMetadata('{"type":"message-metadata","messageMetadata":{"kbMiss":true}}'),
+    ).toEqual({ kbMiss: true })
+  })
+
+  it('ignores an unrecognised pillar rather than trusting it', () => {
+    // The pillar selects which decoder runs; a bogus value must not reach that switch.
+    expect(
+      parseMessageMetadata('{"type":"start","messageMetadata":{"pillar":"wat"}}'),
+    ).toBeNull()
+  })
+
+  it('drops non-string entries from citations', () => {
+    expect(
+      parseMessageMetadata('{"type":"finish","messageMetadata":{"citations":["a",7,null]}}'),
+    ).toEqual({ citations: ['a'] })
+  })
+
+  it('returns null for chunks that carry no metadata', () => {
+    expect(parseMessageMetadata('{"type":"text-delta","id":"0","delta":"hi"}')).toBeNull()
+    expect(parseMessageMetadata('{"type":"finish"}')).toBeNull()
+    expect(parseMessageMetadata('{"type":"start","messageMetadata":null}')).toBeNull()
+    expect(parseMessageMetadata('nope')).toBeNull()
+  })
+})
+
+describe('isHandoffChunk (deprecated)', () => {
+  it('false-positives on any line merely containing the word — why it was replaced', () => {
+    // Documents the flaw: it could only ever fire because the Coach's JSON envelope was
+    // leaking into the stream as literal text, and it fired on innocent prose too.
+    expect(isHandoffChunk('{"type":"text-delta","delta":"the handoff went well"}')).toBe(true)
   })
 })

@@ -501,8 +501,16 @@ describe('Test 7: System prompt growth — journey-stage, grounding, playbooks r
     const prompt = buildCoachSystemPrompt()
     expect(prompt).toContain('KB:')
     expect(prompt).toContain('retrieveKnowledge')
-    // Grounding mandate: handoff on miss
-    expect(prompt).toContain('handoff')
+    // Grounding mandate: honest miss instead of hallucination.
+    // quick-kayinleong-046 dropped the JSON envelope from the STREAMING contract (the
+    // model now writes prose; the server derives citations + the kb_miss signal from
+    // the real tool results), so the prompt no longer contains the literal word
+    // "handoff". Assert the behaviour that mandate exists to guarantee instead of the
+    // wire format it used to be expressed in.
+    expect(prompt).toContain('not in the D2 knowledge base')
+    expect(prompt).toContain('do NOT answer from general knowledge')
+    // …and it must not reintroduce a JSON/fence instruction on the streaming path.
+    expect(prompt).toContain('Do NOT return JSON')
     // Scope: no generic advice
     expect(prompt).toContain('D2-specific')
   })

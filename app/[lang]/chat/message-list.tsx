@@ -85,7 +85,7 @@ export function MessageList({ messages, isStreaming, className }: MessageListPro
           </div>
         )}
 
-        {messages.map((msg) =>
+        {messages.map((msg, i) =>
           msg.role === 'user' ? (
             // User bubble — right-aligned, background accent
             <div
@@ -139,6 +139,10 @@ export function MessageList({ messages, isStreaming, className }: MessageListPro
             >
               <Card
                 data-slot="assistant-message"
+                // Only the turn that just arrived animates in — otherwise restoring a
+                // long transcript on refresh would blur-in every card at once
+                // (quick-kayinleong-046).
+                data-latest={i === messages.length - 1 ? 'true' : undefined}
                 data-size="sm"
                 className={cn(
                   'max-w-[90%] rounded-2xl rounded-bl-md',
@@ -178,11 +182,36 @@ export function MessageList({ messages, isStreaming, className }: MessageListPro
           ),
         )}
 
-        {/* Streaming indicator — shown while the assistant is responding */}
+        {/* Streaming indicator — shown while the assistant is responding.
+            quick-kayinleong-046: was a single "Thinking…" line on `animate-pulse`, a 2s
+            opacity LOOP substituting for a progress signal, cutting hard to the first
+            token. Now three staggered dots with a blur-masked handoff (see
+            app/globals.css [data-slot='thinking']). The label is kept for screen
+            readers — the dots carry no meaning on their own. */}
         {isStreaming && (
           <div className="flex justify-start" data-streaming="true">
-            <div className="text-muted-foreground text-sm animate-pulse px-1">
-              Thinking…
+            <div
+              data-slot="thinking"
+              className="flex items-center gap-1 px-1 py-1.5"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="sr-only">Thinking…</span>
+              <span
+                data-slot="thinking-dot"
+                aria-hidden="true"
+                className="size-1.5 rounded-full bg-muted-foreground"
+              />
+              <span
+                data-slot="thinking-dot"
+                aria-hidden="true"
+                className="size-1.5 rounded-full bg-muted-foreground"
+              />
+              <span
+                data-slot="thinking-dot"
+                aria-hidden="true"
+                className="size-1.5 rounded-full bg-muted-foreground"
+              />
             </div>
           </div>
         )}

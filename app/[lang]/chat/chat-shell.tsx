@@ -23,7 +23,7 @@
  * never import from app/.
  */
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { MessageList } from './message-list'
 import { ChatInput, type SubmittedSuggestion } from './chat-input'
 import { ChatHeader, type LangOverride, type PillarOverride } from './chat-header'
@@ -32,7 +32,17 @@ import { ConversationList } from './conversation-list'
 import { LeadSelector } from './lead-selector'
 import { HeroEmptyState } from './hero-empty-state'
 import { loadConversationMessages } from './load-conversation-messages'
+import { clientAuth } from '@/src/firebase/client'
 import type { ChatMessage } from './message-list'
+
+/**
+ * localStorage key holding the agent's current thread id (quick-kayinleong-046).
+ *
+ * Chosen over a `?c=` search param for the minimal fix: reading `useSearchParams()`
+ * would force a <Suspense> boundary around this shell. A shareable URL is the better
+ * long-term shape and is filed as a follow-up.
+ */
+const ACTIVE_CID_KEY = 'd2-active-cid'
 
 /** Generate a unique conversation id for a brand-new session (quick-033). */
 function newConversationId(): string {
@@ -60,6 +70,19 @@ export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
   // Lazy initializer: runs once; the id is internal state (not rendered), so the
   // server/client values differ harmlessly with no hydration mismatch.
   const [activeCid, setActiveCid] = useState<string>(() => newConversationId())
+
+  // Read the persisted thread id ONCE, during the first client render — before any
+  // effect can run. Doing this in an effect instead would race the persist effect
+  // below, which would have already overwritten the stored value with the fresh uuid.
+  // Guarded for SSR (no window on the server).
+  const [storedCid] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    try {
+      return window.localStorage.getItem(ACTIVE_CID_KEY)
+    } catch {
+      return null // private mode / storage disabled — fall back to a new thread
+    }
+  })
 
   // ── Language override (CHAT-08) ──────────────────────────────────────────────
   // undefined = auto-detect (franc-min per-message detection in the route).
@@ -97,6 +120,51 @@ export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
   const [submittedSuggestion, setSubmittedSuggestion] =
     useState<SubmittedSuggestion | undefined>(undefined)
 
+  // ── Persist the active thread id ─────────────────────────────────────────────
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(ACTIVE_CID_KEY, activeCid)
+    } catch {
+      // Storage unavailable — refresh-restore degrades, nothing else breaks.
+    }
+  }, [activeCid])
+
+  // ── Restore the previous thread on mount (quick-kayinleong-046) ──────────────
+  // activeCid was minted fresh on EVERY mount, and loadConversationMessages had
+  // exactly one call site — the history-drawer click handler. So nothing loaded a
+  // transcript at mount: a browser refresh silently began a brand-new empty thread and
+  // the conversation the agent was in the middle of appeared to be gone. That is the
+  // reported "refreshed the chat history and it went missing".
+  const restoredRef = useRef(false)
+  useEffect(() => {
+    if (restoredRef.current || !storedCid) return
+    restoredRef.current = true
+    let cancelled = false
+    void (async () => {
+      try {
+        // Wait for Firebase to rehydrate LOCAL persistence: the transcript read is
+        // rules-gated on ownerUid, so reading it before auth settles is denied and the
+        // fresh empty thread silently wins.
+        await clientAuth.authStateReady()
+        if (cancelled || !clientAuth.currentUser) return
+        const history = await loadConversationMessages(storedCid)
+        if (cancelled) return
+        // Set the transcript and the cid together, in one commit — ChatInput's re-seed
+        // effect keys on [conversationId, initialMessages], so splitting them across
+        // commits can clobber an in-flight stream.
+        setHistoryMessages(history)
+        setMessages(history)
+        setActiveCid(storedCid)
+      } catch {
+        // Denied/offline read: stay on the fresh thread rather than showing a
+        // half-restored surface.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [storedCid])
+
   const isStreaming = messages.length > 0 &&
     messages[messages.length - 1]?.role === 'assistant' &&
     messages[messages.length - 1]?.content === ''
@@ -120,20 +188,32 @@ export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
     setActiveCid(newConversationId())
     setHistoryMessages([])
     setMessages([])
+    // Clear the pinned pillar (quick-kayinleong-046). It used to survive into the new
+    // conversation, so a session that had once touched Finder kept routing every later
+    // question — including onboarding questions — to Finder.
+    setPillarOverride(undefined)
   }
 
   // Tapping a hero suggestion card: pin the card's pillar, then dispatch its
   // prompt. Reply cards with no active lead flow through the lead-selector gate.
   const handleSuggestion = (prompt: string, pillar: PillarOverride) => {
-    setPillarOverride(pillar)
-    setSubmittedSuggestion({ id: Date.now(), text: prompt })
+    // Carry the pillar ON the suggestion instead of pinning it into pillarOverride
+    // (quick-kayinleong-046). Pinning made the card's pillar sticky for the rest of the
+    // session with nothing ever clearing it: tap a Finder card, then ask "walk me
+    // through running my first Meta ad" and Finder answered "that falls outside what
+    // I'm set up to assist with" — the reported broken onboarding. The card is still
+    // deterministic for its own send; it just no longer hijacks later turns.
+    setSubmittedSuggestion({ id: Date.now(), text: prompt, pillar })
   }
 
   // ── Reply lead gate (D-07) ────────────────────────────────────────────────────
   // Return false to BLOCK dispatch: a Reply turn (override === 'reply') with no
   // active leadId opens the lead-selector before any send. All other turns proceed.
-  const handleBeforeSend = (): boolean => {
-    if (pillarOverride === 'reply' && !leadId) {
+  const handleBeforeSend = (_text: string, pillar?: PillarOverride): boolean => {
+    // `pillar` is the pillar THIS dispatch will actually use (a hero card's pillar, or
+    // the header chip). Falls back to the chip for direct sends.
+    const effective = pillar ?? pillarOverride
+    if (effective === 'reply' && !leadId) {
       setPendingReplySend(true)
       setLeadSelectorOpen(true)
       return false // block — dispatch resumes after the agent picks a lead

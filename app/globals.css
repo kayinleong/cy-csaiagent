@@ -270,3 +270,72 @@
     }
   }
 }
+
+/* ── Assistant "thinking" indicator + message arrival — quick-kayinleong-046 ──
+   The waiting state was one line of text on `animate-pulse`: a 2s ease-in-out
+   opacity LOOP standing in for a progress signal. Both the `animate` and
+   `review-animations` skills call this out — a looping fade reads as "asleep",
+   not "working" — and the swap from "Thinking…" to the first streamed token was
+   an unmasked hard cut. Those two defects are what made waiting for a reply feel
+   inhuman.
+
+   Fix: three dots on a 60ms stagger (a real rhythm; the eye reads sequence as
+   progress), plus a blur-masked ASYMMETRIC handoff — the indicator leaves fast
+   (press duration) while the message arrives on a slower, slightly delayed enter,
+   so the two never contend for the same pixels.
+
+   Compositor-only properties (opacity / transform / filter) — never width, top or
+   height. Deliberately NOT per streamed token: these mount once per turn.
+   Collapsed by the prefers-reduced-motion guard above. */
+@keyframes thinking-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0) scale(0.85);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1);
+  }
+}
+
+@layer components {
+  [data-slot='thinking'] {
+    opacity: 1;
+    filter: blur(0);
+    transition:
+      opacity var(--duration-press) var(--ease-out-strong),
+      filter var(--duration-press) var(--ease-out-strong);
+
+    @starting-style {
+      opacity: 0;
+      filter: blur(2px);
+    }
+  }
+
+  [data-slot='thinking-dot'] {
+    animation: thinking-dot 1.1s var(--ease-in-out-strong) infinite;
+  }
+  [data-slot='thinking-dot']:nth-child(2) {
+    animation-delay: 60ms;
+  }
+  [data-slot='thinking-dot']:nth-child(3) {
+    animation-delay: 120ms;
+  }
+
+  /* Scoped to data-latest so restoring a long transcript on refresh does not
+     blur-in fifty cards at once — only the turn that just arrived animates. */
+  [data-slot='assistant-message'][data-latest='true'] {
+    opacity: 1;
+    filter: blur(0);
+    transition:
+      opacity 180ms var(--ease-out-strong) 40ms,
+      filter 180ms var(--ease-out-strong) 40ms;
+
+    @starting-style {
+      opacity: 0;
+      filter: blur(2px);
+    }
+  }
+}
