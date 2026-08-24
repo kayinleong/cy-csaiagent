@@ -149,11 +149,25 @@ service cloud.firestore {
         if (resource.data.ownerUid == request.auth.uid && sameTenant())
         || (hasRole('admin') && sameTenant());
 
+      // quick-046: admin may create/update/delete a lead ON BEHALF OF another
+      // agent (the admin lead registry at app/[lang]/(admin)/leads is the only
+      // producer of `leads/{id}` documents; before it existed the Reply pillar
+      // was unreachable). The Server Actions use the Admin SDK and bypass rules,
+      // so this grant is not what unblocks the feature — the rules are the
+      // AUDITED SPEC of the intended access model and the rules-test matrix is
+      // the proof artifact, so they must state it. Mirrors the leadContext block
+      // below (`|| (hasRole('admin') && incomingTenant())`).
+      //
+      // A non-admin still cannot create a lead for anyone but themselves, and
+      // 'read-only' stays DENIED throughout: hasRole('admin') is false for it and
+      // it owns no leads (RO-03 least-privilege).
       allow create:
-        if (request.resource.data.ownerUid == request.auth.uid && incomingTenant());
+        if (request.resource.data.ownerUid == request.auth.uid && incomingTenant())
+        || (hasRole('admin') && incomingTenant());
 
       allow update, delete:
-        if (resource.data.ownerUid == request.auth.uid && sameTenant());
+        if (resource.data.ownerUid == request.auth.uid && sameTenant())
+        || (hasRole('admin') && sameTenant());
     }
 
     // ── Collection 6: leadContext ────────────────────────────────────────────

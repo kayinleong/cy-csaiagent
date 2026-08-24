@@ -36,6 +36,7 @@ import {
   UserCircle,
   UserCog,
   UserPlus,
+  UserSquare,
   Flag,
   ScrollText,
   SlidersHorizontal,
@@ -68,6 +69,9 @@ export type NavItemKey =
   | 'auditLog'
   | 'modelConfig'
   | 'pdpaSettings'
+  // ── quick-046: the admin lead registry (the missing producer for the Reply
+  // pillar — Reply requires a leadId and nothing created `leads/{id}` before).
+  | 'leads'
 
 /** The six FIXED section keys (match the `nav.section*` i18n labels + the test). */
 export type SectionKey =
@@ -138,6 +142,11 @@ export function buildSections(lang: string): Section[] {
         // rows deep-link to agents/[uid]. NOT the [uid]-only drill-in.
         { key: 'agentProfiles', href: `/${lang}/agents`, icon: UserCircle, roles: ['admin', 'senior-coach'] },
         { key: 'coachAssignment', href: `/${lang}/coach-assignment`, icon: UserCog, roles: ['admin'] },
+        // ── quick-046: lead registry. Leads are AGENT-OWNED (the chat Reply picker
+        // is scoped by ownerUid), so the entry belongs in this section. Admin-only:
+        // read-only is denied leadContext entirely (RO-03 / D-24) and senior-coach
+        // has no lead-management surface.
+        { key: 'leads', href: `/${lang}/leads`, icon: UserSquare, roles: ['admin'] },
       ],
     },
     {

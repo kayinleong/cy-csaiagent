@@ -410,6 +410,94 @@ rulesSuite('leads collection', () => {
     const db = ctx.firestore()
     await assertSucceeds(getDoc(doc(db, 'leads', ownLeadId)))
   })
+
+  // ── quick-046: admin lead registry (the missing producer for Reply) ─────────
+  //
+  // The admin Leads page creates leads ON BEHALF OF an agent. Its Server Actions
+  // use the Admin SDK (rules bypassed), so these specs prove the RULES SPEC — the
+  // audited statement of the intended access model — not the code path. What they
+  // must NOT do is leak cross-owner write access to any non-admin role.
+
+  const adminCreatedLeadId = 'lead-admin-created-001'
+
+  /** A well-formed lead payload owned by someone OTHER than the writer. */
+  const crossOwnerLead = {
+    tenantId: D2_TENANT,
+    ownerUid: syntheticNewAgent.uid,
+    name: '<LEAD_ID:ADMINCREATE>',
+    phoneHash: 'hash-admin-create',
+    consentFlag: true,
+    nationality: 'MY',
+    segment: 'first-time-buyer',
+  }
+
+  it('admin CAN create a lead on behalf of another agent (quick-046 registry)', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(setDoc(doc(db, 'leads', adminCreatedLeadId), crossOwnerLead))
+  })
+
+  it('admin CANNOT create a cross-tenant lead (incomingTenant still enforced)', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertFails(
+      setDoc(doc(db, 'leads', 'lead-admin-wrong-tenant'), {
+        ...crossOwnerLead,
+        tenantId: WRONG_TENANT,
+      }),
+    )
+  })
+
+  it('admin CAN update any lead (registry edit)', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await assertSucceeds(updateDoc(doc(db, 'leads', ownLeadId), { segment: 'investor' }))
+  })
+
+  it('admin CAN delete any lead (registry delete)', async () => {
+    const ctx = await adminRoleCtx()
+    const db = ctx.firestore()
+    await seed('leads/lead-admin-delete-001', crossOwnerLead)
+    await assertSucceeds(deleteDoc(doc(db, 'leads', 'lead-admin-delete-001')))
+  })
+
+  it("new-agent still CANNOT create a lead owned by someone else (cross-owner create denied)", async () => {
+    const ctx = await newAgentCtx()
+    const db = ctx.firestore()
+    await assertFails(
+      setDoc(doc(db, 'leads', 'lead-agent-crossowner'), {
+        ...crossOwnerLead,
+        ownerUid: STRANGER_UID,
+      }),
+    )
+  })
+
+  it("senior-coach CANNOT create a lead for a downline agent (no coach write grant)", async () => {
+    const ctx = await seniorCoachCtx()
+    const db = ctx.firestore()
+    await assertFails(setDoc(doc(db, 'leads', 'lead-coach-created'), crossOwnerLead))
+  })
+
+  it("senior-coach CANNOT update or delete another agent's lead", async () => {
+    const ctx = await seniorCoachCtx()
+    const db = ctx.firestore()
+    await assertFails(updateDoc(doc(db, 'leads', ownLeadId), { segment: 'investor' }))
+    await assertFails(deleteDoc(doc(db, 'leads', otherLeadId)))
+  })
+
+  it('read-only CANNOT create, update or delete a lead (RO-03 least-privilege)', async () => {
+    const ctx = await readOnlyCtx()
+    const db = ctx.firestore()
+    await assertFails(setDoc(doc(db, 'leads', 'lead-ro-created'), crossOwnerLead))
+    await assertFails(updateDoc(doc(db, 'leads', ownLeadId), { segment: 'investor' }))
+    await assertFails(deleteDoc(doc(db, 'leads', ownLeadId)))
+  })
+
+  it('unauthenticated CANNOT create a lead even with a well-formed payload', async () => {
+    const ctx = await unauthContext()
+    const db = ctx.firestore()
+    await assertFails(setDoc(doc(db, 'leads', 'lead-unauth-created'), crossOwnerLead))
+  })
 })
 
 // ─── 7. leadContext collection ────────────────────────────────────────────────
