@@ -40,8 +40,16 @@ import {
   type Role,
 } from '@/src/firebase/auth'
 import { adminAuth } from '@/src/firebase/admin'
-import { agentProfilesRef, TENANT_ID } from '@/src/firebase/collections'
+import {
+  agentProfilesRef,
+  rateBudgetsRef,
+  TENANT_ID,
+  type RateBudgetDoc,
+} from '@/src/firebase/collections'
+import { adminDb } from '@/src/firebase/admin'
+import { isWindowExpired } from '@/src/ratelimit/window'
 import * as audit from '@/src/audit'
+import * as ratelimit from '@/src/ratelimit'
 
 // ─── Session helper ─────────────────────────────────────────────────────────
 
@@ -176,6 +184,146 @@ export async function createUser(input: CreateUserInput): Promise<CreateUserResu
     if (code === 'auth/invalid-email') return { ok: false, error: 'invalid-email' }
     if (code === 'auth/invalid-password') return { ok: false, error: 'weak-password' }
     // Never forward the raw message — it may contain the submitted email.
+    return { ok: false, error: 'unknown' }
+  }
+}
+
+// ─── resetUserRateLimit ───────────────────────────────────────────────────────
+
+export type ResetRateLimitErrorCode =
+  | 'unauthorized'
+  | 'forbidden'
+  | 'invalid-uid'
+  | 'unknown'
+
+export type ResetRateLimitResult =
+  | { ok: true }
+  | { ok: false; error: ResetRateLimitErrorCode }
+
+/**
+ * Admin-only: clear a specific agent's rate-limit budget and start a fresh window
+ * (quick-kayinleong-049).
+ *
+ * `ratelimit.check()` only clears once the 24h window expires on its own, so an agent
+ * who hits TOKEN_CAP is locked out of chat for the rest of the day with no operator
+ * recourse. This is that recourse.
+ *
+ * Same three-layer gate as createUser above:
+ *   Layer 1: (admin)/layout.tsx admits admin + read-only into the group.
+ *   Layer 2: users/page.tsx (RSC) requireRole({ allowed: ['admin'] }) — read-only DENIED.
+ *   Layer 3: this action asserts role === 'admin' from the VERIFIED token, never from
+ *            args (T-02-31 / T-07-10).
+ *
+ * The target uid comes from the client, so it is treated as untrusted input and shape-
+ * checked — but note it is only ever used as a document id under `rateBudgets`, and the
+ * worst case of a wrong-but-well-formed uid is resetting a budget that did not need it
+ * (the write is idempotent and creates no privilege).
+ *
+ * Audited as `ratelimit-reset`. The audit `raw` map is hashed by audit.log, and carries
+ * only the target uid — no email, no counts tied to an identity in plaintext.
+ */
+export async function resetUserRateLimit(uid: string): Promise<ResetRateLimitResult> {
+  let user: Awaited<ReturnType<typeof requireUser>>
+  try {
+    user = await getSessionUser()
+  } catch {
+    return { ok: false, error: 'unauthorized' }
+  }
+
+  // Layer 3 — the authoritative gate. Role comes from the verified token.
+  if (user.role !== 'admin') {
+    return { ok: false, error: 'forbidden' }
+  }
+
+  const targetUid = uid?.trim()
+  // Firebase UIDs are non-empty and never contain a path separator; rejecting '/' keeps
+  // a malformed value from being read as a nested document path.
+  if (!targetUid || targetUid.length > 128 || targetUid.includes('/')) {
+    return { ok: false, error: 'invalid-uid' }
+  }
+
+  try {
+    await ratelimit.resetBudget(targetUid)
+
+    await audit.log({
+      actorUid: user.uid,
+      action: 'ratelimit-reset',
+      targetRef: `rateBudgets/${targetUid}`,
+      raw: { targetUid },
+    })
+
+    return { ok: true }
+  } catch {
+    // Never surface a raw Firestore error to the client.
+    return { ok: false, error: 'unknown' }
+  }
+}
+
+// ─── listRateBudgets ──────────────────────────────────────────────────────────
+
+/**
+ * Per-user budget summary. Deliberately PLAIN — no Firestore Timestamp crosses the
+ * RSC→Client boundary (that is the "Only plain objects can be passed to Client
+ * Components" crash fixed three times already in quick-029/030/031). `windowStart` is
+ * collapsed server-side into the boolean the UI actually needs.
+ */
+export interface RateBudgetSummary {
+  uid: string
+  requestCount: number
+  tokenCount: number
+  /** True when the stored window already rolled over — counters are stale, nothing to reset. */
+  expired: boolean
+}
+
+export type ListRateBudgetsResult =
+  | { ok: true; budgets: RateBudgetSummary[] }
+  | { ok: false; error: 'unauthorized' | 'forbidden' | 'unknown' }
+
+/**
+ * Admin-only: read the current rate-limit budget for a set of agents
+ * (quick-kayinleong-049), so the admin can see who is actually near the cap instead of
+ * resetting blind.
+ *
+ * ONE batched `getAll()` round-trip, not one read per uid. A read-per-user loop is the
+ * N+1 shape quick-046 spent a commit removing, and this list grows with the pilot.
+ *
+ * Missing docs are simply omitted — an agent who has never spent anything has no doc and
+ * needs no reset. Counts only, no PII.
+ */
+export async function listRateBudgets(uids: string[]): Promise<ListRateBudgetsResult> {
+  let user: Awaited<ReturnType<typeof requireUser>>
+  try {
+    user = await getSessionUser()
+  } catch {
+    return { ok: false, error: 'unauthorized' }
+  }
+  if (user.role !== 'admin') {
+    return { ok: false, error: 'forbidden' }
+  }
+
+  const clean = uids.filter((u) => typeof u === 'string' && u.length > 0 && !u.includes('/'))
+  // getAll() throws on an empty ref list — short-circuit.
+  if (clean.length === 0) {
+    return { ok: true, budgets: [] }
+  }
+
+  try {
+    const refs = clean.map((u) => rateBudgetsRef().doc(u))
+    const snaps = await adminDb.getAll(...refs)
+
+    const budgets: RateBudgetSummary[] = []
+    for (const snap of snaps) {
+      if (!snap.exists) continue
+      const b = snap.data() as RateBudgetDoc
+      budgets.push({
+        uid: snap.id,
+        requestCount: b.requestCount ?? 0,
+        tokenCount: b.tokenCount ?? 0,
+        expired: isWindowExpired(b.windowStart as Date),
+      })
+    }
+    return { ok: true, budgets }
+  } catch {
     return { ok: false, error: 'unknown' }
   }
 }

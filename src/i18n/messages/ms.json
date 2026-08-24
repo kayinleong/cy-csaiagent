@@ -739,7 +739,19 @@
       "invalid-role": "Pilih peranan yang sah.",
       "email-exists": "Akaun dengan e-mel ini sudah wujud. Gunakan halaman Peranan untuk menukar peranan mereka.",
       "unknown": "Tidak dapat mencipta pengguna. Sila cuba lagi."
-    }
+    },
+    "colUsage": "Penggunaan (24j)",
+    "colActions": "Tindakan",
+    "usageTokens": "{used} / {cap} token",
+    "usageAtCap": "had dicapai",
+    "usageWindowExpired": "tetingkap ditetapkan semula",
+    "cancel": "Batal",
+    "resetLimit": "Tetapkan semula had",
+    "resetLimitConfirmTitle": "Tetapkan semula had kadar ejen ini?",
+    "resetLimitConfirmBody": "{user} akan mendapat bajet 24 jam yang baharu bermula sekarang. Penggunaan semasa mereka dikosongkan. Gunakan ini apabila ejen tersekat di tengah hari dan perlu terus bekerja.",
+    "resetLimitConfirmAction": "Tetapkan semula had",
+    "resetLimitSuccess": "Had kadar ditetapkan semula. Ejen boleh berbual semula.",
+    "resetLimitError": "Tidak dapat menetapkan semula had kadar. Sila cuba lagi."
   },
   "adminWhatsapp": {
     "title": "Import WhatsApp",

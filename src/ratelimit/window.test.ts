@@ -56,7 +56,7 @@ vi.mock('firebase-admin/firestore', () => ({
   },
 }))
 
-import { check, decrement, RateLimitError } from './index'
+import { check, decrement, resetBudget, readBudget, RateLimitError } from './index'
 
 // ─── Budget cap constants (must match window.ts defaults) ─────────────────────
 const REQUEST_CAP = 100    // requests per window
@@ -253,5 +253,116 @@ describe('window reset (deterministic clock injection)', () => {
 
     // Still in-window → exhausted → must throw
     await expect(check('uid-still-in-window', 'chat')).rejects.toThrow(RateLimitError)
+  })
+})
+
+// ─── quick-kayinleong-049: admin budget reset ─────────────────────────────────
+//
+// check() only clears once isWindowExpired() becomes true, so an agent who hits
+// TOKEN_CAP was locked out of chat for the remainder of the 24h window with no operator
+// recourse. resetBudget is that recourse.
+
+describe('quick-049: resetBudget', () => {
+  // Mirrors the per-describe setup above (line ~87): this file scopes beforeEach to
+  // each describe, so a new block MUST bring its own or mock calls leak across tests.
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockRateBudgetsDocUpdate.mockResolvedValue(undefined)
+    mockRateBudgetsDocSet.mockResolvedValue(undefined)
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('zeroes both counters and starts a fresh window', async () => {
+    await resetBudget('agent-1')
+
+    expect(mockRateBudgetsDocSet).toHaveBeenCalledTimes(1)
+    const written = mockRateBudgetsDocSet.mock.calls[0][0] as Record<string, unknown>
+    expect(written.requestCount).toBe(0)
+    expect(written.tokenCount).toBe(0)
+    // A fresh window start is what actually unblocks check() — zeroed counters alone
+    // would still sit inside the OLD window.
+    expect(written.windowStart).toEqual({ _type: 'serverTimestamp' })
+  })
+
+  it('writes the identity fields so the doc stays well-formed', async () => {
+    await resetBudget('agent-2')
+    const written = mockRateBudgetsDocSet.mock.calls[0][0] as Record<string, unknown>
+    expect(written.tenantId).toBe('d2')
+    expect(written.ownerUid).toBe('agent-2')
+    // RateBudgetDoc has exactly five fields — an unmerged set() must be complete, or a
+    // partial write would leave the doc missing keys check()/decrement() read.
+    expect(Object.keys(written).sort()).toEqual(
+      ['ownerUid', 'requestCount', 'tenantId', 'tokenCount', 'windowStart'].sort(),
+    )
+  })
+
+  it('uses set(), not update(), so a never-seen uid does not throw NOT_FOUND', async () => {
+    // An agent with no rateBudgets doc is the common case (they have never been capped).
+    // update() would reject with NOT_FOUND — the same trap writeLeadSlot hit in 046.
+    await resetBudget('never-seen')
+    expect(mockRateBudgetsDocSet).toHaveBeenCalledTimes(1)
+    expect(mockRateBudgetsDocUpdate).not.toHaveBeenCalled()
+  })
+
+  it('lets a previously over-cap agent pass check() again', async () => {
+    // Over the token cap, inside a live window → blocked.
+    mockRateBudgetsDocGet.mockResolvedValueOnce(
+      makeBudgetSnap({ tokenCount: TOKEN_CAP, windowStart: new Date() }),
+    )
+    await expect(check('agent-3', 'chat')).rejects.toThrow(RateLimitError)
+
+    // After a reset the doc reads back zeroed with a current window.
+    await resetBudget('agent-3')
+    mockRateBudgetsDocGet.mockResolvedValueOnce(
+      makeBudgetSnap({ requestCount: 0, tokenCount: 0, windowStart: new Date() }),
+    )
+    await expect(check('agent-3', 'chat')).resolves.toBeUndefined()
+  })
+
+  it('is idempotent — resetting an already-fresh budget is harmless', async () => {
+    await resetBudget('agent-4')
+    await resetBudget('agent-4')
+    expect(mockRateBudgetsDocSet).toHaveBeenCalledTimes(2)
+    for (const call of mockRateBudgetsDocSet.mock.calls) {
+      expect((call[0] as Record<string, unknown>).tokenCount).toBe(0)
+    }
+  })
+})
+
+describe('quick-049: readBudget', () => {
+  // Mirrors the per-describe setup above (line ~87): this file scopes beforeEach to
+  // each describe, so a new block MUST bring its own or mock calls leak across tests.
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockRateBudgetsDocUpdate.mockResolvedValue(undefined)
+    mockRateBudgetsDocSet.mockResolvedValue(undefined)
+  })
+  afterEach(() => vi.clearAllMocks())
+
+  it('returns null when the agent has no budget doc', async () => {
+    mockRateBudgetsDocGet.mockResolvedValueOnce({ exists: false })
+    expect(await readBudget('nobody')).toBeNull()
+  })
+
+  it('reports counters plus whether the window already rolled over', async () => {
+    mockRateBudgetsDocGet.mockResolvedValueOnce(
+      makeBudgetSnap({ requestCount: 7, tokenCount: 1234, windowStart: new Date() }),
+    )
+    expect(await readBudget('agent-5')).toEqual({
+      requestCount: 7,
+      tokenCount: 1234,
+      expired: false,
+    })
+  })
+
+  it('flags an expired window — stale counters need no reset', async () => {
+    mockRateBudgetsDocGet.mockResolvedValueOnce(
+      makeBudgetSnap({
+        tokenCount: TOKEN_CAP,
+        windowStart: new Date(Date.now() - WINDOW_MS - 1000),
+      }),
+    )
+    const b = await readBudget('agent-6')
+    expect(b?.expired).toBe(true)
   })
 })

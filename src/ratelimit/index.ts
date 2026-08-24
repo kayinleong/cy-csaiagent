@@ -121,3 +121,67 @@ export async function decrement(uid: string, tokens: number): Promise<void> {
     tokenCount: FieldValue.increment(tokens),
   })
 }
+
+// ─── Admin budget reset ───────────────────────────────────────────────────────
+
+/**
+ * Read an agent's current budget counters (admin/diagnostic use).
+ *
+ * Returns null when no doc exists (the agent has never spent anything), and
+ * `expired: true` when the stored window has already rolled over — in that case the
+ * counters are stale and `check()` already treats the agent as having a fresh budget,
+ * so there is nothing to reset.
+ *
+ * Read-only. Counts only — never message content, never PII.
+ */
+export async function readBudget(uid: string): Promise<{
+  requestCount: number
+  tokenCount: number
+  expired: boolean
+} | null> {
+  const snap = await rateBudgetsRef().doc(uid).get()
+  if (!snap.exists) return null
+
+  const budget = snap.data() as RateBudgetDoc
+  return {
+    requestCount: budget.requestCount ?? 0,
+    tokenCount: budget.tokenCount ?? 0,
+    expired: isWindowExpired(budget.windowStart as Date),
+  }
+}
+
+/**
+ * Reset an agent's rate-limit budget, starting a fresh window from now
+ * (quick-kayinleong-049).
+ *
+ * Why this exists: `check()` only clears once `isWindowExpired()` becomes true, so an
+ * agent who hits TOKEN_CAP (50_000 tokens / 24h) is locked out of chat for the remainder
+ * of the day with no operator recourse. That cap is already flagged as low for a
+ * multi-step + RAG turn, and quick-046's `consumeStream()` fix made previously-free
+ * aborted turns count, so the budget burns sooner than it used to.
+ *
+ * Uses `set()` rather than deleting the doc: the reset stays observable, the doc keeps
+ * its `tenantId`/`ownerUid` identity fields, and `set()` creates-or-overwrites so a
+ * never-seen uid does not throw NOT_FOUND (the same reason `decrement()` uses `set()` on
+ * init/expiry). RateBudgetDoc has exactly these five fields, so an unmerged `set()` is a
+ * full, well-formed write — no stale keys survive.
+ *
+ * Callers MUST verify the caller is an admin BEFORE invoking this. This module does not
+ * know who is asking; it is pure budget mechanics. The gate lives in
+ * app/[lang]/(admin)/users/actions.ts.
+ *
+ * Idempotent: resetting an already-fresh budget is a no-op in effect.
+ *
+ * @param uid The agent whose budget should be cleared.
+ */
+export async function resetBudget(uid: string): Promise<void> {
+  await rateBudgetsRef()
+    .doc(uid)
+    .set({
+      requestCount: 0,
+      tokenCount: 0,
+      windowStart: FieldValue.serverTimestamp(),
+      tenantId: TENANT_ID,
+      ownerUid: uid,
+    } as RateBudgetDoc)
+}

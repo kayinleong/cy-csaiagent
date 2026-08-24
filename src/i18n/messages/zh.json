@@ -739,7 +739,19 @@
       "invalid-role": "请选择有效的角色。",
       "email-exists": "该邮箱的账户已存在。请使用权限角色页面更改其角色。",
       "unknown": "无法创建用户，请重试。"
-    }
+    },
+    "colUsage": "用量（24小时）",
+    "colActions": "操作",
+    "usageTokens": "{used} / {cap} 个令牌",
+    "usageAtCap": "已达上限",
+    "usageWindowExpired": "窗口已重置",
+    "cancel": "取消",
+    "resetLimit": "重置限额",
+    "resetLimitConfirmTitle": "重置该经纪人的速率限额？",
+    "resetLimitConfirmBody": "{user} 将从现在开始获得新的 24 小时额度，当前用量将被清空。当经纪人在工作途中被限制而仍需继续时使用此功能。",
+    "resetLimitConfirmAction": "重置限额",
+    "resetLimitSuccess": "限额已重置，该经纪人可以继续对话。",
+    "resetLimitError": "无法重置限额，请重试。"
   },
   "adminWhatsapp": {
     "title": "WhatsApp 导入",

@@ -737,7 +737,19 @@
       "invalid-role": "Select a valid role.",
       "email-exists": "An account with this email already exists. Use the Roles page to change their role.",
       "unknown": "Couldn't create the user. Please try again."
-    }
+    },
+    "colUsage": "Usage (24h)",
+    "colActions": "Actions",
+    "usageTokens": "{used} / {cap} tokens",
+    "usageAtCap": "at cap",
+    "usageWindowExpired": "window reset",
+    "cancel": "Cancel",
+    "resetLimit": "Reset limit",
+    "resetLimitConfirmTitle": "Reset this agent’s rate limit?",
+    "resetLimitConfirmBody": "{user} gets a fresh 24-hour budget starting now. Their current usage is cleared. Use this when an agent is blocked mid-day and needs to keep working.",
+    "resetLimitConfirmAction": "Reset limit",
+    "resetLimitSuccess": "Rate limit reset. The agent can chat again.",
+    "resetLimitError": "Could not reset the rate limit. Please try again."
   },
   "adminWhatsapp": {
     "title": "WhatsApp Import",

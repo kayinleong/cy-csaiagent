@@ -17,6 +17,7 @@ import { getTranslations } from 'next-intl/server'
 import { requireRole } from '../../_lib/require-role'
 import { listCohorts, type CohortSummary } from '../cohorts/actions'
 import { listUsersWithRoles, type UserWithRole } from '../roles/actions'
+import { listRateBudgets, type RateBudgetSummary } from './actions'
 import { AddUserForm } from './add-user-form'
 import { UserList } from './user-list'
 
@@ -48,6 +49,19 @@ export default async function UsersAdminPage({ params }: PageProps) {
     users = []
   }
 
+  // Current rate-limit budgets for the listed users (quick-kayinleong-049), so the
+  // admin can see who is near the cap before resetting. ONE batched getAll() inside the
+  // action — not a read per user. Non-blocking: no budgets just means no usage readout.
+  let budgets: RateBudgetSummary[] = []
+  try {
+    const result = await listRateBudgets(users.map((u) => u.id))
+    if (result.ok) {
+      budgets = result.budgets
+    }
+  } catch {
+    budgets = []
+  }
+
   // Cohorts power the new-agent intake-batch picker. Non-blocking — render an
   // empty picker rather than crash if the read fails.
   let cohorts: CohortSummary[] = []
@@ -73,7 +87,7 @@ export default async function UsersAdminPage({ params }: PageProps) {
         {/* All users directory */}
         <section>
           <h2 className="mb-4 text-lg font-semibold">{t('listTitle')} ({users.length})</h2>
-          <UserList users={users} />
+          <UserList users={users} budgets={budgets} />
         </section>
 
         {/* Add a new user */}
