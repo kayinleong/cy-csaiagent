@@ -49,6 +49,98 @@ function extractJsonObject(content: string): unknown {
 }
 
 /**
+ * Repair known model drift into the canonical schema shape, BEFORE validation
+ * (quick-kayinleong-053).
+ *
+ * Rationale: the model is not a reliable serializer. Observed in production, the JSON was
+ * complete and well-formed but the wrong SHAPE — collateral came back as
+ *
+ *     "collateral": { "brochures": ["https://…", "https://…"] }
+ *
+ * where the schema wants `[{ type, url }]`. zod rejected it, the decoder returned null,
+ * and the agent got the raw envelope in their chat. Prompt rules cannot guarantee a shape;
+ * this can. Kept deliberately NARROW — it repairs container shape only, never invents a
+ * url, a projectId or any field the model did not supply, so it cannot manufacture
+ * grounding that was not there.
+ *
+ * Unknown shapes are left untouched for zod to reject honestly.
+ */
+function normalizeCollateral(value: unknown): unknown {
+  if (value == null) return value
+
+  // Already canonical-ish: an array. Repair the items.
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        // A bare url string → give it a neutral type rather than dropping it.
+        if (typeof item === 'string') return { type: 'file', url: item }
+        if (item && typeof item === 'object') {
+          const o = item as Record<string, unknown>
+          const url = o.url ?? o.href ?? o.link
+          if (typeof url !== 'string' || url.length === 0) return null
+          const type = typeof o.type === 'string' && o.type.length > 0 ? o.type : 'file'
+          return { type, url }
+        }
+        return null
+      })
+      .filter(Boolean)
+  }
+
+  // The observed drift: an object keyed by category, each holding urls.
+  //   { brochures: [url, url], videos: [url] }  →  [{type:'brochure', url}, …]
+  if (typeof value === 'object') {
+    const out: Array<{ type: string; url: string }> = []
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      // Singularise the key for the chip label: "brochures" → "brochure".
+      const type = key.endsWith('s') ? key.slice(0, -1) : key
+      const list = Array.isArray(entry) ? entry : [entry]
+      for (const item of list) {
+        if (typeof item === 'string' && item.length > 0) {
+          out.push({ type, url: item })
+        } else if (item && typeof item === 'object') {
+          const o = item as Record<string, unknown>
+          const url = o.url ?? o.href ?? o.link
+          if (typeof url === 'string' && url.length > 0) {
+            out.push({ type: typeof o.type === 'string' && o.type ? o.type : type, url })
+          }
+        }
+      }
+    }
+    return out
+  }
+
+  return value
+}
+
+/**
+ * Normalize a decoded Finder envelope so predictable model drift does not cost the agent
+ * their whole answer (quick-kayinleong-053).
+ *
+ * Returns the input untouched when it is not an object — zod then rejects it as before.
+ */
+export function normalizeFinderShape(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw
+  const obj = { ...(raw as Record<string, unknown>) }
+
+  if (Array.isArray(obj.matches)) {
+    obj.matches = obj.matches.map((m) => {
+      if (!m || typeof m !== 'object') return m
+      const match = { ...(m as Record<string, unknown>) }
+      if ('collateral' in match) {
+        const fixed = normalizeCollateral(match.collateral)
+        // Drop the key entirely when nothing survived — `collateral` is optional, and an
+        // empty array is a meaningful "nothing to attach" that MatchList already handles.
+        if (Array.isArray(fixed) && fixed.length === 0) delete match.collateral
+        else match.collateral = fixed
+      }
+      return match
+    })
+  }
+
+  return obj
+}
+
+/**
  * Decode a Reply turn's accumulated text into a ReplyOutput, or null if it isn't one.
  * Requires a populated branch — an empty `{}` (or a stripped non-Reply object) is not a card.
  */
@@ -73,7 +165,10 @@ export function decodeFinderOutput(content: string): FinderOutput | null {
   const obj = extractJsonObject(content)
   if (!obj || typeof obj !== 'object') return null
 
-  const result = FinderOutputSchema.safeParse(obj)
+  // Repair predictable shape drift BEFORE validating (quick-053). Without this, a
+  // complete and well-formed envelope whose `collateral` came back as an object of
+  // arrays fails zod outright and the agent sees raw JSON.
+  const result = FinderOutputSchema.safeParse(normalizeFinderShape(obj))
   if (!result.success) return null
 
   const { matches, refusal, clarifyingQuestion, answer } = result.data
@@ -105,9 +200,15 @@ export function decodeFinderOutput(content: string): FinderOutput | null {
 const SALVAGE_KEYS = ['answer', 'rationale', 'explanation', 'clarifyingQuestion', 'message', 'text']
 
 export function salvageStructuredText(content: string): string | null {
-  const trimmed = content.trim().replace(/^```(?:json)?\s*/i, '')
-  // Only touch things that look like an envelope; ordinary prose is not our business.
-  if (!trimmed.startsWith('{')) return null
+  const unfenced = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
+  // Tolerate a prose PREFIX before the envelope, exactly as extractJsonObject does
+  // (quick-kayinleong-053). The quick-051 version required the content to START with '{',
+  // so a turn beginning "Let me run the search now.{" — the narration the quick-048 prompt
+  // rule forbids but the model still emits — was declined and rendered raw. That single
+  // inconsistency is why one turn degraded gracefully and the next did not.
+  const brace = unfenced.indexOf('{')
+  if (brace === -1) return null
+  const trimmed = unfenced.slice(brace)
 
   for (const key of SALVAGE_KEYS) {
     const at = trimmed.indexOf(`"${key}"`)

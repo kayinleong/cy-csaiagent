@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { decodeReplyOutput, decodeFinderOutput, salvageStructuredText } from './decode-structured-output'
+import { decodeReplyOutput, decodeFinderOutput, salvageStructuredText, normalizeFinderShape } from './decode-structured-output'
 
 const replyDraftJson = JSON.stringify({
   draft: { text: 'Thanks for reaching out…', sopDocIds: ['sop-cold-001'] },
@@ -177,5 +177,120 @@ describe('quick-051: decodeFinderOutput accepts the conversational answer branch
 
   it('still rejects a genuinely empty output', () => {
     expect(decodeFinderOutput('{"matches": []}')).toBeNull()
+  })
+})
+
+// ─── quick-kayinleong-053: guardrails against model shape drift ───────────────
+//
+// Verbatim from a production screenshot: the envelope was COMPLETE and well-formed but
+// the wrong SHAPE — collateral came back as an object of arrays of bare url strings. zod
+// rejected it, the decoder returned null, and the agent got raw JSON in their chat.
+
+describe('quick-053: collateral shape drift', () => {
+  const REAL_DRIFT = JSON.stringify({
+    matches: [
+      {
+        projectId: 'NCrw4BbrKLOTyWhb4M5O',
+        rationale: 'Confirmed 2-bedroom at RM900,000 in Bangsar (Lorong Maarof).',
+        matchedCriteria: {
+          segment: 'unknown',
+          priceMax: 900000,
+          nationality: 'unknown',
+          bumiputera: null,
+          locationPref: 'Bangsar',
+          bedrooms: 2,
+        },
+        collateral: {
+          brochures: [
+            'https://firebasestorage.googleapis.com/v0/b/x/o/a.pdf?alt=media&token=t1',
+            'https://firebasestorage.googleapis.com/v0/b/x/o/b.pdf?alt=media&token=t2',
+          ],
+        },
+      },
+    ],
+  })
+
+  it('decodes the exact envelope that reached a user as raw JSON', () => {
+    const out = decodeFinderOutput(REAL_DRIFT)
+    expect(out).not.toBeNull()
+    expect(out?.matches).toHaveLength(1)
+    expect(out?.matches[0].collateral).toHaveLength(2)
+  })
+
+  it('singularises the container key into a usable chip label', () => {
+    const out = decodeFinderOutput(REAL_DRIFT)
+    expect(out?.matches[0].collateral?.[0].type).toBe('brochure')
+    expect(out?.matches[0].collateral?.[0].url).toContain('firebasestorage.googleapis.com')
+  })
+
+  it('also decodes it WITH the narration prefix the model still emits', () => {
+    // "Let me run the search now.{...}" — forbidden by the quick-048 prompt rule, but the
+    // model does it anyway. A guardrail cannot depend on the model obeying.
+    const out = decodeFinderOutput('Let me run the search now.' + REAL_DRIFT)
+    expect(out).not.toBeNull()
+    expect(out?.matches[0].collateral).toHaveLength(2)
+  })
+
+  it('handles collateral as a flat array of bare url strings', () => {
+    const s = JSON.stringify({
+      matches: [{ projectId: 'p', rationale: 'r', matchedCriteria: {
+        segment: 'unknown', priceMax: null, nationality: 'unknown',
+        bumiputera: null, locationPref: null, bedrooms: null,
+      }, collateral: ['https://a.test/x.pdf'] }],
+    })
+    expect(decodeFinderOutput(s)?.matches[0].collateral).toEqual([
+      { type: 'file', url: 'https://a.test/x.pdf' },
+    ])
+  })
+
+  it('accepts href/link as url aliases', () => {
+    expect(normalizeFinderShape({
+      matches: [{ collateral: [{ type: 'brochure', href: 'https://a.test/x.pdf' }] }],
+    })).toEqual({
+      matches: [{ collateral: [{ type: 'brochure', url: 'https://a.test/x.pdf' }] }],
+    })
+  })
+
+  it('drops collateral entirely when nothing survives, rather than emitting []', () => {
+    // collateral is optional and MatchList already handles its absence; an empty array
+    // would render an empty chip row.
+    const out = normalizeFinderShape({ matches: [{ collateral: { brochures: [] } }] }) as {
+      matches: Array<Record<string, unknown>>
+    }
+    expect('collateral' in out.matches[0]).toBe(false)
+  })
+
+  it('NEVER invents a url — an item without one is dropped, not fabricated', () => {
+    // Grounding is a hard constraint: repairing container shape is fine, inventing a
+    // link is not.
+    const out = normalizeFinderShape({
+      matches: [{ collateral: [{ type: 'brochure' }, { type: 'x', url: 'https://ok.test/a' }] }],
+    }) as { matches: Array<{ collateral: unknown[] }> }
+    expect(out.matches[0].collateral).toEqual([{ type: 'x', url: 'https://ok.test/a' }])
+  })
+
+  it('leaves an already-canonical envelope untouched', () => {
+    const canonical = { matches: [{ collateral: [{ type: 'brochure', url: 'https://a.test/x' }] }] }
+    expect(normalizeFinderShape(canonical)).toEqual(canonical)
+  })
+
+  it('passes through non-objects for zod to reject honestly', () => {
+    expect(normalizeFinderShape(null)).toBeNull()
+    expect(normalizeFinderShape('nope')).toBe('nope')
+    expect(normalizeFinderShape([1, 2])).toEqual([1, 2])
+  })
+})
+
+describe('quick-053: salvage tolerates a prose prefix', () => {
+  it('salvages an envelope that does NOT start with a brace', () => {
+    // The quick-051 version required startsWith('{'), so a narrated turn was declined and
+    // rendered raw. That inconsistency is why one turn degraded gracefully and the next
+    // showed the user JSON.
+    const narrated = 'Let me run the search now.{"matches": [], "answer": "Bangsar Hill Park is leasehold.'
+    expect(salvageStructuredText(narrated)).toBe('Bangsar Hill Park is leasehold.')
+  })
+
+  it('still declines ordinary prose with no envelope at all', () => {
+    expect(salvageStructuredText('Here are the collateral files for Kensho.')).toBeNull()
   })
 })

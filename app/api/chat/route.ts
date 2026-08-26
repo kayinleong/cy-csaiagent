@@ -45,6 +45,13 @@ import { coachAgent } from '@/src/agents/coach'
 import { finderAgent } from '@/src/agents/finder'
 import { replyAgent } from '@/src/agents/reply'
 import { ReplyOutputSchema } from '@/src/agents/reply/schema'
+// Shared decoders — the SAME code the client renders with, so the server-side health
+// check cannot drift from what the agent actually sees (quick-kayinleong-053).
+import {
+  decodeFinderOutput,
+  decodeReplyOutput,
+  salvageStructuredText,
+} from '@/app/[lang]/chat/decode-structured-output'
 import { modelFor } from '@/src/llm/provider'
 import {
   appendMessage,
@@ -680,6 +687,40 @@ export async function POST(req: Request): Promise<Response> {
       // For the Coach path: map retrieveKnowledge tool results into citationIds.
       // For the Finder path: citations come from projectIds (separate extraction below).
       const citationIds = pillar === 'coach' ? extractCitationChunkIds(final) : []
+
+      // ── Structured-output health check (quick-kayinleong-053) ─────────────
+      // The agent asked for a guardrail that runs in real time. This is the observability
+      // half: assert server-side that a Finder/Reply turn actually produced output the
+      // client can render, and say so loudly when it does not.
+      //
+      // Why it matters: the model emitted a COMPLETE, well-formed envelope whose
+      // `collateral` was an object of arrays instead of the schema's array of {type,url}.
+      // zod rejected it, the decoder returned null, and the raw JSON reached the agent —
+      // with nothing anywhere recording that it had happened. Drift was invisible, so it
+      // could only be found by a user screenshotting it.
+      //
+      // Counts and flags only — never message content (CLAUDE.md).
+      if (pillar === 'finder' || pillar === 'reply') {
+        try {
+          const text = fullTurnText(final)
+          const decoded =
+            pillar === 'finder' ? decodeFinderOutput(text) : decodeReplyOutput(text)
+          if (!decoded) {
+            console.warn('[chat] structured output did NOT decode', {
+              pillar,
+              routeDecision,
+              length: text.length,
+              startsWithBrace: text.trimStart().startsWith('{'),
+              hasBrace: text.includes('{'),
+              // A prose prefix means the model narrated despite the prompt rule.
+              narrated: text.includes('{') && !text.trimStart().startsWith('{'),
+              salvageable: salvageStructuredText(text) !== null,
+            })
+          }
+        } catch {
+          // Health check must never break a turn.
+        }
+      }
 
       // ── Persist the assistant message ────────────────────────────────────
       const assistantMsg: MessageDoc = {
