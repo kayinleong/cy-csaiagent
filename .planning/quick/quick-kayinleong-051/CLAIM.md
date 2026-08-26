@@ -3,7 +3,7 @@
 - session: claude-code
 - branch: quick-kayinleong-045-whatsapp-ingest
 - started: 2026-08-26
-- status: claimed
+- status: done
 - summary: Finder dumps a raw JSON envelope when the agent asks a CONVERSATIONAL question about one project ("tell me about kensho taman desa, good for stay or rental"). Three causes: no conversational branch in the prompt, rationale rendered as plain text not markdown, and no graceful fallback when the envelope fails to decode.
 
 ## Symptom
@@ -56,6 +56,65 @@ containing `{"matches":[{"projectId":"…","rationale":"…"}]}`, cut off mid-st
 - `app/[lang]/chat/match-list.tsx`: render `rationale` through MarkdownMessage.
 - Client fallback: a finder turn whose content will not decode must not dump raw JSON.
 
+## What has changed
+
+One commit (`ebfe715`).
+
+- `src/agents/finder/schema.ts`: new optional `answer` — a conversational markdown reply.
+- `src/agents/finder/prompt.ts`: an "Answering a question ABOUT a project" section placed
+  BEFORE the output format, so the model reads it before being told the only shapes are
+  matches/refusal/clarifyingQuestion. Grounding still mandatory on that path; the four
+  output states are declared mutually exclusive.
+- `app/[lang]/chat/match-list.tsx`: `rationale` and the new `answer` both render through
+  MarkdownMessage.
+- `app/[lang]/chat/decode-structured-output.ts`: `answer` counts as a populated state, and
+  new `salvageStructuredText()` recovers readable prose from a broken envelope.
+- Salvage wired into both the live path (`chat-input.tsx`) and history
+  (`conversation-messages-map.ts`).
+
 ## Verification
 
-_(pending)_
+- `npx tsc --noEmit` → **0 errors**
+- `npx vitest run` → **969 passed**, 197 skipped, 0 failed (was 953; **+16**)
+- `npx eslint app src` → **0 errors**
+- `npm run build` → exit 0
+
+### What the new tests pin
+- Salvage recovers `answer` and `rationale` from a truncated envelope, decodes `\n` and
+  `\"` rather than returning them literally, does not stop early on an escaped quote,
+  tolerates a leading code fence, prefers `answer` over `rationale`, and returns null for
+  ordinary prose or an empty value rather than inventing text.
+- `decodeFinderOutput` treats an answer-only output as populated, while a genuinely empty
+  `{matches: []}` is still rejected.
+- The prompt branch precedes `## Output Format`, forbids essays in a rationale, keeps
+  grounding, and declares exclusivity.
+- **The Finder prompt contains no backtick.** I broke that file this way in quick-048,
+  wrote a warning about it in that commit, and then repeated it here. The suite now catches
+  it instead of tsc after the fact.
+
+### Regression surface
+- `FinderOutput.answer` is OPTIONAL, so every existing output shape still parses and every
+  existing test passes unchanged.
+- `MatchList` gains a state ahead of the matches branch; the refusal, clarifying-question
+  and empty branches are untouched.
+- Salvage only fires when a decode has ALREADY failed and the content starts with `{`, so
+  ordinary prose turns are never touched.
+- `decodeFinderOutput`'s populated-check widened, never narrowed — nothing that decoded
+  before stops decoding.
+
+## Honest gaps — NOT verified
+
+1. **No live model call.** Whether the model actually uses `answer` for a conversational
+   question is prompt-dependent and unproven. The salvage path is the deterministic
+   backstop if it does not.
+2. **No authenticated click-through** — the rendered markdown card is unverified in a
+   browser.
+3. **The orphan-turn bug is untouched** (see below) and could still produce a turn that
+   never persists.
+
+## Carried
+
+- **The reported turn persisted NO assistant message** — user message at
+  2026-08-26T07:22:41Z with no reply after it. Needs its own claim.
+- Truncation confirmed in production data by the model's own words ("I had the analysis in
+  the previous response but it got cut off"), from before the quick-050 fix.
