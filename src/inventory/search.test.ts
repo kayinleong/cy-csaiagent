@@ -162,6 +162,29 @@ const FIXTURES = {
     embedding: Array.from({ length: 1024 }, (_, i) => (i === 5 ? 0.7 : 0.01)),
     createdAt: new Date('2023-01-01'),
   },
+  /**
+   * quick-kayinleong-050: priceValue 0 means UNKNOWN, not free.
+   * 32 of 83 active projects are in this state in the real corpus.
+   */
+  'proj-unpriced': {
+    tenantId: 'd2' as const,
+    name: 'Unpriced Launch',
+    status: 'active' as const,
+    // priceBand is derived via priceBandFor(0) at import, so unpriced projects are all
+    // mislabelled 'under_500k' — which is why priceBand is not a usable budget filter.
+    priceBand: 'under_500k' as const,
+    priceValue: 0,
+    tenure: 'freehold',
+    vpStatus: false,
+    vpDate: null,
+    bumiQuota: false,
+    foreignEligible: true,
+    description: 'Price not yet released by the developer',
+    locationText: 'Bangsar, Kuala Lumpur',
+    bedrooms: 0, // 0 = unknown, not studio
+    embedding: Array.from({ length: 1024 }, () => 1.0 / Math.sqrt(1024)),
+    createdAt: new Date('2024-02-01'),
+  },
   'proj-new-launch': {
     tenantId: 'd2' as const,
     name: 'New Launch Tower 2025',
@@ -197,6 +220,18 @@ function makeProjectSnap(ids: FixtureId[]) {
   }
 }
 
+/**
+ * Build a mock QuerySnapshot from ad-hoc docs that are not in FIXTURES.
+ * Needed for cases that synthesise projects (bulk sets, locationText variants) — the
+ * FixtureId-keyed `makeProjectSnap` cannot express those.
+ */
+function makeAdHocSnap(entries: Array<{ id: string; doc: Record<string, unknown> }>) {
+  return {
+    empty: entries.length === 0,
+    docs: entries.map((e) => ({ id: e.id, data: () => ({ ...e.doc }) })),
+  } as unknown as ReturnType<typeof makeProjectSnap>
+}
+
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 /**
@@ -206,6 +241,13 @@ function makeProjectSnap(ids: FixtureId[]) {
  * Typed as number[] to prevent TypeScript from inferring a narrow (0|1)[] literal tuple.
  */
 const STUB_QUERY_VECTOR: number[] = Array.from({ length: 1024 }, (_, i) => (i === 0 ? 1.0 : 0.0))
+
+/**
+ * Evenly-weighted unit vector. Every fixture scores ~0.34 against it — comfortably above
+ * MIN_RELEVANCE and inside the same relevance tier, so segment/criteria behaviour can be
+ * asserted without the relevance floor or tier ordering interfering.
+ */
+const NEUTRAL_VECTOR: number[] = Array.from({ length: 1024 }, () => 1.0 / Math.sqrt(1024))
 
 const { mockEmbedText, mockProjectsGet, mockWhereFn } = vi.hoisted(() => {
   const mockEmbedText = vi.fn(
@@ -549,6 +591,14 @@ describe('searchProjects', () => {
     mockProjectsGet.mockResolvedValueOnce(
       makeProjectSnap(['proj-active-a', 'proj-active-b', 'proj-new-launch']),
     )
+    // quick-kayinleong-050: Stage B now enforces a MIN_RELEVANCE floor, so the surviving
+    // project must actually score against the query. Align the stub query vector with
+    // proj-new-launch's embedding (dim-6) — i.e. a "new launch" query that genuinely
+    // matches it. The default dim-0 stub would score 0.01 and be dropped by the floor,
+    // which would test the floor rather than the since-filter this case exists for.
+    mockEmbedText.mockResolvedValueOnce(
+      Array.from({ length: 1024 }, (_, i) => (i === 6 ? 1.0 : 0.0)),
+    )
 
     const { searchProjects } = await import('@/src/inventory/search')
     const result = await searchProjects({
@@ -572,6 +622,499 @@ describe('searchProjects', () => {
       expect(ids).not.toContain('proj-active-a')  // 2023-01-01 — too old
       expect(ids).not.toContain('proj-active-b')  // 2023-03-01 — too old
     }
+  })
+})
+
+// ─── quick-kayinleong-050: location gate, price gate, floor/cap, grounding ────
+//
+// The reported defect: a tester asked for "a 2-bedroom in Cheras, budget 800k" and was
+// shown a RM6.4M Ampang project. `locationPref` and `priceMax` were carried through the
+// whole pipeline as display-only strings — never filters, never scoring inputs — so the
+// tool returned all 83 active projects and the prompt forbade a refusal.
+
+describe('quick-kayinleong-050: locationPref is a hard filter', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    mockEmbedText.mockReset()
+    mockProjectsGet.mockReset()
+    mockWhereFn.mockReset()
+    mockEmbedText.mockImplementation(async () => STUB_QUERY_VECTOR)
+    mockWhereFn.mockImplementation((..._args: [string, string, unknown]) => ({
+      where: mockWhereFn,
+      get: mockProjectsGet,
+      orderBy: mockWhereFn,
+    }))
+    mockProjectsGet.mockResolvedValue(
+      makeProjectSnap(['proj-active-a', 'proj-active-b', 'proj-active-c', 'proj-active-d']),
+    )
+  })
+
+  /** The reported query, minus the Cheras fixture — mirrors the real corpus (zero Cheras). */
+  const CHERAS_QUERY = {
+    segment: 'investment' as const,
+    priceMin: null,
+    priceMax: 800_000,
+    monthlyIncome: null,
+    nationality: 'unknown' as const,
+    bumiputera: null,
+    locationPref: 'Cheras, KL',
+    bedrooms: 2,
+    freeText: 'Find me a 2-bedroom in Cheras, budget 800k',
+  }
+
+  it('THE REPORTED BUG: a Cheras query REFUSES instead of returning far-away projects', async () => {
+    // Eligible set is KLCC / Damansara / Kepong — no Cheras project. The real inventory
+    // has zero Cheras projects, so this is the production case.
+    mockProjectsGet.mockResolvedValueOnce(
+      makeProjectSnap(['proj-active-a', 'proj-active-c', 'proj-active-d']),
+    )
+
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects(CHERAS_QUERY)
+
+    expect(result.found).toBe(false)
+    if (!result.found) {
+      expect(result.reason).toBe('no_match')
+    }
+  })
+
+  it('a Cheras query DOES return the Cheras project when one exists', async () => {
+    // proj-active-b is "Cheras, Kuala Lumpur — near LRT Taman Connaught", 620k.
+    mockProjectsGet.mockResolvedValueOnce(
+      makeProjectSnap(['proj-active-a', 'proj-active-b', 'proj-active-c']),
+    )
+    // Query vector aligned with proj-active-b (dim-1) so it clears MIN_RELEVANCE.
+    mockEmbedText.mockResolvedValueOnce(
+      Array.from({ length: 1024 }, (_, i) => (i === 1 ? 1.0 : 0.0)),
+    )
+
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects(CHERAS_QUERY)
+
+    expect(result.found).toBe(true)
+    if (result.found) {
+      expect(result.matches.map((m) => m.projectId)).toEqual(['proj-active-b'])
+    }
+  })
+
+  it('a location preference with nothing discriminating ("KL") does NOT filter to zero', async () => {
+    // "Kuala Lumpur" appears in 23+ of 82 locationText values — matching on it is
+    // indistinguishable from not filtering. The gate must be skipped, not applied.
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({
+      ...CHERAS_QUERY,
+      priceMax: null,
+      bedrooms: null,
+      locationPref: 'KL',
+      freeText: 'anything',
+    })
+
+    expect(result.found).toBe(true)
+  })
+
+  it('proximity prose does NOT count as a location match (false-positive guard)', async () => {
+    // HAZARD: locationText is prose that name-drops NEARBY landmarks. 27 of 83 active
+    // projects mention KLCC; most are not in KLCC. A naive substring match would match
+    // any project whose blurb says "near KLCC".
+    const { locationNeedles, projectMatchesLocation } = await import('@/src/inventory/search')
+
+    const nearKlcc = {
+      ...FIXTURES['proj-active-b'],
+      name: 'Bangsar Hill Park',
+      locationText:
+        'Lorong Maarof, Bangsar, 400m to Bangsar LRT Station & 450m to Bangsar Village Shopping Mall, near KLCC and Bangsar CBD',
+    }
+
+    const klcc = locationNeedles('KLCC')
+    const bangsar = locationNeedles('Bangsar')
+    expect(klcc).not.toBeNull()
+    expect(bangsar).not.toBeNull()
+
+    // Sits in Bangsar, merely near KLCC.
+    expect(projectMatchesLocation(nearKlcc, bangsar!)).toBe(true)
+    expect(projectMatchesLocation(nearKlcc, klcc!)).toBe(false)
+  })
+
+  it('a generic place-type prefix does not conflate distinct areas', async () => {
+    const { locationNeedles, projectMatchesLocation } = await import('@/src/inventory/search')
+
+    const bukitJalil = { ...FIXTURES['proj-active-c'], locationText: 'Bukit Jalil, Kuala Lumpur' }
+    const bukitBintang = { ...FIXTURES['proj-active-c'], locationText: 'Bukit Bintang, Kuala Lumpur' }
+    const needles = locationNeedles('Bukit Jalil')!
+
+    expect(projectMatchesLocation(bukitJalil, needles)).toBe(true)
+    // "bukit" alone must never be the match — Bukit Bintang is a different place.
+    expect(projectMatchesLocation(bukitBintang, needles)).toBe(false)
+
+    // Mirror case: "Sri Petaling" must not match "Petaling Jaya".
+    const sriPetaling = locationNeedles('Sri Petaling')!
+    const petalingJaya = { ...FIXTURES['proj-active-c'], locationText: 'Petaling Jaya, Selangor' }
+    expect(projectMatchesLocation(petalingJaya, sriPetaling)).toBe(false)
+  })
+})
+
+describe('quick-kayinleong-050: priceMax/priceMin are hard filters', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    mockEmbedText.mockReset()
+    mockProjectsGet.mockReset()
+    mockWhereFn.mockReset()
+    mockEmbedText.mockImplementation(async () => NEUTRAL_VECTOR)
+    mockWhereFn.mockImplementation((..._args: [string, string, unknown]) => ({
+      where: mockWhereFn,
+      get: mockProjectsGet,
+      orderBy: mockWhereFn,
+    }))
+    mockProjectsGet.mockResolvedValue(
+      makeProjectSnap(['proj-active-a', 'proj-active-b', 'proj-active-c', 'proj-active-d']),
+    )
+  })
+
+  const BASE = {
+    segment: 'unknown' as const,
+    priceMin: null,
+    priceMax: null,
+    monthlyIncome: null,
+    nationality: 'unknown' as const,
+    bumiputera: null,
+    locationPref: null,
+    bedrooms: null,
+    freeText: 'property',
+  }
+
+  it('a price ceiling EXCLUDES over-budget projects', async () => {
+    // proj-active-a is 950k; b 620k; c 700k; d 350k. Budget 800k must drop a.
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({ ...BASE, priceMax: 800_000 })
+
+    expect(result.found).toBe(true)
+    if (result.found) {
+      const ids = result.matches.map((m) => m.projectId)
+      expect(ids).not.toContain('proj-active-a')
+      expect(result.matches.every((m) => m.priceValue <= 800_000)).toBe(true)
+    }
+  })
+
+  it('the price ceiling is INCLUSIVE at the boundary', async () => {
+    // A project priced at exactly priceMax is within budget (proj-active-a === 950_000).
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({ ...BASE, priceMax: 950_000 })
+
+    expect(result.found).toBe(true)
+    if (result.found) {
+      expect(result.matches.map((m) => m.projectId)).toContain('proj-active-a')
+    }
+  })
+
+  it('priceMin excludes under-budget projects and is inclusive', async () => {
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({ ...BASE, priceMin: 700_000 })
+
+    expect(result.found).toBe(true)
+    if (result.found) {
+      const ids = result.matches.map((m) => m.projectId)
+      expect(ids).toContain('proj-active-c') // exactly 700_000 — boundary
+      expect(ids).not.toContain('proj-active-d') // 350_000
+      expect(ids).not.toContain('proj-active-b') // 620_000
+    }
+  })
+
+  it('an all-over-budget set refuses with no_match, NOT ineligible/financing', async () => {
+    // 'ineligible'/'financing' is reserved for the income-derived affordability ceiling.
+    mockProjectsGet.mockResolvedValueOnce(makeProjectSnap(['proj-active-a']))
+
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({ ...BASE, priceMax: 100_000 })
+
+    expect(result.found).toBe(false)
+    if (!result.found) {
+      expect(result.reason).toBe('no_match')
+    }
+  })
+
+  it('an UNPRICED project (priceValue 0 = unknown) is excluded when a budget is stated', async () => {
+    // 32 of 83 active projects carry priceValue 0. That means UNKNOWN, not free — we
+    // must not assert "within budget" for a price we do not hold.
+    mockProjectsGet.mockResolvedValueOnce(makeProjectSnap(['proj-unpriced', 'proj-active-b']))
+
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({ ...BASE, priceMax: 800_000 })
+
+    expect(result.found).toBe(true)
+    if (result.found) {
+      expect(result.matches.map((m) => m.projectId)).not.toContain('proj-unpriced')
+    }
+  })
+
+  it('an unpriced project is still returned when NO budget is stated', async () => {
+    mockProjectsGet.mockResolvedValueOnce(makeProjectSnap(['proj-unpriced']))
+
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects(BASE)
+
+    expect(result.found).toBe(true)
+    if (result.found) {
+      expect(result.matches.map((m) => m.projectId)).toContain('proj-unpriced')
+    }
+  })
+})
+
+describe('quick-kayinleong-050: matchedCriteria never claims an unapplied criterion', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    mockEmbedText.mockReset()
+    mockProjectsGet.mockReset()
+    mockWhereFn.mockReset()
+    mockEmbedText.mockImplementation(async () => NEUTRAL_VECTOR)
+    mockWhereFn.mockImplementation((..._args: [string, string, unknown]) => ({
+      where: mockWhereFn,
+      get: mockProjectsGet,
+      orderBy: mockWhereFn,
+    }))
+    mockProjectsGet.mockResolvedValue(makeProjectSnap(['proj-active-c']))
+  })
+
+  it('locationPref is NOT echoed when the location gate never ran', async () => {
+    // buildRationale renders this under the heading "Matched criteria" and the chat UI
+    // badges it, so echoing an unapplied criterion is a false grounding claim.
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({
+      segment: 'unknown',
+      priceMin: null,
+      priceMax: null,
+      monthlyIncome: null,
+      nationality: 'unknown',
+      bumiputera: null,
+      locationPref: 'KL', // reduces to nothing discriminating → gate skipped
+      bedrooms: null,
+      freeText: 'property',
+    })
+
+    expect(result.found).toBe(true)
+    if (result.found) {
+      expect(result.matches[0].matchedCriteria.locationPref).toBeNull()
+    }
+  })
+
+  it('priceMax is NOT echoed when no budget was supplied', async () => {
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({
+      segment: 'unknown',
+      priceMin: null,
+      priceMax: null,
+      monthlyIncome: null,
+      nationality: 'unknown',
+      bumiputera: null,
+      locationPref: null,
+      bedrooms: null,
+      freeText: 'property',
+    })
+
+    expect(result.found).toBe(true)
+    if (result.found) {
+      expect(result.matches[0].matchedCriteria.priceMax).toBeNull()
+    }
+  })
+
+  it('bedrooms is echoed ONLY when the project actually has that bedroom count', async () => {
+    // proj-active-c has 3 bedrooms. `bedrooms` is not a filter (0 means "unknown" on 29
+    // of 83 projects), so it may only be claimed when it genuinely matches.
+    const { searchProjects } = await import('@/src/inventory/search')
+    const base = {
+      segment: 'unknown' as const,
+      priceMin: null,
+      priceMax: null,
+      monthlyIncome: null,
+      nationality: 'unknown' as const,
+      bumiputera: null,
+      locationPref: null,
+      freeText: 'property',
+    }
+
+    const mismatch = await searchProjects({ ...base, bedrooms: 2 })
+    expect(mismatch.found).toBe(true)
+    if (mismatch.found) {
+      expect(mismatch.matches[0].matchedCriteria.bedrooms).toBeNull()
+    }
+
+    vi.resetModules()
+    mockProjectsGet.mockResolvedValue(makeProjectSnap(['proj-active-c']))
+    mockEmbedText.mockImplementation(async () => NEUTRAL_VECTOR)
+    const { searchProjects: searchProjects2 } = await import('@/src/inventory/search')
+    const match = await searchProjects2({ ...base, bedrooms: 3 })
+    expect(match.found).toBe(true)
+    if (match.found) {
+      expect(match.matches[0].matchedCriteria.bedrooms).toBe(3)
+    }
+  })
+
+  it('applied criteria ARE echoed (the echo is narrowed, not removed)', async () => {
+    mockProjectsGet.mockResolvedValueOnce(makeProjectSnap(['proj-active-b']))
+    mockEmbedText.mockResolvedValueOnce(
+      Array.from({ length: 1024 }, (_, i) => (i === 1 ? 1.0 : 0.0)),
+    )
+
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({
+      segment: 'own_stay',
+      priceMin: null,
+      priceMax: 800_000,
+      monthlyIncome: null,
+      nationality: 'unknown',
+      bumiputera: null,
+      locationPref: 'Cheras',
+      bedrooms: 4,
+      freeText: 'family home in Cheras',
+    })
+
+    expect(result.found).toBe(true)
+    if (result.found) {
+      const mc = result.matches[0].matchedCriteria
+      expect(mc.locationPref).toBe('Cheras') // gate ran, this project passed it
+      expect(mc.priceMax).toBe(800_000)      // gate ran, 620k is within budget
+      expect(mc.bedrooms).toBe(4)            // proj-active-b genuinely has 4
+    }
+  })
+})
+
+describe('quick-kayinleong-050: relevance floor, top-N cap, and segment weighting', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    mockEmbedText.mockReset()
+    mockProjectsGet.mockReset()
+    mockWhereFn.mockReset()
+    mockEmbedText.mockImplementation(async () => STUB_QUERY_VECTOR)
+    mockWhereFn.mockImplementation((..._args: [string, string, unknown]) => ({
+      where: mockWhereFn,
+      get: mockProjectsGet,
+      orderBy: mockWhereFn,
+    }))
+    mockProjectsGet.mockResolvedValue(makeProjectSnap(['proj-active-a']))
+  })
+
+  const BASE = {
+    segment: 'unknown' as const,
+    priceMin: null,
+    priceMax: null,
+    monthlyIncome: null,
+    nationality: 'unknown' as const,
+    bumiputera: null,
+    locationPref: null,
+    bedrooms: null,
+    freeText: 'property',
+  }
+
+  it('projects below MIN_RELEVANCE are dropped', async () => {
+    // STUB_QUERY_VECTOR is dim-0: proj-active-a scores 0.9, the rest 0.01.
+    mockProjectsGet.mockResolvedValueOnce(
+      makeProjectSnap(['proj-active-a', 'proj-active-b', 'proj-active-c']),
+    )
+
+    const { searchProjects, MIN_RELEVANCE } = await import('@/src/inventory/search')
+    const result = await searchProjects(BASE)
+
+    expect(result.found).toBe(true)
+    if (result.found) {
+      expect(result.matches.map((m) => m.projectId)).toEqual(['proj-active-a'])
+      expect(result.matches.every((m) => m.score >= MIN_RELEVANCE)).toBe(true)
+    }
+  })
+
+  it('an all-irrelevant set refuses rather than returning noise', async () => {
+    mockProjectsGet.mockResolvedValueOnce(makeProjectSnap(['proj-active-b', 'proj-active-c']))
+
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects(BASE)
+
+    expect(result.found).toBe(false)
+    if (!result.found) {
+      expect(result.reason).toBe('no_match')
+    }
+  })
+
+  it('results are capped at MAX_MATCHES (payload guard — was all 83 active projects)', async () => {
+    // 12 relevant projects → must be truncated to MAX_MATCHES.
+    mockProjectsGet.mockResolvedValueOnce(
+      makeAdHocSnap(
+        Array.from({ length: 12 }, (_, i) => ({
+          id: `proj-bulk-${i}`,
+          doc: { ...FIXTURES['proj-active-a'], priceValue: 500_000 + i },
+        })),
+      ),
+    )
+    mockEmbedText.mockResolvedValueOnce(STUB_QUERY_VECTOR)
+
+    const { searchProjects, MAX_MATCHES } = await import('@/src/inventory/search')
+    const result = await searchProjects(BASE)
+
+    expect(result.found).toBe(true)
+    if (result.found) {
+      expect(result.matches.length).toBe(MAX_MATCHES)
+    }
+  })
+
+  it('segment weighting cannot outrank relevance across tiers', async () => {
+    // proj-active-a: highly relevant (dim-0, score 0.9) but only 2 bedrooms.
+    // proj-active-b: irrelevant to this query (score 0.01) but 4 bedrooms.
+    // The old own_stay sort was bedrooms-first, so b would win. Relevance tier is now
+    // primary, so the far more relevant project must stay on top.
+    mockProjectsGet.mockResolvedValueOnce(
+      makeProjectSnap(['proj-active-b', 'proj-active-a']),
+    )
+    // Lower the floor's effect by scoring both above it: dim-0 0.9 vs a blended vector.
+    mockEmbedText.mockResolvedValueOnce(
+      Array.from({ length: 1024 }, (_, i) => (i === 0 ? 0.9 : i === 1 ? 0.3 : 0.0)),
+    )
+
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({ ...BASE, segment: 'own_stay' })
+
+    expect(result.found).toBe(true)
+    if (result.found) {
+      // a scores ~0.81 (tier 16); b scores ~0.27 (tier 5). Bedrooms must not cross tiers.
+      expect(result.matches[0].projectId).toBe('proj-active-a')
+    }
+  })
+
+  it('own_stay ranking no longer uses locationText.length', async () => {
+    // The old secondary key was the CHARACTER COUNT of locationText — a "location
+    // richness" proxy with no relationship to where the project is. Two projects with
+    // equal relevance and equal bedrooms must not be ordered by string length.
+    const short = { ...FIXTURES['proj-active-c'], bedrooms: 3, locationText: 'Bangsar' }
+    const long = {
+      ...FIXTURES['proj-active-c'],
+      bedrooms: 3,
+      locationText: 'Bangsar, Kuala Lumpur with a very long descriptive location blurb attached',
+    }
+    mockProjectsGet.mockResolvedValueOnce(
+      makeAdHocSnap([
+        { id: 'proj-short', doc: short },
+        { id: 'proj-long', doc: long },
+      ]),
+    )
+    mockEmbedText.mockResolvedValueOnce(
+      Array.from({ length: 1024 }, (_, i) => (i === 2 ? 1.0 : 0.0)),
+    )
+
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({ ...BASE, segment: 'own_stay' })
+
+    expect(result.found).toBe(true)
+    if (result.found) {
+      // Identical score and bedrooms → stable input order, NOT longest-locationText-first.
+      expect(result.matches[0].projectId).toBe('proj-short')
+    }
+  })
+
+  it('status:active is still the base Firestore gate (T-03-05)', async () => {
+    mockProjectsGet.mockResolvedValueOnce(makeProjectSnap(['proj-active-a']))
+
+    const { searchProjects } = await import('@/src/inventory/search')
+    await searchProjects({ ...BASE, locationPref: 'KLCC', priceMax: 1_000_000 })
+
+    // The very first filter applied must be status == active — the new location/price
+    // gates run in memory and must NOT have displaced it.
+    expect(mockWhereFn).toHaveBeenCalledWith('status', '==', 'active')
   })
 })
 

@@ -678,3 +678,65 @@ describe('quick-048: finder prompt forbids tool-use narration', () => {
     expect(FINDER_SYSTEM_PROMPT).toContain('## Grounding (MANDATORY)')
   })
 })
+
+// ─── quick-kayinleong-050: the refusal must be permitted ──────────────────────
+//
+// A tester asked for "a 2-bedroom in Cheras, budget 800k" and was shown a RM6.4M Ampang
+// project. Half the cause was the tool (locationPref/priceMax were never filters). The
+// other half was THIS PROMPT: the refusal branch was conditioned on "include ONLY when
+// searchProjects returns no match", the tool returned 83 matches, so refusing was
+// forbidden and the model dutifully presented alternatives from unrelated areas.
+
+describe('quick-kayinleong-050: finder prompt permits the honest no_match refusal', () => {
+  it('states that locationPref and priceMax are hard filters', async () => {
+    const { FINDER_SYSTEM_PROMPT: prompt } = await import('./prompt')
+
+    expect(prompt).toContain('## Location and Budget')
+    expect(prompt).toContain('HARD FILTERS')
+    // The model must know a no_match for an area/budget is a real, grounded result.
+    expect(prompt.toLowerCase()).toContain('emit the refusal')
+  })
+
+  it('forbids substituting projects from a different area', async () => {
+    const { FINDER_SYSTEM_PROMPT: prompt } = await import('./prompt')
+
+    // The exact reported behaviour: acknowledge the miss, then list unrelated projects.
+    expect(prompt).toContain('NEVER answer an area you have no inventory for')
+    expect(prompt).toContain('but here are some options in Y')
+  })
+
+  it('forbids inventing proximity (no distance or adjacency data exists)', async () => {
+    const { FINDER_SYSTEM_PROMPT: prompt } = await import('./prompt')
+
+    expect(prompt).toContain('no data on how FAR any project is')
+    expect(prompt).toContain('adjacency')
+  })
+
+  it('no longer restricts refusal to "ONLY when searchProjects returns no match"', async () => {
+    const { FINDER_SYSTEM_PROMPT: prompt } = await import('./prompt')
+
+    // The old wording made the refusal unreachable once the tool returned anything.
+    expect(prompt).not.toContain('include ONLY when searchProjects returns no match')
+    expect(prompt).toContain('include whenever searchProjects returns found:false')
+  })
+
+  it('tells the model not to claim an unapplied criterion from matchedCriteria', async () => {
+    const { FINDER_SYSTEM_PROMPT: prompt } = await import('./prompt')
+
+    expect(prompt).toContain('## Matched Criteria (grounding)')
+    expect(prompt).toContain('A null field means that criterion was NOT verified')
+    expect(prompt).toContain('Never claim a project is "within budget" when matchedCriteria.priceMax is null')
+    // priceValue 0 means unknown, not free — never render it as a price.
+    expect(prompt).toContain('Never present 0 as a price')
+  })
+
+  it('keeps the active-only and never-invent mandates intact', async () => {
+    const { FINDER_SYSTEM_PROMPT: prompt } = await import('./prompt')
+
+    expect(prompt).toContain('## Grounding (MANDATORY)')
+    expect(prompt).toContain('NEVER invent a project, price, or availability')
+    expect(prompt).toContain('## Active-Only / Eligibility')
+    // Infra failure must still be distinct from a refusal.
+    expect(prompt).toContain('## Tool Unavailable')
+  })
+})
