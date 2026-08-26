@@ -129,15 +129,55 @@ still works (3 real Bangsar matches under budget); one of the three is 1BR.
   unpriced as cheap.
 - `bedrooms` is 0 (unknown) on **29/83**, so it is not a filter.
 
-## Honest gaps — NOT verified
+## Post-close: backfill EXECUTED and live verification done (user authorised)
 
-1. **No live model call anywhere.** Track B tested against `projects.inventory.json` + mocked
-   Firestore. Unverified: whether `MIN_RELEVANCE = 0.20` filters anything at all against
-   real Gemini embeddings (it may be a no-op, with the cap doing the payload work), and the
-   model's actual refusal wording under the new prompt.
+### Collateral backfill — APPLIED against production
+```
+scanned docs         : 12020      backfilled          : 11722
+already had a URL    :   296      missing object (404):     2
+candidates seen      : 11724      no download token   :     0
+processed this run   : 11724      errors              :     0
+```
+Verified INDEPENDENTLY of the script's own summary by scanning all 12,020 docs:
+**12,018 now carry an https `externalUrl` — 2.0% → 99.98%**, and a GET on a backfilled
+`whatsapp-media` URL returns **HTTP 206** unauthenticated.
+
+The 2 stragglers are the SAME malformed path duplicated across two docs:
+`collateral/WsCKdwpNCvFwHy5cHTH6/whatsapp/RA New Broucher ` — trailing space, no file
+extension, object absent from Storage. A WhatsApp-import artifact. The `tools.ts` guard
+omits them, so the agent never surfaces them; left in place rather than deleted (that is
+the user's call).
+
+### Finder verified LIVE — real Firestore, real Gemini embeddings, no mocks
+- `"Cheras"` + 800k → **`found:false, reason=no_match`** — the headline fix works live.
+- `"Bangsar"` + 900k → **3 matches**, all genuinely Bangsar, all ≤900k
+  (900k / 720k / 799k) — inclusive boundary correct.
+- unfiltered query → capped at `MAX_MATCHES = 8`.
+This closes gap 1 below for the filter path.
+
+### MIN_RELEVANCE measured — it is a NO-OP
+83/83 projects clear 0.20 for every query tried, including "banana bread recipe"
+(top 0.494) and "quantum chromodynamics…" (top 0.499). Real relevant queries score
+0.558–0.719. The floor filters nothing; `MAX_MATCHES` does the payload work and the hard
+gates do the correctness work. Deliberately NOT retuned on four probe queries — the
+separation window (0.50–0.55) is narrow and a floor set too high produces SILENT false
+negatives. Documented in-code so it is not mistaken for an active guard.
+
+### Carried items cleared (`034558a`)
+- Doc drift in `finder/schema.ts`, `inventory/crud.ts`, `firebase/collections.ts` — all
+  three claimed a path→URL resolution that no code performed. That shared fiction is why
+  the gap survived: every reader assumed someone else did it.
+- `match-list.tsx` now filters non-http URLs before rendering an anchor.
+- `collateral-form.tsx` says "no link" instead of printing a raw path that reads like one.
+
+## Honest gaps — NOT verified## Honest gaps — NOT verified
+
+1. **Partially closed.** The FILTER path is now verified live (Cheras refuses, Bangsar
+   returns 3, cap binds) and `MIN_RELEVANCE` is measured as a no-op. Still unverified:
+   the model's actual refusal WORDING under the new prompt, which needs a real chat turn.
 2. **Ingestion fix has no automated test** — it is a browser upload path with no harness.
    Needs one real WhatsApp import.
-3. **Backfill `--apply` NOT run.** 11,754 collateral docs remain dead until it is.
+3. ~~Backfill `--apply` NOT run.~~ **DONE** — 11,722 backfilled, 2 orphans remain (see above).
 4. **No authenticated click-through** of chat or the admin surfaces.
 5. **Deploy revision unknown.** Two reported items (history-lost-on-refresh, raw JSON) were
    fixed in quick-046/048 which landed the same day as this feedback. CI does not deploy;
