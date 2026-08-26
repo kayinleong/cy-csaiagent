@@ -93,6 +93,29 @@ const clientApp = initClient()
 export const clientAuth: Auth = getAuth(clientApp)
 
 /**
+ * A CURRENT Firebase ID token for the signed-in user, for `Authorization: Bearer …` on a
+ * Route Handler call (quick-kayinleong-058).
+ *
+ * Always call this immediately before the fetch — never capture the result and reuse it.
+ * A Firebase ID token is valid for ONE HOUR. `getIdToken()` returns the cached token and
+ * transparently refreshes it when it is close to expiring, so a per-request call is both
+ * cheap and the only thing that stays correct across a long poll loop.
+ *
+ * This exists because the KB ingestion pollers took a token as a PROP: two call sites
+ * passed nothing at all (so the header was literally "Bearer " and every poll 401'd), one
+ * passed a value read on the server, and one read a real token but only once. A single
+ * accessor removes the whole class.
+ *
+ * @throws Error('not-signed-in') when there is no client auth session — the caller should
+ *         surface a sign-in prompt rather than fetch with an empty token.
+ */
+export async function getFreshIdToken(): Promise<string> {
+  const user = clientAuth.currentUser
+  if (!user) throw new Error('not-signed-in')
+  return user.getIdToken()
+}
+
+/**
  * Firestore web SDK — client-side reads. **Async accessor, not a const**
  * (quick-kayinleong-046).
  *

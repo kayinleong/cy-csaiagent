@@ -33,12 +33,7 @@ import {
 import { InlineCorrectionDialog, type CorrectionTarget } from './inline-correction-dialog'
 import { Paginator, usePagination } from '../../_components/paginator'
 
-interface KbDocExplorerProps {
-  /** Firebase ID token for the correction dialog's ingest poll. */
-  idToken: string
-}
-
-export function KbDocExplorer({ idToken }: KbDocExplorerProps) {
+export function KbDocExplorer() {
   const t = useTranslations('dashboard')
   const [docs, setDocs] = useState<KbDocSummary[] | null>(null)
   const [error, setError] = useState(false)
@@ -159,7 +154,7 @@ export function KbDocExplorer({ idToken }: KbDocExplorerProps) {
         </div>
       )}
 
-      <InlineCorrectionDialog idToken={idToken} doc={correcting} onClose={handleClose} />
+      <InlineCorrectionDialog doc={correcting} onClose={handleClose} />
     </div>
   )
 }

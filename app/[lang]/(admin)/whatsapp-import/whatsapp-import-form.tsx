@@ -39,7 +39,7 @@ import { Input } from '@/components/ui/input'
 // firebase/storage is imported lazily at the upload site below — it shares a ~353 KB
 // chunk with firebase/firestore, which every route touching this module used to pay for
 // on first load (quick-kayinleong-046). clientAuth stays eager (AUTH-05 timing).
-import { clientAuth, getClientStorage } from '@/src/firebase/client'
+import { clientAuth, getClientStorage, getFreshIdToken } from '@/src/firebase/client'
 import { parseWhatsApp, toTranscript, toClassificationSample } from '@/src/whatsapp/parse'
 import {
   classifyWhatsAppProjectAction,
@@ -295,7 +295,9 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
       while (remaining > 0 && iterations < POLL_MAX_ITERATIONS) {
         const res = await fetch(
           `/api/kb/ingest/process?jobId=${encodeURIComponent(kb.jobId)}&limit=${POLL_LIMIT}`,
-          { headers: { Authorization: `Bearer ${token}` } },
+          // Re-read per poll (quick-kayinleong-058): a WhatsApp export is large enough
+          // that this loop can outlive the 1-hour ID-token lifetime.
+          { headers: { Authorization: `Bearer ${await getFreshIdToken()}` } },
         )
         if (!res.ok) {
           // Surface the route's error body (e.g. a Gemini embed failure) — not just the status.

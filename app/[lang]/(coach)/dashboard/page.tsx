@@ -229,7 +229,11 @@ export default async function CoachDashboardPage({ params }: PageProps) {
         {/* CDASH-04: KB document explorer → inline AI correction (client island) */}
         <section>
           <h2 className="mb-4 text-lg font-semibold">{t('correctionTitle')}</h2>
-          <KbDocExplorer idToken={sessionCookie.value} />
+          {/* No token prop (quick-kayinleong-058): it used to be handed the __session
+              cookie value, which is not an ID token and 401'd — and shipping an httpOnly
+              credential into client props is not something to keep either. The dialog
+              reads a live token from the client SDK when it needs one. */}
+          <KbDocExplorer />
         </section>
 
         {/* CDASH-05/07: Metrics panel with recharts (client island) */}

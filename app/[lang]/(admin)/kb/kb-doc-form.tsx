@@ -51,6 +51,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { createKbDocAction, updateKbDocAction } from './actions'
+import { getFreshIdToken } from '@/src/firebase/client'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -98,7 +99,6 @@ const POLL_INTERVAL_MS = 1500
  */
 async function pollIngestion(
   jobId: string,
-  token: string,
   total: number,
   onProgress: (remaining: number) => void,
 ): Promise<void> {
@@ -106,8 +106,12 @@ async function pollIngestion(
 
   while (remaining > 0) {
     const url = `/api/kb/ingest/process?jobId=${encodeURIComponent(jobId)}&limit=${POLL_LIMIT}`
+    // Fetched PER POLL, not once (quick-kayinleong-058). The token used to arrive as a
+    // prop that neither page actually passed, so this header was `Bearer ` and every poll
+    // returned 401 — the reported "uploading a kb file throws 401". Re-reading it each
+    // iteration also survives the 1-hour ID-token lifetime on a long ingestion.
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${await getFreshIdToken()}` },
     })
 
     if (!response.ok) {
@@ -135,15 +139,13 @@ interface KbDocFormProps {
   initialValues?: Partial<KbDocTextData>
   /** Callback after successful create/update */
   onSuccess?: (docId: string) => void
-  /** Firebase ID token for the ingest poll (injected from the parent page) */
-  idToken?: string
 }
 
 type ValidationErrors = Partial<Record<keyof KbDocTextData | 'file', { message?: string }[]>>
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFormProps) {
+export function KbDocForm({ docId, initialValues, onSuccess }: KbDocFormProps) {
   const t = useTranslations('kb')
   const [isPending, startTransition] = useTransition()
   const [errors, setErrors] = useState<ValidationErrors>({})
@@ -225,10 +227,9 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
             uploadForm.set('supersedesId', docId)
           }
 
-          const token = idToken ?? ''
           const response = await fetch('/api/kb/ingest/upload', {
             method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${await getFreshIdToken()}` },
             body: uploadForm,
           })
 
@@ -250,7 +251,7 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
             toast.info(`Indexing "${selectedFile.name}"… (${result.total} chunks)`)
 
             try {
-              await pollIngestion(result.jobId, token, result.total, (remaining) => {
+              await pollIngestion(result.jobId, result.total, (remaining) => {
                 setIngestProgress({ remaining, total: result.total! })
               })
               setIngestProgress(null)
@@ -316,11 +317,10 @@ export function KbDocForm({ docId, initialValues, onSuccess, idToken }: KbDocFor
           if (result.jobId && result.total != null && result.total > 0) {
             setIngestProgress({ remaining: result.total, total: result.total })
 
-            const token = idToken ?? ''
             toast.info(`Indexing document… (${result.total} chunks)`)
 
             try {
-              await pollIngestion(result.jobId, token, result.total, (remaining) => {
+              await pollIngestion(result.jobId, result.total, (remaining) => {
                 setIngestProgress({ remaining, total: result.total! })
               })
               setIngestProgress(null)

@@ -61,6 +61,8 @@ type CorrectionData = z.infer<typeof CorrectionSchema>
 
 type ValidationErrors = Partial<Record<'content', { message?: string }[]>>
 
+import { getFreshIdToken } from '@/src/firebase/client'
+
 // ─── Poll helper ─────────────────────────────────────────────────────────────
 
 /**
@@ -69,7 +71,6 @@ type ValidationErrors = Partial<Record<'content', { message?: string }[]>>
  */
 async function pollIngestion(
   jobId: string,
-  token: string,
   total: number,
   onProgress: (remaining: number) => void,
 ): Promise<void> {
@@ -77,8 +78,11 @@ async function pollIngestion(
 
   while (remaining > 0) {
     const url = `/api/kb/ingest/process?jobId=${encodeURIComponent(jobId)}&limit=${POLL_LIMIT}`
+    // Per-poll, never captured (quick-kayinleong-058). The dialog used to receive this as
+    // a prop that the dashboard filled with the SESSION COOKIE value — a session cookie is
+    // not an ID token, verifyIdToken rejects it, and every correction 401'd.
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${await getFreshIdToken()}` },
     })
 
     if (!response.ok) {
@@ -105,8 +109,6 @@ export interface CorrectionTarget {
 }
 
 interface InlineCorrectionDialogProps {
-  /** Firebase ID token for authenticating the ingest poll (from the RSC session cookie). */
-  idToken: string
   /** The document to correct (null = dialog closed). Selected in the KB explorer. */
   doc: CorrectionTarget | null
   /** Controlled close handler — clears the selected doc in the parent. */
@@ -114,7 +116,6 @@ interface InlineCorrectionDialogProps {
 }
 
 export function InlineCorrectionDialog({
-  idToken,
   doc,
   onClose,
 }: InlineCorrectionDialogProps) {
@@ -179,7 +180,7 @@ export function InlineCorrectionDialog({
           toast.info(t('correctionIndexing'))
 
           try {
-            await pollIngestion(result.jobId, idToken, result.total, (remaining) => {
+            await pollIngestion(result.jobId, result.total, (remaining) => {
               setIngestProgress({ remaining, total: result.total! })
             })
             setIngestProgress(null)
