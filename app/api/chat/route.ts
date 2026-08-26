@@ -553,11 +553,21 @@ export async function POST(req: Request): Promise<Response> {
   // actually produced. `persisted` makes the write idempotent — whichever callback fires
   // first wins and the rest are no-ops, which is what quick-046 was rightly worried about
   // when it declined to pair consumeStream() with onAbort.
+  /**
+   * How a turn ended, recorded in routeDecision (D-02) so an incomplete transcript is
+   * honest without showing the agent scaffolding. 'partial' is written at every step
+   * boundary and replaced by 'ok' if the turn finishes; a row still marked ':partial'
+   * means the process died mid-turn (quick-kayinleong-061).
+   */
+  type AssistantOutcome = 'ok' | 'error' | 'aborted' | 'partial'
+
   const turnText: string[] = []
   /** Message id once a reply HAS been written. Null means nothing is on disk yet. */
   let persistedMid: string | null = null
   /** Length of the text on disk, so a fuller version can replace a partial one. */
   let persistedLen = 0
+  /** Outcome recorded on the row, so a mid-flight ':partial' can be finalised. */
+  let persistedOutcome: AssistantOutcome | null = null
   /**
    * Serialises every call. onAbort/onError/onFinish are independent callbacks and two can
    * be in flight at once; without this the check-then-write below is a race that appends
@@ -567,7 +577,7 @@ export async function POST(req: Request): Promise<Response> {
 
   async function doPersistAssistant(
     text: string,
-    outcome: 'ok' | 'error' | 'aborted',
+    outcome: AssistantOutcome,
     extra?: { citations?: string[]; tokens?: number },
   ): Promise<void> {
     const body = text.trim()
@@ -580,7 +590,9 @@ export async function POST(req: Request): Promise<Response> {
     // the write and then refused the completed turn that arrived after it — the exact
     // "revisit and the reply is gone" the flag was added to prevent.
     if (body.length === 0) {
-      if (outcome !== 'ok') {
+      // 'partial' fires at every step boundary, and a tool-only step legitimately has no
+      // text — warning there would be noise on every healthy Finder turn.
+      if (outcome !== 'ok' && outcome !== 'partial') {
         console.warn('[chat] turn produced no text; nothing persisted', { pillar, outcome })
       }
       return
@@ -588,7 +600,13 @@ export async function POST(req: Request): Promise<Response> {
 
     // Already have this much (or more) on disk — a partial must never overwrite a fuller
     // reply, and the same text must never be appended twice.
-    if (persistedMid !== null && body.length <= persistedLen) return
+    //
+    // One exception: a row still marked ':partial' must be finalised even when the text did
+    // not grow, or a turn that ended on its last step would stay flagged as interrupted
+    // forever (and an errored turn would lose its ':error'). Terminal-to-terminal is NOT an
+    // exception — that is the shorter-onFinish case, which must not truncate the row.
+    const finalisesPartial = persistedOutcome === 'partial' && outcome !== 'partial'
+    if (persistedMid !== null && body.length <= persistedLen && !finalisesPartial) return
 
     const doc = {
       tenantId: TENANT_ID,
@@ -614,6 +632,7 @@ export async function POST(req: Request): Promise<Response> {
         await updateMessage(cid, persistedMid, doc)
       }
       persistedLen = body.length
+      persistedOutcome = outcome
     } catch (err) {
       console.error('[chat] assistant message write FAILED', {
         pillar,
@@ -626,7 +645,7 @@ export async function POST(req: Request): Promise<Response> {
 
   function persistAssistantOnce(
     text: string,
-    outcome: 'ok' | 'error' | 'aborted',
+    outcome: AssistantOutcome,
     extra?: { citations?: string[]; tokens?: number },
   ): Promise<void> {
     writeChain = writeChain.then(() => doPersistAssistant(text, outcome, extra))
@@ -767,6 +786,20 @@ export async function POST(req: Request): Promise<Response> {
       } catch {
         // Grounding bookkeeping is best-effort — never break the stream.
       }
+
+      // Persist what exists SO FAR, at every step boundary (quick-kayinleong-061).
+      //
+      // Measured: 25 lost replies, ALL of them Finder, and usageEvents (written at the end
+      // of onFinish) matches the stored assistant count — so onFinish never ran. No
+      // :error and no :aborted markers either, so onError and onAbort did not run. When no
+      // callback fires at all the process is being killed, and no amount of callback
+      // plumbing can save the turn: the text has to already be on disk.
+      //
+      // NOT after(): that defers until the response is sent, which is precisely too late.
+      // The writer is idempotent and upgrade-only, so these calls append once and then
+      // extend the same row; onFinish's 'ok' call rewrites it with the real citations,
+      // the real token count and a clean routeDecision.
+      void persistAssistantOnce(turnText.join('\n\n'), 'partial')
     },
     // Surface model/stream failures. The AI SDK reports these as an `error` chunk on a
     // 200 response, so without this they were invisible server-side too (defect RC-3).

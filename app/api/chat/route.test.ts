@@ -1635,14 +1635,28 @@ describe('quick-055: assistant message survives a failed turn', () => {
 
   it('marks an incomplete turn in routeDecision, not in the content', async () => {
     // The agent should not be shown scaffolding, but the transcript must stay honest.
+    // quick-061: the row is APPENDED at the step boundary as ':partial' and FINALISED by
+    // an update, so the honest end state is the LAST write of either kind — not the append.
     const decisions: string[] = []
+    // Filtered by cid — the microtask flush below also drains write chains left pending by
+    // earlier tests in this file, whose mocks fire-and-forget onFinish.
+    const record = (cid: string, msg: { role: string; routeDecision?: string }) => {
+      if (msg.role === 'assistant' && cid === 'c-055e') decisions.push(String(msg.routeDecision))
+    }
     mocks.mockAppendMessage.mockImplementation((async (
-      _cid: string,
+      cid: string,
       msg: { role: string; routeDecision?: string },
     ) => {
-      if (msg.role === 'assistant') decisions.push(String(msg.routeDecision))
+      record(cid, msg)
       return 'id'
     }) as unknown as () => Promise<string>)
+    mocks.mockUpdateMessage.mockImplementation((async (
+      cid: string,
+      _mid: string,
+      msg: { role: string; routeDecision?: string },
+    ) => {
+      record(cid, msg)
+    }) as unknown as () => Promise<void>)
 
     mocks.mockStreamText.mockImplementationOnce(
       ({ onStepFinish, onError }: {
@@ -1660,8 +1674,8 @@ describe('quick-055: assistant message survives a failed turn', () => {
 
     await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-055e' }))
 
-    expect(decisions).toHaveLength(1)
-    expect(decisions[0]).toMatch(/:error$/)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(decisions.at(-1)).toMatch(/:error$/)
   })
 })
 
@@ -1786,8 +1800,10 @@ describe('quick-057: a completed reply survives an early empty callback', () => 
     await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-057c' }))
     await flushWrites()
 
+    // ONE row, whatever the write count: quick-061 appends it at the step boundary, the
+    // abort finalises the marker, and onFinish extends it to the complete text.
     expect(appended).toEqual(['half an'])
-    expect(updated).toEqual(['half an answer, now complete'])
+    expect(updated.at(-1)).toBe('half an answer, now complete')
   })
 
   it('never lets a SHORTER later text overwrite what is already stored', async () => {
@@ -1812,8 +1828,12 @@ describe('quick-057: a completed reply survives an early empty callback', () => 
     await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-057d' }))
     await flushWrites()
 
+    // The point is that the stored text is never truncated. quick-061 does write once more
+    // here (finalising ':partial' to ':error'), but always with the LONG text — the short
+    // onFinish payload is refused.
     expect(appended).toEqual(['the long complete answer'])
-    expect(updated).toEqual([])
+    expect(updated.every((c) => c === 'the long complete answer')).toBe(true)
+    expect(updated).not.toContain('oops')
   })
 
   it('does NOT pass abortSignal — cancelling the model is what loses the reply', async () => {
@@ -1824,5 +1844,134 @@ describe('quick-057: a completed reply survives an early empty callback', () => 
     const args = mocks.mockStreamText.mock.calls.at(-1)?.[0] as Record<string, unknown>
     expect(args.abortSignal).toBeUndefined()
     expect(typeof args.onAbort).toBe('function')
+  })
+})
+
+// ─── quick-kayinleong-061: the text must be on disk BEFORE the turn ends ──────
+//
+// Measured on live Firestore: 25 lost replies, every one of them Finder (coach 24/24 and
+// reply 4/4 lost nothing). usageEvents — written at the END of onFinish — matched the
+// stored assistant count, so onFinish never ran; and there were zero :error / :aborted
+// markers, so onError and onAbort did not run either. When NO callback fires the process is
+// being killed, and callback plumbing cannot save the turn.
+
+describe('quick-061: the assistant row is written at each step boundary', () => {
+  const flushWrites = () => new Promise((r) => setTimeout(r, 0))
+
+  function captureAssistant(cid: string) {
+    const appended: Array<{ content: string; routeDecision: string }> = []
+    const updated: Array<{ content: string; routeDecision: string }> = []
+    mocks.mockAppendMessage.mockImplementation((async (
+      writtenCid: string,
+      msg: { role: string; content: string; routeDecision: string },
+    ) => {
+      if (msg.role === 'assistant' && writtenCid === cid) {
+        appended.push({ content: msg.content, routeDecision: msg.routeDecision })
+      }
+      return 'assistant-mid'
+    }) as unknown as () => Promise<string>)
+    mocks.mockUpdateMessage.mockImplementation((async (
+      writtenCid: string,
+      _mid: string,
+      msg: { role: string; content: string; routeDecision: string },
+    ) => {
+      if (msg.role === 'assistant' && writtenCid === cid) {
+        updated.push({ content: msg.content, routeDecision: msg.routeDecision })
+      }
+    }) as unknown as () => Promise<void>)
+    return { appended, updated }
+  }
+
+  it('persists step-1 text even when NO callback ever fires — the reported failure', async () => {
+    const { appended } = captureAssistant('c-061a')
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onStepFinish }: { onStepFinish?: (s: unknown) => void }) => {
+        // Two steps land, then the process is killed: no onFinish, no onError, no onAbort.
+        onStepFinish?.({ text: 'Here are the two strongest matches', toolResults: [] })
+        onStepFinish?.({ text: '', toolResults: [] })
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-061a' }))
+    await flushWrites()
+
+    expect(appended).toHaveLength(1)
+    expect(appended[0].content).toBe('Here are the two strongest matches')
+    // Marked incomplete in the observable D-02 field, never in the content.
+    expect(appended[0].routeDecision).toMatch(/:partial$/)
+  })
+
+  it('extends the SAME row across steps rather than appending one per step', async () => {
+    const { appended, updated } = captureAssistant('c-061b')
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onStepFinish }: { onStepFinish?: (s: unknown) => void }) => {
+        onStepFinish?.({ text: 'first', toolResults: [] })
+        onStepFinish?.({ text: 'second', toolResults: [] })
+        onStepFinish?.({ text: 'third', toolResults: [] })
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-061b' }))
+    await flushWrites()
+
+    expect(appended).toHaveLength(1)
+    expect(updated).toHaveLength(2)
+    expect(updated.at(-1)!.content).toBe('first\n\nsecond\n\nthird')
+  })
+
+  it('a completed turn ends CLEAN — onFinish clears the :partial marker', async () => {
+    const { appended, updated } = captureAssistant('c-061c')
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onStepFinish, onFinish }: {
+        onStepFinish?: (s: unknown) => void
+        onFinish?: (r: Record<string, unknown>) => Promise<void>
+      }) => {
+        onStepFinish?.({ text: 'searching', toolResults: [] })
+        void onFinish?.({
+          ...mockFinalResult,
+          text: 'searching\n\nthe full ranked answer',
+          steps: [{ text: 'searching' }, { text: 'the full ranked answer' }],
+        })
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-061c' }))
+    await flushWrites()
+
+    expect(appended).toHaveLength(1)
+    const final = updated.at(-1)!
+    expect(final.content).toBe('searching\n\nthe full ranked answer')
+    expect(final.routeDecision).not.toMatch(/:partial$/)
+  })
+
+  it('a tool-only step writes nothing — no empty bubble mid-loop', async () => {
+    const { appended, updated } = captureAssistant('c-061d')
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onStepFinish }: { onStepFinish?: (s: unknown) => void }) => {
+        onStepFinish?.({ text: '', toolResults: [{ toolName: 'searchProjects' }] })
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-061d' }))
+    await flushWrites()
+
+    expect(appended).toEqual([])
+    expect(updated).toEqual([])
   })
 })
