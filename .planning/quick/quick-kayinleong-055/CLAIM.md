@@ -3,7 +3,7 @@
 - session: claude-code
 - branch: quick-kayinleong-045-whatsapp-ingest
 - started: 2026-08-26
-- status: claimed
+- status: done
 - summary: 19 assistant responses are missing from Firestore (26% of conversations). onFinish is the ONLY thing that persists an assistant message, so any turn that errors or aborts saves the user's question and nothing else — the user sees their own messages with no replies when they revisit a chat.
 
 ## Evidence (live Firestore)
@@ -49,6 +49,49 @@ has vanished entirely, which is exactly what was reported.
   it is not mistaken for a complete answer.
 - Wire `abortSignal: req.signal` so `onAbort` can actually fire.
 
+## What has changed
+
+One commit (`44baeec`), all in `app/api/chat/route.ts`.
+
+- `turnText` accumulates per step (extends the existing `onStepFinish`).
+- `persistAssistantOnce(text, outcome)` — idempotent via a `persisted` flag.
+- Called from `onFinish` (unchanged: still `fullTurnText(final)` + the real token count),
+  and now ALSO from `onError` and `onAbort`. `abortSignal: req.signal` wired so `onAbort`
+  can fire.
+- Empty turn ⇒ writes NOTHING. An empty bubble reads as the agent answering with silence.
+- Incomplete turn marked in `routeDecision` (`…:error` / `…:aborted`) — the existing
+  observable D-02 field — not in the content.
+
 ## Verification
 
-_(pending)_
+- `npx tsc --noEmit` → **0 errors**
+- `npx vitest run` → **995 passed**, 197 skipped, 0 failed (was 990; **+5**)
+- `npx eslint app src` → **0 errors**; `npm run build` → exit 0
+
+### What the tests pin
+Partial text persists on **error**; partial text persists on **abort**; **exactly once**
+when `onError` and `onFinish` both fire (the double-write quick-046 was rightly worried
+about — the guard is what makes full coverage safe); **no empty bubble** when nothing was
+generated; the incomplete marker lands in `routeDecision`, not the content.
+
+### Regression surface
+- The normal path is behaviourally unchanged — same `fullTurnText(final)`, same citations,
+  same token count. Only the write is now gated on a flag that is false at that point.
+- `citations` is `string[]` on `MessageDoc` (not `{chunkId}[]`); tsc caught my first
+  attempt at that and it is now correct in both writers.
+- Everything downstream of the assistant write in `onFinish` (finderSlot, replySlot,
+  knowledgeGaps, ratelimit decrement, audit, usage) is untouched and still only runs on
+  the normal path — a failed turn should not be billed or audited as a complete one.
+- `abortSignal` is newly wired. quick-046 chose `consumeStream()` over
+  `abortSignal`+`onAbort` to avoid a double write; both now coexist safely behind the guard.
+
+## Honest gaps
+
+1. **Does not recover the 19 already-lost replies.** They were never written anywhere, so
+   there is nothing to restore. This stops the bleeding only.
+2. **The underlying cause of the failures is still unknown** — this guarantees the reply is
+   saved when a turn dies, but not *why* turns die. `onError`/`onAbort` now log with the
+   pillar and step count, so the next occurrence leaves evidence. quick-054 (collateral
+   660 → 12 items, −98% payload) is a strong candidate for having been a major contributor.
+3. **No live verification** — no authenticated session, so the fix is proven against mocks
+   and the live Firestore diagnostic, not by reproducing a failed turn end to end.
