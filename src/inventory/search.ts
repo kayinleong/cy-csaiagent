@@ -181,9 +181,28 @@ export const DSR_MULTIPLE = 4.5
  *   3. The correctness work is done by the deterministic location/price gates above, not
  *      by this number. This floor is a noise/payload guard.
  *
- * ⚠ UNVALIDATED against real inventory embeddings — no score distribution has been
- * captured yet. `score` is returned on every ProjectMatch, so log the distribution for
- * known-good and known-bad queries and re-tune.
+ * ⚠ MEASURED, AND CURRENTLY A NO-OP. The distribution has now been captured against the
+ * real 83-project corpus with real Gemini query embeddings (quick-kayinleong-050):
+ *
+ *   "nice condo for a small family"              top 0.628  median 0.600  min 0.558
+ *   "a 2-bedroom in Bangsar under 900k"          top 0.719  median 0.638  min 0.590
+ *   "quantum chromodynamics lattice gauge theory" top 0.499  median 0.468  min 0.448
+ *   "banana bread recipe"                        top 0.494  median 0.458  min 0.427
+ *
+ * Every project clears 0.20 for every query, including deliberate nonsense — 83/83 in all
+ * four cases. So this floor filters NOTHING today; MAX_MATCHES below is doing all of the
+ * payload work, and the hard location/price gates do the correctness work.
+ *
+ * It is left at 0.20 deliberately rather than retuned on four probe queries. A floor in
+ * the 0.50-0.55 window WOULD separate the observed relevant scores (min 0.558) from the
+ * observed irrelevant ones (max 0.499), but that gap is narrow, Gemini similarity ranges
+ * are compressed, and a floor set too high produces silent false negatives on a real
+ * agent's oddly-phrased query — the worst failure mode here, because it is invisible.
+ * Raising it needs a proper eval set, not four samples.
+ *
+ * The constant is kept (not deleted) so the seam exists, but do NOT read it as an active
+ * guard. Assuming a safety net that does not exist is exactly what left 11,774 collateral
+ * docs as dead links in this same claim.
  */
 export const MIN_RELEVANCE = 0.20
 
