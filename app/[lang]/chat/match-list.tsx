@@ -165,7 +165,7 @@ interface MatchCardProps {
  * Footer: matched-criteria badges + collateral chips (links, never Drive embed)
  */
 function MatchCard({ match, rank }: MatchCardProps) {
-  const { projectId, rationale, matchedCriteria, collateral } = match
+  const { projectId, name, rationale, matchedCriteria, collateral } = match
 
   return (
     <Card
@@ -181,10 +181,26 @@ function MatchCard({ match, rank }: MatchCardProps) {
         >
           {rank}
         </Badge>
-        {/* Project ID — cite real ID, never fabricated (D-04) */}
-        <span className="font-mono text-xs text-muted-foreground truncate" title={projectId}>
-          {projectId}
-        </span>
+        {/* Name first, ID second (quick-kayinleong-056). The ID stays visible — it is the
+            grounding citation (D-04) and the admin surfaces key off it — but an agent
+            cannot say "QiQthTM3nC4SqWnST1Q6" to a lead, and until now that opaque string
+            was the only thing identifying the project on the card. Falls back to the ID
+            alone when the model omitted the name, which is the pre-056 rendering. */}
+        {name ? (
+          <>
+            <span className="text-sm font-semibold truncate">{name}</span>
+            <span
+              className="font-mono text-[0.625rem] text-muted-foreground truncate shrink"
+              title={projectId}
+            >
+              {projectId}
+            </span>
+          </>
+        ) : (
+          <span className="font-mono text-xs text-muted-foreground truncate" title={projectId}>
+            {projectId}
+          </span>
+        )}
       </CardHeader>
 
       {/* Grounded rationale — references real project fields.

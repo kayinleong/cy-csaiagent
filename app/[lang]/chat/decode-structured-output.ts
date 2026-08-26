@@ -15,7 +15,165 @@
  */
 
 import { ReplyOutputSchema, type ReplyOutput } from '@/src/agents/reply/schema'
-import { FinderOutputSchema, type FinderOutput } from '@/src/agents/finder/schema'
+import {
+  FinderOutputSchema,
+  FinderMatchSchema,
+  type FinderOutput,
+} from '@/src/agents/finder/schema'
+
+// ─── Truncated-envelope repair (quick-kayinleong-056) ─────────────────────────
+
+/**
+ * Close the containers still open at `safeEnd` and return the resulting JSON text.
+ * Returns null when no complete value was ever seen (nothing to salvage).
+ */
+function truncateToSafe(src: string, safeEnd: number, safeStack: Array<'{' | '['>): string | null {
+  if (safeEnd < 0) return null
+  let out = src.slice(0, safeEnd)
+  for (let k = safeStack.length - 1; k >= 0; k--) out += safeStack[k] === '{' ? '}' : ']'
+  return out
+}
+
+/** Number of backslashes immediately before the end of `s` — an ODD count means the
+ *  final character is an open escape that would swallow a closing quote. */
+function trailingBackslashes(s: string): number {
+  let n = 0
+  for (let i = s.length - 1; i >= 0 && s[i] === '\\'; i--) n++
+  return n
+}
+
+/**
+ * Repair a JSON envelope that was cut off mid-flight, so a truncated turn still renders
+ * as a card instead of collapsing to a lone paragraph (quick-kayinleong-056).
+ *
+ * This is the dominant real-world failure: the model streams a long envelope, the turn
+ * ends early, and everything after the cut is lost. quick-051 answered that by pulling out
+ * the first prose field, which rescues the words but throws away the collateral links and
+ * the criteria badges — the reported screenshot is exactly that, a good-looking card whose
+ * last link is severed mid-token.
+ *
+ * Two repair strategies, chosen by WHERE the cut landed:
+ *
+ *   1. Cut inside a prose string ("answer", "rationale", …) → close the string. Nearly all
+ *      of the text survives; a markdown link left dangling by the cut is neutralised
+ *      downstream by sanitizeMarkdown().
+ *   2. Cut inside a URL string → do NOT close it. A half-URL closed into a valid-looking
+ *      link is the UI asserting something false — the same reason quick-050 made
+ *      fetchCollateral omit pathless items. Fall back to the last COMPLETE value instead,
+ *      which leaves the half-built item without its `url`; normalizeCollateral then drops
+ *      it and the agent sees the links that did arrive.
+ *
+ * A number cut mid-token is never closed either — "priceMax": 90000 may well have been
+ * 900000, and quietly under-reporting a price is worse than dropping the field.
+ *
+ * Returns null when the input is already complete (nothing to do) or when nothing
+ * salvageable was seen. NEVER invents a key, a value or a URL.
+ */
+export function repairTruncatedJson(src: string): string | null {
+  const n = src.length
+  const stack: Array<'{' | '['> = []
+  // Per-object frame: is the next string a KEY (vs a value)? Arrays push `false`.
+  const expectKey: boolean[] = []
+  let safeEnd = -1
+  let safeStack: Array<'{' | '['> = []
+
+  const markSafe = (end: number) => {
+    if (stack.length === 0) return
+    safeEnd = end
+    safeStack = [...stack]
+  }
+
+  let i = 0
+  while (i < n) {
+    const ch = src[i]
+
+    if (ch === ' ' || ch === '\n' || ch === '\r' || ch === '\t') {
+      i++
+      continue
+    }
+
+    if (ch === '{' || ch === '[') {
+      stack.push(ch)
+      expectKey.push(ch === '{')
+      i++
+      // An empty container is itself a valid place to cut.
+      markSafe(i)
+      continue
+    }
+
+    if (ch === '}' || ch === ']') {
+      stack.pop()
+      expectKey.pop()
+      i++
+      // The document closed on its own — it was never truncated.
+      if (stack.length === 0) return null
+      if (stack[stack.length - 1] === '{') expectKey[expectKey.length - 1] = false
+      markSafe(i)
+      continue
+    }
+
+    if (ch === ',') {
+      i++
+      if (stack[stack.length - 1] === '{') expectKey[expectKey.length - 1] = true
+      continue
+    }
+
+    if (ch === ':') {
+      i++
+      if (stack.length > 0) expectKey[expectKey.length - 1] = false
+      continue
+    }
+
+    if (ch === '"') {
+      const quoteStart = i
+      let j = i + 1
+      let closed = false
+      for (; j < n; j++) {
+        const c = src[j]
+        if (c === '\\') {
+          j++
+          continue
+        }
+        if (c === '"') {
+          closed = true
+          break
+        }
+      }
+
+      if (!closed) {
+        // Strategy 2: a severed URL is dropped, not closed.
+        const body = src.slice(quoteStart + 1)
+        if (/^https?:\/\//i.test(body)) return truncateToSafe(src, safeEnd, safeStack)
+
+        // Strategy 1: close the prose string. Trim a partial escape first, or the
+        // backslash swallows the quote we are about to add.
+        let out = src
+        out = out.replace(/\\u[0-9a-fA-F]{0,3}$/, '')
+        if (trailingBackslashes(out) % 2 === 1) out = out.slice(0, -1)
+        out += '"'
+        for (let k = stack.length - 1; k >= 0; k--) out += stack[k] === '{' ? '}' : ']'
+        return out
+      }
+
+      i = j + 1
+      const isKey = stack[stack.length - 1] === '{' && expectKey[expectKey.length - 1]
+      if (!isKey) markSafe(i)
+      continue
+    }
+
+    // A bare literal: number, true, false or null.
+    let j = i
+    while (j < n && !/[\s,\]}]/.test(src[j])) j++
+    // Ran to the end of the buffer — the token itself is incomplete, so it cannot be
+    // trusted (a truncated number is a WRONG number, not a missing one).
+    if (j >= n) return truncateToSafe(src, safeEnd, safeStack)
+    i = j
+    markSafe(i)
+  }
+
+  if (stack.length === 0) return null
+  return truncateToSafe(src, safeEnd, safeStack)
+}
 
 /**
  * Extract a JSON object from the model's final text. Tolerates a ```json … ``` code
@@ -36,6 +194,12 @@ function extractJsonObject(content: string): unknown {
   const last = unfenced.lastIndexOf('}')
   if (first !== -1 && last > first) {
     candidates.push(unfenced.slice(first, last + 1))
+  }
+  // Last resort: the envelope was cut off mid-flight. Tried AFTER the intact candidates
+  // so a complete envelope is never routed through the repair path (quick-056).
+  if (first !== -1) {
+    const repaired = repairTruncatedJson(unfenced.slice(first))
+    if (repaired) candidates.push(repaired)
   }
 
   for (const candidate of candidates) {
@@ -141,6 +305,28 @@ export function normalizeFinderShape(raw: unknown): unknown {
 }
 
 /**
+ * Drop any match that is not renderable ON ITS OWN, rather than letting one husk fail the
+ * WHOLE envelope (quick-kayinleong-056).
+ *
+ * A repaired truncation almost always leaves a half-built FINAL match — the cut landed
+ * inside it. Before this, that husk cost the agent every complete match above it, because
+ * zod validates `matches` as a unit. Validating each match against its own schema is the
+ * exact test — the schema IS the definition of renderable.
+ *
+ * Deliberately a separate step from normalizeFinderShape, whose contract is "repair the
+ * container shape, let zod reject the rest honestly". This one drops; it never fills in.
+ */
+export function dropUnrenderableMatches(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return raw
+  const obj = raw as Record<string, unknown>
+  if (!Array.isArray(obj.matches)) return raw
+  return {
+    ...obj,
+    matches: obj.matches.filter((m) => FinderMatchSchema.safeParse(m).success),
+  }
+}
+
+/**
  * Decode a Reply turn's accumulated text into a ReplyOutput, or null if it isn't one.
  * Requires a populated branch — an empty `{}` (or a stripped non-Reply object) is not a card.
  */
@@ -168,7 +354,7 @@ export function decodeFinderOutput(content: string): FinderOutput | null {
   // Repair predictable shape drift BEFORE validating (quick-053). Without this, a
   // complete and well-formed envelope whose `collateral` came back as an object of
   // arrays fails zod outright and the agent sees raw JSON.
-  const result = FinderOutputSchema.safeParse(normalizeFinderShape(obj))
+  const result = FinderOutputSchema.safeParse(dropUnrenderableMatches(normalizeFinderShape(obj)))
   if (!result.success) return null
 
   const { matches, refusal, clarifyingQuestion, answer } = result.data
@@ -198,6 +384,13 @@ export function decodeFinderOutput(content: string): FinderOutput | null {
  * recovered — the caller should then leave the content alone rather than invent anything.
  */
 const SALVAGE_KEYS = ['answer', 'rationale', 'explanation', 'clarifyingQuestion', 'message', 'text']
+
+/**
+ * Does this text actually look like a Reply/Finder envelope? Guards the prose-prefix
+ * fallback below so a legitimate answer that merely CONTAINS a brace — a JSON snippet in a
+ * how-to, a set in prose — is never truncated at it.
+ */
+const ENVELOPE_KEY = /"(?:matches|refusal|draft|noSopMatch|clarifyingQuestion|answer|projectId|sopDocIds)"/
 
 export function salvageStructuredText(content: string): string | null {
   const unfenced = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
@@ -241,5 +434,17 @@ export function salvageStructuredText(content: string): string | null {
     }
   }
 
-  return null
+  // Nothing readable INSIDE the envelope. Fall back to the prose the model wrote BEFORE
+  // it (quick-kayinleong-056). When a turn is cut off very early the envelope holds only
+  // keys — no prose to lift — and the whole thing used to reach the agent as
+  // `Let me pull that up.{"matches":[{"projectId":"QiQ…`. The narration is real text the
+  // model produced; the braces are not something anyone should ever see.
+  const prefix = unfenced.slice(0, brace).replace(/```(?:json)?\s*$/i, '').trim()
+  // Machine noise = a recognisable envelope key, OR an object that never closed. A turn
+  // cut off inside the very first key has no recognisable key yet — that is precisely the
+  // case that leaked — and an unterminated `{` at the tail of a Reply/Finder turn is
+  // machine output by contract either way. A CLOSED brace is left alone: prose legitimately
+  // says "the shape { projectId, rationale }".
+  const machineNoise = ENVELOPE_KEY.test(trimmed) || !trimmed.includes('}')
+  return prefix.length > 0 && machineNoise ? prefix : null
 }

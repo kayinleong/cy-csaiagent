@@ -7,7 +7,13 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { decodeReplyOutput, decodeFinderOutput, salvageStructuredText, normalizeFinderShape } from './decode-structured-output'
+import {
+  decodeReplyOutput,
+  decodeFinderOutput,
+  salvageStructuredText,
+  normalizeFinderShape,
+  repairTruncatedJson,
+} from './decode-structured-output'
 
 const replyDraftJson = JSON.stringify({
   draft: { text: 'Thanks for reaching out…', sopDocIds: ['sop-cold-001'] },
@@ -292,5 +298,185 @@ describe('quick-053: salvage tolerates a prose prefix', () => {
 
   it('still declines ordinary prose with no envelope at all', () => {
     expect(salvageStructuredText('Here are the collateral files for Kensho.')).toBeNull()
+  })
+})
+
+// ─── repairTruncatedJson (quick-kayinleong-056) ───────────────────────────────
+
+describe('repairTruncatedJson', () => {
+  it('returns null for a COMPLETE envelope — the repair path must never run on good input', () => {
+    expect(repairTruncatedJson('{"answer":"all good"}')).toBeNull()
+    expect(repairTruncatedJson('{"matches":[{"projectId":"a"}]}')).toBeNull()
+  })
+
+  it('closes a prose string cut mid-sentence, keeping the words that arrived', () => {
+    const repaired = repairTruncatedJson('{"answer":"Bangsar Hill Park is leasehold until')
+    expect(repaired).not.toBeNull()
+    expect(JSON.parse(repaired!)).toEqual({
+      answer: 'Bangsar Hill Park is leasehold until',
+    })
+  })
+
+  it('DROPS a URL cut mid-token rather than closing it into a dead link', () => {
+    const src =
+      '{"matches":[{"projectId":"p1","rationale":"why","collateral":[' +
+      '{"type":"Brochure","url":"https://example.com/a.pdf"},' +
+      '{"type":"End Financier","url":"https://example.com/b.pdf?token=36782d20-42ac'
+    const parsed = JSON.parse(repairTruncatedJson(src)!) as {
+      matches: Array<{ collateral: Array<{ type: string; url?: string }> }>
+    }
+    // The complete item survives; the severed one keeps its type but has NO url, so
+    // normalizeCollateral drops it downstream. A half URL is never emitted.
+    expect(parsed.matches[0].collateral).toEqual([
+      { type: 'Brochure', url: 'https://example.com/a.pdf' },
+      { type: 'End Financier' },
+    ])
+  })
+
+  it('drops a number cut mid-token — a truncated price is a WRONG price', () => {
+    const parsed = JSON.parse(repairTruncatedJson('{"a":1,"priceMax":90000')!) as Record<
+      string,
+      unknown
+    >
+    expect(parsed).toEqual({ a: 1 })
+    expect(parsed.priceMax).toBeUndefined()
+  })
+
+  it('drops a key whose value never started', () => {
+    expect(JSON.parse(repairTruncatedJson('{"a":1,"b":')!)).toEqual({ a: 1 })
+    expect(JSON.parse(repairTruncatedJson('{"a":1,')!)).toEqual({ a: 1 })
+    expect(JSON.parse(repairTruncatedJson('{"a":1,"b"')!)).toEqual({ a: 1 })
+  })
+
+  it('closes nested containers to the right depth', () => {
+    expect(JSON.parse(repairTruncatedJson('{"matches":[{"projectId":"p1"')!)).toEqual({
+      matches: [{ projectId: 'p1' }],
+    })
+    expect(JSON.parse(repairTruncatedJson('{"matches":[')!)).toEqual({ matches: [] })
+  })
+
+  it('does not let a partial escape swallow the closing quote', () => {
+    expect(JSON.parse(repairTruncatedJson('{"answer":"line one\\')!)).toEqual({
+      answer: 'line one',
+    })
+    expect(JSON.parse(repairTruncatedJson('{"answer":"snow \\u26')!)).toEqual({
+      answer: 'snow ',
+    })
+  })
+
+  it('never invents a key or a value', () => {
+    const parsed = JSON.parse(repairTruncatedJson('{"matches":[{"projectId":"p1","name"')!) as {
+      matches: Array<Record<string, unknown>>
+    }
+    expect(Object.keys(parsed.matches[0])).toEqual(['projectId'])
+  })
+})
+
+// ─── decodeFinderOutput on truncated envelopes (quick-kayinleong-056) ─────────
+
+describe('decodeFinderOutput — truncated envelopes still render as cards', () => {
+  it('recovers the conversational answer instead of collapsing to a bare paragraph', () => {
+    // The reported screenshot: a long markdown answer cut off inside the third link.
+    const truncated =
+      '```json\n{"matches":[],"answer":"**Bangsar Hill Park**\\n\\n1. [Carpark Plan](https://x/a.pdf)\\n2. [End Financier Info](https://x/b.pdf?token=36782d20-42ac'
+    const out = decodeFinderOutput(truncated)
+    expect(out).not.toBeNull()
+    expect(out!.answer).toContain('Bangsar Hill Park')
+    expect(out!.answer).toContain('[Carpark Plan](https://x/a.pdf)')
+  })
+
+  it('keeps the collateral links that arrived and drops the severed one', () => {
+    const truncated =
+      '{"matches":[{"projectId":"QiQ","name":"Residensi 38 Bangsar","rationale":"why",' +
+      '"matchedCriteria":{"segment":"unknown","priceMax":900000,"nationality":"malaysian",' +
+      '"bumiputera":false,"locationPref":"Bangsar","bedrooms":2},"collateral":[' +
+      '{"type":"Sales Kit","url":"https://x/a.pdf"},' +
+      '{"type":"Brochure","url":"https://x/b.pdf"},' +
+      '{"type":"End Financier","url":"https://x/c.pdf?token=3678'
+    const out = decodeFinderOutput(truncated)
+    expect(out).not.toBeNull()
+    expect(out!.matches).toHaveLength(1)
+    expect(out!.matches[0].name).toBe('Residensi 38 Bangsar')
+    expect(out!.matches[0].collateral).toEqual([
+      { type: 'Sales Kit', url: 'https://x/a.pdf' },
+      { type: 'Brochure', url: 'https://x/b.pdf' },
+    ])
+  })
+
+  it('drops an incomplete trailing match instead of losing the complete ones', () => {
+    const criteria =
+      '{"segment":"unknown","priceMax":null,"nationality":"unknown","bumiputera":null,' +
+      '"locationPref":null,"bedrooms":null}'
+    const truncated =
+      `{"matches":[{"projectId":"p1","rationale":"first","matchedCriteria":${criteria}},` +
+      '{"projectId":"p2","rationale":"second'
+    const out = decodeFinderOutput(truncated)
+    expect(out).not.toBeNull()
+    // p2 never got its matchedCriteria, so it is not renderable — but that must not cost
+    // the agent p1, which is complete.
+    expect(out!.matches.map((m) => m.projectId)).toEqual(['p1'])
+  })
+
+  it('still returns null when nothing renderable survives — no empty card', () => {
+    expect(decodeFinderOutput('{"matches":[')).toBeNull()
+    expect(decodeFinderOutput('{"matc')).toBeNull()
+  })
+
+  it('leaves a COMPLETE envelope byte-identical — repair is last-resort only', () => {
+    const complete = JSON.stringify({
+      matches: [
+        {
+          projectId: 'p1',
+          name: 'The Lantern Bangsar',
+          rationale: 'why',
+          matchedCriteria: {
+            segment: 'unknown',
+            priceMax: 900000,
+            nationality: 'malaysian',
+            bumiputera: false,
+            locationPref: 'Bangsar',
+            bedrooms: 2,
+          },
+          collateral: [{ type: 'Sales Kit', url: 'https://x/a.pdf' }],
+        },
+      ],
+    })
+    const out = decodeFinderOutput('Let me pull that up.\n\n```json\n' + complete + '\n```')
+    expect(out).not.toBeNull()
+    expect(out!.matches[0].collateral).toHaveLength(1)
+    expect(out!.matches[0].name).toBe('The Lantern Bangsar')
+  })
+})
+
+// ─── salvage prose-prefix fallback (quick-kayinleong-056) ─────────────────────
+
+describe('salvageStructuredText — prose-prefix fallback', () => {
+  it('returns the narration when the envelope was cut off before any prose', () => {
+    // A turn cut off this early has nothing readable INSIDE the envelope, so before 056
+    // the braces themselves reached the agent.
+    const cut = 'Let me pull up that search result now.\n\n```json\n{"matches":[{"projectId":"QiQ","ration'
+    expect(salvageStructuredText(cut)).toBe('Let me pull up that search result now.')
+  })
+
+  it('still prefers a readable field INSIDE the envelope over the narration', () => {
+    const both = 'Let me check.\n\n{"answer":"Bangsar Hill Park is leasehold."'
+    expect(salvageStructuredText(both)).toBe('Bangsar Hill Park is leasehold.')
+  })
+
+  it('returns the narration when the cut landed inside the very FIRST key', () => {
+    // No recognisable envelope key exists yet at this point, so the key test alone is not
+    // enough — an unterminated object at the tail is machine output by contract.
+    expect(salvageStructuredText('Let me pull that up.\n\n```json\n{\n  "m')).toBe(
+      'Let me pull that up.',
+    )
+  })
+
+  it('does not truncate prose that merely contains a brace', () => {
+    const prose = 'Use the shape { projectId, rationale } when you file the form.'
+    expect(salvageStructuredText(prose)).toBeNull()
+  })
+
+  it('returns null when there is no narration to fall back to', () => {
+    expect(salvageStructuredText('{"matches":[{"projectId":"QiQ","ration')).toBeNull()
   })
 })

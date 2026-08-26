@@ -145,6 +145,19 @@ export const FinderMatchSchema = z.object({
   projectId: z.string().min(1),
 
   /**
+   * The project's display name, copied verbatim from the searchProjects result
+   * (quick-kayinleong-056).
+   *
+   * Optional so an older persisted turn still decodes. When absent the card falls back to
+   * the projectId — which is what every match card showed before this field existed, and
+   * "QiQthTM3nC4SqWnST1Q6" is not a thing an agent can say to a lead.
+   *
+   * Invariant: copied from the tool result, NEVER composed. A name the search did not
+   * return is a fabricated project by another route.
+   */
+  name: z.string().min(1).optional(),
+
+  /**
    * Human-readable "why this match" explanation grounded in real project fields.
    * Must reference at least one of: projectId, priceBand, tenure, vpStatus, bedrooms,
    * locationText, foreignEligible, bumiQuota — no invented attributes.

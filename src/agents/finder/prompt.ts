@@ -133,7 +133,8 @@ ${reRankSection}
 
 ## Output Format
 Return a JSON object matching the FinderOutput schema:
-- matches: array of { projectId, rationale, matchedCriteria, collateral? } — must be empty when refusal or clarifyingQuestion is present.
+- matches: array of { projectId, name, rationale, matchedCriteria, collateral? } — must be empty when refusal or clarifyingQuestion is present.
+- name: copy the project's name EXACTLY as searchProjects returned it. Never compose, translate or abbreviate it. Omit the field entirely rather than guess — the agent reads this name out to a lead.
 - refusal (optional): { reason: "no_match"|"ineligible", explanation: string } — include whenever searchProjects returns found:false, and in that case matches MUST be empty. Use "no_match" when the search ran and nothing met the criteria (including an area or budget with no active inventory); use "ineligible" when the tool returned an eligibility or financing gate. The explanation must reference the real gate result — which area, which budget, or which eligibility rule — and must not name any project.
 - clarifyingQuestion (optional): string — include ONLY when eligibility-critical data (nationality / income / segment) is unknown and you need to ask before searching. When present, matches must be empty and refusal must be absent.
 - answer (optional): string — a conversational markdown reply for a question ABOUT a project rather than a request for matches (see the section above). When present, matches must be empty and refusal must be absent.

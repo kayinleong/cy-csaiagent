@@ -14,6 +14,7 @@ import { memo } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { cn } from '@/lib/utils'
+import { sanitizeMarkdown } from './sanitize-markdown'
 
 const components: Components = {
   p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
@@ -97,7 +98,11 @@ export const MarkdownMessage = memo(function MarkdownMessage({
   return (
     <div data-slot="markdown-message" className={cn('break-words', className)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {content}
+        {/* Applied HERE rather than at the call sites so it covers every path into
+            markdown at once — the plain assistant bubble, a Finder `answer`, a match
+            `rationale`, a restored history turn. Those four drifted apart once already
+            (quick-046), and a guardrail that only guards three of them is not one. */}
+        {sanitizeMarkdown(content)}
       </ReactMarkdown>
     </div>
   )
