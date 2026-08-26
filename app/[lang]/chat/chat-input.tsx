@@ -43,6 +43,7 @@ import {
   parseTextChunk,
   parseStreamError,
   parseMessageMetadata,
+  isTextBlockEnd,
   TEXT_BLOCK_SEPARATOR,
 } from './decode-stream-chunk'
 
@@ -304,10 +305,13 @@ function useChatStream({
       let serverCitations: string[] = []
       let kbMiss = false
       let streamError: string | null = null
-      // Which text block the deltas are currently landing in. A multi-step turn opens a
-      // NEW block per step, and the boundary is where the paragraph break belongs
-      // (quick-kayinleong-048).
-      let currentTextBlockId: string | null = null
+      // Did the model just CLOSE a text block? The next delta then opens a new one and
+      // needs a paragraph break before it (quick-kayinleong-054).
+      //
+      // This tracks the `text-end` EVENT rather than watching the delta id change, because
+      // the SDK reuses id "0" for every block in a turn — so the id-change test from
+      // quick-048 never fired and the blocks welded together anyway.
+      let sawTextBlockEnd = false
       let buffer = ''
       // Accumulate the full assistant text so we can decode a Reply/Finder turn's
       // structured-output JSON on completion (the card-variant decode bridge).
@@ -347,18 +351,20 @@ function useChatStream({
           const errText = parseStreamError(dataLine)
           if (errText) streamError = errText
 
+          // A closed block means the next delta starts a new one.
+          if (isTextBlockEnd(dataLine)) sawTextBlockEnd = true
+
           // Extract text delta, separating step boundaries.
           const textChunk = parseTextChunk(dataLine)
           if (textChunk) {
-            // A new block id mid-turn means the model finished a step (usually to call a
-            // tool) and has started writing again. Without this the two steps weld
-            // together: "Let me search now.The search returned results…". Only inserted
-            // when there is already text, so a turn never opens with a blank line.
-            const isNewBlock =
-              currentTextBlockId !== null && textChunk.id !== currentTextBlockId
-            currentTextBlockId = textChunk.id
+            // The model closed a block and is writing again — usually it narrated, called
+            // a tool, and resumed. Without a break the two weld together:
+            // "Let me search the inventory now.{"matches": …". Only inserted when there is
+            // already text, so a turn never opens with a blank line.
+            const isNewBlock = sawTextBlockEnd && assistantContent.length > 0
+            sawTextBlockEnd = false
             const addition =
-              isNewBlock && assistantContent.length > 0
+              isNewBlock
                 ? TEXT_BLOCK_SEPARATOR + textChunk.delta
                 : textChunk.delta
 

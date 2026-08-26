@@ -30,6 +30,52 @@ import type { ProjectDoc } from '@/src/firebase/collections'
 // ─── Infra-failure guard (quick-kayinleong-040) ───────────────────────────────
 
 /**
+ * Maximum collateral items returned per project (quick-kayinleong-054).
+ *
+ * Enough to attach a brochure, a sales kit, an FAQ, a price list and a folder link without
+ * shipping a project's entire media library into the model context on every step.
+ */
+export const MAX_COLLATERAL_ITEMS = 12
+
+/**
+ * Sort key for collateral usefulness — LOWER is better.
+ *
+ * The corpus is dominated by WhatsApp media, so `type` alone does not discriminate: nearly
+ * everything is `whatsapp-media` and the real signal is the file extension in the URL. An
+ * agent sending something to a lead wants documents first.
+ */
+function collateralRank(item: { type: string; url: string }): number {
+  const url = item.url.toLowerCase()
+  // Strip the query string before testing the extension — Firebase download URLs always
+  // carry ?alt=media&token=… so a naive endsWith() would never match.
+  const path = url.split('?')[0]
+
+  if (/\.(pdf|docx?|xlsx?|pptx?)$/.test(path)) return 0 // brochures, sales kits, FAQs, price lists
+  // Curated folder/video links from the Drive importer — few, and high value.
+  if (item.type !== 'whatsapp-media') return 1
+  if (/\.(mp4|mov|webm)$/.test(path)) return 2 // walkthroughs
+  if (/\.(jpe?g|png|webp)$/.test(path)) return 3 // photos
+  return 4 // .opus voice notes, .vcf contacts, anything else
+}
+
+/**
+ * Rank + cap a collateral list (quick-kayinleong-054).
+ *
+ * The single implementation — fetchCollateral calls this on its Firestore read, and the
+ * tests exercise it directly without needing a Firestore mock. Stable within a rank band:
+ * rank first, original order within a rank, so identical calls are deterministic.
+ */
+export function rankAndCapCollateral(
+  items: Array<{ type: string; url: string }>,
+): Array<{ type: string; url: string }> {
+  return items
+    .map((item, index) => ({ item, index, rank: collateralRank(item) }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((r) => r.item)
+    .slice(0, MAX_COLLATERAL_ITEMS)
+}
+
+/**
  * Structured failure a read-only Finder tool returns when an underlying infra
  * dependency (Gemini embedding, Firestore, network) throws.
  *
@@ -326,7 +372,27 @@ export function makeFetchCollateralTool(userLang: 'en' | 'ms' | 'zh') {
           )
         }
 
-        return items
+        // Rank, then cap (quick-kayinleong-054). A raw SSE capture of a real turn showed
+        // this returning ~200 items for one project, called three times in a turn, with
+        // every result re-sent on each subsequent step of the stepCountIs(5) loop — tens
+        // of thousands of tokens of Firebase download URLs. That fits the measured data:
+        // Finder averages 7,209 tokens/turn vs Coach's 3,273, and one real user-day burned
+        // 70,939 tokens in FOUR turns. quick-050 capped searchProjects; this path was left
+        // unbounded.
+        //
+        // It is also simply the wrong content. An agent forwarding something to a lead
+        // wants the brochure, sales kit, FAQ and price list — not 200 WhatsApp photos,
+        // .opus voice notes and .vcf contact cards, which is what an unranked read returns.
+        const ranked = rankAndCapCollateral(items)
+
+        if (items.length > ranked.length) {
+          // Counts + projectId only, never content (PDPA).
+          console.warn(
+            `[fetchCollateral] project ${projectId}: returned ${ranked.length} of ${items.length} items (ranked + capped).`,
+          )
+        }
+
+        return ranked
       }),
   })
 }

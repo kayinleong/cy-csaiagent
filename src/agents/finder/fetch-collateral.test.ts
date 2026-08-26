@@ -168,3 +168,61 @@ describe('fetchCollateral — never emits a non-URL (quick-kayinleong-050)', () 
     expect(desc).toContain('never invent')
   })
 })
+
+// ─── quick-kayinleong-054: bound and rank collateral ──────────────────────────
+//
+// A raw SSE capture showed fetchCollateral returning ~200 items for one project, called
+// three times in a turn, re-sent on every subsequent step of the stepCountIs(5) loop.
+
+describe('quick-054: collateralRank ordering', () => {
+  // Exercised through the exported ranking used by fetchCollateral. Firebase download
+  // URLs always carry ?alt=media&token=…, so extension matching must ignore the query.
+  const fbUrl = (name: string) =>
+    `https://firebasestorage.googleapis.com/v0/b/x/o/collateral%2Fp%2Fwhatsapp%2F${name}?alt=media&token=abc123`
+
+  it('ranks documents above media, and media above voice notes', async () => {
+    const { rankAndCapCollateral } = await import('./tools')
+    const ranked = rankAndCapCollateral([
+      { type: 'whatsapp-media', url: fbUrl('PTT-voice.opus') },
+      { type: 'whatsapp-media', url: fbUrl('photo.jpg') },
+      { type: 'whatsapp-media', url: fbUrl('Sales%20Kit.pdf') },
+      { type: 'whatsapp-media', url: fbUrl('walkthrough.mp4') },
+      { type: 'drive', url: 'https://drive.google.com/drive/folders/abc' },
+    ])
+    expect(ranked.map((r: { type: string; url: string }) => r.url.includes('.pdf') ? 'pdf'
+      : r.type === 'drive' ? 'drive'
+      : r.url.includes('.mp4') ? 'video'
+      : r.url.includes('.jpg') ? 'photo' : 'other'))
+      .toEqual(['pdf', 'drive', 'video', 'photo', 'other'])
+  })
+
+  it('matches the extension despite the ?alt=media&token= query string', async () => {
+    // A naive endsWith('.pdf') would never match a Firebase download URL.
+    const { rankAndCapCollateral } = await import('./tools')
+    const ranked = rankAndCapCollateral([
+      { type: 'whatsapp-media', url: fbUrl('a.jpg') },
+      { type: 'whatsapp-media', url: fbUrl('Brochure.pdf') },
+    ])
+    expect(ranked[0].url).toContain('Brochure.pdf')
+  })
+
+  it('is stable within a rank — original order preserved', async () => {
+    const { rankAndCapCollateral } = await import('./tools')
+    const ranked = rankAndCapCollateral([
+      { type: 'whatsapp-media', url: fbUrl('first.pdf') },
+      { type: 'whatsapp-media', url: fbUrl('second.pdf') },
+      { type: 'whatsapp-media', url: fbUrl('third.pdf') },
+    ])
+    expect(ranked.map((r: { url: string }) => r.url)).toEqual([
+      fbUrl('first.pdf'), fbUrl('second.pdf'), fbUrl('third.pdf'),
+    ])
+  })
+
+  it('caps the result so one project cannot flood the model context', async () => {
+    const { rankAndCapCollateral, MAX_COLLATERAL_ITEMS } = await import('./tools')
+    const many = Array.from({ length: 200 }, (_, i) => ({
+      type: 'whatsapp-media', url: fbUrl(`photo-${i}.jpg`),
+    }))
+    expect(rankAndCapCollateral(many)).toHaveLength(MAX_COLLATERAL_ITEMS)
+  })
+})

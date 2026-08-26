@@ -15,6 +15,7 @@ import {
   parseMessageMetadata,
   parseTextChunk,
   TEXT_BLOCK_SEPARATOR,
+  isTextBlockEnd,
 } from './decode-stream-chunk'
 
 describe('parseTextDelta', () => {
@@ -228,5 +229,70 @@ describe('step-boundary joining (the "now.The search" bug)', () => {
 
   it('uses a blank line, not a soft break — markdown would still run it together', () => {
     expect(TEXT_BLOCK_SEPARATOR).toBe('\n\n')
+  })
+})
+
+// ─── quick-kayinleong-054: the REAL block boundary signal ─────────────────────
+//
+// quick-048 detected step boundaries by watching the text-delta id change. A raw SSE
+// capture of a real Finder turn proved the SDK REUSES id "0" for every block, so that
+// test never fired and the blocks welded together anyway. The 048 tests passed only
+// because they used a synthetic stream with distinct ids.
+
+describe('isTextBlockEnd', () => {
+  it('detects a text-end chunk', () => {
+    expect(isTextBlockEnd('{"type":"text-end","id":"0"}')).toBe(true)
+  })
+
+  it('is false for every other chunk type', () => {
+    expect(isTextBlockEnd('{"type":"text-start","id":"0"}')).toBe(false)
+    expect(isTextBlockEnd('{"type":"text-delta","id":"0","delta":"hi"}')).toBe(false)
+    expect(isTextBlockEnd('{"type":"finish-step"}')).toBe(false)
+    expect(isTextBlockEnd('not json')).toBe(false)
+  })
+})
+
+describe('quick-054: separator fires on REPEATED block ids', () => {
+  /** Mirrors chat-input's accumulation, now keyed on text-end rather than an id change. */
+  function accumulate(lines: string[]): string {
+    let content = ''
+    let sawEnd = false
+    for (const line of lines) {
+      if (isTextBlockEnd(line)) { sawEnd = true; continue }
+      const c = parseTextChunk(line)
+      if (!c) continue
+      const isNew = sawEnd && content.length > 0
+      sawEnd = false
+      content += isNew ? TEXT_BLOCK_SEPARATOR + c.delta : c.delta
+    }
+    return content
+  }
+  const d = (id: string, delta: string) => JSON.stringify({ type: 'text-delta', id, delta })
+  const end = (id: string) => JSON.stringify({ type: 'text-end', id })
+
+  it('separates two blocks that BOTH carry id "0" — the real SDK shape', () => {
+    // Verbatim structure from the SSE capture.
+    const out = accumulate([
+      d('0', 'Let me search the inventory now.'),
+      end('0'),
+      d('0', '{\n  "matches": ['),
+    ])
+    expect(out).toBe('Let me search the inventory now.\n\n{\n  "matches": [')
+    expect(out).not.toContain('now.{')
+  })
+
+  it('does not separate deltas within one block', () => {
+    expect(accumulate([d('0', 'Hello'), d('0', ' there')])).toBe('Hello there')
+  })
+
+  it('never opens a message with a blank line', () => {
+    // A turn can end a block before any text has accumulated.
+    expect(accumulate([end('0'), d('0', 'First')])).toBe('First')
+  })
+
+  it('handles three blocks all sharing one id', () => {
+    expect(
+      accumulate([d('0', 'a'), end('0'), d('0', 'b'), end('0'), d('0', 'c')]),
+    ).toBe('a\n\nb\n\nc')
   })
 })

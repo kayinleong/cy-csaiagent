@@ -181,3 +181,34 @@ export function parseTextChunk(line: string): TextChunk | null {
  * lone newline is only a soft break and would still read as one run-on paragraph.
  */
 export const TEXT_BLOCK_SEPARATOR = '\n\n'
+
+/**
+ * Is this line a `text-end` chunk — i.e. the model just closed a text block?
+ *
+ * quick-kayinleong-054. quick-048 detected step boundaries by watching for the
+ * `text-delta` id to CHANGE. A raw SSE capture of a real Finder turn proved that wrong:
+ *
+ *     {"type":"text-start","id":"0"}   -> "Let me search the inventory now."
+ *     {"type":"text-end","id":"0"}
+ *     ...tool calls...
+ *     {"type":"text-start","id":"0"}   -> "{\n  \"matches\": [ ..."
+ *
+ * The SDK REUSES id "0" for the next block, so the id never changes and the separator
+ * never fired — the two blocks welded together exactly as before the "fix". The 048 tests
+ * passed because they used a synthetic stream with distinct ids.
+ *
+ * `text-end` is the reliable signal: it means the next `text-delta` opens a NEW block,
+ * whatever id it carries.
+ */
+export function isTextBlockEnd(line: string): boolean {
+  try {
+    const chunk = JSON.parse(line) as unknown
+    return (
+      chunk !== null &&
+      typeof chunk === 'object' &&
+      (chunk as { type?: unknown }).type === 'text-end'
+    )
+  } catch {
+    return false
+  }
+}
