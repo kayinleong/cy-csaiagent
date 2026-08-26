@@ -113,8 +113,15 @@ export type ParsedCriteriaInput = z.infer<typeof CriteriaSchema>
 
 /**
  * A single collateral item attached to a project match.
- * Returns type + URL (Storage path resolved to download URL, or externalUrl).
- * D-09/C2: Never a Drive API link — Storage or plain external URL.
+ *
+ * `url` is ALWAYS a web-addressable http/https URL. quick-kayinleong-050: this comment
+ * used to say "Storage path resolved to download URL", but no such resolution existed
+ * anywhere in the repo — the tool fell back to the raw bucket key, so 98% of collateral
+ * reached the model as a dead path. Items without a usable URL are now OMITTED by
+ * `fetchCollateral` rather than emitted as a path, because presenting a path as a link is
+ * the model asserting something false.
+ *
+ * D-09/C2: Never a Drive API link — Firebase Storage download URL or a plain external URL.
  */
 export const CollateralItemSchema = z.object({
   type: z.string().min(1),

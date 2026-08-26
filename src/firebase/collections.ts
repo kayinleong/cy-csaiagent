@@ -275,9 +275,12 @@ export interface CollateralDoc {
   /**
    * Firebase Storage object path (e.g. `collateral/project-id/poster.pdf`).
    *
-   * D-09 / C2: This field stores a Firebase Storage path OR a plain external
-   * share URL (see `externalUrl`). NEVER a Google Drive API integration —
-   * the Drive API is forbidden by the no-GCP constraint.
+   * D-09 / C2: NEVER a Google Drive API integration — the Drive API is forbidden by the
+   * no-GCP constraint.
+   *
+   * A path here is NOT web-addressable on its own. quick-kayinleong-050: write
+   * `externalUrl` alongside it (a `getDownloadURL` result), or the asset is unreachable —
+   * that gap left 11,774 of 12,020 collateral docs as dead links.
    */
   storagePath: string
   /**

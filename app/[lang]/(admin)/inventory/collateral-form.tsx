@@ -141,7 +141,12 @@ export function CollateralForm({ projectId, existing = [], onDone }: CollateralF
                   link
                 </a>
               ) : (
-                <span className="opacity-60">{item.storagePath}</span>
+                // quick-kayinleong-050: a storagePath alone is NOT web-addressable, so
+                // this is deliberately not an anchor. Label it so an admin can see the
+                // asset is unreachable rather than reading a path as if it were a link.
+                <span className="opacity-60" title={item.storagePath}>
+                  no link
+                </span>
               )}
             </Badge>
           ))}

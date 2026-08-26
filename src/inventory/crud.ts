@@ -247,8 +247,13 @@ export async function hideProject(
  * Exactly one of `storagePath` (Firebase Storage) or `externalUrl` (plain URL) is required.
  *
  * D-09 / C2: NEVER call the Google Drive API. `externalUrl` is a plain string stored as-is;
- * the client renders a download link. Signed URLs for storagePath are generated
- * in the READ path (03-04 fetchCollateral / 03-08 admin UI), not here.
+ * the client renders a download link.
+ *
+ * quick-kayinleong-050: this used to claim "signed URLs for storagePath are generated in
+ * the READ path". They never were — nothing in the repo resolved a path to a URL. Callers
+ * that upload to Storage MUST now write `externalUrl` themselves (a Firebase download URL
+ * from `getDownloadURL`) ALONGSIDE `storagePath`; a path-only doc is unreachable to both
+ * the agent and the UI.
  *
  * @param user      Verified user — must have role 'admin'.
  * @param projectId ID of the project this collateral belongs to.

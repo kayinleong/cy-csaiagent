@@ -43,6 +43,23 @@ interface MatchListProps {
  *   - clarifyingQuestion  → plain clarifying message
  *   - all empty           → empty placeholder (should not normally occur)
  */
+/**
+ * Is this string something a browser can actually navigate to?
+ *
+ * Inlined rather than imported from src/agents/finder/tools.ts (which has the canonical
+ * `webAddressableUrl`): that module pulls the AI SDK and Firebase Admin, and this is a
+ * client component — importing it would drag server-only code into the browser bundle.
+ */
+function isWebUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0) return false
+  try {
+    const u = new URL(value)
+    return u.protocol === 'http:' || u.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 export function MatchList({ output, className }: MatchListProps) {
   const { matches, refusal, clarifyingQuestion } = output
 
@@ -164,8 +181,14 @@ function MatchCard({ match, rank }: MatchCardProps) {
           {/* Matched-criteria badges */}
           <MatchedCriteriaBadges criteria={matchedCriteria} />
 
-          {/* Collateral chips — plain link anchors, never a Drive embed (D-09/C2) */}
-          {collateral?.map((item, i) => (
+          {/* Collateral chips — plain link anchors, never a Drive embed (D-09/C2).
+              Defence in depth (quick-kayinleong-050): fetchCollateral now OMITS items
+              without a web-addressable URL, so a bare bucket key should never reach here.
+              This filter is the second line — rendering `href="collateral/<id>/x.pdf"`
+              produces a chip that looks clickable and 404s, which is the UI telling the
+              agent something false. Cheap to keep, and it also covers a hand-entered
+              storagePath from the admin collateral form. */}
+          {collateral?.filter((item) => isWebUrl(item.url)).map((item, i) => (
             <a
               key={i}
               href={item.url}
