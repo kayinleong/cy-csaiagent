@@ -24,8 +24,30 @@ export const WINDOW_MS = 24 * 60 * 60 * 1000
 /** Maximum API requests per agent per window. */
 export const REQUEST_CAP = 100
 
-/** Maximum tokens per agent per window (cost-DoS guard). */
-export const TOKEN_CAP = 50_000
+/**
+ * Maximum tokens per agent per window (cost-DoS guard).
+ *
+ * Sized from MEASURED usage, not guessed (quick-kayinleong-050). Over 58 real recorded
+ * turns in `usageEvents`:
+ *   mean 5,812 · p50 3,422 · p90 14,703 · p99 23,455 tokens per turn
+ *   (Finder is the costly pillar at mean 7,209; Coach 3,273.)
+ *
+ * The previous cap of 50_000 therefore bought roughly EIGHT average turns, and 4 of the 8
+ * real user-days on record were already at or over it. Two separate testers hit the wall
+ * mid-session — the second after about ten questions. quick-049 added an admin reset as an
+ * escape hatch, but an escape hatch that has to be pulled on half of all working days is
+ * not a working limit.
+ *
+ * 300_000 ≈ 50 turns at the mean, ≈ 20 even at the p90 — a full working day for a pilot
+ * agent — while still bounding a runaway loop, which is what this guard exists for
+ * (T-01-20).
+ *
+ * NOTE: `app/api/chat/route.ts` decrements `final.usage.totalTokens`, which is the LAST
+ * STEP only, so the limiter still undercounts multi-step turns (documented as a
+ * REGRESSION-NOTE at that call site). That errs generous — the safe direction — and was
+ * deliberately left alone when this cap was raised, so the two changes could not compound.
+ */
+export const TOKEN_CAP = 300_000
 
 /**
  * Check whether a rate-limit window has expired.

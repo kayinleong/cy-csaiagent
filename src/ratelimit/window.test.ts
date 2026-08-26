@@ -58,10 +58,12 @@ vi.mock('firebase-admin/firestore', () => ({
 
 import { check, decrement, resetBudget, readBudget, RateLimitError } from './index'
 
-// ─── Budget cap constants (must match window.ts defaults) ─────────────────────
-const REQUEST_CAP = 100    // requests per window
-const TOKEN_CAP = 50_000   // tokens per window
-const WINDOW_MS = 24 * 60 * 60 * 1000  // 1 day in ms
+// ─── Budget cap constants ─────────────────────────────────────────────────────
+// Imported, NOT mirrored (quick-kayinleong-050). These used to be hand-copied literals
+// "must match window.ts defaults" — which silently went stale the moment TOKEN_CAP was
+// raised from 50_000 to 300_000, leaving the suite green while asserting against a cap
+// the product no longer used. Importing them means a future cap change cannot drift.
+import { REQUEST_CAP, TOKEN_CAP, WINDOW_MS } from './window'
 
 /** Build a fresh RateBudgetDoc snapshot */
 function makeBudgetSnap(overrides: Partial<RateBudgetDoc> = {}): { exists: boolean; data: () => RateBudgetDoc } {

@@ -55,6 +55,10 @@ export async function loadConversationMessages(cid: string): Promise<ChatMessage
         role: data.role as string | undefined,
         content: data.content as string | undefined,
         citations: (data.citations as string[] | undefined) ?? [],
+        // Carried so the mapper can decode Finder/Reply structured output the same way
+        // the live path does (quick-kayinleong-050) — without it a restored turn renders
+        // its raw JSON envelope.
+        routeDecision: data.routeDecision as string | undefined,
         createdAt: data.createdAt?.toDate?.() ?? null,
       }
     })

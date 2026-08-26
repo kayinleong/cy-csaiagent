@@ -155,7 +155,8 @@ export async function readBudget(uid: string): Promise<{
  * (quick-kayinleong-049).
  *
  * Why this exists: `check()` only clears once `isWindowExpired()` becomes true, so an
- * agent who hits TOKEN_CAP (50_000 tokens / 24h) is locked out of chat for the remainder
+ * agent who hits TOKEN_CAP (300_000 tokens / 24h, raised from 50_000 in quick-050) is
+ * locked out of chat for the remainder
  * of the day with no operator recourse. That cap is already flagged as low for a
  * multi-step + RAG turn, and quick-046's `consumeStream()` fix made previously-free
  * aborted turns count, so the budget burns sooner than it used to.

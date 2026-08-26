@@ -199,7 +199,7 @@ vi.mock('@/src/escalation', () => ({
 
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
-import { POST, replyAgentReportedSopGap } from './route'
+import { POST, replyAgentReportedSopGap, fullTurnText } from './route'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1429,5 +1429,95 @@ describe('quick-047: a non-inbound reply turn records NO knowledge gap', () => {
     // The bug: "hi" used to write a knowledgeGaps row with the topic "hi", polluting
     // the feed that tells the senior coach which SOPs to write.
     expect(mocks.mockRecordKnowledgeGap).not.toHaveBeenCalled()
+  })
+})
+
+// ─── quick-kayinleong-050: persisted turns were truncated ─────────────────────
+//
+// A tester reported "some part of the response is truncated" and could not tell whether
+// it was UI, backend length, or user error. It was none of those: onFinish's `final.text`
+// is the LAST STEP's text only (ai@5.0.193 builds it from
+// recordedSteps[recordedSteps.length - 1]), while the client accumulates every block. So
+// the message was whole while it streamed and truncated once reloaded from Firestore.
+
+describe('quick-050: fullTurnText', () => {
+  it('joins every step, not just the last', () => {
+    expect(
+      fullTurnText({
+        text: 'second half only',
+        steps: [{ text: 'Got it, searching now.' }, { text: 'second half only' }],
+      }),
+    ).toBe('Got it, searching now.\n\nsecond half only')
+  })
+
+  it('uses a blank line so the reloaded transcript matches the live one', () => {
+    // The client joins blocks with TEXT_BLOCK_SEPARATOR ('\n\n', quick-048). A single
+    // newline would render as one run-on paragraph through MarkdownMessage.
+    const out = fullTurnText({ steps: [{ text: 'a' }, { text: 'b' }] })
+    expect(out).toBe('a\n\nb')
+  })
+
+  it('handles a single-step turn unchanged', () => {
+    expect(fullTurnText({ text: 'only', steps: [{ text: 'only' }] })).toBe('only')
+  })
+
+  it('skips empty step texts rather than emitting blank gaps', () => {
+    // A tool-only step carries no text; joining it blindly would produce leading or
+    // doubled separators.
+    expect(
+      fullTurnText({ steps: [{ text: 'a' }, { text: '' }, {}, { text: 'b' }] }),
+    ).toBe('a\n\nb')
+  })
+
+  it('falls back to final.text when no step carries text', () => {
+    // Never persist an empty message just because the step shape was unexpected.
+    expect(fullTurnText({ text: 'fallback', steps: [] })).toBe('fallback')
+    expect(fullTurnText({ text: 'fallback' })).toBe('fallback')
+    expect(fullTurnText({ text: 'fallback', steps: [{}, { text: '' }] })).toBe('fallback')
+  })
+
+  it('returns empty string when there is nothing at all', () => {
+    expect(fullTurnText({})).toBe('')
+  })
+})
+
+describe('quick-050: the persisted message is the FULL turn', () => {
+  it('appendMessage stores every step, not the last one', async () => {
+    const stored: string[] = []
+    mocks.mockAppendMessage.mockImplementation((async (
+      _cid: string,
+      msg: { role: string; content: string },
+    ) => {
+      if (msg.role === 'assistant') stored.push(msg.content)
+      return 'id'
+    }) as unknown as () => Promise<string>)
+
+    let resolveOnFinish: () => void
+    const done = new Promise<void>((r) => { resolveOnFinish = r })
+
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onFinish }: { onFinish: (r: Record<string, unknown>) => Promise<void> }) => {
+        void onFinish({
+          ...mockFinalResult,
+          text: 'The two strongest candidates are…',
+          steps: [
+            { text: 'Got it. Let me search now.' },
+            { text: 'The two strongest candidates are…' },
+          ],
+        }).then(resolveOnFinish)
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-050' }))
+    await done
+
+    expect(stored).toHaveLength(1)
+    expect(stored[0]).toBe('Got it. Let me search now.\n\nThe two strongest candidates are…')
+    // The regression: storing final.text alone silently dropped the opening block.
+    expect(stored[0]).not.toBe('The two strongest candidates are…')
   })
 })
