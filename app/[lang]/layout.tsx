@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from 'next-intl/server'
 import { routing } from '@/src/i18n/routing'
+import { SessionTokenSync } from './_components/session-token-sync'
 
 // Generate static params for all supported locales so Next.js knows the valid
 // [lang] values at build time.
@@ -35,6 +36,10 @@ export default async function LangLayout({
 
   return (
     <NextIntlClientProvider locale={lang} messages={messages}>
+      {/* Keeps the __session cookie in step with the Firebase ID token inside it, which
+          expires after an hour while the cookie itself is set for 14 days
+          (quick-kayinleong-059). Renders nothing; a no-op when signed out. */}
+      <SessionTokenSync />
       {children}
     </NextIntlClientProvider>
   )
