@@ -31,7 +31,7 @@
  */
 
 import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
-import { processBatch } from '@/src/kb/ingest/pipeline'
+import { processBatch, IngestionError } from '@/src/kb/ingest/pipeline'
 
 // Node runtime: Admin SDK and the Gemini embedding API are not available in the Edge runtime.
 export const runtime = 'nodejs'
@@ -111,7 +111,21 @@ async function handleIngest(req: Request): Promise<Response> {
     const result = await processBatch(jobId, limit)
     return Response.json({ remaining: result.remaining })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    return Response.json({ error: message }, { status: 500 })
+    // Only an IngestionError carries a message written FOR the user
+    // (quick-kayinleong-060). Everything else is echoed as a generic failure: a raw
+    // Firestore error reached the browser verbatim, internal
+    // `projects/<id>/databases/(default)/documents/...` path and all.
+    if (err instanceof IngestionError) {
+      return Response.json({ error: err.message }, { status: 409 })
+    }
+    console.error('[kb-ingest] processBatch failed', {
+      jobId,
+      name: err instanceof Error ? err.name : typeof err,
+      message: err instanceof Error ? err.message : String(err),
+    })
+    return Response.json(
+      { error: 'Indexing failed. Please try again, or re-upload the file.' },
+      { status: 500 },
+    )
   }
 }

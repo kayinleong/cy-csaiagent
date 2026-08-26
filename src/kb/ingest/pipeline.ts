@@ -28,6 +28,7 @@
  * Core/shell rule: this file must NOT import from app/ or next.
  */
 
+import { FieldValue } from 'firebase-admin/firestore'
 import crypto from 'crypto'
 import { kbIngestionJobsRef, kbChunksRef, kbDocsRef, TENANT_ID } from '@/src/firebase/collections'
 import { embedText } from '@/src/rag/embed'
@@ -79,6 +80,19 @@ export interface ProcessBatchResult {
  * @param file   File buffer + metadata.
  * @returns      Job metadata: jobId, fileHash, total, remaining, status.
  */
+/**
+ * An ingestion failure whose message is SAFE to show the user (quick-kayinleong-060).
+ *
+ * The process Route Handler echoes only this class's message; anything else becomes a
+ * generic 500, because a raw Firestore error carries the internal database path.
+ */
+export class IngestionError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'IngestionError'
+  }
+}
+
 export async function shardJob(file: IngestFile): Promise<ShardJobResult> {
   // Step 1: compute sha256 idempotency key
   const fileHash = crypto.createHash('sha256').update(file.buffer).digest('hex')
@@ -92,6 +106,38 @@ export async function shardJob(file: IngestFile): Promise<ShardJobResult> {
   if (!existingSnap.empty) {
     const existingDoc = existingSnap.docs[0]
     const data = existingDoc.data()
+
+    // The SAME file is being ingested for a DIFFERENT kbDoc (quick-kayinleong-060).
+    // Delete a KB doc and re-upload its file and you land here: createDocFromFile has
+    // already made a NEW kbDoc, but this short-circuit used to hand back the old job
+    // still bound to the DELETED one. Chunks were then embedded against a dangling docId,
+    // the new doc stayed empty, and the completion update() died with
+    // "5 NOT_FOUND: No document to update: …/kbDocs/…".
+    //
+    // Re-point the job instead of returning it as-is. The expensive part — text extraction
+    // and chunking — is already stored in chunkTexts, so this keeps the idempotency win
+    // while making the job describe the ingestion actually being asked for.
+    if (data.docId !== file.docId) {
+      await existingDoc.ref.update({
+        docId: file.docId,
+        lang: file.lang,
+        pillar: file.pillar,
+        remaining: data.total,
+        status: 'pending',
+        // supersedesId belongs to THIS request; a stale one would retire the wrong doc.
+        supersedesId: file.supersedesId ?? FieldValue.delete(),
+      })
+      return {
+        jobId: existingDoc.id,
+        fileHash,
+        total: data.total,
+        remaining: data.total,
+        status: 'pending',
+        isExisting: true,
+      }
+    }
+
+    // Genuine idempotency: same file, same target doc (a double submit).
     return {
       jobId: existingDoc.id,
       fileHash,
@@ -231,11 +277,20 @@ export async function processBatch(jobId: string, limit: number): Promise<Proces
     // Job is complete — mark both the job and the kbDoc
     await jobDoc.update({ remaining: 0, status: 'complete' })
 
-    // Also mark the kbDoc as published (its chunks are now retrievable)
+    // Also mark the kbDoc as published (its chunks are now retrievable).
+    // Checked rather than blind-updated (quick-kayinleong-060): the doc can be deleted
+    // while its chunks are still embedding, and a raw Firestore NOT_FOUND reached the
+    // browser verbatim — including the internal projects/…/databases/… path.
     if (docId) {
-      await kbDocsRef().doc(docId).update({
-        publishedAt: new Date(),
-      })
+      const target = kbDocsRef().doc(docId)
+      if ((await target.get()).exists) {
+        await target.update({ publishedAt: new Date() })
+      } else {
+        await jobDoc.update({ status: 'error' })
+        throw new IngestionError(
+          'The knowledge-base document for this upload no longer exists. Re-upload the file to start a fresh ingestion.',
+        )
+      }
     }
 
     // New version is fully embedded → retire the old version it supersedes so the

@@ -78,6 +78,10 @@ const {
   }))
 
   const mockKbDocsDoc = vi.fn().mockImplementation(() => ({
+    // processBatch now CHECKS the doc exists before publishing it
+    // (quick-kayinleong-060) — a deleted doc used to surface as a raw Firestore
+    // NOT_FOUND in the browser.
+    get: vi.fn().mockResolvedValue({ exists: true }),
     update: mockKbDocsUpdate,
   }))
 
