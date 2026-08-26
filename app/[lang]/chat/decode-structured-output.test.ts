@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { decodeReplyOutput, decodeFinderOutput } from './decode-structured-output'
+import { decodeReplyOutput, decodeFinderOutput, salvageStructuredText } from './decode-structured-output'
 
 const replyDraftJson = JSON.stringify({
   draft: { text: 'Thanks for reaching out…', sopDocIds: ['sop-cold-001'] },
@@ -110,5 +110,72 @@ describe('decodeFinderOutput', () => {
 
   it('returns null for a degenerate empty-matches object', () => {
     expect(decodeFinderOutput(JSON.stringify({ matches: [] }))).toBeNull()
+  })
+})
+
+// ─── quick-kayinleong-051: salvage a broken envelope ──────────────────────────
+//
+// A Finder turn reached the agent as a wall of {"matches":[{"projectId":... in a code
+// block. The envelope had arrived TRUNCATED (no closing brace), so decodeFinderOutput
+// returned null and the raw text fell through to the markdown renderer.
+
+describe('salvageStructuredText', () => {
+  it('recovers the answer field from a truncated envelope', () => {
+    // Cut off mid-string, exactly like the reported turn.
+    const broken = '{"matches": [], "answer": "**Own-Stay angle**\\n- Compact 2-bedroom'
+    expect(salvageStructuredText(broken)).toBe('**Own-Stay angle**\n- Compact 2-bedroom')
+  })
+
+  it('recovers a rationale when that is where the prose landed', () => {
+    const broken = '{"matches": [{"projectId": "p1", "rationale": "Kensho is in Taman Desa'
+    expect(salvageStructuredText(broken)).toBe('Kensho is in Taman Desa')
+  })
+
+  it('decodes escapes rather than returning them literally', () => {
+    const broken = '{"answer": "line one\\nline two \\"quoted\\" end"}'
+    expect(salvageStructuredText(broken)).toBe('line one\nline two "quoted" end')
+  })
+
+  it('does not stop early on an escaped quote', () => {
+    // A naive indexOf('"') would truncate at the escaped quote.
+    const broken = '{"answer": "he said \\"yes\\" and then more text'
+    expect(salvageStructuredText(broken)).toBe('he said "yes" and then more text')
+  })
+
+  it('tolerates a leading code fence', () => {
+    expect(salvageStructuredText('```json\n{"answer": "hello"}')).toBe('hello')
+  })
+
+  it('prefers answer over rationale when both are present', () => {
+    // answer is the conversational branch; it is the reply the agent is meant to read.
+    const s = '{"answer": "the real reply", "matches": [{"rationale": "shortlist note"}]}'
+    expect(salvageStructuredText(s)).toBe('the real reply')
+  })
+
+  it('returns null for ordinary prose — not our business', () => {
+    expect(salvageStructuredText('Here are the key collateral files for Kensho.')).toBeNull()
+    expect(salvageStructuredText('')).toBeNull()
+  })
+
+  it('returns null when the envelope has no readable field', () => {
+    expect(salvageStructuredText('{"matches": [], "citations": []}')).toBeNull()
+  })
+
+  it('returns null rather than inventing text for an empty string value', () => {
+    expect(salvageStructuredText('{"answer": ""}')).toBeNull()
+    expect(salvageStructuredText('{"answer": "   "}')).toBeNull()
+  })
+})
+
+describe('quick-051: decodeFinderOutput accepts the conversational answer branch', () => {
+  it('decodes an answer-only output as a populated state', () => {
+    const out = decodeFinderOutput('{"matches": [], "answer": "Kensho is leasehold."}')
+    expect(out).not.toBeNull()
+    expect(out?.answer).toBe('Kensho is leasehold.')
+    expect(out?.matches).toEqual([])
+  })
+
+  it('still rejects a genuinely empty output', () => {
+    expect(decodeFinderOutput('{"matches": []}')).toBeNull()
   })
 })

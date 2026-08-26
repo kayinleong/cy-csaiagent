@@ -81,6 +81,7 @@ vi.mock('@/src/firebase/collections', () => ({
 
 import { finderAgent } from './index'
 import { FinderOutputSchema, CriteriaSchema } from './schema'
+import { FINDER_SYSTEM_PROMPT, buildFinderSystemPrompt } from './prompt'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -738,5 +739,47 @@ describe('quick-kayinleong-050: finder prompt permits the honest no_match refusa
     expect(prompt).toContain('## Active-Only / Eligibility')
     // Infra failure must still be distinct from a refusal.
     expect(prompt).toContain('## Tool Unavailable')
+  })
+})
+
+// ─── quick-kayinleong-051: conversational branch ──────────────────────────────
+//
+// "tell me about kensho taman desa, good for stay or rental" is a question ABOUT a
+// project, not a request for a shortlist. With only matches/refusal/clarifyingQuestion
+// available the model stuffed a full markdown essay into matches[0].rationale and the
+// agent saw a raw JSON envelope.
+
+describe('quick-051: finder prompt has a conversational branch', () => {
+  it('tells the model to use the answer field for questions about a project', () => {
+    const prompt = buildFinderSystemPrompt()
+
+    expect(prompt).toContain('Answering a question ABOUT a project')
+    expect(prompt).toContain('"answer" field')
+    // The branch must come BEFORE the output format, or the model has already been told
+    // the only shapes are matches/refusal/clarifyingQuestion.
+    expect(prompt.indexOf('Answering a question ABOUT a project')).toBeLessThan(
+      prompt.indexOf('## Output Format'),
+    )
+  })
+
+  it('forbids stuffing an essay into a rationale', () => {
+    expect(FINDER_SYSTEM_PROMPT).toContain('not a place to put an essay')
+  })
+
+  it('keeps grounding mandatory on the conversational path too', () => {
+    // The escape hatch must not become a licence to invent project facts.
+    expect(FINDER_SYSTEM_PROMPT).toContain('only describe projects your tools actually returned')
+  })
+
+  it('states the four output states are mutually exclusive', () => {
+    expect(FINDER_SYSTEM_PROMPT).toContain('Never populate two')
+  })
+
+  it('contains NO backtick — it would terminate the template literal', () => {
+    // This exact mistake broke this file in quick-048 and again in quick-051: a backtick
+    // inside the prompt's template literal ends the string and the module stops compiling.
+    // Cheap guard so the third time is caught by the suite, not by tsc after the fact.
+    expect(buildFinderSystemPrompt()).not.toContain('`')
+    expect(FINDER_SYSTEM_PROMPT).not.toContain('`')
   })
 })

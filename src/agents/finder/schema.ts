@@ -216,6 +216,22 @@ export const FinderOutputSchema = z.object({
    * When present, matches must be empty and refusal must be absent.
    */
   clarifyingQuestion: z.string().min(1).optional(),
+
+  /**
+   * A conversational answer, in markdown, for when the agent asked ABOUT a project rather
+   * than FOR a set of matches (quick-kayinleong-051).
+   *
+   * "tell me about Kensho @ Taman Desa, good for stay or rental?" is not a search — it is
+   * a question about one known project. Before this field existed the model had only
+   * matches/refusal/clarifyingQuestion to choose from, so it stuffed a full markdown essay
+   * into `matches[0].rationale` and the agent saw a raw JSON envelope. Coach got a
+   * greetings branch (quick-046) and Reply got a not-an-inbound branch (quick-047);
+   * this is Finder's equivalent escape hatch.
+   *
+   * Still grounded: the answer may only describe projects the tools actually returned.
+   * When present, `matches` must be empty and `refusal` absent.
+   */
+  answer: z.string().min(1).optional(),
 })
 
 export type FinderOutput = z.infer<typeof FinderOutputSchema>

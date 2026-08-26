@@ -24,6 +24,7 @@ import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { FinderOutput, FinderMatch } from '@/src/agents/finder/schema'
+import { MarkdownMessage } from './markdown-message'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -61,7 +62,7 @@ function isWebUrl(value: unknown): value is string {
 }
 
 export function MatchList({ output, className }: MatchListProps) {
-  const { matches, refusal, clarifyingQuestion } = output
+  const { matches, refusal, clarifyingQuestion, answer } = output
 
   // ── State 3: Clarifying question ─────────────────────────────────────────
   if (clarifyingQuestion) {
@@ -99,6 +100,22 @@ export function MatchList({ output, className }: MatchListProps) {
             {refusal.explanation}
           </CardContent>
         </Card>
+      </div>
+    )
+  }
+
+  // ── State 0: Conversational answer (quick-kayinleong-051) ────────────────
+  // The agent asked ABOUT a project rather than FOR a shortlist. Before this branch the
+  // model had no shape for that and stuffed an essay into matches[0].rationale, which
+  // reached the user as a raw JSON envelope.
+  if (answer) {
+    return (
+      <div
+        data-slot="match-list"
+        data-state="answer"
+        className={cn('text-sm leading-relaxed', className)}
+      >
+        <MarkdownMessage content={answer} />
       </div>
     )
   }
@@ -170,9 +187,12 @@ function MatchCard({ match, rank }: MatchCardProps) {
         </span>
       </CardHeader>
 
-      {/* Grounded rationale — references real project fields */}
+      {/* Grounded rationale — references real project fields.
+          Rendered as markdown (quick-kayinleong-051): the model legitimately writes bold
+          and bullets here, and as plain text they showed as literal ** and collapsed
+          newlines. */}
       <CardContent className="px-4 pb-3 text-sm md:text-[0.8125rem] leading-relaxed">
-        {rationale}
+        <MarkdownMessage content={rationale} />
       </CardContent>
 
       {/* Matched-criteria badges + collateral links */}

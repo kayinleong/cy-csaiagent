@@ -19,7 +19,11 @@
  */
 
 import type { ChatMessage } from './message-list'
-import { decodeFinderOutput, decodeReplyOutput } from './decode-structured-output'
+import {
+  decodeFinderOutput,
+  decodeReplyOutput,
+  salvageStructuredText,
+} from './decode-structured-output'
 
 /** A raw message record read from the messages subcollection (pre-mapping). */
 export interface RawMessageRecord {
@@ -75,7 +79,10 @@ export function mapConversationMessages(records: RawMessageRecord[]): ChatMessag
         const finderOutput = decodeFinderOutput(base.content)
         // MatchList is self-contained (output + className), so a restored Finder turn
         // renders identically to a live one.
-        return finderOutput ? { ...base, finderOutput } : base
+        if (finderOutput) return { ...base, finderOutput }
+        // Truncated/!parseable envelope — surface the prose rather than raw JSON (051).
+        const salvaged = salvageStructuredText(base.content)
+        return salvaged ? { ...base, content: salvaged } : base
       }
 
       if (pillar === 'reply') {
@@ -84,7 +91,10 @@ export function mapConversationMessages(records: RawMessageRecord[]): ChatMessag
         // write rows against an empty lead. Surfacing the readable draft text fixes the
         // raw-JSON symptom without inventing data.
         const replyOutput = decodeReplyOutput(base.content)
-        if (!replyOutput) return base
+        if (!replyOutput) {
+          const salvaged = salvageStructuredText(base.content)
+          return salvaged ? { ...base, content: salvaged } : base
+        }
         const readable = replyOutput.draft?.text
           ?? replyOutput.noSopMatch?.message
           ?? replyOutput.clarifyingQuestion

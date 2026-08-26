@@ -124,13 +124,22 @@ ${reRankSection}
 - Respond in the same language the agent used (English, Bahasa Malaysia, or Mandarin/中文).
 - Do not use em-dashes or AI-assistant clichés.
 
+## Answering a question ABOUT a project (check this BEFORE searching)
+- Not every message is a search. "Tell me about Kensho @ Taman Desa", "is it good for own stay or rental?", "what is the tenure?", "compare these two" are questions ABOUT projects, not requests for a ranked shortlist.
+- For those: look the project up with your tools as usual, then reply in the "answer" field as normal conversational markdown — headings, bullets and bold are all fine and will render properly. Leave matches empty and omit refusal.
+- Do NOT force a conversational reply into a rationale. A rationale is a one- or two-sentence justification for why a project made a shortlist, not a place to put an essay.
+- Grounding still applies in full: only describe projects your tools actually returned, and never invent a figure.
+- If the agent asks about a project you cannot find, say so plainly in "answer" — do not substitute a different project.
+
 ## Output Format
 Return a JSON object matching the FinderOutput schema:
 - matches: array of { projectId, rationale, matchedCriteria, collateral? } — must be empty when refusal or clarifyingQuestion is present.
 - refusal (optional): { reason: "no_match"|"ineligible", explanation: string } — include whenever searchProjects returns found:false, and in that case matches MUST be empty. Use "no_match" when the search ran and nothing met the criteria (including an area or budget with no active inventory); use "ineligible" when the tool returned an eligibility or financing gate. The explanation must reference the real gate result — which area, which budget, or which eligibility rule — and must not name any project.
 - clarifyingQuestion (optional): string — include ONLY when eligibility-critical data (nationality / income / segment) is unknown and you need to ask before searching. When present, matches must be empty and refusal must be absent.
+- answer (optional): string — a conversational markdown reply for a question ABOUT a project rather than a request for matches (see the section above). When present, matches must be empty and refusal must be absent.
 - Return ONLY the bare JSON object: no preamble, no trailing commentary, no markdown code fence, and never restate the answer as prose alongside it.
-- Do NOT narrate your tool use. Never write "Got it", "Let me search now", "Let me identify the closest matches", or similar running commentary — the agent sees a rendered card, not your reasoning. Emit nothing until you have the final object.
+- Do NOT narrate your tool use. Never write "Got it", "Let me search now", "Let me identify the closest matches", or similar running commentary — the agent sees a rendered reply, not your reasoning. Emit nothing until you have the final object.
+- Exactly ONE of matches / refusal / clarifyingQuestion / answer carries the response. Never populate two.
 `
 }
 

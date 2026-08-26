@@ -34,7 +34,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { ChatMessage } from './message-list'
-import { decodeReplyOutput, decodeFinderOutput } from './decode-structured-output'
+import {
+  decodeReplyOutput,
+  decodeFinderOutput,
+  salvageStructuredText,
+} from './decode-structured-output'
 import {
   parseTextChunk,
   parseStreamError,
@@ -403,6 +407,16 @@ function useChatStream({
       const decodePillar = serverPillar ?? effectivePillar
       if (decodePillar === 'reply') {
         const replyOutput = decodeReplyOutput(assistantContent)
+        if (!replyOutput) {
+          // Same salvage as the Finder branch below — a truncated Reply envelope must not
+          // reach the agent as raw JSON (quick-051).
+          const salvaged = salvageStructuredText(assistantContent)
+          if (salvaged) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === assistantMsgId ? { ...m, content: salvaged } : m)),
+            )
+          }
+        }
         if (replyOutput) {
           setMessages((prev) =>
             prev.map((m) =>
@@ -426,6 +440,17 @@ function useChatStream({
               m.id === assistantMsgId ? { ...m, finderOutput } : m,
             ),
           )
+        } else {
+          // The envelope did not decode — most often because it arrived truncated, so the
+          // JSON has no closing brace. Without this the raw text falls through to
+          // MarkdownMessage and the agent gets a wall of {"matches":[{"projectId":...
+          // Recover the prose the model actually wrote for them (quick-051).
+          const salvaged = salvageStructuredText(assistantContent)
+          if (salvaged) {
+            setMessages((prev) =>
+              prev.map((m) => (m.id === assistantMsgId ? { ...m, content: salvaged } : m)),
+            )
+          }
         }
       }
 
