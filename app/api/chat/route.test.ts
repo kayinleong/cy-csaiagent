@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => {
   const mockModelFor = vi.fn()
   const mockStreamText = vi.fn()
   const mockAppendMessage = vi.fn(async () => 'msg-id-001')
+  const mockUpdateMessage = vi.fn(async () => {})
   const mockAfter = vi.fn((fn: () => void) => fn()) // execute inline for test assertions
   const mockEnsurePrimaryThread = vi.fn(async () => 'coach-uid-001')
   // quick-033: a provided cid is resolved via ensureConversationOwned (creates/owns
@@ -73,6 +74,7 @@ const mocks = vi.hoisted(() => {
     mockModelFor,
     mockStreamText,
     mockAppendMessage,
+    mockUpdateMessage,
     mockAfter,
     mockEnsurePrimaryThread,
     mockEnsureConversationOwned,
@@ -137,6 +139,7 @@ vi.mock('ai', () => ({
 
 vi.mock('@/src/memory', () => ({
   appendMessage: mocks.mockAppendMessage,
+  updateMessage: mocks.mockUpdateMessage,
   ensurePrimaryThread: mocks.mockEnsurePrimaryThread,
   ensureConversationOwned: mocks.mockEnsureConversationOwned,
   // 03-07: leadContext exports re-exported from the barrel
@@ -1659,5 +1662,167 @@ describe('quick-055: assistant message survives a failed turn', () => {
 
     expect(decisions).toHaveLength(1)
     expect(decisions[0]).toMatch(/:error$/)
+  })
+})
+
+// ─── quick-kayinleong-057: an EMPTY early callback must not claim the write ───
+//
+// Reported for the third time: "the chat history still not save, revisit still doesnt show
+// the meesasge". The cause was in quick-055's own fix. `persistAssistantOnce` set its
+// `persisted` flag BEFORE testing for empty text, and 055 also wired
+// `abortSignal: req.signal` — so a client disconnect fired onAbort with nothing
+// accumulated, latched the flag, and then REFUSED the completed reply that consumeStream()
+// kept alive. Before 055 that same disconnect was saved.
+
+describe('quick-057: a completed reply survives an early empty callback', () => {
+  /**
+   * Drain pending microtasks. The mock calls `void onFinish?.(...)` fire-and-forget, where
+   * the real SDK awaits it — and the writer now serialises through a promise chain, so the
+   * write lands a few hops after POST resolves. Production awaits it properly inside
+   * onFinish; this only compensates for the mock's shortcut.
+   */
+  const flushWrites = () => new Promise((r) => setTimeout(r, 0))
+
+  /** Capture assistant appends and in-place upgrades separately. */
+  function captureAssistant(cid: string): { appended: string[]; updated: string[] } {
+    const appended: string[] = []
+    const updated: string[] = []
+    // Filtered by cid: flushWrites() also drains write chains left pending by EARLIER
+    // tests in this file (their mocks call `void onFinish?.()` and never await it), and
+    // those late writes would otherwise land in this test's array.
+    mocks.mockAppendMessage.mockImplementation((async (
+      writtenCid: string,
+      msg: { role: string; content: string },
+    ) => {
+      if (msg.role === 'assistant' && writtenCid === cid) appended.push(msg.content)
+      return 'assistant-mid'
+    }) as unknown as () => Promise<string>)
+    mocks.mockUpdateMessage.mockImplementation((async (
+      writtenCid: string,
+      _mid: string,
+      msg: { role: string; content: string },
+    ) => {
+      if (msg.role === 'assistant' && writtenCid === cid) updated.push(msg.content)
+    }) as unknown as () => Promise<void>)
+    return { appended, updated }
+  }
+
+  it('onAbort with NO text does not block the onFinish write — the reported bug', async () => {
+    const { appended } = captureAssistant('c-057a')
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onAbort, onFinish }: {
+        onAbort?: () => void
+        onFinish?: (r: Record<string, unknown>) => Promise<void>
+      }) => {
+        // The client went away before the first token — nothing accumulated yet.
+        onAbort?.()
+        // consumeStream() keeps the model call alive and the turn completes anyway.
+        void onFinish?.({
+          ...mockFinalResult,
+          text: 'the complete answer',
+          steps: [{ text: 'the complete answer' }],
+        })
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-057a' }))
+    await flushWrites()
+
+    expect(appended).toEqual(['the complete answer'])
+  })
+
+  it('onError with NO text does not block the onFinish write either', async () => {
+    const { appended } = captureAssistant('c-057b')
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onError, onFinish }: {
+        onError?: (e: { error: unknown }) => void
+        onFinish?: (r: Record<string, unknown>) => Promise<void>
+      }) => {
+        onError?.({ error: new Error('transient') })
+        void onFinish?.({
+          ...mockFinalResult,
+          text: 'recovered answer',
+          steps: [{ text: 'recovered answer' }],
+        })
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-057b' }))
+    await flushWrites()
+
+    expect(appended).toEqual(['recovered answer'])
+  })
+
+  it('UPGRADES a partial in place rather than appending a second bubble', async () => {
+    const { appended, updated } = captureAssistant('c-057c')
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onStepFinish, onAbort, onFinish }: {
+        onStepFinish?: (s: unknown) => void
+        onAbort?: () => void
+        onFinish?: (r: Record<string, unknown>) => Promise<void>
+      }) => {
+        onStepFinish?.({ text: 'half an', toolResults: [] })
+        onAbort?.()
+        void onFinish?.({
+          ...mockFinalResult,
+          text: 'half an answer, now complete',
+          steps: [{ text: 'half an answer, now complete' }],
+        })
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-057c' }))
+    await flushWrites()
+
+    expect(appended).toEqual(['half an'])
+    expect(updated).toEqual(['half an answer, now complete'])
+  })
+
+  it('never lets a SHORTER later text overwrite what is already stored', async () => {
+    const { appended, updated } = captureAssistant('c-057d')
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onStepFinish, onError, onFinish }: {
+        onStepFinish?: (s: unknown) => void
+        onError?: (e: { error: unknown }) => void
+        onFinish?: (r: Record<string, unknown>) => Promise<void>
+      }) => {
+        onStepFinish?.({ text: 'the long complete answer', toolResults: [] })
+        onError?.({ error: new Error('late failure') })
+        // A finish payload whose last step is shorter must not truncate the record.
+        void onFinish?.({ ...mockFinalResult, text: 'oops', steps: [{ text: 'oops' }] })
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-057d' }))
+    await flushWrites()
+
+    expect(appended).toEqual(['the long complete answer'])
+    expect(updated).toEqual([])
+  })
+
+  it('does NOT pass abortSignal — cancelling the model is what loses the reply', async () => {
+    // consumeStream() exists to finish a turn the client walked away from. Passing
+    // req.signal cancels that same call, so the two are contradictory; 046 chose
+    // finish-and-save and 055 silently reversed it.
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-057e' }))
+    const args = mocks.mockStreamText.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(args.abortSignal).toBeUndefined()
+    expect(typeof args.onAbort).toBe('function')
   })
 })

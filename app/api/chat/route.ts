@@ -55,6 +55,7 @@ import {
 import { modelFor } from '@/src/llm/provider'
 import {
   appendMessage,
+  updateMessage,
   ensurePrimaryThread,
   ensureConversationOwned,
   readFinderSlot,
@@ -553,45 +554,83 @@ export async function POST(req: Request): Promise<Response> {
   // first wins and the rest are no-ops, which is what quick-046 was rightly worried about
   // when it declined to pair consumeStream() with onAbort.
   const turnText: string[] = []
-  let persisted = false
+  /** Message id once a reply HAS been written. Null means nothing is on disk yet. */
+  let persistedMid: string | null = null
+  /** Length of the text on disk, so a fuller version can replace a partial one. */
+  let persistedLen = 0
+  /**
+   * Serialises every call. onAbort/onError/onFinish are independent callbacks and two can
+   * be in flight at once; without this the check-then-write below is a race that appends
+   * the reply twice.
+   */
+  let writeChain: Promise<void> = Promise.resolve()
 
-  async function persistAssistantOnce(
+  async function doPersistAssistant(
     text: string,
     outcome: 'ok' | 'error' | 'aborted',
+    extra?: { citations?: string[]; tokens?: number },
   ): Promise<void> {
-    if (persisted) return
-    persisted = true
-
     const body = text.trim()
+
+    // Nothing was generated. Recording an empty bubble would be worse than recording
+    // nothing — it reads as the assistant having answered with silence.
+    //
+    // CRITICALLY, this does NOT latch (quick-kayinleong-057). The 055 version set its
+    // `persisted` flag BEFORE this check, so an early callback carrying no text claimed
+    // the write and then refused the completed turn that arrived after it — the exact
+    // "revisit and the reply is gone" the flag was added to prevent.
     if (body.length === 0) {
-      // Nothing was generated. Recording an empty bubble would be worse than recording
-      // nothing — it reads as the assistant having answered with silence.
       if (outcome !== 'ok') {
         console.warn('[chat] turn produced no text; nothing persisted', { pillar, outcome })
       }
       return
     }
 
+    // Already have this much (or more) on disk — a partial must never overwrite a fuller
+    // reply, and the same text must never be appended twice.
+    if (persistedMid !== null && body.length <= persistedLen) return
+
+    const doc = {
+      tenantId: TENANT_ID,
+      role: 'assistant',
+      content: body,
+      // MessageDoc.citations is a string[] of chunk IDs (not {chunkId} objects).
+      citations:
+        extra?.citations ??
+        (pillar === 'coach' ? Array.from(new Set(grounding.citations)) : []),
+      // Mark an incomplete turn in the observable routeDecision (D-02) rather than in
+      // the content, so the agent is not shown scaffolding but the transcript is honest.
+      routeDecision: outcome === 'ok' ? routeDecision : `${routeDecision}:${outcome}`,
+      tokens: extra?.tokens ?? 0,
+      redacted: true,
+    } satisfies MessageDoc
+
     try {
-      await appendMessage(cid, {
-        tenantId: TENANT_ID,
-        role: 'assistant',
-        content: body,
-        // MessageDoc.citations is a string[] of chunk IDs (not {chunkId} objects).
-        citations: pillar === 'coach' ? Array.from(new Set(grounding.citations)) : [],
-        // Mark an incomplete turn in the observable routeDecision (D-02) rather than in
-        // the content, so the agent is not shown scaffolding but the transcript is honest.
-        routeDecision: outcome === 'ok' ? routeDecision : `${routeDecision}:${outcome}`,
-        tokens: 0,
-        redacted: true,
-      } satisfies MessageDoc)
+      if (persistedMid === null) {
+        persistedMid = await appendMessage(cid, doc)
+      } else {
+        // A partial landed first and the turn recovered. Upgrade it in place rather than
+        // appending a second bubble; createdAt is untouched so it keeps its position.
+        await updateMessage(cid, persistedMid, doc)
+      }
+      persistedLen = body.length
     } catch (err) {
       console.error('[chat] assistant message write FAILED', {
         pillar,
         outcome,
+        upgrade: persistedMid !== null,
         name: err instanceof Error ? err.name : typeof err,
       })
     }
+  }
+
+  function persistAssistantOnce(
+    text: string,
+    outcome: 'ok' | 'error' | 'aborted',
+    extra?: { citations?: string[]; tokens?: number },
+  ): Promise<void> {
+    writeChain = writeChain.then(() => doPersistAssistant(text, outcome, extra))
+    return writeChain
   }
 
   // ── Dispatch: build agent system prompt + tools based on pillar ──────────────
@@ -694,13 +733,18 @@ export async function POST(req: Request): Promise<Response> {
     // Track tool-derived grounding as each step lands, so the response's
     // messageMetadata can report the authoritative citations + kb-miss signal to the
     // client (quick-kayinleong-046). Bookkeeping only — never fails a turn.
-    // A client that goes away mid-stream (refresh, navigation, closed tab) aborts the
-    // request. consumeStream() below keeps onFinish alive for the disconnect case, but a
-    // genuine abort still needs its own path or the turn is lost (quick-055).
-    abortSignal: req.signal,
+    // NO abortSignal here, deliberately (quick-kayinleong-057). 055 passed req.signal so a
+    // client that goes away mid-stream would fire onAbort — but that CANCELS the model
+    // call, which is the exact thing consumeStream() below exists to prevent. 046 chose
+    // finish-the-turn-and-save-it; 055 silently reversed that and turned every refresh
+    // into a lost reply. Losing the answer costs the agent more than finishing a turn
+    // nobody is watching costs in tokens.
+    //
+    // onAbort is kept as a net for an abort from any OTHER source, and now writes through
+    // the non-latching writer, so a partial it saves is upgraded by onFinish.
     onAbort: () => {
       console.warn('[chat] turn aborted', { pillar, steps: turnText.length })
-      void persistAssistantOnce(turnText.join('\n\n'), 'aborted')
+      after(() => persistAssistantOnce(turnText.join('\n\n'), 'aborted'))
     },
     onStepFinish: (step) => {
       try {
@@ -736,7 +780,9 @@ export async function POST(req: Request): Promise<Response> {
       // Persist whatever the model produced before it failed (quick-055). onFinish does
       // NOT run on this path, so without this the turn vanishes from the transcript
       // entirely — the agent sees an error bubble live, then nothing on revisit.
-      void persistAssistantOnce(turnText.join('\n\n'), 'error')
+      // after() rather than a bare floating promise: the response may already be closing,
+      // and an unawaited write is not guaranteed to survive teardown (quick-057).
+      after(() => persistAssistantOnce(turnText.join('\n\n'), 'error'))
     },
     onFinish: async (final) => {
       // A turn that halts because it exhausted `stopWhen: stepCountIs(5)` finishes with
@@ -796,23 +842,15 @@ export async function POST(req: Request): Promise<Response> {
       // message lands exactly once no matter which callback fires first. The normal path
       // still uses fullTurnText(final) — the authoritative assembly (quick-050) — and the
       // real token count.
-      if (!persisted) {
-        persisted = true
-        const content = fullTurnText(final)
-        if (content.trim().length > 0) {
-          await appendMessage(cid, {
-            tenantId: TENANT_ID,
-            role: 'assistant',
-            content,
-            citations: citationIds, // real KB chunk IDs (coach) or [] (finder)
-            routeDecision, // D-02: pillar:reason on every message (T-03-27)
-            tokens: final.usage.totalTokens ?? 0,
-            redacted: true, // PDPA gate was applied
-          } satisfies MessageDoc)
-        } else {
-          console.warn('[chat] onFinish produced no text; nothing persisted', { pillar })
-        }
-      }
+      // One writer for all three callbacks (quick-kayinleong-057). 055 left onFinish with
+      // its own copy of the guard, which is how the empty-latch bug came to exist in two
+      // places at once. This call still supplies the authoritative assembly
+      // (fullTurnText — quick-050), the real citations and the real token count; the
+      // writer upgrades a partial row in place if onAbort/onError got there first.
+      await persistAssistantOnce(fullTurnText(final), 'ok', {
+        citations: citationIds, // real KB chunk IDs (coach) or [] (finder)
+        tokens: final.usage.totalTokens ?? 0,
+      })
 
       // ── Finder: write finderSlot in onFinish (FIND-05/08) ────────────────
       // Only for Finder turns with a leadId — agent-scoped slot write (T-03-28).

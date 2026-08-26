@@ -12,7 +12,7 @@
  * Consumed by: chat route (01-11), stall-detect job (01-10).
  */
 
-export { appendMessage, loadRecent, ensurePrimaryThread, ensureConversationOwned, truncateTitle, listConversations, searchConversations } from './conversation'
+export { appendMessage, updateMessage, loadRecent, ensurePrimaryThread, ensureConversationOwned, truncateTitle, listConversations, searchConversations } from './conversation'
 export type { MessageRecord, ConversationRecord } from './conversation'
 
 export { writeLeadSlot, readFinderSlot, readReplySlot, mergeFinderCriteria, mergeDiscussed } from './leadContext'

@@ -57,6 +57,25 @@ export async function appendMessage(cid: string, msg: MessageDoc): Promise<strin
 }
 
 /**
+ * Replace the body of a message already appended to `conversations/{cid}/messages`.
+ *
+ * Exists for exactly one caller (quick-kayinleong-057): /api/chat may persist a PARTIAL
+ * assistant reply when a turn looks like it is dying, and then the turn finishes anyway
+ * with the complete text. Without this the partial permanently shadows the real answer,
+ * which is a quieter version of the bug it was added to prevent.
+ *
+ * `createdAt` is deliberately NOT touched — the message keeps its original position in the
+ * transcript, which is the sort key mapConversationMessages() orders by.
+ *
+ * @param cid  The parent conversation document ID.
+ * @param mid  The message document ID returned by appendMessage.
+ * @param msg  The replacement message body.
+ */
+export async function updateMessage(cid: string, mid: string, msg: MessageDoc): Promise<void> {
+  await messagesRef(cid).doc(mid).set(msg, { merge: true })
+}
+
+/**
  * Ensure the primary "Coach" thread for an agent exists.
  *
  * The thread has a deterministic cid = `coach-${uid}` (D-01 — ONE persistent
