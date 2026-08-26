@@ -20,11 +20,12 @@
  * References: FIND-01, FIND-04, D-04, D-09, C2, 03-07-PLAN.md.
  */
 
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { FinderOutput, FinderMatch } from '@/src/agents/finder/schema'
 import { MarkdownMessage } from './markdown-message'
+import { presentCollateral, type CollateralKind } from './collateral-label'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -166,12 +167,16 @@ interface MatchCardProps {
  */
 function MatchCard({ match, rank }: MatchCardProps) {
   const { projectId, name, rationale, matchedCriteria, collateral } = match
+  const criteriaLabels = criteriaToLabels(matchedCriteria)
+  const files = (collateral ?? []).filter((item) => isWebUrl(item.url))
 
   return (
     <Card
       data-slot="match-card"
       data-project-id={projectId}
-      className="rounded-xl ring-1 ring-foreground/10 shadow-sm"
+      // overflow-hidden so the last attachment row's hover fill is clipped to the card's
+      // rounded corner instead of squaring it off.
+      className="overflow-hidden rounded-xl ring-1 ring-foreground/10 shadow-sm"
     >
       <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center gap-2">
         {/* Rank badge */}
@@ -211,113 +216,164 @@ function MatchCard({ match, rank }: MatchCardProps) {
         <MarkdownMessage content={rationale} />
       </CardContent>
 
-      {/* Matched-criteria badges + collateral links */}
-      {(hasMatchedCriteria(matchedCriteria) || (collateral && collateral.length > 0)) && (
-        <CardFooter className="px-4 pb-4 pt-0 flex flex-wrap gap-1.5">
-          {/* Matched-criteria badges */}
-          <MatchedCriteriaBadges criteria={matchedCriteria} />
-
-          {/* Collateral chips — plain link anchors, never a Drive embed (D-09/C2).
-              Defence in depth (quick-kayinleong-050): fetchCollateral now OMITS items
-              without a web-addressable URL, so a bare bucket key should never reach here.
-              This filter is the second line — rendering `href="collateral/<id>/x.pdf"`
-              produces a chip that looks clickable and 404s, which is the UI telling the
-              agent something false. Cheap to keep, and it also covers a hand-entered
-              storagePath from the admin collateral form. */}
-          {collateral?.filter((item) => isWebUrl(item.url)).map((item, i) => (
-            <a
-              key={i}
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(
-                'inline-flex items-center gap-1',
-                'rounded-full border border-border bg-background',
-                'px-2 py-0.5 text-[0.625rem] font-medium text-foreground',
-                'hover:bg-accent hover:text-accent-foreground transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              )}
-            >
-              <CollateralIcon className="h-2.5 w-2.5 shrink-0" />
-              {item.type}
-            </a>
+      {/* Matched criteria — a QUIET meta line, not chips (quick-kayinleong-062).
+          Rendering these identically to the collateral made context look like actions.
+          They are what the search matched on; the files below are what the agent taps. */}
+      {criteriaLabels.length > 0 && (
+        <div
+          data-slot="match-criteria"
+          className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-4 pb-3 text-[0.6875rem] text-muted-foreground"
+        >
+          {criteriaLabels.map((label, i) => (
+            <span key={label} className="flex items-center gap-1.5">
+              {i > 0 && <span aria-hidden="true" className="text-muted-foreground/40">·</span>}
+              {label}
+            </span>
           ))}
-        </CardFooter>
+        </div>
+      )}
+
+      {/* Collateral — a stacked list of real files, not a wrapping pill row.
+          quick-kayinleong-062: every chip used to read "whatsapp-media" (the raw type on a
+          WhatsApp import), so the agent had to open all three to find the sales kit. The
+          name comes out of the URL. Stacked because this is a phone surface first and a
+          wrapping row of chips is its worst case; each row is min-h-11 (44px), the
+          touch-target floor.
+
+          Defence in depth (quick-050): fetchCollateral omits items without a
+          web-addressable URL, and this filter is the second line — a chip that looks
+          clickable and 404s is the UI telling the agent something false. */}
+      {files.length > 0 && (
+        <div data-slot="match-collateral" className="border-t border-foreground/10">
+          <span className="block px-4 pt-2.5 pb-1 text-[0.625rem] font-semibold uppercase tracking-wide text-muted-foreground">
+            {files.length === 1 ? '1 file to share' : `${files.length} files to share`}
+          </span>
+          <ul className="pb-1">
+            {files.map((item, i) => {
+              const { label, kind, ext } = presentCollateral(item)
+              return (
+                <li key={`${item.url}-${i}`}>
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cn(
+                      'group flex min-h-11 items-center gap-2.5 px-4 py-2',
+                      'transition-colors hover:bg-accent focus-visible:bg-accent',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                    )}
+                  >
+                    <KindIcon kind={kind} className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate text-[0.8125rem] font-medium">
+                      {label}
+                    </span>
+                    {ext && (
+                      <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.5625rem] font-semibold tracking-wide text-muted-foreground">
+                        {ext}
+                      </span>
+                    )}
+                    <ExternalIcon className="h-3 w-3 shrink-0 text-muted-foreground/50 transition-colors group-hover:text-foreground" />
+                  </a>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
       )}
     </Card>
   )
 }
 
-// ─── MatchedCriteriaBadges ────────────────────────────────────────────────────
-
-interface MatchedCriteriaBadgesProps {
-  criteria: FinderMatch['matchedCriteria']
-}
+// ─── Criteria labels ──────────────────────────────────────────────────────────
 
 /**
- * Render the matched criteria as compact badge chips.
- * Only renders non-null / non-unknown fields.
+ * The matched criteria as plain strings, in the order an agent would say them.
+ * Only non-null / non-unknown fields appear — an empty array means the search had nothing
+ * concrete to match on, and the meta line is omitted entirely.
  */
-function MatchedCriteriaBadges({ criteria }: MatchedCriteriaBadgesProps) {
-  const badges: string[] = []
+function criteriaToLabels(criteria: FinderMatch['matchedCriteria']): string[] {
+  const labels: string[] = []
 
   if (criteria.segment !== 'unknown') {
-    badges.push(criteria.segment === 'investment' ? 'Investment' : 'Own-stay')
+    labels.push(criteria.segment === 'investment' ? 'Investment' : 'Own-stay')
   }
   if (criteria.nationality !== 'unknown') {
-    badges.push(criteria.nationality === 'foreign' ? 'Foreign buyer' : 'Malaysian')
+    labels.push(criteria.nationality === 'foreign' ? 'Foreign buyer' : 'Malaysian')
   }
   if (criteria.bumiputera !== null) {
-    badges.push(criteria.bumiputera ? 'Bumi' : 'Non-bumi')
+    labels.push(criteria.bumiputera ? 'Bumi' : 'Non-bumi')
   }
   if (criteria.priceMax !== null) {
-    const formatted =
+    labels.push(
       criteria.priceMax >= 1_000_000
-        ? `≤RM${(criteria.priceMax / 1_000_000).toFixed(1)}M`
-        : `≤RM${Math.round(criteria.priceMax / 1_000)}k`
-    badges.push(formatted)
+        ? `\u2264RM${(criteria.priceMax / 1_000_000).toFixed(1)}M`
+        : `\u2264RM${Math.round(criteria.priceMax / 1_000)}k`,
+    )
   }
-  if (criteria.locationPref) {
-    badges.push(criteria.locationPref)
-  }
-  if (criteria.bedrooms !== null) {
-    badges.push(`${criteria.bedrooms} bed`)
+  if (criteria.locationPref) labels.push(criteria.locationPref)
+  if (criteria.bedrooms !== null) labels.push(`${criteria.bedrooms} bed`)
+
+  return labels
+}
+
+// ─── Inline icons ─────────────────────────────────────────────────────────────
+
+/** One glyph per file class, so the list is scannable without reading every label. */
+function KindIcon({ kind, className }: { kind: CollateralKind; className?: string }) {
+  const common = {
+    xmlns: 'http://www.w3.org/2000/svg',
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.75,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    className,
+    'aria-hidden': true,
   }
 
+  if (kind === 'image') {
+    return (
+      <svg {...common}>
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="9" cy="9" r="1.5" />
+        <path d="m21 15-4.5-4.5L7 20" />
+      </svg>
+    )
+  }
+  if (kind === 'video') {
+    return (
+      <svg {...common}>
+        <rect x="2" y="4" width="14" height="16" rx="2" />
+        <path d="m16 10 6-3v10l-6-3z" />
+      </svg>
+    )
+  }
+  if (kind === 'folder') {
+    return (
+      <svg {...common}>
+        <path d="M3 7a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.6.8l.9 1.2H19a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      </svg>
+    )
+  }
+  if (kind === 'link') {
+    return (
+      <svg {...common}>
+        <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
+        <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
+      </svg>
+    )
+  }
+  // pdf / doc / sheet — a document page with a folded corner.
   return (
-    <>
-      {badges.map((label) => (
-        <Badge
-          key={label}
-          variant="outline"
-          className="text-[0.625rem] px-1.5 py-0.5 h-auto font-normal"
-        >
-          {label}
-        </Badge>
-      ))}
-    </>
+    <svg {...common}>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+    </svg>
   )
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Returns true if the matched-criteria object has at least one non-null/non-unknown field.
- */
-function hasMatchedCriteria(criteria: FinderMatch['matchedCriteria']): boolean {
-  return (
-    criteria.segment !== 'unknown' ||
-    criteria.nationality !== 'unknown' ||
-    criteria.bumiputera !== null ||
-    criteria.priceMax !== null ||
-    criteria.locationPref !== null ||
-    criteria.bedrooms !== null
-  )
-}
-
-// ─── Inline icon ──────────────────────────────────────────────────────────────
-
-function CollateralIcon({ className }: { className?: string }) {
+function ExternalIcon({ className }: { className?: string }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
