@@ -206,8 +206,16 @@ export function ConversationList({
           </Button>
         </div>
 
-        {/* Conversation list */}
-        <ScrollArea className="flex-1">
+        {/* Conversation list.
+            min-h-0 is required (quick-kayinleong-052): SheetContent is a height-bounded
+            flex column (sheet.tsx — inset-y-0 + h-full + flex flex-col), but `flex-1`
+            leaves min-height:auto, and a flex item's automatic minimum size refuses to
+            shrink below its content. Without it this grows to the full height of the
+            thread list, which bounds the Radix Viewport to content height — and a viewport
+            already as tall as its content has nothing to scroll, so older conversations
+            were unreachable. Same defect quick-020 fixed on the message list; see the
+            matching comment at message-list.tsx:69. */}
+        <ScrollArea className="flex-1 min-h-0">
           {isLoading ? (
             <ul className="py-1" data-slot="conversation-list-loading" aria-busy="true">
               {[0, 1, 2, 3, 4].map((i) => (
