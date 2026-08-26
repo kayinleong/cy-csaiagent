@@ -541,6 +541,59 @@ export async function POST(req: Request): Promise<Response> {
   // more trustworthy than asking the model to restate chunk IDs it can get wrong.
   const grounding = { citations: [] as string[], retrievalAttempted: false }
 
+  // ── Guaranteed assistant-message persistence (quick-kayinleong-055) ─────────
+  // onFinish used to be the ONLY path that wrote an assistant message, so any turn that
+  // errored or aborted saved the user's question and nothing else. Measured: 19 lost
+  // responses across 26% of conversations — the agent revisits a chat and sees their own
+  // messages with no replies. quick-046's RC-3 fix renders an error bubble CLIENT-side,
+  // which made this worse to diagnose: something appeared at the time, then vanished.
+  //
+  // Text is accumulated per step so a failed turn can still persist what the model
+  // actually produced. `persisted` makes the write idempotent — whichever callback fires
+  // first wins and the rest are no-ops, which is what quick-046 was rightly worried about
+  // when it declined to pair consumeStream() with onAbort.
+  const turnText: string[] = []
+  let persisted = false
+
+  async function persistAssistantOnce(
+    text: string,
+    outcome: 'ok' | 'error' | 'aborted',
+  ): Promise<void> {
+    if (persisted) return
+    persisted = true
+
+    const body = text.trim()
+    if (body.length === 0) {
+      // Nothing was generated. Recording an empty bubble would be worse than recording
+      // nothing — it reads as the assistant having answered with silence.
+      if (outcome !== 'ok') {
+        console.warn('[chat] turn produced no text; nothing persisted', { pillar, outcome })
+      }
+      return
+    }
+
+    try {
+      await appendMessage(cid, {
+        tenantId: TENANT_ID,
+        role: 'assistant',
+        content: body,
+        // MessageDoc.citations is a string[] of chunk IDs (not {chunkId} objects).
+        citations: pillar === 'coach' ? Array.from(new Set(grounding.citations)) : [],
+        // Mark an incomplete turn in the observable routeDecision (D-02) rather than in
+        // the content, so the agent is not shown scaffolding but the transcript is honest.
+        routeDecision: outcome === 'ok' ? routeDecision : `${routeDecision}:${outcome}`,
+        tokens: 0,
+        redacted: true,
+      } satisfies MessageDoc)
+    } catch (err) {
+      console.error('[chat] assistant message write FAILED', {
+        pillar,
+        outcome,
+        name: err instanceof Error ? err.name : typeof err,
+      })
+    }
+  }
+
   // ── Dispatch: build agent system prompt + tools based on pillar ──────────────
   // Phase 3 adds the Finder branch alongside the existing Coach branch.
   // Phase 4 (Plan 04-06) adds the Reply branch as a third dispatch arm.
@@ -641,6 +694,14 @@ export async function POST(req: Request): Promise<Response> {
     // Track tool-derived grounding as each step lands, so the response's
     // messageMetadata can report the authoritative citations + kb-miss signal to the
     // client (quick-kayinleong-046). Bookkeeping only — never fails a turn.
+    // A client that goes away mid-stream (refresh, navigation, closed tab) aborts the
+    // request. consumeStream() below keeps onFinish alive for the disconnect case, but a
+    // genuine abort still needs its own path or the turn is lost (quick-055).
+    abortSignal: req.signal,
+    onAbort: () => {
+      console.warn('[chat] turn aborted', { pillar, steps: turnText.length })
+      void persistAssistantOnce(turnText.join('\n\n'), 'aborted')
+    },
     onStepFinish: (step) => {
       try {
         const toolResults = (step.toolResults ?? []) as Array<{
@@ -655,6 +716,10 @@ export async function POST(req: Request): Promise<Response> {
           }
         }
         grounding.citations.push(...extractCitationChunkIds({ steps: [{ toolResults }] }))
+        // Keep the text per step so onError/onAbort can persist a partial turn
+        // (quick-055). onFinish still assembles the authoritative copy via fullTurnText.
+        const stepText = (step as { text?: unknown }).text
+        if (typeof stepText === 'string' && stepText.length > 0) turnText.push(stepText)
       } catch {
         // Grounding bookkeeping is best-effort — never break the stream.
       }
@@ -668,6 +733,10 @@ export async function POST(req: Request): Promise<Response> {
         name: error instanceof Error ? error.name : typeof error,
         message: error instanceof Error ? error.message : String(error),
       })
+      // Persist whatever the model produced before it failed (quick-055). onFinish does
+      // NOT run on this path, so without this the turn vanishes from the transcript
+      // entirely — the agent sees an error bubble live, then nothing on revisit.
+      void persistAssistantOnce(turnText.join('\n\n'), 'error')
     },
     onFinish: async (final) => {
       // A turn that halts because it exhausted `stopWhen: stepCountIs(5)` finishes with
@@ -723,17 +792,27 @@ export async function POST(req: Request): Promise<Response> {
       }
 
       // ── Persist the assistant message ────────────────────────────────────
-      const assistantMsg: MessageDoc = {
-        tenantId: TENANT_ID,
-        role: 'assistant',
-        // Full turn, not just the last step — see fullTurnText (quick-050).
-        content: fullTurnText(final),
-        citations: citationIds, // real KB chunk IDs from retrieveKnowledge (coach) or [] (finder)
-        routeDecision,  // D-02: pillar:reason on every message (T-03-27 — observable/eval-able)
-        tokens: final.usage.totalTokens ?? 0,
-        redacted: true, // PDPA gate was applied
+      // Routed through the same idempotent writer as onError/onAbort (quick-055) so the
+      // message lands exactly once no matter which callback fires first. The normal path
+      // still uses fullTurnText(final) — the authoritative assembly (quick-050) — and the
+      // real token count.
+      if (!persisted) {
+        persisted = true
+        const content = fullTurnText(final)
+        if (content.trim().length > 0) {
+          await appendMessage(cid, {
+            tenantId: TENANT_ID,
+            role: 'assistant',
+            content,
+            citations: citationIds, // real KB chunk IDs (coach) or [] (finder)
+            routeDecision, // D-02: pillar:reason on every message (T-03-27)
+            tokens: final.usage.totalTokens ?? 0,
+            redacted: true, // PDPA gate was applied
+          } satisfies MessageDoc)
+        } else {
+          console.warn('[chat] onFinish produced no text; nothing persisted', { pillar })
+        }
       }
-      await appendMessage(cid, assistantMsg)
 
       // ── Finder: write finderSlot in onFinish (FIND-05/08) ────────────────
       // Only for Finder turns with a leadId — agent-scoped slot write (T-03-28).

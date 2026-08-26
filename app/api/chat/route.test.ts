@@ -1521,3 +1521,143 @@ describe('quick-050: the persisted message is the FULL turn', () => {
     expect(stored[0]).not.toBe('The two strongest candidates are…')
   })
 })
+
+// ─── quick-kayinleong-055: the assistant reply must ALWAYS persist ────────────
+//
+// Measured in production: 19 lost responses across 26% of conversations. onFinish was the
+// ONLY path that wrote an assistant message, so any turn that errored or aborted saved the
+// user's question and nothing else — the agent revisits a chat and sees their own messages
+// with no replies.
+
+describe('quick-055: assistant message survives a failed turn', () => {
+  /** Capture just the assistant writes. */
+  function captureAssistantWrites(): string[] {
+    const written: string[] = []
+    mocks.mockAppendMessage.mockImplementation((async (
+      _cid: string,
+      msg: { role: string; content: string },
+    ) => {
+      if (msg.role === 'assistant') written.push(msg.content)
+      return 'id'
+    }) as unknown as () => Promise<string>)
+    return written
+  }
+
+  it('persists partial text when the stream ERRORS (onFinish never runs)', async () => {
+    const written = captureAssistantWrites()
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onStepFinish, onError }: {
+        onStepFinish?: (s: unknown) => void
+        onError?: (e: { error: unknown }) => void
+      }) => {
+        onStepFinish?.({ text: 'Here are the two strongest matches', toolResults: [] })
+        onError?.({ error: new Error('overloaded_error') })
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-055a' }))
+
+    expect(written).toEqual(['Here are the two strongest matches'])
+  })
+
+  it('persists partial text when the turn is ABORTED', async () => {
+    const written = captureAssistantWrites()
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onStepFinish, onAbort }: {
+        onStepFinish?: (s: unknown) => void
+        onAbort?: () => void
+      }) => {
+        onStepFinish?.({ text: 'Searching inventory', toolResults: [] })
+        onAbort?.()
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-055b' }))
+
+    expect(written).toEqual(['Searching inventory'])
+  })
+
+  it('writes EXACTLY ONCE when both onError and onFinish fire', async () => {
+    // The double-write quick-046 was rightly worried about when it declined to pair
+    // consumeStream() with onAbort. The idempotency guard is what makes covering every
+    // path safe.
+    const written = captureAssistantWrites()
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onStepFinish, onError, onFinish }: {
+        onStepFinish?: (s: unknown) => void
+        onError?: (e: { error: unknown }) => void
+        onFinish?: (r: Record<string, unknown>) => Promise<void>
+      }) => {
+        onStepFinish?.({ text: 'partial', toolResults: [] })
+        onError?.({ error: new Error('boom') })
+        void onFinish?.({ ...mockFinalResult, text: 'partial', steps: [{ text: 'partial' }] })
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-055c' }))
+
+    expect(written).toHaveLength(1)
+  })
+
+  it('does NOT write an empty bubble when nothing was generated', async () => {
+    // An empty assistant message reads as the agent having answered with silence, which
+    // is worse than an honest gap.
+    const written = captureAssistantWrites()
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onError }: { onError?: (e: { error: unknown }) => void }) => {
+        onError?.({ error: new Error('failed before any text') })
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-055d' }))
+
+    expect(written).toEqual([])
+  })
+
+  it('marks an incomplete turn in routeDecision, not in the content', async () => {
+    // The agent should not be shown scaffolding, but the transcript must stay honest.
+    const decisions: string[] = []
+    mocks.mockAppendMessage.mockImplementation((async (
+      _cid: string,
+      msg: { role: string; routeDecision?: string },
+    ) => {
+      if (msg.role === 'assistant') decisions.push(String(msg.routeDecision))
+      return 'id'
+    }) as unknown as () => Promise<string>)
+
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onStepFinish, onError }: {
+        onStepFinish?: (s: unknown) => void
+        onError?: (e: { error: unknown }) => void
+      }) => {
+        onStepFinish?.({ text: 'half an answer', toolResults: [] })
+        onError?.({ error: new Error('x') })
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-055e' }))
+
+    expect(decisions).toHaveLength(1)
+    expect(decisions[0]).toMatch(/:error$/)
+  })
+})
