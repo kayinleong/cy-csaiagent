@@ -217,6 +217,31 @@ export function makeQueryInventoryTool(userLang: 'en' | 'ms' | 'zh') {
   })
 }
 
+/**
+ * Return `value` only if it is a complete, web-addressable http(s) URL.
+ *
+ * This is the guard that stops a raw Firebase Storage bucket key
+ * (`collateral/{pid}/whatsapp/brochure.pdf`) from ever reaching the model as a
+ * `url`. A bucket key is not a link: the model renders it as dead inline code and
+ * the Finder card turns it into a relative href that 404s.
+ *
+ * Deliberately strict — protocol-relative (`//host/x`) and `data:`/`javascript:`
+ * values are rejected too, since the value is emitted into chat markdown and into
+ * an `<a href>` in the Finder card.
+ */
+function webAddressableUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (trimmed.length === 0) return null
+  try {
+    const parsed = new URL(trimmed)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? trimmed : null
+  } catch {
+    // Not an absolute URL — almost always a Storage bucket key.
+    return null
+  }
+}
+
 // ─── 3. makeFetchCollateralTool ───────────────────────────────────────────────
 
 /**
@@ -229,9 +254,25 @@ export function makeQueryInventoryTool(userLang: 'en' | 'ms' | 'zh') {
  * collateral document's `externalUrl` field may contain a Google Drive share link
  * (stored as a plain URL string) but this tool never calls the Drive API client.
  *
- * URL resolution:
- *   - If externalUrl is set → return it as-is (plain external share link)
- *   - Otherwise → return storagePath as the URL (caller / UI resolves to signed URL)
+ * URL resolution (quick-kayinleong-050 — the "dead collateral link" fix):
+ *   - `externalUrl` is the ONLY web-addressable field. It holds either a plain
+ *     external share link (Drive/Skool importer) or a Firebase Storage *download
+ *     URL* captured at upload time by the WhatsApp importer.
+ *   - `storagePath` is a bucket key (`collateral/{pid}/whatsapp/x.pdf`). It is NOT a
+ *     URL and NOTHING in this repo resolves it to one — no signed-URL minting exists
+ *     anywhere (server-side Storage is deliberately not initialised; see the rejected
+ *     option in .planning/quick/quick-kayinleong-050/RESEARCH-collateral.md).
+ *
+ * Guard: an item whose only location is a bucket key is **OMITTED** from the result.
+ * Previously the bare key was handed to the model as `url`, which the model then
+ * copied into its narration as a dead string (and `match-list.tsx` turned into a
+ * relative href → 404). Grounding is a hard constraint: we never present something
+ * as a link when it is not one. Omitting (rather than emitting a null/`unavailable`
+ * marker) keeps the tool result shape `{type, url}` — so `CollateralItemSchema` and
+ * the chat renderer need no change, and the model simply has nothing to attach.
+ *
+ * Docs whose `externalUrl` is missing are backfilled by
+ * `scripts/backfill-collateral-urls.ts`.
  *
  * @param userLang  Injected via closure for future i18n of tool descriptions.
  */
@@ -241,7 +282,9 @@ export function makeFetchCollateralTool(userLang: 'en' | 'ms' | 'zh') {
   return tool({
     description:
       'Fetch the collateral (brochures, videos, fact-sheets) for a specific project by its ID. ' +
-      'Returns an array of {type, url} items where url is a Firebase Storage path or an external share link. ' +
+      'Returns an array of {type, url} items where url is ALWAYS a complete http(s) link that can be ' +
+      'shared with a lead. Assets that have no shareable link are omitted, so an empty array means ' +
+      'there is no collateral you can attach — say so plainly, never invent or guess a link. ' +
       'Call this AFTER searchProjects returns a match to attach the relevant collateral to the recommendation.',
     inputSchema: z.object({
       projectId: z
@@ -260,16 +303,30 @@ export function makeFetchCollateralTool(userLang: 'en' | 'ms' | 'zh') {
           return []
         }
 
-        return snap.docs.map((doc) => {
+        const items: Array<{ type: string; url: string }> = []
+        let omitted = 0
+
+        for (const doc of snap.docs) {
           const data = doc.data()
-          // externalUrl takes precedence (plain share link);
-          // storagePath is the fallback (Firebase Storage object path)
-          const url = data.externalUrl ?? data.storagePath
-          return {
-            type: data.type,
-            url,
+          // externalUrl is the only web-addressable field. storagePath is a bucket
+          // key and is deliberately NOT used as a fallback (quick-kayinleong-050).
+          const url = webAddressableUrl(data.externalUrl)
+          if (!url) {
+            omitted += 1
+            continue
           }
-        })
+          items.push({ type: data.type, url })
+        }
+
+        if (omitted > 0) {
+          // Counts + projectId only — never any document content (PDPA).
+          console.warn(
+            `[fetchCollateral] omitted ${omitted} collateral item(s) for project ${projectId}: ` +
+              'no externalUrl (storage-path-only doc). Run scripts/backfill-collateral-urls.ts.',
+          )
+        }
+
+        return items
       }),
   })
 }

@@ -327,7 +327,10 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
       // NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET points at a bucket that does not exist,
       // which makes uploadBytes 404-and-retry until the timeout instead of failing
       // loudly — logging the bucket makes that misconfiguration obvious immediately.
-      const [{ ref: storageRef, uploadBytes }, storage] = await Promise.all([
+      // Lazy import kept deliberately (quick-kayinleong-046): `firebase/storage` is a
+      // ~353 KB chunk and must stay off every route's critical path. Do NOT hoist this
+      // to module scope. getDownloadURL comes from the same chunk, so it is free here.
+      const [{ ref: storageRef, uploadBytes, getDownloadURL }, storage] = await Promise.all([
         import('firebase/storage'),
         getClientStorage(),
       ])
@@ -348,15 +351,35 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
           } else {
             const blob = await file.async('blob')
             const path = `collateral/${projectId}/whatsapp/${safeStorageName(entryName)}`
-            await withTimeout(
+            // quick-kayinleong-050: keep the upload result. Its `ref` is what
+            // getDownloadURL() needs. Discarding it was the root cause of 11,774
+            // collateral docs holding a bucket key and no shareable link — the
+            // Finder agent had nothing web-addressable to attach, so every
+            // WhatsApp-ingested brochure rendered as dead text.
+            const snap = await withTimeout(
               uploadBytes(storageRef(storage, path), blob),
+              UPLOAD_TIMEOUT_MS,
+              t('mediaTimedOut', { bucket }),
+            )
+            // Objects written by the web SDK carry a `firebaseStorageDownloadTokens`
+            // metadata value, so this is a permanent, non-expiring URL — one metadata
+            // read, no IAM signing, no expiry to re-break the link later.
+            // Timed out like the upload: a misconfigured bucket makes this hang rather
+            // than fail fast, and a rejection here must land in the catch below so it
+            // increments mediaErrors / consecutiveFailures like any other failure.
+            const downloadUrl = await withTimeout(
+              getDownloadURL(snap.ref),
               UPLOAD_TIMEOUT_MS,
               t('mediaTimedOut', { bucket }),
             )
             const att = await attachCollateralAction(projectId, {
               type: 'whatsapp-media',
               lang: kbLang,
+              // Both fields: storagePath stays the canonical object identity (used for
+              // delete/overwrite), externalUrl is the web-addressable form the Finder
+              // agent reads. attachCollateral requires at least one and permits both.
               storagePath: path,
+              externalUrl: downloadUrl,
             })
             if (!att.ok) {
               prog.mediaErrors += 1
