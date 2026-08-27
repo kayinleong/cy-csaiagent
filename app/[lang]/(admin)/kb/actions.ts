@@ -23,6 +23,7 @@ import { cookies } from 'next/headers'
 import { requireUser } from '@/src/firebase/auth'
 import { createDoc, updateDoc, deleteDoc, publishDoc, unpublishDoc, type CreateDocInput, type UpdateDocInput,
   repillarDocs,
+  copyDocsToPillar,
 } from '@/src/kb/crud'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -133,6 +134,30 @@ export async function repillarKbDocsAction(
   try {
     const user = await getSessionUser()
     const result = await repillarDocs(user, docIds, pillar)
+    return { ok: true, ...result }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    return { ok: false, error: message }
+  }
+}
+
+/**
+ * Copy documents into another pillar, leaving the originals in place
+ * (quick-kayinleong-065).
+ *
+ * BOUNDED like repillarKbDocsAction, but tighter: a copy WRITES a chunk per source chunk
+ * rather than updating one, and each carries a 1024-float embedding.
+ */
+export async function copyKbDocsToPillarAction(
+  docIds: string[],
+  pillar: 'coach' | 'finder' | 'reply',
+): Promise<
+  | { ok: true; docsCopied: number; chunksCopied: number; skipped: number; remaining: string[] }
+  | { ok: false; error: string }
+> {
+  try {
+    const user = await getSessionUser()
+    const result = await copyDocsToPillar(user, docIds, pillar)
     return { ok: true, ...result }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'

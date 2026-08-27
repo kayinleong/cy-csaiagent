@@ -320,6 +320,14 @@ export interface KbDocDoc {
   lang: 'en' | 'ms' | 'zh'
   pillar: 'coach' | 'finder' | 'reply'
   /**
+   * Source kbDocs id when this document is a cross-pillar COPY (quick-kayinleong-065).
+   *
+   * Set only by copyDocsToPillar(). Provenance, and the reason the copy's own id is
+   * derived from it — a repeat copy resolves to the same id and is a no-op, without
+   * needing a composite index to look one up.
+   */
+  copiedFromId?: string
+  /**
    * SOP category metadata (D-09) — net-new, optional. Existing docs have none.
    * Canonical Reply values seeded but not hard-coded: 'cold-prospect',
    * 'objection-handling', 'financing', 'voice'. Free-form open string.

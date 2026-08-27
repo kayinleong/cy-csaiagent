@@ -589,6 +589,138 @@ export async function repillarDocs(
   return { docsMoved, chunksMoved, remaining }
 }
 
+// ─── copyDocsToPillar ────────────────────────────────────────────────────────
+
+/**
+ * How many documents one copyDocsToPillar() call may copy (quick-kayinleong-065).
+ *
+ * Lower than REPILLAR_DOC_LIMIT because a copy WRITES a chunk per source chunk rather than
+ * updating one — roughly 24 new documents each, every one carrying a 1024-float embedding.
+ * Three at a time keeps a single call well inside a request budget.
+ */
+export const COPY_DOC_LIMIT = 3
+
+export interface CopyDocsResult {
+  /** Documents copied by THIS call. */
+  docsCopied: number
+  /** Chunks duplicated by this call. */
+  chunksCopied: number
+  /** Sources skipped because a copy already existed, or they were already in `pillar`. */
+  skipped: number
+  /** Ids this call did not reach — feed them to the next call. */
+  remaining: string[]
+}
+
+/**
+ * The id a copy of `sourceId` into `pillar` will always have.
+ *
+ * Deterministic ON PURPOSE. The client loops this action, and a user can click twice; with
+ * a generated id each pass would mint another duplicate and quietly double the corpus.
+ * Deriving the id means "already copied" is a single get() — an equality query on
+ * (copiedFromId, pillar) would need a composite index to answer the same question.
+ */
+export function copyDocId(sourceId: string, pillar: 'coach' | 'finder' | 'reply'): string {
+  return `${sourceId}--${pillar}`
+}
+
+/**
+ * Copy documents into another pillar, chunks and all, leaving the originals in place.
+ *
+ * The counterpart to repillarDocs(). Moving is destructive to the source pillar, which is
+ * the wrong tool when Coach needs material that Finder still has to serve.
+ *
+ * The embedding is copied VERBATIM — vectors are pillar-agnostic, so a copy costs storage
+ * and nothing else. No Gemini call, no re-chunking, and the copy is retrievable the moment
+ * it is written.
+ *
+ * Version lineage (`supersedesId`, `supersededBy`, `correctedBy`) is deliberately NOT
+ * carried over: it describes the SOURCE's chain, and duplicating it would make two
+ * documents claim the same place in one history. The copy starts at version 1 with a
+ * `copiedFromId` pointing home.
+ *
+ * Idempotent per (source, pillar) via copyDocId(). Copying into the pillar a document is
+ * already in is skipped rather than duplicating it.
+ *
+ * @param user     Verified user from requireUser() — must have role 'admin'.
+ * @param docIds   Source kbDocs ids.
+ * @param pillar   Target pillar.
+ */
+export async function copyDocsToPillar(
+  user: AuthenticatedUser,
+  docIds: string[],
+  pillar: 'coach' | 'finder' | 'reply',
+): Promise<CopyDocsResult> {
+  assertAdmin(user)
+
+  if (!['coach', 'finder', 'reply'].includes(pillar)) {
+    throw new Error(`copyDocsToPillar: invalid pillar "${pillar}"`)
+  }
+
+  const clean = docIds
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0 && id.length <= 128 && !id.includes('/'))
+
+  const batch = clean.slice(0, COPY_DOC_LIMIT)
+  const remaining = clean.slice(COPY_DOC_LIMIT)
+
+  let docsCopied = 0
+  let chunksCopied = 0
+  let skipped = 0
+
+  for (const sourceId of batch) {
+    const sourceSnap = await kbDocsRef().doc(sourceId).get()
+    const source = sourceSnap.data()
+    if (!sourceSnap.exists || !source) {
+      skipped++
+      continue
+    }
+
+    // Copying a doc into the pillar it already lives in has no meaning and would double
+    // the corpus for nothing.
+    if (source.pillar === pillar) {
+      skipped++
+      continue
+    }
+
+    const targetId = copyDocId(sourceId, pillar)
+    const targetRef = kbDocsRef().doc(targetId)
+    if ((await targetRef.get()).exists) {
+      skipped++
+      continue
+    }
+
+    await targetRef.set({
+      tenantId: TENANT_ID,
+      title: source.title,
+      sourcePath: source.sourcePath,
+      version: 1,
+      status: source.status ?? 'published',
+      lang: source.lang,
+      pillar,
+      ...(source.category ? { category: source.category } : {}),
+      copiedFromId: sourceId,
+      publishedAt: FieldValue.serverTimestamp(),
+    } as KbDocDoc)
+    docsCopied++
+
+    const chunksSnap = await kbChunksRef().where('docId', '==', sourceId).get()
+    await Promise.all(
+      chunksSnap.docs.map((chunk) => {
+        const c = chunk.data()
+        return kbChunksRef().add({
+          ...c,
+          docId: targetId,
+          pillar,
+          tenantId: TENANT_ID,
+        })
+      }),
+    )
+    chunksCopied += chunksSnap.size
+  }
+
+  return { docsCopied, chunksCopied, skipped, remaining }
+}
+
 // ─── publishDoc ──────────────────────────────────────────────────────────────
 
 /**

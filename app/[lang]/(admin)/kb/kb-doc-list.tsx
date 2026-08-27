@@ -42,7 +42,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { PublishToggle } from './publish-toggle'
-import { deleteKbDocAction, repillarKbDocsAction } from './actions'
+import {
+  deleteKbDocAction,
+  repillarKbDocsAction,
+  copyKbDocsToPillarAction,
+} from './actions'
 import { Paginator, usePagination } from '../../_components/paginator'
 import type { KbDocDoc } from '@/src/firebase/collections'
 
@@ -111,7 +115,7 @@ export function KbDocList({ docs, lang }: KbDocListProps) {
   // Bulk re-pillar (quick-kayinleong-064). Selection is by id and survives paging, so
   // "select all" on several pages accumulates rather than resetting.
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [moving, setMoving] = useState<{ done: number; total: number } | null>(null)
+  const [busy, setBusy] = useState<{ done: number; total: number; mode: 'move' | 'copy' } | null>(null)
 
   // Apply the pillar filter first (ADMIN-05), then the superseded toggle.
   const pillarFilteredDocs =
@@ -152,53 +156,71 @@ export function KbDocList({ docs, lang }: KbDocListProps) {
   }
 
   /**
-   * Move every selected document to `pillar`, in bounded slices.
+   * Apply a bulk pillar operation to the selection, in bounded slices.
    *
-   * The Server Action moves at most REPILLAR_DOC_LIMIT documents per call and returns the
-   * ids it did not reach; this loops until that list is empty. Same client-driven shape as
-   * KB ingestion, and for the same reason — the corpus is ~25k chunks and one request
-   * cannot rewrite them.
+   * Both Server Actions move/copy a small number of documents per call and return the ids
+   * they did not reach; this loops until that list is empty. Same client-driven shape as KB
+   * ingestion, and for the same reason — the corpus is ~25k chunks and one request cannot
+   * rewrite them.
+   *
+   * `copy` is the non-destructive option and exists because Coach needs material that
+   * Finder still has to serve; moving a sales kit out of Finder to feed Coach breaks Finder.
    */
-  function handleMove(pillar: 'coach' | 'finder' | 'reply') {
+  function handleBulk(mode: 'move' | 'copy', pillar: 'coach' | 'finder' | 'reply') {
     const ids = [...selected]
     if (ids.length === 0) return
     const label = PILLAR_LABEL[pillar]
-    if (
-      !window.confirm(
-        `Move ${ids.length} document${ids.length === 1 ? '' : 's'} to ${label}?\n\n` +
-          'Their chunks move too, so the agents will retrieve them under the new pillar.',
-      )
-    ) {
-      return
-    }
+    const noun = `${ids.length} document${ids.length === 1 ? '' : 's'}`
+    const question =
+      mode === 'move'
+        ? `Move ${noun} to ${label}?\n\nTheir chunks move too, so ${label} gains them and ` +
+          'the current pillar loses them.'
+        : `Copy ${noun} to ${label}?\n\nThe originals stay where they are. ` +
+          'Chunks are duplicated, so this adds to storage.'
+    if (!window.confirm(question)) return
 
     startTransition(async () => {
       let queue = ids
-      let docsMoved = 0
-      let chunksMoved = 0
-      setMoving({ done: 0, total: ids.length })
+      let docs = 0
+      let chunks = 0
+      let skipped = 0
+      setBusy({ done: 0, total: ids.length, mode })
 
       while (queue.length > 0) {
-        const result = await repillarKbDocsAction(queue, pillar)
+        const result =
+          mode === 'move'
+            ? await repillarKbDocsAction(queue, pillar)
+            : await copyKbDocsToPillarAction(queue, pillar)
+
         if (!result.ok) {
-          setMoving(null)
-          toast.error(result.error ?? 'Failed to move documents')
-          // Not a rollback: what already moved stays moved, which is honest and safe to
-          // re-run — moving a doc to the pillar it is already in is a no-op.
-          if (docsMoved > 0) window.location.reload()
+          setBusy(null)
+          toast.error(result.error ?? `Failed to ${mode} documents`)
+          // Not a rollback: what already changed stays changed, which is honest and safe to
+          // re-run — both operations are no-ops when repeated on the same document.
+          if (docs > 0) window.location.reload()
           return
         }
-        docsMoved += result.docsMoved
-        chunksMoved += result.chunksMoved
+
+        if ('docsMoved' in result) {
+          docs += result.docsMoved
+          chunks += result.chunksMoved
+        } else {
+          docs += result.docsCopied
+          chunks += result.chunksCopied
+          skipped += result.skipped
+        }
+
         // Guard against a call that reports no progress, so a bad id cannot spin forever.
         if (result.remaining.length >= queue.length) break
         queue = result.remaining
-        setMoving({ done: ids.length - queue.length, total: ids.length })
+        setBusy({ done: ids.length - queue.length, total: ids.length, mode })
       }
 
-      setMoving(null)
+      setBusy(null)
+      const verb = mode === 'move' ? 'Moved' : 'Copied'
       toast.success(
-        `Moved ${docsMoved} document${docsMoved === 1 ? '' : 's'} (${chunksMoved} chunks) to ${label}`,
+        `${verb} ${docs} document${docs === 1 ? '' : 's'} (${chunks} chunks) to ${label}` +
+          (skipped > 0 ? ` — ${skipped} skipped (already there)` : ''),
       )
       window.location.reload()
     })
@@ -276,33 +298,45 @@ export function KbDocList({ docs, lang }: KbDocListProps) {
           pillar, so this is what makes a document answerable by a different agent — not the
           label in the table. */}
       {selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
-          <span className="text-sm font-medium">
-            {moving
-              ? `Moving ${moving.done}/${moving.total}…`
-              : `${selected.size} selected`}
-          </span>
-          <span className="text-xs text-muted-foreground">Move to</span>
-          {(['coach', 'finder', 'reply'] as const).map((p) => (
+        <div className="space-y-2 rounded-lg border bg-muted/40 px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">
+              {busy
+                ? `${busy.mode === 'move' ? 'Moving' : 'Copying'} ${busy.done}/${busy.total}…`
+                : `${selected.size} selected`}
+            </span>
             <Button
-              key={p}
-              variant="outline"
+              variant="ghost"
               size="sm"
               disabled={isPending}
-              onClick={() => handleMove(p)}
+              className="ml-auto text-xs text-muted-foreground"
+              onClick={() => setSelected(new Set())}
             >
-              {PILLAR_LABEL[p]}
+              Clear
             </Button>
+          </div>
+
+          {/* Two labelled rows rather than one long one: MOVE takes the documents away from
+              their current pillar and COPY does not, and a row of six identical buttons
+              would not say which is which. */}
+          {(['move', 'copy'] as const).map((mode) => (
+            <div key={mode} className="flex flex-wrap items-center gap-2">
+              <span className="w-14 shrink-0 text-xs text-muted-foreground">
+                {mode === 'move' ? 'Move to' : 'Copy to'}
+              </span>
+              {(['coach', 'finder', 'reply'] as const).map((p) => (
+                <Button
+                  key={p}
+                  variant="outline"
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() => handleBulk(mode, p)}
+                >
+                  {PILLAR_LABEL[p]}
+                </Button>
+              ))}
+            </div>
           ))}
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={isPending}
-            className="ml-auto text-xs text-muted-foreground"
-            onClick={() => setSelected(new Set())}
-          >
-            Clear
-          </Button>
         </div>
       )}
 
