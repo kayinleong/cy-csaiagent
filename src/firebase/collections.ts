@@ -48,6 +48,9 @@ import {
   type Timestamp,
   type WithFieldValue,
 } from 'firebase-admin/firestore'
+// VectorValue is declared in @google-cloud/firestore; firebase-admin re-exports the
+// runtime FieldValue.vector() helper but not this type (quick-kayinleong-066).
+import type { VectorValue } from '@google-cloud/firestore'
 import { adminDb } from '@/src/firebase/admin'
 
 // ─── Tenant constant ────────────────────────────────────────────────────────
@@ -361,8 +364,20 @@ export interface KbChunkDoc {
    * on all existing chunks that have none (D-08 default).
    */
   pillar?: 'coach' | 'finder' | 'reply'
-  /** 1024-d normalized vector (Gemini gemini-embedding-001, DOT_PRODUCT) */
-  embedding: number[]
+  /**
+   * 1024-d normalized vector (Gemini gemini-embedding-001, DOT_PRODUCT).
+   *
+   * MUST be written as `FieldValue.vector(numbers)`, never as a bare array
+   * (quick-kayinleong-066). A Firestore vector index only covers fields stored as the
+   * VECTOR type; a plain `number[]` is silently skipped, so `findNearest` returns zero
+   * rows and every Coach/Reply retrieval reports kb_miss with no error anywhere. That is
+   * exactly what happened to all 25,167 chunks written before that claim.
+   *
+   * The union keeps `number[]` assignable for the backfill's read side and for chunks
+   * written before the fix; nothing in the app reads this field back — it exists to be
+   * indexed.
+   */
+  embedding: number[] | VectorValue
   tokens: number
   /** Zero-based position of this chunk in the source document */
   chunkIndex: number

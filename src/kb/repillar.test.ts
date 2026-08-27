@@ -37,7 +37,11 @@ const {
 let mockTargetExists = false
 
 vi.mock('firebase-admin/firestore', () => ({
-  FieldValue: { serverTimestamp: () => '__TS__', delete: () => '__DEL__' },
+  FieldValue: {
+    serverTimestamp: () => '__TS__',
+    delete: () => '__DEL__',
+    vector: (a: number[]) => ({ __vector: a }),
+  },
 }))
 
 vi.mock('@/src/firebase/collections', () => ({
@@ -85,7 +89,12 @@ describe('repillarDocs', () => {
 
     expect(mockDocUpdate).toHaveBeenCalledWith({ pillar: 'coach' })
     expect(mockChunkUpdate).toHaveBeenCalledTimes(3)
-    expect(mockChunkUpdate).toHaveBeenCalledWith({ pillar: 'coach' })
+    const chunkPatch = mockChunkUpdate.mock.calls[0][0]
+    expect(chunkPatch.pillar).toBe('coach')
+    // quick-066: a chunk written as a bare number[] is invisible to the vector index, so
+    // moving it to Coach without repairing the type would relabel an UNSEARCHABLE chunk
+    // and the move would look like it had done nothing.
+    expect(chunkPatch.embedding).toEqual({ __vector: [0.1] })
     expect(result).toEqual({ docsMoved: 1, chunksMoved: 3, remaining: [] })
   })
 
@@ -166,12 +175,22 @@ describe('copyDocsToPillar', () => {
     expect(chunkWrite.docId).toBe(copyDocId('src1', 'coach'))
   })
 
-  it('copies the embedding verbatim — a copy needs no re-embedding', async () => {
+  it('copies the embedding values verbatim, but as the VECTOR type', async () => {
+    // The numbers are unchanged — a copy needs no re-embedding — but they must land as a
+    // Firestore VECTOR or the copy is unsearchable (quick-066).
     mockChunksGet.mockResolvedValue(chunks(1, { embedding: [0.5, 0.25], text: 'body', tokens: 7 }))
     await copyDocsToPillar(ADMIN, ['src1'], 'coach')
     const chunkWrite = mockChunkAdd.mock.calls[0][0]
-    expect(chunkWrite.embedding).toEqual([0.5, 0.25])
+    expect(chunkWrite.embedding).toEqual({ __vector: [0.5, 0.25] })
     expect(chunkWrite.text).toBe('body')
+  })
+
+  it('converts a source chunk ALREADY stored as a VectorValue without double-wrapping', async () => {
+    mockChunksGet.mockResolvedValue(
+      chunks(1, { embedding: { toArray: () => [0.9, 0.1] } as unknown as number[] }),
+    )
+    await copyDocsToPillar(ADMIN, ['src1'], 'coach')
+    expect(mockChunkAdd.mock.calls[0][0].embedding).toEqual({ __vector: [0.9, 0.1] })
   })
 
   it('does NOT carry version lineage into the copy', async () => {

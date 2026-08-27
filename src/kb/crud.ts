@@ -582,11 +582,35 @@ export async function repillarDocs(
     docsMoved++
 
     const chunksSnap = await kbChunksRef().where('docId', '==', docId).get()
-    await Promise.all(chunksSnap.docs.map((chunk) => chunk.ref.update({ pillar })))
+    await Promise.all(
+      chunksSnap.docs.map((chunk) => {
+        // Repair the embedding type on the way past (quick-kayinleong-066). A chunk
+        // written before that claim holds a plain number[], which a vector index does not
+        // cover — moving it to Coach without this would relabel an UNSEARCHABLE chunk and
+        // the pillar move would look like it had done nothing.
+        const patch: Record<string, unknown> = { pillar }
+        const emb = (chunk.data() as { embedding?: unknown }).embedding
+        if (Array.isArray(emb)) patch.embedding = FieldValue.vector(emb as number[])
+        return chunk.ref.update(patch)
+      }),
+    )
     chunksMoved += chunksSnap.size
   }
 
   return { docsMoved, chunksMoved, remaining }
+}
+
+/**
+ * Coerce an embedding to the Firestore VECTOR type (quick-kayinleong-066).
+ *
+ * Accepts either shape: a `number[]` (how every chunk was written before that claim) or an
+ * already-converted `VectorValue`, which reads back with a `toArray()` method.
+ */
+function toVector(embedding: unknown): FirebaseFirestore.VectorValue {
+  if (Array.isArray(embedding)) return FieldValue.vector(embedding as number[])
+  const v = embedding as { toArray?: () => number[] }
+  if (typeof v?.toArray === 'function') return FieldValue.vector(v.toArray())
+  throw new Error('toVector: chunk has no usable embedding')
 }
 
 // ─── copyDocsToPillar ────────────────────────────────────────────────────────
@@ -712,6 +736,10 @@ export async function copyDocsToPillar(
           docId: targetId,
           pillar,
           tenantId: TENANT_ID,
+          // Normalised, not spread through (quick-kayinleong-066). A source chunk written
+          // before that claim holds a plain number[], which a vector index does not cover —
+          // copying it verbatim would faithfully reproduce an unsearchable chunk.
+          embedding: toVector(c.embedding),
         })
       }),
     )

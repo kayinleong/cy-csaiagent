@@ -336,8 +336,13 @@ describe('KB Ingestion Pipeline', () => {
       expect(firstCall.docId).toBe('mock-doc-id')
       expect(firstCall.lang).toBe('en')
       expect(firstCall.ownerCollection).toBe('kbDocs')
-      expect(Array.isArray(firstCall.embedding)).toBe(true)
-      expect(firstCall.embedding.length).toBe(1024)
+      // quick-kayinleong-066: this MUST be the Firestore VECTOR type, not a bare array.
+      // A vector index only covers VECTOR fields, so writing a plain number[] here is what
+      // made findNearest return zero rows for every Coach and Reply query — silently, for
+      // all 25,167 chunks, with no error anywhere.
+      expect(Array.isArray(firstCall.embedding)).toBe(false)
+      expect(typeof firstCall.embedding.toArray).toBe('function')
+      expect(firstCall.embedding.toArray()).toHaveLength(1024)
       expect(typeof firstCall.tokens).toBe('number')
       expect(firstCall.tenantId).toBe('d2')
     })

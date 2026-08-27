@@ -95,14 +95,28 @@ const FIND_NEAREST_LIMIT = 8
  * is populated, every query would return 8 chunks and the Coach would cite whatever
  * came back, turning a truthful `kb_miss` into a confidently-wrong grounded answer.
  *
- * ⚠ NEEDS EMPIRICAL TUNING. This floor was chosen conservatively (low) to avoid
- * false negatives and has NOT been validated against real content, because no
- * `pillar:'coach'` chunks have ever been ingested (see the claim's Verification
- * section). Re-tune once the KB is loaded: `_vectorDistance` is now returned on every
- * result via `score`, so log the score distribution for known-good and known-bad
- * queries and raise this until noise is excluded without dropping true matches.
+ * MEASURED at last, against live Firestore (quick-kayinleong-066). The previous value of
+ * 0.35 was a guess, and its own note said it had "NOT been validated against real content" —
+ * it could not be, because quick-066 found that kbChunks stored `embedding` as a plain
+ * number[], which a vector index does not cover, so findNearest returned zero rows for
+ * every query and nothing ever reached this floor.
+ *
+ * With the chunks converted to the VECTOR type, the top score per query separates cleanly
+ * (coach corpus, 14 chunks):
+ *
+ *   RELEVANT     0.6060 .. 0.6496   ("Core Residence @ TRX", "what unit types are available")
+ *   OFF-TOPIC    0.4587 .. 0.4924   ("banana bread recipe", "capital of France", "car tyre")
+ *
+ * 0.55 sits in the gap with ~0.06 of clearance either side. At the old 0.35, "banana bread
+ * recipe" returned 8 chunks and the Coach would have cited TRX pricing for it — a
+ * confidently-wrong grounded answer, which is worse than an honest kb_miss (D-10).
+ *
+ * ⚠ STILL THIN. That is 14 chunks from ONE project. As the corpus grows both distributions
+ * move — off-topic queries find something nearer, and questions about other projects land
+ * differently. Re-measure when real coach content is loaded; `score` carries
+ * `_vectorDistance` on every result, so the distribution is observable.
  */
-export const MIN_SIMILARITY = 0.35
+export const MIN_SIMILARITY = 0.55
 
 /**
  * Field name Firestore writes the computed similarity into on each returned doc.

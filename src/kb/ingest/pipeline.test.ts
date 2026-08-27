@@ -18,7 +18,12 @@ const { mockGet, mockUpdate, mockExtractText, mockChunk } = vi.hoisted(() => ({
 }))
 
 vi.mock('firebase-admin/firestore', () => ({
-  FieldValue: { delete: () => '__DELETE__', serverTimestamp: () => '__TS__' },
+  FieldValue: {
+    delete: () => '__DELETE__',
+    serverTimestamp: () => '__TS__',
+    // quick-066: embeddings must be written as the VECTOR type or the index skips them.
+    vector: (a: number[]) => ({ __vector: a }),
+  },
 }))
 
 vi.mock('@/src/firebase/collections', () => ({

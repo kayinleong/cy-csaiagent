@@ -262,7 +262,12 @@ export async function processBatch(jobId: string, limit: number): Promise<Proces
       lang,
       pillar,
       ownerCollection: 'kbDocs',
-      embedding,
+      // FieldValue.vector(), NOT the bare array (quick-kayinleong-066). A Firestore vector
+      // index only covers fields stored as the VECTOR type — a plain number[] is silently
+      // skipped, so findNearest returns zero rows with no error anywhere and every Coach
+      // and Reply retrieval reports kb_miss. All 25,167 chunks written before this line
+      // changed were invisible to the index.
+      embedding: FieldValue.vector(embedding),
       tokens,
       tenantId: TENANT_ID,
       chunkIndex,
