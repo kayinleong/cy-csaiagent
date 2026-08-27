@@ -512,6 +512,83 @@ export async function deleteDoc(user: AuthenticatedUser, docId: string): Promise
   await Promise.all(chunksSnap.docs.map((chunk) => chunk.ref.delete()))
 }
 
+// ─── repillarDocs ────────────────────────────────────────────────────────────
+
+/**
+ * How many documents one repillarDocs() call may move (quick-kayinleong-064).
+ *
+ * Small on purpose. Each document drags its chunks with it — the corpus averages ~24 per
+ * doc — so five documents is roughly 120 writes plus the reads to find them. Moving all
+ * 1068 Finder docs in one request is the Cloud Run / serverless timeout trap this codebase
+ * already answers with a client-driven loop (TSD 3.4, and the ingestion poller).
+ */
+export const REPILLAR_DOC_LIMIT = 5
+
+export interface RepillarResult {
+  /** Documents actually moved by THIS call. */
+  docsMoved: number
+  /** Chunks re-tagged by this call. */
+  chunksMoved: number
+  /** Ids the caller passed that this call did not reach — feed them to the next call. */
+  remaining: string[]
+}
+
+/**
+ * Move documents to a different pillar, taking their chunks with them.
+ *
+ * The chunk update is the ENTIRE point. `kbChunks.pillar` is denormalized from the parent
+ * doc, and every retrieval path filters findNearest on the CHUNK — `retrieveReplySop`
+ * pre-filters `pillar == 'reply'`, Coach retrieval `pillar == 'coach'`. Moving only the
+ * kbDocs row would relabel the admin list and change nothing an agent can retrieve, which
+ * is a worse outcome than not offering the button: it looks fixed and is not.
+ *
+ * Bounded to REPILLAR_DOC_LIMIT per call; the caller loops with `remaining` until it is
+ * empty. Not transactional across documents — a call that fails part way leaves the
+ * documents it already moved moved, which is the honest and re-runnable state (moving a doc
+ * to the pillar it is already in is a no-op).
+ *
+ * @param user     Verified user from requireUser() — must have role 'admin'.
+ * @param docIds   kbDocs ids to move.
+ * @param pillar   Target pillar.
+ */
+export async function repillarDocs(
+  user: AuthenticatedUser,
+  docIds: string[],
+  pillar: 'coach' | 'finder' | 'reply',
+): Promise<RepillarResult> {
+  assertAdmin(user)
+
+  if (!['coach', 'finder', 'reply'].includes(pillar)) {
+    throw new Error(`repillarDocs: invalid pillar "${pillar}"`)
+  }
+
+  const clean = docIds
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0 && id.length <= 128 && !id.includes('/'))
+
+  const batch = clean.slice(0, REPILLAR_DOC_LIMIT)
+  const remaining = clean.slice(REPILLAR_DOC_LIMIT)
+
+  let docsMoved = 0
+  let chunksMoved = 0
+
+  for (const docId of batch) {
+    const ref = kbDocsRef().doc(docId)
+    // Checked rather than blind-updated — a doc deleted between the page render and the
+    // click would otherwise abort the whole batch with a raw NOT_FOUND (quick-060).
+    if (!(await ref.get()).exists) continue
+
+    await ref.update({ pillar })
+    docsMoved++
+
+    const chunksSnap = await kbChunksRef().where('docId', '==', docId).get()
+    await Promise.all(chunksSnap.docs.map((chunk) => chunk.ref.update({ pillar })))
+    chunksMoved += chunksSnap.size
+  }
+
+  return { docsMoved, chunksMoved, remaining }
+}
+
 // ─── publishDoc ──────────────────────────────────────────────────────────────
 
 /**

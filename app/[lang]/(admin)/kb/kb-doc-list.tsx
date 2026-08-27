@@ -40,8 +40,9 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { PublishToggle } from './publish-toggle'
-import { deleteKbDocAction } from './actions'
+import { deleteKbDocAction, repillarKbDocsAction } from './actions'
 import { Paginator, usePagination } from '../../_components/paginator'
 import type { KbDocDoc } from '@/src/firebase/collections'
 
@@ -87,10 +88,11 @@ const PILLAR_LABEL: Record<string, string> = {
 
 // ─── Pillar filter ────────────────────────────────────────────────────────────
 
-// ADMIN-05 (D-10): the pillar filter exposes All / Coach / Reply. Finder docs are
-// still visible under "All"; the explicit tabs surface the two pillars Derek
-// actively manages via this editor (Coach training, Reply SOPs).
-type PillarFilter = 'all' | 'coach' | 'reply'
+// ADMIN-05 (D-10) originally exposed All / Coach / Reply only, on the reasoning that
+// Finder inventory was not managed through this editor. quick-kayinleong-064 adds Finder:
+// 1068 of the 1069 documents in the corpus are Finder, so leaving it out meant the entire
+// KB was reachable only under "All" — which reads as the documents being somewhere else.
+type PillarFilter = 'all' | 'coach' | 'finder' | 'reply'
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -106,6 +108,10 @@ export function KbDocList({ docs, lang }: KbDocListProps) {
   const [pillarFilter, setPillarFilter] = useState<PillarFilter>('all')
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  // Bulk re-pillar (quick-kayinleong-064). Selection is by id and survives paging, so
+  // "select all" on several pages accumulates rather than resetting.
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [moving, setMoving] = useState<{ done: number; total: number } | null>(null)
 
   // Apply the pillar filter first (ADMIN-05), then the superseded toggle.
   const pillarFilteredDocs =
@@ -122,6 +128,81 @@ export function KbDocList({ docs, lang }: KbDocListProps) {
   ).length
 
   const { page, setPage, pageItems, pageCount } = usePagination(visibleDocs)
+
+  const pageAllSelected = pageItems.length > 0 && pageItems.every((d) => selected.has(d.id))
+
+  function togglePage(next: boolean | 'indeterminate') {
+    setSelected((prev) => {
+      const out = new Set(prev)
+      for (const d of pageItems) {
+        if (next === true) out.add(d.id)
+        else out.delete(d.id)
+      }
+      return out
+    })
+  }
+
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  /**
+   * Move every selected document to `pillar`, in bounded slices.
+   *
+   * The Server Action moves at most REPILLAR_DOC_LIMIT documents per call and returns the
+   * ids it did not reach; this loops until that list is empty. Same client-driven shape as
+   * KB ingestion, and for the same reason — the corpus is ~25k chunks and one request
+   * cannot rewrite them.
+   */
+  function handleMove(pillar: 'coach' | 'finder' | 'reply') {
+    const ids = [...selected]
+    if (ids.length === 0) return
+    const label = PILLAR_LABEL[pillar]
+    if (
+      !window.confirm(
+        `Move ${ids.length} document${ids.length === 1 ? '' : 's'} to ${label}?\n\n` +
+          'Their chunks move too, so the agents will retrieve them under the new pillar.',
+      )
+    ) {
+      return
+    }
+
+    startTransition(async () => {
+      let queue = ids
+      let docsMoved = 0
+      let chunksMoved = 0
+      setMoving({ done: 0, total: ids.length })
+
+      while (queue.length > 0) {
+        const result = await repillarKbDocsAction(queue, pillar)
+        if (!result.ok) {
+          setMoving(null)
+          toast.error(result.error ?? 'Failed to move documents')
+          // Not a rollback: what already moved stays moved, which is honest and safe to
+          // re-run — moving a doc to the pillar it is already in is a no-op.
+          if (docsMoved > 0) window.location.reload()
+          return
+        }
+        docsMoved += result.docsMoved
+        chunksMoved += result.chunksMoved
+        // Guard against a call that reports no progress, so a bad id cannot spin forever.
+        if (result.remaining.length >= queue.length) break
+        queue = result.remaining
+        setMoving({ done: ids.length - queue.length, total: ids.length })
+      }
+
+      setMoving(null)
+      toast.success(
+        `Moved ${docsMoved} document${docsMoved === 1 ? '' : 's'} (${chunksMoved} chunks) to ${label}`,
+      )
+      window.location.reload()
+    })
+  }
 
   function handleDelete(docId: string, title: string) {
     if (!window.confirm(`Delete "${title}"? This will also remove all its chunks.`)) return
@@ -154,6 +235,7 @@ export function KbDocList({ docs, lang }: KbDocListProps) {
       <TabsList>
         <TabsTrigger value="all">{t('pillarFilter.all')}</TabsTrigger>
         <TabsTrigger value="coach">{t('pillarFilter.coach')}</TabsTrigger>
+        <TabsTrigger value="finder">Finder</TabsTrigger>
         <TabsTrigger value="reply">{t('pillarFilter.reply')}</TabsTrigger>
       </TabsList>
     </Tabs>
@@ -189,9 +271,53 @@ export function KbDocList({ docs, lang }: KbDocListProps) {
         </div>
       )}
 
+      {/* Bulk re-pillar bar (quick-kayinleong-064). Only rendered when something is
+          selected, so the default view is unchanged. Coach retrieval filters on the CHUNK
+          pillar, so this is what makes a document answerable by a different agent — not the
+          label in the table. */}
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+          <span className="text-sm font-medium">
+            {moving
+              ? `Moving ${moving.done}/${moving.total}…`
+              : `${selected.size} selected`}
+          </span>
+          <span className="text-xs text-muted-foreground">Move to</span>
+          {(['coach', 'finder', 'reply'] as const).map((p) => (
+            <Button
+              key={p}
+              variant="outline"
+              size="sm"
+              disabled={isPending}
+              onClick={() => handleMove(p)}
+            >
+              {PILLAR_LABEL[p]}
+            </Button>
+          ))}
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={isPending}
+            className="ml-auto text-xs text-muted-foreground"
+            onClick={() => setSelected(new Set())}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
+
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-10">
+              {/* Selects the CURRENT page only — the label says so, and selection
+                  accumulates across pages rather than resetting. */}
+              <Checkbox
+                aria-label="Select all on this page"
+                checked={pageAllSelected}
+                onCheckedChange={togglePage}
+              />
+            </TableHead>
             <TableHead>Title</TableHead>
             <TableHead>Lang</TableHead>
             <TableHead>Pillar</TableHead>
@@ -203,7 +329,15 @@ export function KbDocList({ docs, lang }: KbDocListProps) {
         </TableHeader>
         <TableBody>
           {pageItems.map(({ id, data }) => (
-            <TableRow key={id}>
+            <TableRow key={id} data-selected={selected.has(id) ? 'true' : undefined}>
+              <TableCell className="w-10">
+                <Checkbox
+                  aria-label={`Select ${data.title}`}
+                  checked={selected.has(id)}
+                  onCheckedChange={() => toggleOne(id)}
+                />
+              </TableCell>
+
               {/* Title → link to detail page */}
               <TableCell className="max-w-[240px] truncate font-medium">
                 <Link

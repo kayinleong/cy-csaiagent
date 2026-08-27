@@ -21,7 +21,9 @@
 
 import { cookies } from 'next/headers'
 import { requireUser } from '@/src/firebase/auth'
-import { createDoc, updateDoc, deleteDoc, publishDoc, unpublishDoc, type CreateDocInput, type UpdateDocInput } from '@/src/kb/crud'
+import { createDoc, updateDoc, deleteDoc, publishDoc, unpublishDoc, type CreateDocInput, type UpdateDocInput,
+  repillarDocs,
+} from '@/src/kb/crud'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -113,6 +115,31 @@ export async function deleteKbDocAction(docId: string): Promise<ActionResult> {
  * Publish a KB document — sets status:'published' on the doc + all its chunks,
  * making them retrievable by the Coach. Admin-gated via assertAdmin inside crud.
  */
+/**
+ * Move documents to a different pillar, chunks included (quick-kayinleong-064).
+ *
+ * BOUNDED: moves at most REPILLAR_DOC_LIMIT documents and returns the ids it did not
+ * reach. The client loops until `remaining` is empty — the same client-driven shape as KB
+ * ingestion, and for the same reason: 1068 documents and their ~25k chunks cannot be
+ * rewritten inside one request.
+ */
+export async function repillarKbDocsAction(
+  docIds: string[],
+  pillar: 'coach' | 'finder' | 'reply',
+): Promise<
+  | { ok: true; docsMoved: number; chunksMoved: number; remaining: string[] }
+  | { ok: false; error: string }
+> {
+  try {
+    const user = await getSessionUser()
+    const result = await repillarDocs(user, docIds, pillar)
+    return { ok: true, ...result }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    return { ok: false, error: message }
+  }
+}
+
 export async function publishKbDocAction(docId: string): Promise<ActionResult> {
   try {
     const user = await getSessionUser()
