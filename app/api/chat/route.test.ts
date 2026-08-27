@@ -1975,3 +1975,52 @@ describe('quick-061: the assistant row is written at each step boundary', () => 
     expect(updated).toEqual([])
   })
 })
+
+// ─── quick-kayinleong-063: the write must be AWAITED, not floating ────────────
+//
+// A Finder turn the user watched render a complete card left the user message and nothing
+// else — no usageEvent, no assistant row, not even quick-061's ':partial'. The user message
+// is the only write the request handler awaits; every other one was a floating promise
+// inside an SDK callback, and the serverless invocation dropped them at response close.
+
+describe('quick-063: onStepFinish awaits the persist', () => {
+  it('resolves only AFTER the row is written — no flush hack needed', async () => {
+    const appended: string[] = []
+    mocks.mockAppendMessage.mockImplementation((async (
+      cid: string,
+      msg: { role: string; content: string },
+    ) => {
+      if (msg.role === 'assistant' && cid === 'c-063a') appended.push(msg.content)
+      return 'mid'
+    }) as unknown as () => Promise<string>)
+
+    // The SDK does `await onStepFinish(step)` — ai/dist/index.mjs:2469. Capture exactly
+    // that promise so the test can assert on what awaiting it guarantees.
+    let stepSettled: Promise<unknown> | null = null
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onStepFinish }: { onStepFinish?: (s: unknown) => unknown }) => {
+        stepSettled = Promise.resolve(onStepFinish?.({ text: 'ranked matches', toolResults: [] }))
+        return {
+          consumeStream: vi.fn(async () => {}),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-063a' }))
+
+    expect(stepSettled).not.toBeNull()
+    await stepSettled
+    // No setTimeout flush anywhere in this test: awaiting the callback IS the guarantee.
+    expect(appended).toEqual(['ranked matches'])
+  })
+
+  it('returns a promise from onStepFinish so the SDK can await it', async () => {
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-063b' }))
+    const args = mocks.mockStreamText.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    const onStepFinish = args.onStepFinish as (s: unknown) => unknown
+    const returned = onStepFinish({ text: 'x', toolResults: [] })
+    expect(returned).toBeInstanceOf(Promise)
+    await returned
+  })
+})

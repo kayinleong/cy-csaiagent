@@ -765,7 +765,7 @@ export async function POST(req: Request): Promise<Response> {
       console.warn('[chat] turn aborted', { pillar, steps: turnText.length })
       after(() => persistAssistantOnce(turnText.join('\n\n'), 'aborted'))
     },
-    onStepFinish: (step) => {
+    onStepFinish: async (step) => {
       try {
         const toolResults = (step.toolResults ?? []) as Array<{
           toolName?: string
@@ -795,11 +795,21 @@ export async function POST(req: Request): Promise<Response> {
       // callback fires at all the process is being killed, and no amount of callback
       // plumbing can save the turn: the text has to already be on disk.
       //
-      // NOT after(): that defers until the response is sent, which is precisely too late.
-      // The writer is idempotent and upgrade-only, so these calls append once and then
-      // extend the same row; onFinish's 'ok' call rewrites it with the real citations,
-      // the real token count and a clean routeDecision.
-      void persistAssistantOnce(turnText.join('\n\n'), 'partial')
+      // AWAITED, not fire-and-forget (quick-kayinleong-063). The AI SDK awaits this
+      // callback — `await onStepFinish(currentStepResult)` in ai/dist/index.mjs — so
+      // awaiting here puts the write INSIDE the stream's own lifecycle, while the
+      // invocation is provably alive.
+      //
+      // That distinction is the whole bug. A Finder turn the user watched render a
+      // complete card left the user message (awaited in the request path) and NOTHING
+      // else: no usageEvent, no assistant row, not even the ':partial' quick-061 was
+      // supposed to leave. Every write that was a floating promise inside an SDK callback
+      // was dropped when the serverless invocation ended at response close. `after()` is
+      // no better here — it is explicitly post-response.
+      //
+      // Costs one Firestore write per step (<=5, bounded by stopWhen) on a turn that
+      // already runs for seconds. Cheap next to losing the answer.
+      await persistAssistantOnce(turnText.join('\n\n'), 'partial')
     },
     // Surface model/stream failures. The AI SDK reports these as an `error` chunk on a
     // 200 response, so without this they were invisible server-side too (defect RC-3).
