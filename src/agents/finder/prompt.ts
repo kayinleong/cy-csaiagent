@@ -111,12 +111,20 @@ ${reRankSection}
 ## Segmentation Branch (FIND-09)
 - For investment leads: emphasise VP completion status (yield-ready), price tier, and location return signals.
 - For own-stay leads: emphasise bedrooms, lifestyle location fit, and completion timeline.
-- If segment is 'unknown': ask whether the lead is buying to stay or invest BEFORE running searchProjects.
+- If segment is 'unknown': ask whether the lead is buying to stay or invest BEFORE running searchProjects — UNLESS the agent has told you not to ask (see the override section below).
 
 ## Missing Eligibility-Critical Data (Pitfalls 23/36)
+- Every rule in this section is overridden when the agent has told you not to ask — see "When the agent tells you NOT to ask" below.
 - If nationality is unknown and it affects eligibility (e.g. only Malaysian projects are available), ASK the lead's nationality first.
 - If monthly income is unknown and affordability is a concern, ASK the income range rather than guessing.
 - Do NOT apply a nationality filter or affordability gate based on an assumed value — use 'unknown' and ask.
+
+## When the agent tells you NOT to ask (overrides the two sections above)
+- If the agent says anything like "don't ask questions", "no questions", "just show me", "just give me the results", or answers a clarifying question with "doesn't matter" / "any" / "skip it" — do NOT ask again. Run searchProjects immediately with 'unknown' or null for whatever is still missing.
+- This is safe to do: 'unknown' means the tool applies NO filter for that field, so the result set gets WIDER, never wrong. You are not guessing a nationality or an income — you are declining to filter on one.
+- You MUST still say, in one short line after the matches, which eligibility-critical facts were not confirmed and what would change — e.g. "Not confirmed: nationality and income. Bumi-quota and foreign-eligibility still need checking before you quote these." Never present an unconfirmed fact as settled.
+- Do NOT re-ask the same question later in the conversation once the agent has waved it off.
+- Asking again after being told not to costs the agent a whole extra round trip, and a turn that runs too long is killed before they see anything.
 
 ## Legal Disclaimer (Pitfall 5)
 - Do not state generic foreign-buyer legal price thresholds (e.g. "foreigners must buy above RM1m") — these are state-dependent and change.

@@ -775,6 +775,42 @@ describe('quick-051: finder prompt has a conversational branch', () => {
     expect(FINDER_SYSTEM_PROMPT).toContain('Never populate two')
   })
 
+  // ── quick-kayinleong-068: "don't ask me questions" ────────────────────────
+  //
+  // Three rules force a clarifying question before any search (unknown segment, unknown
+  // nationality, unknown income). An agent who has said not to ask should get results.
+
+  it('lets the agent switch OFF clarifying questions', () => {
+    expect(FINDER_SYSTEM_PROMPT).toContain('When the agent tells you NOT to ask')
+    expect(FINDER_SYSTEM_PROMPT).toContain('do NOT ask again')
+    expect(FINDER_SYSTEM_PROMPT).toContain('Run searchProjects immediately')
+  })
+
+  it('explains WHY skipping the question is safe, not just that it is allowed', () => {
+    // 'unknown' means the tool applies NO filter (Pitfall 23), so the result set gets
+    // wider, never wrong. Without this the model has to infer that searching on unknowns
+    // is safe, and the conservative read is to keep asking.
+    expect(FINDER_SYSTEM_PROMPT).toContain('applies NO filter')
+    expect(FINDER_SYSTEM_PROMPT).toContain('WIDER, never wrong')
+  })
+
+  it('still requires the unconfirmed facts to be stated', () => {
+    // Skipping the question must not become quietly asserting the answer.
+    expect(FINDER_SYSTEM_PROMPT).toContain('which eligibility-critical facts were not confirmed')
+    expect(FINDER_SYSTEM_PROMPT).toContain('Never present an unconfirmed fact as settled')
+  })
+
+  it('cross-references the override from the rules it overrides', () => {
+    // A rule that says ASK and an override 40 lines away is how a model ends up obeying
+    // whichever it read last.
+    expect(FINDER_SYSTEM_PROMPT).toContain(
+      "UNLESS the agent has told you not to ask (see the override section below)",
+    )
+    expect(FINDER_SYSTEM_PROMPT).toContain(
+      'Every rule in this section is overridden when the agent has told you not to ask',
+    )
+  })
+
   it('contains NO backtick — it would terminate the template literal', () => {
     // This exact mistake broke this file in quick-048 and again in quick-051: a backtick
     // inside the prompt's template literal ends the string and the module stops compiling.
