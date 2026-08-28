@@ -80,7 +80,27 @@ export async function routeAsync(
   }
 
   // 3. Ambiguous — call the LLM classifier.
-  const classification = await classifyIntent(messages)
+  //
+  // Wrapped, because a router is an OPTIMISATION over the heuristic and its failure must
+  // not be fatal (quick-kayinleong-069). Reproduced end to end: when the Anthropic account
+  // ran out of credit, classifyIntent threw an AI_APICallError, nothing caught it, and the
+  // agent got HTTP 500 with an EMPTY body — no message, no explanation, and the turn dead
+  // before the user message had even been written. A provider outage, a billing lapse, a
+  // rate limit or a malformed model id should cost routing ACCURACY, not the whole turn.
+  //
+  // Falls back to 'coach', the same safe default the low-confidence branch below already
+  // uses (Pitfall 2 / D-01), with the reason recorded so the failure is visible in
+  // routeDecision rather than silent.
+  let classification: Awaited<ReturnType<typeof classifyIntent>>
+  try {
+    classification = await classifyIntent(messages)
+  } catch (err) {
+    // Name only — never the provider's message, which can carry account details.
+    console.error('[router] classifier unavailable; falling back to coach', {
+      name: err instanceof Error ? err.name : typeof err,
+    })
+    return { pillar: 'coach', reason: 'classifier_unavailable' }
+  }
 
   if (classification.confidence < ROUTER_CONFIDENCE_THRESHOLD) {
     // Below threshold → default to 'coach' (safe pillar; Pitfall 2 / D-01).

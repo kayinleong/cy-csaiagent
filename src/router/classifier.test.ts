@@ -254,3 +254,47 @@ describe('routeAsync — three-tier routing (override→heuristic→classifier)'
     expect(result.reason).toMatch(/classifier/i)
   })
 })
+
+// ─── quick-kayinleong-069: the classifier failing must not kill the turn ──────
+//
+// Reproduced end to end against the local dev server: when the Anthropic account ran out of
+// credit, classifyIntent threw AI_APICallError, nothing caught it, and the agent got HTTP
+// 500 with an EMPTY body — no message, no explanation. A router is an optimisation over the
+// heuristic; a provider outage, billing lapse, rate limit or bad model id should cost
+// routing ACCURACY, not the whole turn.
+
+describe('routeAsync — the classifier is optional, not load-bearing', () => {
+  it('falls back to coach when the classifier THROWS, instead of propagating', async () => {
+    mocks.mockGenerateObject.mockRejectedValueOnce(
+      Object.assign(new Error('Your credit balance is too low'), { name: 'AI_APICallError' }),
+    )
+
+    const result = await routeAsync(AMBIGUOUS)
+
+    expect(result.pillar).toBe('coach')
+    expect(result.reason).toBe('classifier_unavailable')
+  })
+
+  it('makes the failure observable in routeDecision rather than silent', async () => {
+    // `${pillar}:${reason}` is what lands on every message (D-02), so a turn routed by
+    // fallback is distinguishable from one the classifier actually decided.
+    mocks.mockGenerateObject.mockRejectedValueOnce(new Error('ECONNRESET'))
+    const result = await routeAsync(AMBIGUOUS)
+    expect(`${result.pillar}:${result.reason}`).toBe('coach:classifier_unavailable')
+  })
+
+  it('never reaches the classifier when the heuristic already decided', async () => {
+    // The fallback must not mask a heuristic hit — a Finder question with the classifier
+    // down still routes to Finder.
+    mocks.mockGenerateObject.mockRejectedValue(new Error('should not be called'))
+    const result = await routeAsync(FINDER_MSG)
+    expect(result.pillar).toBe('finder')
+    expect(result.reason).not.toBe('classifier_unavailable')
+  })
+
+  it('still honours the manual override with the classifier down', async () => {
+    mocks.mockGenerateObject.mockRejectedValue(new Error('down'))
+    const result = await routeAsync(AMBIGUOUS, { override: 'reply' })
+    expect(result).toEqual({ pillar: 'reply', reason: 'manual-override' })
+  })
+})
