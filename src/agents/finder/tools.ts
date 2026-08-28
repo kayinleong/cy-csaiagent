@@ -38,6 +38,16 @@ import type { ProjectDoc } from '@/src/firebase/collections'
 export const MAX_COLLATERAL_ITEMS = 12
 
 /**
+ * How many of a search's top matches get their collateral attached inline
+ * (quick-kayinleong-067).
+ *
+ * Three, not all eight: the tail of a shortlist is rarely what the agent forwards, and
+ * every attached item is re-sent to the model on every subsequent step of the tool loop —
+ * the token blowup quick-054 was fixed to stop.
+ */
+export const INLINE_COLLATERAL_MATCHES = 3
+
+/**
  * Sort key for collateral usefulness — LOWER is better.
  *
  * The corpus is dominated by WhatsApp media, so `type` alone does not discriminate: nearly
@@ -154,7 +164,9 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh') {
       'Only returns projects with status=active — sold-out and hidden projects are excluded. ' +
       'Eligibility (bumiQuota / foreignEligible) and affordability (priceValue vs income ceiling) ' +
       'are enforced deterministically — the results are the ground truth. ' +
-      'If the result is no_match or ineligible, deliver the grounded refusal — do NOT invent a project.',
+      'If the result is no_match or ineligible, deliver the grounded refusal — do NOT invent a project. ' +
+      'The top matches already include their shareable collateral inline, so you do NOT need to call ' +
+      'fetchCollateral for them — use what is attached.',
     inputSchema: z.object({
       segment: z
         .enum(['investment', 'own_stay', 'unknown'])
@@ -179,8 +191,8 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh') {
       // READ-ONLY: calls searchProjects, no Firestore writes.
       // Infra errors (Gemini embed auth, Firestore, network) are caught and returned
       // as a grounded inventory_unavailable signal instead of a raw provider error.
-      runReadOnly('searchProjects', () =>
-        searchProjects({
+      runReadOnly('searchProjects', async () => {
+        const result = await searchProjects({
           segment: input.segment,
           priceMin: input.priceMin,
           priceMax: input.priceMax,
@@ -190,8 +202,43 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh') {
           locationPref: input.locationPref,
           bedrooms: input.bedrooms,
           freeText: input.freeText,
-        }),
-      ),
+        })
+
+        // Attach collateral INLINE for the top matches (quick-kayinleong-067).
+        //
+        // The model used to spend a whole extra STEP calling fetchCollateral, and a Finder
+        // turn was already running past the platform's function timeout — killed mid-flight
+        // with a 500 and an empty body, which is why onFinish never ran and replies were
+        // never persisted. Measured: searchProjects is 4519ms cold, a model round trip is
+        // seconds. Reading collateral here costs one more Firestore query in a step that is
+        // already open, and removes a whole round trip from the common path.
+        //
+        // Only the top INLINE_COLLATERAL_MATCHES get it: the tail of a shortlist is rarely
+        // the one the agent forwards, and every attached item is re-sent on every
+        // subsequent step (the token blowup quick-054 fixed).
+        if (!result.found || !result.matches?.length) return result
+
+        const top = result.matches.slice(0, INLINE_COLLATERAL_MATCHES)
+        const collaterals = await Promise.all(
+          top.map((m) =>
+            collateralFor(m.projectId).catch(() => {
+              // A collateral read must never fail the search. The match is still the
+              // ground truth; the agent just gets no files for it.
+              console.warn(`[searchProjects] inline collateral failed for ${m.projectId}`)
+              return [] as Array<{ type: string; url: string }>
+            }),
+          ),
+        )
+
+        return {
+          ...result,
+          matches: result.matches.map((m, i) =>
+            i < top.length && collaterals[i].length > 0
+              ? { ...m, collateral: collaterals[i] }
+              : m,
+          ),
+        }
+      }),
   })
 }
 
@@ -331,7 +378,9 @@ export function makeFetchCollateralTool(userLang: 'en' | 'ms' | 'zh') {
       'Returns an array of {type, url} items where url is ALWAYS a complete http(s) link that can be ' +
       'shared with a lead. Assets that have no shareable link are omitted, so an empty array means ' +
       'there is no collateral you can attach — say so plainly, never invent or guess a link. ' +
-      'Call this AFTER searchProjects returns a match to attach the relevant collateral to the recommendation.',
+      'Only needed for a project whose collateral was NOT already attached by searchProjects — for example a ' +
+      'project the agent names directly, or a lower-ranked match. Do not re-fetch collateral that the ' +
+      'search result already gave you.',
     inputSchema: z.object({
       projectId: z
         .string()
@@ -342,7 +391,20 @@ export function makeFetchCollateralTool(userLang: 'en' | 'ms' | 'zh') {
       // READ-ONLY: reads the collateral collection — no Firestore writes.
       // D-09/C2: NEVER calls the Google Drive API; returns Storage path or externalUrl only.
       // Infra errors are caught and returned as a grounded inventory_unavailable signal.
-      runReadOnly('fetchCollateral', async () => {
+      runReadOnly('fetchCollateral', () => collateralFor(projectId)),
+  })
+}
+
+/**
+ * Read, rank and cap the shareable collateral for one project.
+ *
+ * Extracted so searchProjects can attach collateral INLINE (quick-kayinleong-067) rather
+ * than the model spending a whole extra step calling fetchCollateral for it. A Firestore
+ * read costs ~100-300ms; a model round trip costs seconds, and a Finder turn was running
+ * past the platform's function timeout.
+ */
+async function collateralFor(projectId: string): Promise<Array<{ type: string; url: string }>> {
+  {
         const snap = await collateralRef().where('projectId', '==', projectId).get()
 
         if (snap.empty) {
@@ -393,6 +455,5 @@ export function makeFetchCollateralTool(userLang: 'en' | 'ms' | 'zh') {
         }
 
         return ranked
-      }),
-  })
+  }
 }

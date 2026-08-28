@@ -35,7 +35,11 @@ vi.mock('@/src/firebase/collections', () => ({
   TENANT_ID: 'd2',
 }))
 
-import { makeFetchCollateralTool } from './tools'
+import {
+  makeFetchCollateralTool,
+  makeSearchProjectsTool,
+  INLINE_COLLATERAL_MATCHES,
+} from './tools'
 
 const PID = 'project-kl-001'
 
@@ -224,5 +228,105 @@ describe('quick-054: collateralRank ordering', () => {
       type: 'whatsapp-media', url: fbUrl(`photo-${i}.jpg`),
     }))
     expect(rankAndCapCollateral(many)).toHaveLength(MAX_COLLATERAL_ITEMS)
+  })
+})
+
+// ─── quick-kayinleong-067: collateral rides along with the search ─────────────
+//
+// POST /api/chat was returning 500 with an EMPTY body — not one of ours, every 500 our
+// route returns carries a JSON body. The platform was killing the function. Measured:
+// searchProjects is 4519ms cold and a Finder turn also makes 3-5 sequential model round
+// trips; successful turns reached 21.0s while Coach topped out at 11.6s. Making the model
+// spend a whole step on fetchCollateral was a round trip the turn could not afford.
+
+describe('quick-067: searchProjects attaches collateral inline', () => {
+  const SEARCH_INPUT = {
+    segment: 'unknown' as const,
+    priceMin: null,
+    priceMax: null,
+    monthlyIncome: null,
+    financingNote: null,
+    nationality: 'unknown' as const,
+    bumiputera: null,
+    locationPref: 'KLCC',
+    tenurePref: null,
+    bedrooms: 2,
+    freeText: 'two bed in klcc',
+  }
+
+  async function runSearch(matchCount: number, collateralDocs: Array<Record<string, unknown>>) {
+    const { searchProjects } = await import('@/src/inventory/search')
+    vi.mocked(searchProjects).mockResolvedValue({
+      found: true,
+      matches: Array.from({ length: matchCount }, (_, i) => ({
+        projectId: `p${i}`,
+        name: `Project ${i}`,
+      })),
+    } as never)
+    mocks.mockCollateralGet.mockResolvedValue(snapshotOf(collateralDocs))
+    const tool = makeSearchProjectsTool('en')
+    const execute = tool.execute as NonNullable<typeof tool.execute>
+    return (await execute(SEARCH_INPUT, {} as never)) as {
+      found: boolean
+      matches: Array<{ projectId: string; collateral?: Array<{ type: string; url: string }> }>
+    }
+  }
+
+  it('attaches collateral to the top matches so no extra round trip is needed', async () => {
+    const result = await runSearch(5, [
+      { type: 'brochure', externalUrl: 'https://x.test/a.pdf', projectId: 'p0' },
+    ])
+    expect(result.matches[0].collateral).toEqual([
+      { type: 'brochure', url: 'https://x.test/a.pdf' },
+    ])
+  })
+
+  it('only attaches to the top N — the tail is rarely what gets forwarded', async () => {
+    const result = await runSearch(8, [
+      { type: 'brochure', externalUrl: 'https://x.test/a.pdf', projectId: 'p0' },
+    ])
+    const withCollateral = result.matches.filter((m) => (m.collateral?.length ?? 0) > 0)
+    expect(withCollateral).toHaveLength(INLINE_COLLATERAL_MATCHES)
+    expect(result.matches).toHaveLength(8)
+    // Every attached item is re-sent on every subsequent step of the tool loop — the
+    // token blowup quick-054 fixed. Attaching to all eight would reintroduce it.
+    expect(result.matches[INLINE_COLLATERAL_MATCHES].collateral).toBeUndefined()
+  })
+
+  it('omits the key entirely when a project has no shareable collateral', async () => {
+    const result = await runSearch(3, [])
+    expect(result.matches[0].collateral).toBeUndefined()
+  })
+
+  it('a collateral read failure never fails the search — the match is still ground truth', async () => {
+    const { searchProjects } = await import('@/src/inventory/search')
+    vi.mocked(searchProjects).mockResolvedValue({
+      found: true,
+      matches: [{ projectId: 'p0', name: 'Project 0' }],
+    } as never)
+    mocks.mockCollateralGet.mockRejectedValue(new Error('firestore unavailable'))
+
+    const tool = makeSearchProjectsTool('en')
+    const execute = tool.execute as NonNullable<typeof tool.execute>
+    const result = (await execute(SEARCH_INPUT, {} as never)) as {
+      found: boolean
+      matches: Array<{ projectId: string; collateral?: unknown }>
+    }
+    expect(result.found).toBe(true)
+    expect(result.matches).toHaveLength(1)
+    expect(result.matches[0].collateral).toBeUndefined()
+  })
+
+  it('leaves a no_match result untouched', async () => {
+    const { searchProjects } = await import('@/src/inventory/search')
+    vi.mocked(searchProjects).mockResolvedValue({ found: false, reason: 'no_match' } as never)
+    // Cleared here rather than asserting on a running total — earlier tests in this file
+    // share the same mock instance.
+    mocks.mockCollateralGet.mockClear()
+    const tool = makeSearchProjectsTool('en')
+    const execute = tool.execute as NonNullable<typeof tool.execute>
+    const result = await execute(SEARCH_INPUT, {} as never)
+    expect(result).toEqual({ found: false, reason: 'no_match' })
+    expect(mocks.mockCollateralGet).not.toHaveBeenCalled()
   })
 })
