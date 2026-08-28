@@ -99,3 +99,21 @@ common Finder path.
 3. **`searchProjects` is still 4519ms cold.** Most of that is Firestore client cold start,
    which recurs on every fresh container. Untouched here.
 4. The step budget is still `stepCountIs(5)`, shared across all three pillars.
+
+
+---
+
+## CORRECTION (quick-kayinleong-069, 2026-08-28)
+
+**The diagnosis above is wrong.** The 500 was not a platform timeout — it reproduces on the
+local dev server in **1504ms**. The real cause is that the Anthropic account ran out of
+credit: `classifyIntent` threw `AI_APICallError` and nothing caught it. See
+[quick-kayinleong-069](../quick-kayinleong-069/CLAIM.md).
+
+The timing evidence collected here (searchProjects 4519ms cold, Finder turns reaching 21.0s
+against Coach's 11.6s) is accurate, but it was circumstantial and I stopped at a hypothesis
+that fit rather than running the endpoint.
+
+**The change itself still stands on its own merits** — removing a model round trip from every
+Finder turn is a real saving, and the inline-collateral behaviour is tested and verified live.
+Only the stated motivation was wrong.
