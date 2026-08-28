@@ -2024,3 +2024,133 @@ describe('quick-063: onStepFinish awaits the persist', () => {
     await returned
   })
 })
+
+// ─── quick-kayinleong-070: checkpoint the reply WHILE it generates ────────────
+//
+// Measured on a real 34.2s Finder turn: the assistant row's createTime and updateTime were
+// 95ms apart — both at the very end. Finder's steps are searchProjects (no text, the
+// quick-048 anti-narration rule forbids it) -> fetchCollateral (no text) -> the whole JSON
+// envelope. EVERY character arrives in the final step, so step-boundary writes have nothing
+// to save until generation has already finished.
+
+describe('quick-070: onChunk checkpoints the reply mid-generation', () => {
+  const flush = () => new Promise((r) => setTimeout(r, 0))
+
+  function capture(cid: string) {
+    const writes: string[] = []
+    mocks.mockAppendMessage.mockImplementation((async (
+      c: string,
+      msg: { role: string; content: string },
+    ) => {
+      if (msg.role === 'assistant' && c === cid) writes.push(msg.content)
+      return 'mid'
+    }) as unknown as () => Promise<string>)
+    mocks.mockUpdateMessage.mockImplementation((async (
+      c: string,
+      _mid: string,
+      msg: { role: string; content: string },
+    ) => {
+      if (msg.role === 'assistant' && c === cid) writes.push(msg.content)
+    }) as unknown as () => Promise<void>)
+    return writes
+  }
+
+  /**
+   * Drive onChunk with text deltas, advancing the clock between them.
+   *
+   * The route does `void result.consumeStream()`, so POST returns before the stream is
+   * drained — the test has to await the stream promise itself, exactly as the runtime does.
+   */
+  async function stream(cid: string, deltas: Array<{ text: string; waitMs?: number }>) {
+    let settled: Promise<void> | null = null
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onChunk }: { onChunk?: (e: { chunk: { type: string; text: string } }) => unknown }) => {
+        settled = (async () => {
+          for (const d of deltas) {
+            if (d.waitMs) await new Promise((r) => setTimeout(r, d.waitMs))
+            await onChunk?.({ chunk: { type: 'text-delta', text: d.text } })
+          }
+        })()
+        return {
+          consumeStream: vi.fn(() => settled),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid }))
+    await settled
+    await flush()
+  }
+
+  it('writes the reply BEFORE generation finishes — the whole point', async () => {
+    const writes = capture('c-070a')
+    // Enough text and enough elapsed time to cross both thresholds.
+    await stream('c-070a', [
+      { text: 'x'.repeat(700), waitMs: 2100 },
+      { text: 'y'.repeat(700), waitMs: 2100 },
+    ])
+    // No onFinish, no onStepFinish — nothing but streaming. Before quick-070 this turn
+    // persisted NOTHING.
+    expect(writes.length).toBeGreaterThan(0)
+    expect(writes.at(-1)!.length).toBeGreaterThanOrEqual(700)
+  })
+
+  it('is throttled — a long reply costs a handful of writes, not one per token', async () => {
+    const writes = capture('c-070b')
+    // 100 small deltas with no waiting: the char threshold is crossed but not the time one.
+    await stream('c-070b', Array.from({ length: 100 }, () => ({ text: 'abcdefghij' })))
+    expect(writes.length).toBeLessThanOrEqual(2)
+  })
+
+  it('ignores non-text chunks', async () => {
+    const writes = capture('c-070c')
+    let settled: Promise<void> | null = null
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onChunk }: { onChunk?: (e: { chunk: { type: string } }) => unknown }) => {
+        settled = (async () => {
+          await onChunk?.({ chunk: { type: 'tool-call' } })
+          await onChunk?.({ chunk: { type: 'tool-result' } })
+        })()
+        return {
+          consumeStream: vi.fn(() => settled),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-070c' }))
+    await settled
+    await flush()
+    expect(writes).toEqual([])
+  })
+
+  it('does not double-count a step’s text once onStepFinish has banked it', async () => {
+    const writes = capture('c-070d')
+    let settled: Promise<void> | null = null
+    mocks.mockStreamText.mockImplementationOnce(
+      ({ onChunk, onStepFinish }: {
+        onChunk?: (e: { chunk: { type: string; text: string } }) => unknown
+        onStepFinish?: (s: unknown) => unknown
+      }) => {
+        settled = (async () => {
+          await new Promise((r) => setTimeout(r, 2100))
+          await onChunk?.({ chunk: { type: 'text-delta', text: 'A'.repeat(700) } })
+          // The step ends: its text moves into turnText and the live buffer resets.
+          await onStepFinish?.({ text: 'A'.repeat(700), toolResults: [] })
+          await new Promise((r) => setTimeout(r, 2100))
+          await onChunk?.({ chunk: { type: 'text-delta', text: 'B'.repeat(700) } })
+        })()
+        return {
+          consumeStream: vi.fn(() => settled),
+          toUIMessageStreamResponse: vi.fn(() => new Response('s')),
+        }
+      },
+    )
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'q' }], cid: 'c-070d' }))
+    await settled
+    await flush()
+    const last = writes.at(-1)!
+    // 700 A + separator + 700 B — the A block must appear once, not twice.
+    expect(last.split('A'.repeat(700)).length - 1).toBe(1)
+    expect(last).toContain('B'.repeat(700))
+  })
+})

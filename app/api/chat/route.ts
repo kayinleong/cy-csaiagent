@@ -76,6 +76,16 @@ import { dayKey } from '@/src/usage/types'
 
 // ─── Runtime configuration ────────────────────────────────────────────────────
 
+/**
+ * Mid-generation checkpoint thresholds (quick-kayinleong-070).
+ *
+ * Both must be satisfied before a flush, so a fast short reply writes once at the end while
+ * a long one is checkpointed a handful of times. A 3184-char Finder envelope generated over
+ * ~28s costs roughly 5-8 extra updates — cheap next to losing the answer.
+ */
+const FLUSH_EVERY_MS = 2000
+const FLUSH_EVERY_CHARS = 600
+
 export const runtime = 'nodejs'
 export const maxDuration = 90
 
@@ -562,6 +572,23 @@ export async function POST(req: Request): Promise<Response> {
   type AssistantOutcome = 'ok' | 'error' | 'aborted' | 'partial'
 
   const turnText: string[] = []
+
+  /**
+   * Text streamed so far in the CURRENT step, and the checkpoint bookkeeping that decides
+   * when to flush it (quick-kayinleong-070).
+   *
+   * Step-boundary writes (quick-061/063) cannot save a Finder turn. Measured on a real
+   * 34.2s turn: the assistant row's createTime and updateTime were 95ms apart — both at
+   * the very end. Finder's step sequence is searchProjects (no text, the quick-048
+   * anti-narration rule forbids it) -> fetchCollateral (no text) -> the whole JSON envelope.
+   * EVERY character arrives in the final step, so there is nothing to checkpoint until
+   * generation has already finished. That is why Coach never lost a reply and Finder always
+   * did: not speed, but one late burst.
+   */
+  let liveText = ''
+  let lastFlushAt = Date.now()
+  let lastFlushLen = 0
+
   /** Message id once a reply HAS been written. Null means nothing is on disk yet. */
   let persistedMid: string | null = null
   /** Length of the text on disk, so a fuller version can replace a partial one. */
@@ -765,6 +792,27 @@ export async function POST(req: Request): Promise<Response> {
       console.warn('[chat] turn aborted', { pillar, steps: turnText.length })
       after(() => persistAssistantOnce(turnText.join('\n\n'), 'aborted'))
     },
+    // Checkpoint the reply WHILE it is being generated (quick-kayinleong-070).
+    //
+    // Awaited deliberately: the SDK documents that "the stream processing will pause until
+    // the callback promise is resolved", which is the same guarantee that made quick-063's
+    // onStepFinish write survive. A floating write here would be dropped on teardown.
+    //
+    // Throttled so a long reply costs a handful of writes, not one per token: flush when at
+    // least FLUSH_EVERY_MS has passed AND at least FLUSH_EVERY_CHARS of new text exists.
+    // The writer is upgrade-only, so a flush that adds nothing is a no-op.
+    onChunk: async ({ chunk }) => {
+      if (chunk.type !== 'text-delta') return
+      liveText += chunk.text
+
+      const grown = liveText.length - lastFlushLen
+      if (grown < FLUSH_EVERY_CHARS) return
+      if (Date.now() - lastFlushAt < FLUSH_EVERY_MS) return
+
+      lastFlushAt = Date.now()
+      lastFlushLen = liveText.length
+      await persistAssistantOnce([...turnText, liveText].join('\n\n'), 'partial')
+    },
     onStepFinish: async (step) => {
       try {
         const toolResults = (step.toolResults ?? []) as Array<{
@@ -786,6 +834,11 @@ export async function POST(req: Request): Promise<Response> {
       } catch {
         // Grounding bookkeeping is best-effort — never break the stream.
       }
+
+      // The step's text is now in turnText, so start the live buffer fresh for the next
+      // step. Without this the final step's text would be counted twice (quick-070).
+      liveText = ''
+      lastFlushLen = 0
 
       // Persist what exists SO FAR, at every step boundary (quick-kayinleong-061).
       //
