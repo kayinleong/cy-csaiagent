@@ -88,6 +88,14 @@ export interface StreamMessageMetadata {
   citations?: string[]
   /** True when a Coach turn ran retrieval and got nothing back (D-10). */
   kbMiss?: boolean
+  /**
+   * projectId -> the collateral the TOOLS returned (quick-kayinleong-071).
+   *
+   * Derived server-side, like `citations`, because the model transcribed a different subset
+   * of URLs on every run — 19, then 10, then 9 across three identical queries, so the same
+   * project showed a different file count each time.
+   */
+  collateralByProject?: Record<string, Array<{ type: string; url: string }>>
 }
 
 /**
@@ -126,6 +134,23 @@ export function parseMessageMetadata(line: string): StreamMessageMetadata | null
       out.citations = citations.filter((c): c is string => typeof c === 'string')
     }
     if (typeof m.kbMiss === 'boolean') out.kbMiss = m.kbMiss
+
+    // Validated item by item — this drives what the agent forwards to a lead, so a
+    // malformed entry is dropped rather than rendered as a broken link.
+    if (m.collateralByProject && typeof m.collateralByProject === 'object') {
+      const byProject: Record<string, Array<{ type: string; url: string }>> = {}
+      for (const [pid, items] of Object.entries(m.collateralByProject as Record<string, unknown>)) {
+        if (!Array.isArray(items)) continue
+        const clean = items.filter(
+          (i): i is { type: string; url: string } =>
+            !!i && typeof i === 'object' &&
+            typeof (i as { type?: unknown }).type === 'string' &&
+            typeof (i as { url?: unknown }).url === 'string',
+        )
+        if (clean.length > 0) byProject[pid] = clean
+      }
+      if (Object.keys(byProject).length > 0) out.collateralByProject = byProject
+    }
 
     return Object.keys(out).length > 0 ? out : null
   } catch {

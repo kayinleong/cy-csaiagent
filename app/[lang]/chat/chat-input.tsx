@@ -37,6 +37,7 @@ import type { ChatMessage } from './message-list'
 import {
   decodeReplyOutput,
   decodeFinderOutput,
+  attachCollateral,
   salvageStructuredText,
 } from './decode-structured-output'
 import {
@@ -304,6 +305,10 @@ function useChatStream({
       let serverPillar: 'coach' | 'finder' | 'reply' | undefined
       let serverCitations: string[] = []
       let kbMiss = false
+      // Authoritative collateral keyed by projectId (quick-kayinleong-071). Derived from
+      // the tool results server-side, because the model chose a different subset of URLs to
+      // transcribe on every run — 19, then 10, then 9 for the same projects.
+      let serverCollateral: Record<string, Array<{ type: string; url: string }>> | undefined
       let streamError: string | null = null
       // Did the model just CLOSE a text block? The next delta then opens a new one and
       // needs a paragraph break before it (quick-kayinleong-054).
@@ -343,6 +348,7 @@ function useChatStream({
             if (meta.pillar) serverPillar = meta.pillar
             if (meta.citations) serverCitations = meta.citations
             if (meta.kbMiss !== undefined) kbMiss = meta.kbMiss
+            if (meta.collateralByProject) serverCollateral = meta.collateralByProject
           }
 
           // A mid-stream failure arrives as an `error` chunk on an already-200 response.
@@ -439,7 +445,11 @@ function useChatStream({
           )
         }
       } else if (decodePillar === 'finder') {
-        const finderOutput = decodeFinderOutput(assistantContent)
+        const decoded = decodeFinderOutput(assistantContent)
+        // Merge the server's collateral over whatever the model did or did not emit
+        // (quick-071). The same map is written into the persisted envelope server-side, so
+        // a revisited turn shows exactly these files too.
+        const finderOutput = decoded ? attachCollateral(decoded, serverCollateral) : null
         if (finderOutput) {
           setMessages((prev) =>
             prev.map((m) =>

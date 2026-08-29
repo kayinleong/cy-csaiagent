@@ -13,6 +13,7 @@ import {
   salvageStructuredText,
   normalizeFinderShape,
   repairTruncatedJson,
+  attachCollateral,
 } from './decode-structured-output'
 
 const replyDraftJson = JSON.stringify({
@@ -403,17 +404,25 @@ describe('decodeFinderOutput — truncated envelopes still render as cards', () 
     ])
   })
 
-  it('drops an incomplete trailing match instead of losing the complete ones', () => {
+  it('drops an unrenderable trailing match instead of losing the complete ones', () => {
     const criteria =
       '{"segment":"unknown","priceMax":null,"nationality":"unknown","bumiputera":null,' +
       '"locationPref":null,"bedrooms":null}'
+    // The husk must be a match with no PROJECT ID — that is the field a card cannot be
+    // rendered or grounded without. quick-071 made matchedCriteria default, so a match
+    // missing only that is now kept: it still carries a real, tool-verified projectId and
+    // a rationale, and losing it over a display-only field was the wrong trade.
     const truncated =
       `{"matches":[{"projectId":"p1","rationale":"first","matchedCriteria":${criteria}},` +
-      '{"projectId":"p2","rationale":"second'
+      '{"rationale":"second'
     const out = decodeFinderOutput(truncated)
     expect(out).not.toBeNull()
-    // p2 never got its matchedCriteria, so it is not renderable — but that must not cost
-    // the agent p1, which is complete.
+    expect(out!.matches.map((m) => m.projectId)).toEqual(['p1'])
+  })
+
+  it('KEEPS a truncated match that still has a projectId (quick-071)', () => {
+    const truncated = '{"matches":[{"projectId":"p1","name":"Bangsar Hill Park","rationale":"first'
+    const out = decodeFinderOutput(truncated)
     expect(out!.matches.map((m) => m.projectId)).toEqual(['p1'])
   })
 
@@ -478,5 +487,85 @@ describe('salvageStructuredText — prose-prefix fallback', () => {
 
   it('returns null when there is no narration to fall back to', () => {
     expect(salvageStructuredText('{"matches":[{"projectId":"QiQ","ration')).toBeNull()
+  })
+})
+
+// ─── quick-kayinleong-071: the SERVER owns the collateral ─────────────────────
+//
+// Measured over three identical Finder queries: the model transcribed 19 collateral URLs,
+// then 10, then 9 — for the same projects. The agent saw "1 file to share" on a card and
+// "2 files" on the same project moments later.
+
+describe('attachCollateral', () => {
+  const criteria = {
+    segment: 'unknown' as const, priceMax: null, nationality: 'unknown' as const,
+    bumiputera: null, locationPref: null, bedrooms: null,
+  }
+  const out = (matches: Array<Record<string, unknown>>) =>
+    ({ matches } as unknown as Parameters<typeof attachCollateral>[0])
+
+  it('replaces whatever the model wrote with the tool-derived list', () => {
+    const result = attachCollateral(
+      out([{ projectId: 'p1', rationale: 'r', matchedCriteria: criteria, collateral: [{ type: 'guess', url: 'https://x/model.pdf' }] }]),
+      { p1: [{ type: 'Sales Kit', url: 'https://x/real1.pdf' }, { type: 'FAQ', url: 'https://x/real2.pdf' }] },
+    )
+    expect(result.matches[0].collateral).toEqual([
+      { type: 'Sales Kit', url: 'https://x/real1.pdf' },
+      { type: 'FAQ', url: 'https://x/real2.pdf' },
+    ])
+  })
+
+  it('attaches to a match that emitted none — the model no longer writes URLs at all', () => {
+    const result = attachCollateral(
+      out([{ projectId: 'p1', rationale: 'r', matchedCriteria: criteria }]),
+      { p1: [{ type: 'FAQ', url: 'https://x/a.pdf' }] },
+    )
+    expect(result.matches[0].collateral).toHaveLength(1)
+  })
+
+  it('leaves a match alone when the server has nothing for that projectId', () => {
+    // An older persisted turn still carrying model-emitted collateral must render unchanged.
+    const legacy = [{ type: 'old', url: 'https://x/legacy.pdf' }]
+    const result = attachCollateral(
+      out([{ projectId: 'p9', rationale: 'r', matchedCriteria: criteria, collateral: legacy }]),
+      { p1: [{ type: 'FAQ', url: 'https://x/a.pdf' }] },
+    )
+    expect(result.matches[0].collateral).toEqual(legacy)
+  })
+
+  it('is a no-op without a server map, and never mutates the input', () => {
+    const input = out([{ projectId: 'p1', rationale: 'r', matchedCriteria: criteria }])
+    expect(attachCollateral(input, undefined)).toBe(input)
+    const mapped = attachCollateral(input, { p1: [{ type: 'FAQ', url: 'https://x/a.pdf' }] })
+    expect(mapped).not.toBe(input)
+    expect(input.matches[0].collateral).toBeUndefined()
+  })
+})
+
+describe('FinderMatch.matchedCriteria is forgiving (quick-071)', () => {
+  it('keeps a match whose matchedCriteria is partial', () => {
+    // A real turn returned only { locationPref: 'Bangsar' } per match. Requiring all six
+    // fields made dropUnrenderableMatches discard EVERY match and the agent got nothing —
+    // losing tool-verified projects over a display-only field.
+    const decoded = decodeFinderOutput(JSON.stringify({
+      matches: [{ projectId: 'a', name: 'Bangsar Hill Park', rationale: 'why', matchedCriteria: { locationPref: 'Bangsar' } }],
+    }))
+    expect(decoded).not.toBeNull()
+    expect(decoded!.matches).toHaveLength(1)
+    expect(decoded!.matches[0].matchedCriteria.locationPref).toBe('Bangsar')
+    expect(decoded!.matches[0].matchedCriteria.segment).toBe('unknown')
+  })
+
+  it('keeps a match with NO matchedCriteria, filling every field', () => {
+    const decoded = decodeFinderOutput(JSON.stringify({
+      matches: [{ projectId: 'b', name: 'The Lantern', rationale: 'why' }],
+    }))
+    expect(decoded!.matches).toHaveLength(1)
+    // Spelled-out defaults: zod's .default() substitutes the value whole and does not run
+    // the inner field defaults, so `{}` would decode to an empty object.
+    expect(decoded!.matches[0].matchedCriteria).toEqual({
+      segment: 'unknown', priceMax: null, nationality: 'unknown',
+      bumiputera: null, locationPref: null, bedrooms: null,
+    })
   })
 })

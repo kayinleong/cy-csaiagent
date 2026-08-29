@@ -367,6 +367,37 @@ export function decodeFinderOutput(content: string): FinderOutput | null {
 }
 
 /**
+ * Attach the SERVER's collateral to a decoded Finder output (quick-kayinleong-071).
+ *
+ * The model used to transcribe every collateral URL into its own JSON output, and it chose
+ * a different subset each time — measured over three identical queries: 19 URLs, then 10,
+ * then 9, for the same projects. The agent saw "1 file to share" on one card and "2 files"
+ * on the same project a moment later.
+ *
+ * `byProject` comes from the searchProjects / fetchCollateral tool RESULTS, so it is the
+ * same deterministic, ranked, capped list every time. This is the pattern quick-046
+ * established for citations, for the same stated reason: derived from real tool results is
+ * "strictly more trustworthy than asking the model to restate" them.
+ *
+ * Pure. A projectId with no server entry keeps whatever the match already had, so an older
+ * persisted turn that still carries model-emitted collateral renders unchanged.
+ */
+export function attachCollateral(
+  output: FinderOutput,
+  byProject: Record<string, Array<{ type: string; url: string }>> | undefined,
+): FinderOutput {
+  if (!byProject || output.matches.length === 0) return output
+  return {
+    ...output,
+    matches: output.matches.map((m) => {
+      const server = byProject[m.projectId]
+      if (!server || server.length === 0) return m
+      return { ...m, collateral: server }
+    }),
+  }
+}
+
+/**
  * Last-resort salvage: pull readable prose out of a structured envelope that will NOT
  * decode (quick-kayinleong-051).
  *

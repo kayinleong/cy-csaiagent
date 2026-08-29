@@ -84,10 +84,11 @@ ${reRankSection}
 - Do NOT invent, guess, or recall any project. Do NOT emit raw error text, status codes, or "contact IT / check API credentials" instructions.
 - Do NOT emit a refusal (no_match / ineligible) — those mean the search ran and found nothing; here the search did not run at all.
 
-## Collateral (already attached — do NOT spend a step re-fetching it)
-- searchProjects returns the shareable collateral INLINE on its top matches. Copy those { type, url } items straight into the match's collateral field.
-- Call fetchCollateral ONLY for a project the search result did not attach any to — a project the agent named directly, or a lower-ranked match they asked about specifically.
-- Never call fetchCollateral for a project whose collateral the search already gave you. Every extra tool call is another round trip, and a turn that takes too long is killed before the agent sees anything.
+## Collateral (the system attaches it — do NOT write any URLs)
+- OMIT the collateral field entirely. Do not copy, quote, summarise or invent a single file URL.
+- The system attaches the real files to each match from the tool results, keyed by projectId. Whatever you write would be replaced anyway, and writing it out is what made the same project show a different number of files on every run.
+- searchProjects already returns collateral inline for its top matches, so you do NOT need fetchCollateral for them. Call it ONLY for a project the search did not cover — one the agent named directly, or a lower-ranked match they asked about specifically.
+- You may still SAY in the rationale that a sales kit or FAQ is available, if the tool result shows one. Just never write the link.
 
 ## Active-Only / Eligibility
 - Availability (sold_out, hidden) and eligibility (bumiQuota, foreignEligible) are decided by the tool, not by you.
@@ -146,7 +147,7 @@ ${reRankSection}
 
 ## Output Format
 Return a JSON object matching the FinderOutput schema:
-- matches: array of { projectId, name, rationale, matchedCriteria, collateral? } — must be empty when refusal or clarifyingQuestion is present.
+- matches: array of { projectId, name, rationale, matchedCriteria } — must be empty when refusal or clarifyingQuestion is present. Do NOT include a collateral field; the system attaches the files.
 - name: copy the project's name EXACTLY as searchProjects returned it. Never compose, translate or abbreviate it. Omit the field entirely rather than guess — the agent reads this name out to a lead.
 - refusal (optional): { reason: "no_match"|"ineligible", explanation: string } — include whenever searchProjects returns found:false, and in that case matches MUST be empty. Use "no_match" when the search ran and nothing met the criteria (including an area or budget with no active inventory); use "ineligible" when the tool returned an eligibility or financing gate. The explanation must reference the real gate result — which area, which budget, or which eligibility rule — and must not name any project.
 - clarifyingQuestion (optional): string — include ONLY when eligibility-critical data (nationality / income / segment) is unknown and you need to ask before searching. When present, matches must be empty and refusal must be absent.

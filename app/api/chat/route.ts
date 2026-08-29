@@ -48,6 +48,7 @@ import { ReplyOutputSchema } from '@/src/agents/reply/schema'
 // Shared decoders — the SAME code the client renders with, so the server-side health
 // check cannot drift from what the agent actually sees (quick-kayinleong-053).
 import {
+  attachCollateral,
   decodeFinderOutput,
   decodeReplyOutput,
   salvageStructuredText,
@@ -104,15 +105,48 @@ export const maxDuration = 90
  * @param final  The onFinish payload from streamText (StepResult + steps array).
  * @returns      Array of KB chunk ID strings.
  */
+/** The shape of a step's tool result, across SDK versions. */
+export interface ToolResultLike {
+  toolName?: string
+  /** AI SDK v5 name for the tool's return value. */
+  output?: unknown
+  /** Pre-v5 name, still accepted so an older payload keeps working. */
+  result?: unknown
+  /** The tool's INPUT — typed loosely so a typed StepResult still assigns structurally. */
+  input?: unknown
+  args?: unknown
+}
+
+/**
+ * Read a tool's return value from a step result (quick-kayinleong-071).
+ *
+ * **AI SDK v5 calls this field `output`; every extractor in this file read `result`.**
+ * `result` is not present on a v5 `TypedToolResult` (see StaticToolResult in
+ * ai/dist/index.d.ts — toolCallId, toolName, input, output), so all four extractors have
+ * been silently returning nothing since the v5 upgrade:
+ *   - extractCitationChunkIds  -> Coach turns carried NO citations, and because kbMiss is
+ *     `retrievalAttempted && citations.length === 0`, a Coach turn that DID retrieve was
+ *     still reported as a knowledge gap.
+ *   - extractFinderProjectIds  -> finderSlot never recorded a discussed project.
+ *   - extractReplySopIds       -> the reply grounding trail was always empty.
+ * Every one of them was wrapped in try/catch and returned [] on anything unexpected, which
+ * is why it never surfaced as an error.
+ *
+ * Falls back to `result` so nothing breaks if a payload predates v5.
+ */
+function toolOutput(tr: ToolResultLike): unknown {
+  return tr.output !== undefined ? tr.output : tr.result
+}
+
 export function extractCitationChunkIds(
-  final: { steps?: Array<{ toolResults?: Array<{ toolName?: string; result?: unknown }> }> },
+  final: { steps?: Array<{ toolResults?: Array<ToolResultLike> }> },
 ): string[] {
   try {
     const chunkIds: string[] = []
     for (const step of final.steps ?? []) {
       for (const tr of step.toolResults ?? []) {
         if (tr.toolName === 'retrieveKnowledge') {
-          const r = tr.result as RetrieveHit | { found: false } | null | undefined
+          const r = toolOutput(tr) as RetrieveHit | { found: false } | null | undefined
           if (r && r.found === true) {
             for (const c of (r as RetrieveHit).citations) {
               if (c.chunkId) chunkIds.push(c.chunkId)
@@ -144,14 +178,14 @@ export function extractCitationChunkIds(
  * @returns      Array of project ID strings.
  */
 export function extractFinderProjectIds(
-  final: { steps?: Array<{ toolResults?: Array<{ toolName?: string; result?: unknown }> }> },
+  final: { steps?: Array<{ toolResults?: Array<ToolResultLike> }> },
 ): string[] {
   try {
     const projectIds: string[] = []
     for (const step of final.steps ?? []) {
       for (const tr of step.toolResults ?? []) {
         if (tr.toolName === 'searchProjects') {
-          const r = tr.result as { found: boolean; matches?: Array<{ projectId: string }> } | null | undefined
+          const r = toolOutput(tr) as { found: boolean; matches?: Array<{ projectId: string }> } | null | undefined
           if (r && r.found === true && Array.isArray(r.matches)) {
             for (const m of r.matches) {
               if (m.projectId) projectIds.push(m.projectId)
@@ -184,14 +218,14 @@ export function extractFinderProjectIds(
  * @returns      Array of cited SOP doc ID strings.
  */
 export function extractReplySopIds(
-  final: { steps?: Array<{ toolResults?: Array<{ toolName?: string; result?: unknown }> }> },
+  final: { steps?: Array<{ toolResults?: Array<ToolResultLike> }> },
 ): string[] {
   try {
     const sopDocIds: string[] = []
     for (const step of final.steps ?? []) {
       for (const tr of step.toolResults ?? []) {
         if (tr.toolName === 'retrieveReplySop') {
-          const r = tr.result as
+          const r = toolOutput(tr) as
             | { found: boolean; citations?: Array<{ docId: string }> }
             | null
             | undefined
@@ -228,7 +262,7 @@ export function extractReplySopIds(
  * @returns      true if the reply turn resolved to no_sop_match (no grounding hit).
  */
 export function replyHadNoSopMatch(
-  final: { steps?: Array<{ toolResults?: Array<{ toolName?: string; result?: unknown }> }> },
+  final: { steps?: Array<{ toolResults?: Array<ToolResultLike> }> },
 ): boolean {
   try {
     let sawMiss = false
@@ -236,7 +270,7 @@ export function replyHadNoSopMatch(
     for (const step of final.steps ?? []) {
       for (const tr of step.toolResults ?? []) {
         if (tr.toolName === 'retrieveReplySop') {
-          const r = tr.result as { found?: boolean; reason?: string } | null | undefined
+          const r = toolOutput(tr) as { found?: boolean; reason?: string } | null | undefined
           if (r && r.found === true) sawHit = true
           if (r && r.found === false && r.reason === 'no_sop_match') sawMiss = true
         }
@@ -552,6 +586,16 @@ export async function POST(req: Request): Promise<Response> {
   // more trustworthy than asking the model to restate chunk IDs it can get wrong.
   const grounding = { citations: [] as string[], retrievalAttempted: false }
 
+  /**
+   * projectId -> the collateral the TOOLS returned for it (quick-kayinleong-071).
+   *
+   * The model used to transcribe these URLs into its own output and picked a different
+   * subset every time — 19, then 10, then 9 across three identical queries. This is the
+   * deterministic list, derived from the tool results exactly as `grounding.citations` is,
+   * and it is what the client and the persisted transcript both use.
+   */
+  const collateralByProject: Record<string, Array<{ type: string; url: string }>> = {}
+
   // ── Guaranteed assistant-message persistence (quick-kayinleong-055) ─────────
   // onFinish used to be the ONLY path that wrote an assistant message, so any turn that
   // errored or aborted saved the user's question and nothing else. Measured: 19 lost
@@ -815,10 +859,7 @@ export async function POST(req: Request): Promise<Response> {
     },
     onStepFinish: async (step) => {
       try {
-        const toolResults = (step.toolResults ?? []) as Array<{
-          toolName?: string
-          result?: unknown
-        }>
+        const toolResults = (step.toolResults ?? []) as ToolResultLike[]
         for (const tr of toolResults) {
           // Any KB lookup counts as "retrieval was attempted" — that is what makes a
           // zero-citation Coach turn a genuine kb_miss rather than a chat reply.
@@ -827,6 +868,23 @@ export async function POST(req: Request): Promise<Response> {
           }
         }
         grounding.citations.push(...extractCitationChunkIds({ steps: [{ toolResults }] }))
+
+        // Harvest collateral from the tool results (quick-071). searchProjects attaches it
+        // inline per match (quick-067); fetchCollateral returns a bare array for one project.
+        for (const tr of toolResults) {
+          if (tr.toolName === 'searchProjects') {
+            const matches = (toolOutput(tr) as { matches?: Array<{ projectId?: string; collateral?: Array<{ type: string; url: string }> }> })?.matches
+            for (const m of matches ?? []) {
+              if (m?.projectId && m.collateral?.length) collateralByProject[m.projectId] = m.collateral
+            }
+          } else if (tr.toolName === 'fetchCollateral') {
+            // The projectId is on the CALL, not the result.
+            const call = (tr.input ?? tr.args) as { projectId?: string } | undefined
+            const pid = call?.projectId
+            const items = toolOutput(tr) as Array<{ type: string; url: string }> | undefined
+            if (pid && Array.isArray(items) && items.length > 0) collateralByProject[pid] = items
+          }
+        }
         // Keep the text per step so onError/onAbort can persist a partial turn
         // (quick-055). onFinish still assembles the authoritative copy via fullTurnText.
         const stepText = (step as { text?: unknown }).text
@@ -943,7 +1001,26 @@ export async function POST(req: Request): Promise<Response> {
       // places at once. This call still supplies the authoritative assembly
       // (fullTurnText — quick-050), the real citations and the real token count; the
       // writer upgrades a partial row in place if onAbort/onError got there first.
-      await persistAssistantOnce(fullTurnText(final), 'ok', {
+      // Rewrite the envelope with the SERVER's collateral before it is stored
+      // (quick-kayinleong-071), so a revisited turn shows the same files as the live one.
+      // Live rendering merges the same map from messageMetadata; this is the history half.
+      //
+      // Only ever ADDS what the tools returned. If the text does not decode — a truncated
+      // turn, say — it is persisted verbatim and quick-056's repair handles it, exactly as
+      // before.
+      let finalText = fullTurnText(final)
+      if (pillar === 'finder' && Object.keys(collateralByProject).length > 0) {
+        try {
+          const decoded = decodeFinderOutput(finalText)
+          if (decoded) {
+            finalText = JSON.stringify(attachCollateral(decoded, collateralByProject))
+          }
+        } catch {
+          // Enrichment is best-effort; never lose a reply over formatting.
+        }
+      }
+
+      await persistAssistantOnce(finalText, 'ok', {
         citations: citationIds, // real KB chunk IDs (coach) or [] (finder)
         tokens: final.usage.totalTokens ?? 0,
       })
@@ -1155,6 +1232,12 @@ export async function POST(req: Request): Promise<Response> {
             pillar === 'coach' &&
             grounding.retrievalAttempted &&
             grounding.citations.length === 0,
+          // The authoritative collateral, keyed by projectId (quick-071). The client merges
+          // this into the decoded matches instead of trusting what the model wrote out.
+          collateralByProject:
+            pillar === 'finder' && Object.keys(collateralByProject).length > 0
+              ? collateralByProject
+              : undefined,
         }
       }
       return undefined

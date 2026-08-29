@@ -168,14 +168,35 @@ export const FinderMatchSchema = z.object({
    * The criteria fields that drove this match — grounding citation.
    * Mirrors matchedCriteria in ProjectMatch.
    */
-  matchedCriteria: z.object({
-    segment: z.enum(['investment', 'own_stay', 'unknown']),
-    priceMax: z.number().nullable(),
-    nationality: z.enum(['malaysian', 'foreign', 'unknown']),
-    bumiputera: z.boolean().nullable(),
-    locationPref: z.string().nullable(),
-    bedrooms: z.number().nullable(),
-  }),
+  matchedCriteria: z
+    .object({
+      // Every field defaults (quick-kayinleong-071). These are DISPLAY-ONLY — they render
+      // as the quiet criteria line on the card, and criteriaToLabels() already skips
+      // 'unknown' and null. Requiring all six made one omitted key drop the ENTIRE match:
+      // a real turn came back with only { locationPref: 'Bangsar' } per match, so
+      // dropUnrenderableMatches removed all of them and the agent got nothing.
+      //
+      // Losing a real, tool-verified project match over a missing display field is the
+      // wrong trade. The grounding that matters — projectId, eligibility, availability —
+      // is decided by the tool, not by this object.
+      segment: z.enum(['investment', 'own_stay', 'unknown']).default('unknown'),
+      priceMax: z.number().nullable().default(null),
+      nationality: z.enum(['malaysian', 'foreign', 'unknown']).default('unknown'),
+      bumiputera: z.boolean().nullable().default(null),
+      locationPref: z.string().nullable().default(null),
+      bedrooms: z.number().nullable().default(null),
+    })
+    // Spelled out rather than `{}`: zod's .default() substitutes the value WHOLE and does
+    // not run the inner field defaults, so an omitted matchedCriteria would otherwise
+    // decode to an empty object and break criteriaToLabels().
+    .default({
+      segment: 'unknown',
+      priceMax: null,
+      nationality: 'unknown',
+      bumiputera: null,
+      locationPref: null,
+      bedrooms: null,
+    }),
 
   /**
    * Collateral attached to this project (optional).
