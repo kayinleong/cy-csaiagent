@@ -29,6 +29,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
+import { loadConversationMessages } from './load-conversation-messages'
 import { clientAuth } from '@/src/firebase/client'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
@@ -309,6 +310,9 @@ function useChatStream({
       // the tool results server-side, because the model chose a different subset of URLs to
       // transcribe on every run — 19, then 10, then 9 for the same projects.
       let serverCollateral: Record<string, Array<{ type: string; url: string }>> | undefined
+      // Did the stream reach its `finish` chunk? A turn cut short by the platform never
+      // does, and that is where the server's collateral map rides (quick-kayinleong-072).
+      let sawFinish = false
       let streamError: string | null = null
       // Did the model just CLOSE a text block? The next delta then opens a new one and
       // needs a paragraph break before it (quick-kayinleong-054).
@@ -349,6 +353,9 @@ function useChatStream({
             if (meta.citations) serverCitations = meta.citations
             if (meta.kbMiss !== undefined) kbMiss = meta.kbMiss
             if (meta.collateralByProject) serverCollateral = meta.collateralByProject
+            // `citations` and `kbMiss` only ever ride on `finish`, so their presence is how
+            // we know the turn completed.
+            if (meta.kbMiss !== undefined || meta.citations) sawFinish = true
           }
 
           // A mid-stream failure arrives as an `error` chunk on an already-200 response.
@@ -481,6 +488,40 @@ function useChatStream({
               : m,
           ),
         )
+      }
+
+      // ── Truncated turn → reload the row the server actually stored (quick-072) ──
+      //
+      // The server checkpoints the reply mid-generation (quick-070) and attaches the real
+      // collateral to every checkpoint, so what is ON DISK is richer than what reached the
+      // browser when a turn is cut short: the agent otherwise sees project cards with no
+      // files, then the files appear if they navigate away and back.
+      //
+      // Only on the truncated path. A completed turn already has everything and must not
+      // pay a Firestore read.
+      const liveCid = cidRef.current
+      if (!sawFinish && liveCid) {
+        try {
+          // The final checkpoint may still be in flight as the stream dies.
+          await new Promise((r) => setTimeout(r, 1200))
+          const restored = await loadConversationMessages(liveCid)
+          const lastAssistant = [...restored].reverse().find((m) => m.role === 'assistant')
+          if (lastAssistant && (lastAssistant.finderOutput || lastAssistant.content.length > 0)) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMsgId
+                  ? {
+                      ...m,
+                      content: lastAssistant.content || m.content,
+                      finderOutput: lastAssistant.finderOutput ?? m.finderOutput,
+                    }
+                  : m,
+              ),
+            )
+          }
+        } catch {
+          // Best-effort: the agent keeps the partial render they already have.
+        }
       }
 
       // Surface KB-miss as a toast (D-10). Now driven by the server's tool-result-derived

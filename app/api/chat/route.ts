@@ -651,7 +651,26 @@ export async function POST(req: Request): Promise<Response> {
     outcome: AssistantOutcome,
     extra?: { citations?: string[]; tokens?: number },
   ): Promise<void> {
-    const body = text.trim()
+    let body = text.trim()
+
+    // Attach the server's collateral to whatever is being stored, INCLUDING a
+    // mid-generation checkpoint (quick-kayinleong-072). quick-071 did this only in
+    // onFinish, so a turn killed before it finished stored an envelope with no files at
+    // all — worse than before 071, when the model had at least transcribed some.
+    //
+    // quick-056's repair means a truncated envelope usually still decodes, so the stored
+    // partial comes out as complete, enriched JSON. Best-effort: if it does not decode, the
+    // raw text is stored exactly as before.
+    if (pillar === 'finder' && body.length > 0 && Object.keys(collateralByProject).length > 0) {
+      try {
+        const decoded = decodeFinderOutput(body)
+        if (decoded && decoded.matches.length > 0) {
+          body = JSON.stringify(attachCollateral(decoded, collateralByProject))
+        }
+      } catch {
+        // Never lose a reply over formatting.
+      }
+    }
 
     // Nothing was generated. Recording an empty bubble would be worse than recording
     // nothing — it reads as the assistant having answered with silence.
@@ -1001,26 +1020,9 @@ export async function POST(req: Request): Promise<Response> {
       // places at once. This call still supplies the authoritative assembly
       // (fullTurnText — quick-050), the real citations and the real token count; the
       // writer upgrades a partial row in place if onAbort/onError got there first.
-      // Rewrite the envelope with the SERVER's collateral before it is stored
-      // (quick-kayinleong-071), so a revisited turn shows the same files as the live one.
-      // Live rendering merges the same map from messageMetadata; this is the history half.
-      //
-      // Only ever ADDS what the tools returned. If the text does not decode — a truncated
-      // turn, say — it is persisted verbatim and quick-056's repair handles it, exactly as
-      // before.
-      let finalText = fullTurnText(final)
-      if (pillar === 'finder' && Object.keys(collateralByProject).length > 0) {
-        try {
-          const decoded = decodeFinderOutput(finalText)
-          if (decoded) {
-            finalText = JSON.stringify(attachCollateral(decoded, collateralByProject))
-          }
-        } catch {
-          // Enrichment is best-effort; never lose a reply over formatting.
-        }
-      }
-
-      await persistAssistantOnce(finalText, 'ok', {
+      // Enrichment now lives in the writer (quick-kayinleong-072) so that every checkpoint
+      // gets it, not just this one.
+      await persistAssistantOnce(fullTurnText(final), 'ok', {
         citations: citationIds, // real KB chunk IDs (coach) or [] (finder)
         tokens: final.usage.totalTokens ?? 0,
       })
@@ -1219,6 +1221,11 @@ export async function POST(req: Request): Promise<Response> {
       if (part.type === 'start') {
         return { pillar, routeDecision }
       }
+      // Tried and removed (quick-kayinleong-072): emitting the collateral on 'finish-step',
+      // which is the earliest point it is known. The SDK does NOT call this on step
+      // boundaries — its own comment says "Called on `start` and `finish` events" and a live
+      // test confirmed no metadata arrived before the kill. So a truncated turn cannot get
+      // the map this way; the client reloads the persisted row instead.
       if (part.type === 'finish') {
         return {
           pillar,
