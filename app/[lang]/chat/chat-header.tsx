@@ -7,7 +7,8 @@
  * Layout (left → center → right), matching the D2 brand screenshot:
  *   LEFT   — conversation-history button, D2 lime logo, app name, persistent "AI" badge
  *   CENTER — segmented Auto / Coach / Finder / Reply pillar-override control (FIND-11)
- *   RIGHT  — EN / BM / 中文 reply-language toggles (CHAT-08) + "Talk to my coach" pill (CHAT-06)
+ *   RIGHT  — EN / BM / 中文 reply-language toggles (CHAT-08), "Talk to my coach" pill
+ *            (CHAT-06), and sign-out (quick-kayinleong-074)
  *
  * Preserved contracts (do not remove — referenced by e2e + PDPA):
  *   - data-slot="chat-header"        (e2e/finder-flow.spec.ts)
@@ -28,6 +29,8 @@ import { useLocale, useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { LogOut } from 'lucide-react'
+import { useSignOut } from '../_components/use-sign-out'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 import { requestHandoff } from '@/app/_actions/chat'
@@ -67,6 +70,9 @@ export function ChatHeader({
   onOpenHistory,
 }: ChatHeaderProps) {
   const t = useTranslations('chat')
+  // 'nav' already carries the signOut label used by the sidebar — no new catalog key.
+  const tNav = useTranslations('nav')
+  const { signOut, isPending } = useSignOut()
   const locale = useLocale()
   const [isHandoffPending, setIsHandoffPending] = useState(false)
 
@@ -206,6 +212,26 @@ export function ChatHeader({
             className="h-8 shrink-0 rounded-full px-3 text-xs font-semibold"
           >
             {t('talkToCoach')}
+          </Button>
+
+          {/* Sign out (quick-kayinleong-074). The chat surface renders no sidebar, so this
+              was the only authenticated page with no way out — and it is where a new agent
+              lands by default after signing in.
+
+              Icon-only: this header already carries history, the pillar tabs, three
+              language chips and the coach pill, and it has to survive a 375px phone. The
+              aria-label carries the meaning, and `title` gives pointer users a tooltip. */}
+          <Button
+            data-slot="sign-out-button"
+            variant="ghost"
+            size="icon"
+            onClick={signOut}
+            disabled={isPending}
+            aria-label={tNav('signOut')}
+            title={tNav('signOut')}
+            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+          >
+            <LogOut className="h-4 w-4" aria-hidden="true" />
           </Button>
         </div>
       </div>

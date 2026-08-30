@@ -38,47 +38,20 @@
  * swallowed so the server cookie is still cleared (fail-safe sign-out).
  */
 
-import { useTransition } from 'react'
-import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { LogOut } from 'lucide-react'
 import { SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar'
+import { useSignOut } from './use-sign-out'
 
 export function SignOutButton() {
   const t = useTranslations('nav')
-  const router = useRouter()
-  const params = useParams()
-  const lang = (params?.lang as string) ?? 'en'
-  const [isPending, startTransition] = useTransition()
-
-  function handleSignOut() {
-    startTransition(async () => {
-      // Clear the client (IndexedDB) auth state. Swallow failure — the server
-      // cookie deletion below is what actually ends the privileged session.
-      // The Firebase SDK is loaded HERE, on demand (see the perf note above); a
-      // chunk-load failure lands in the same catch as a signOut() failure.
-      try {
-        const [{ clientAuth }, { signOut }] = await Promise.all([
-          import('@/src/firebase/client'),
-          import('firebase/auth'),
-        ])
-        await signOut(clientAuth)
-      } catch {
-        // ignore — still clear the server cookie
-      }
-      try {
-        await fetch('/api/auth/session', { method: 'DELETE' })
-      } catch {
-        // ignore — redirect regardless; the cookie is httpOnly + expires
-      }
-      router.push(`/${lang}/sign-in`)
-      router.refresh()
-    })
-  }
+  // The sequence itself lives in useSignOut (quick-kayinleong-074) so the chat header can
+  // offer sign-out without a second copy of it.
+  const { signOut, isPending } = useSignOut()
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton onClick={handleSignOut} disabled={isPending} tooltip={t('signOut')}>
+      <SidebarMenuButton onClick={signOut} disabled={isPending} tooltip={t('signOut')}>
         <LogOut />
         <span>{t('signOut')}</span>
       </SidebarMenuButton>
