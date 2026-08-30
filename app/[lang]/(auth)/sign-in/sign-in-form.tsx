@@ -26,7 +26,8 @@
 
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { useRouter, useParams } from 'next/navigation'
+import { useRouter, useParams, useSearchParams } from 'next/navigation'
+import { safeNextPath } from '@/src/auth/next-path'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 
 import { clientAuth } from '@/src/firebase/client'
@@ -41,6 +42,7 @@ import { cn } from '@/lib/utils'
 export function SignInForm() {
   const t = useTranslations('auth')
   const router = useRouter()
+  const searchParams = useSearchParams()
   const params = useParams()
   const lang = (params?.lang as string) ?? 'en'
   const isMobile = useIsMobile()
@@ -83,6 +85,18 @@ export function SignInForm() {
       // SECURITY: role is derived from the server's verifyIdToken — never from
       // a client-supplied value. Every Firestore read is independently rules-gated (T-02-02).
       const { role } = (await res.json()) as { ok: boolean; role?: string }
+
+      // ── Return the agent where they were headed (quick-kayinleong-073) ─────
+      // Someone bounced off /chat by its auth gate arrives here with ?next=/en/chat.
+      // safeNextPath() is what makes honouring it safe: this parameter is read BEFORE the
+      // visitor is authenticated, so an unvalidated version is an open redirect — a phishing
+      // link could send an agent off-origin the instant a REAL sign-in succeeds. Anything
+      // that is not a same-origin in-app path falls through to the role default below.
+      const next = safeNextPath(searchParams.get('next'))
+      if (next) {
+        router.push(next)
+        return
+      }
 
       // Route by role (access matrix):
       //   read-only    → /[lang]/usage     (analytics landing — RO-01; Home in Wave 4)

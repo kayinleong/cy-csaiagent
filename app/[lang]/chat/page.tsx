@@ -4,12 +4,14 @@
  * RSC-by-default — this is a Server Component (no "use client").
  * It renders the mobile-first layout and mounts the client island.
  *
- * Auth strategy:
- *   - OPTIMISTIC: the proxy.ts checks the session cookie at the edge.
- *   - HARD gate: /api/chat requires a valid Firebase Bearer token server-side.
- *   - If the session cookie is absent, users land here unauthenticated — the
- *     ChatInput island will detect no Firebase currentUser and toast an error.
- *     Phase 2 will add a redirect-to-sign-in redirect from proxy.ts.
+ * Auth strategy (quick-kayinleong-073):
+ *   - HARD gate HERE: no valid session cookie -> redirect to sign-in with ?next= so the
+ *     agent lands back on this page once they are in. proxy.ts does locale redirects only
+ *     and never looks at the cookie, so this page is the first place that can gate.
+ *   - HARD gate: /api/chat independently requires a valid Firebase Bearer token. This
+ *     redirect is UX; that check is the security boundary.
+ *   - Previously there was no gate at all: an unauthenticated visitor rendered the full
+ *     chat surface, typed a question, and the only feedback was an error toast.
  *
  * Mobile-first:
  *   - Full-height flex column (100dvh on mobile for viewport consistency).
@@ -22,7 +24,11 @@
  */
 
 import type { Metadata } from 'next'
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
+import { requireUser, UnauthorizedError } from '@/src/firebase/auth'
+import { signInUrlFor } from '@/src/auth/next-path'
 import { ChatShell } from './chat-shell'
 import { triggerDueJobs } from '@/app/_actions/jobs'
 
@@ -42,7 +48,30 @@ export default async function ChatPage({
 }) {
   // Next.js 16: params is a Promise — must await
   const { lang } = await params
-  void lang // lang is available for future locale-scoped logic
+
+  // ── Auth gate (quick-kayinleong-073) ───────────────────────────────────────
+  // Same shape as the coach dashboard's gate: read the cookie, verify it through
+  // requireUser, and send anyone without a valid session to sign-in carrying where they
+  // were trying to go.
+  //
+  // Next.js 16: cookies() is async.
+  const sessionCookie = (await cookies()).get('__session')
+  if (!sessionCookie?.value) {
+    redirect(signInUrlFor(lang, `/${lang}/chat`))
+  }
+  try {
+    const syntheticReq = new Request('https://d2.app/chat', {
+      headers: { Authorization: `Bearer ${sessionCookie.value}` },
+    })
+    await requireUser(syntheticReq)
+  } catch (err) {
+    // An EXPIRED token lands here too, which is the common case: the cookie holds a raw ID
+    // token good for one hour (see quick-059).
+    if (err instanceof UnauthorizedError) {
+      redirect(signInUrlFor(lang, `/${lang}/chat`))
+    }
+    throw err
+  }
 
   // On-visit lazy-cron: fire-and-forget; never blocks rendering.
   // triggerDueJobs() gates on the session cookie — unauthenticated visits

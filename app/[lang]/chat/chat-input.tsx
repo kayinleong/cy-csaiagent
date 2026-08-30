@@ -29,6 +29,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
+import { useRouter, useParams } from 'next/navigation'
+import { signInUrlFor } from '@/src/auth/next-path'
 import { loadConversationMessages } from './load-conversation-messages'
 import { clientAuth } from '@/src/firebase/client'
 import { Textarea } from '@/components/ui/textarea'
@@ -144,6 +146,22 @@ function useChatStream({
   // Localized copy for the failed-turn bubble. Reuses the existing `chat.error` key
   // rather than adding one, so this claim does not touch the i18n catalogs.
   const t = useTranslations('chat')
+  const router = useRouter()
+  const routeParams = useParams()
+
+  /**
+   * Send the agent to sign-in, carrying where they are so they come straight back
+   * (quick-kayinleong-073).
+   *
+   * The chat page has a server-side gate, but a session can also lapse WHILE the tab is
+   * open — the cookie holds a raw ID token good for one hour (quick-059) — and then the
+   * only feedback was a toast on a surface that could no longer answer.
+   */
+  const bounceToSignIn = useCallback(() => {
+    const lang = (routeParams?.lang as string) ?? 'en'
+    router.push(signInUrlFor(lang, `/${lang}/chat`))
+  }, [router, routeParams])
+
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [isStreaming, setIsStreaming] = useState(false)
   const [input, setInput] = useState('')
@@ -228,8 +246,11 @@ function useChatStream({
       await clientAuth.authStateReady()
       const currentUser = clientAuth.currentUser
       if (!currentUser) {
-        toast.error('You are not signed in. Please sign in to continue.')
+        // Send them to sign-in rather than leaving them on a chat surface that cannot
+        // answer (quick-kayinleong-073). They come straight back here afterwards.
+        toast.error('Please sign in to continue.')
         setIsStreaming(false)
+        bounceToSignIn()
         return
       }
       const idToken = await currentUser.getIdToken()
@@ -270,7 +291,12 @@ function useChatStream({
       if (!response.ok) {
         const status = response.status
         if (status === 401) {
+          // The cookie holds a raw ID token that expires after an hour (quick-059), so a
+          // long-lived tab lands here routinely. A toast alone left the agent stuck.
           toast.error('Session expired. Please sign in again.')
+          setIsStreaming(false)
+          bounceToSignIn()
+          return
         } else if (status === 429) {
           // TOKEN_CAP is a 24-HOUR window (src/ratelimit/window.ts), not hourly — the
           // old copy told agents to "wait a few minutes" for a limit that resets
@@ -538,7 +564,7 @@ function useChatStream({
     } finally {
       setIsStreaming(false)
     }
-  }, [input, isStreaming, messages, langOverride, pillarOverride, leadId, onBeforeSend, t])
+  }, [input, isStreaming, messages, langOverride, pillarOverride, leadId, onBeforeSend, t, bounceToSignIn])
 
   // ── Suggestion-card dispatch (redesign) ──────────────────────────────────────
   // When a hero card is tapped, chat-shell pins the pillar override then bumps
