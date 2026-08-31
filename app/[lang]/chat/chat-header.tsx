@@ -145,9 +145,13 @@ export function ChatHeader({
       data-slot="chat-header"
       className="shrink-0 sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur"
     >
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:px-4">
+      {/* flex-wrap below sm (quick-kayinleong-082). quick-081 bought space for the tabs by
+          shrinking neighbours, which fixed 375px and still clipped at 320px — "Finde" with
+          Reply off-screen. Trading items against tab width only ever buys one breakpoint.
+          Wrapping gives the strip its own full-width row instead, so it fits at any width. */}
+      <div className="mx-auto flex min-h-14 max-w-6xl flex-wrap items-center gap-2 px-3 py-2 sm:h-14 sm:flex-nowrap sm:px-4 sm:py-0">
         {/* ── LEFT: history · logo · name · AI badge ─────────────────────────── */}
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none">
           <Button
             variant="ghost"
             size="icon"
@@ -191,7 +195,7 @@ export function ChatHeader({
             box — at 375px the tabs read "ach … Find", with Auto and Reply gone entirely.
             Left-aligned overflow starts at Auto and scrolls, which is at least usable.
             min-w-0 lets the flex item actually shrink so the scroll box forms. */}
-        <div className="flex min-w-0 flex-1 justify-start overflow-x-auto sm:justify-center">
+        <div className="order-last flex min-w-0 basis-full justify-center overflow-x-auto sm:order-none sm:basis-0 sm:flex-1 sm:justify-center">
           <ToggleGroup
             type="single"
             value={pillarOverride ?? 'auto'}
