@@ -1,5 +1,6 @@
 /**
- * reply-hidden.test.ts — Reply is not offered to agents (quick-kayinleong-075).
+ * reply-hidden.test.ts — the Reply pillar is offered through ONE flag
+ * (quick-kayinleong-075, re-enabled in quick-076).
  *
  * The pillar is fully built and the server still accepts it; this is about what an agent
  * can CHOOSE. The two surfaces that let them choose — the header tab and the hero
@@ -15,8 +16,11 @@ const HEADER = readFileSync(new URL('./chat-header.tsx', import.meta.url), 'utf8
 const HERO = readFileSync(new URL('./hero-empty-state.tsx', import.meta.url), 'utf8')
 
 describe('REPLY_PILLAR_ENABLED', () => {
-  it('is off, so the chat page offers Auto / Coach / Finder only', () => {
-    expect(REPLY_PILLAR_ENABLED).toBe(false)
+  it('is on, so the chat page offers Auto / Coach / Finder / Reply', () => {
+    // This assertion tracks the product decision and moves with it (off in quick-075, back
+    // on in quick-076). The tests below are the ones that matter: they pin that all three
+    // surfaces read the SAME flag, and they pass whichever way it is set.
+    expect(REPLY_PILLAR_ENABLED).toBe(true)
   })
 
   it('gates the header tab rather than deleting it', () => {

@@ -44,16 +44,21 @@ export type PillarOverride = 'coach' | 'finder' | 'reply'
  * Flip to `true` to bring it back — the tab and the hero suggestion card both read this, so
  * they cannot end up disagreeing about whether Reply exists.
  *
- * Hidden, not deleted: the pillar is fully built (schema, agent, route dispatch,
- * ReplyDraftCard) and `PillarOverride` still includes 'reply', so the server keeps accepting
- * it. This governs what an agent can CHOOSE.
+ * Governs what an agent can CHOOSE. The pillar itself is always built — schema, agent,
+ * route dispatch, ReplyDraftCard — and `PillarOverride` always includes 'reply', so the
+ * server accepts it either way.
  *
- * NOT a routing gate. Auto can still land on Reply via the heuristic in src/router/
- * heuristic.ts ("draft a reply", "what should I say") or the LLM classifier. Changing that
- * is a routing decision, not a UI one. Note when making it: Reply has zero kbChunks
- * (measured in quick-066), so a turn that does reach it answers no_sop_match.
+ * NOT a routing gate. Auto can land on Reply via the heuristic in src/router/heuristic.ts
+ * ("draft a reply", "what should I say") or the LLM classifier regardless of this value.
+ *
+ * ⚠ Re-enabled in quick-kayinleong-076 at the user's request. Measured at that moment:
+ * `pillar:'reply'` had **0 kbDocs and 0 kbChunks**, so `retrieveReplySop` finds nothing and
+ * a Reply turn answers `no_sop_match` rather than drafting. That is the honest behaviour —
+ * the Reply agent refuses rather than inventing SOP content — but it means the pillar is
+ * visible before it is useful. Load Reply content (the admin KB page can copy or move
+ * documents into the Reply pillar, quick-064/065) to make it draft.
  */
-export const REPLY_PILLAR_ENABLED = false
+export const REPLY_PILLAR_ENABLED = true
 
 const LANG_OPTIONS: LangOverride[] = ['en', 'ms', 'zh']
 
