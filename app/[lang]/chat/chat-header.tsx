@@ -38,6 +38,23 @@ import { requestHandoff } from '@/app/_actions/chat'
 export type LangOverride = 'en' | 'ms' | 'zh'
 export type PillarOverride = 'coach' | 'finder' | 'reply'
 
+/**
+ * Is the Reply pillar offered to agents? (quick-kayinleong-075)
+ *
+ * Flip to `true` to bring it back — the tab and the hero suggestion card both read this, so
+ * they cannot end up disagreeing about whether Reply exists.
+ *
+ * Hidden, not deleted: the pillar is fully built (schema, agent, route dispatch,
+ * ReplyDraftCard) and `PillarOverride` still includes 'reply', so the server keeps accepting
+ * it. This governs what an agent can CHOOSE.
+ *
+ * NOT a routing gate. Auto can still land on Reply via the heuristic in src/router/
+ * heuristic.ts ("draft a reply", "what should I say") or the LLM classifier. Changing that
+ * is a routing decision, not a UI one. Note when making it: Reply has zero kbChunks
+ * (measured in quick-066), so a turn that does reach it answers no_sop_match.
+ */
+export const REPLY_PILLAR_ENABLED = false
+
 const LANG_OPTIONS: LangOverride[] = ['en', 'ms', 'zh']
 
 interface ChatHeaderProps {
@@ -176,10 +193,17 @@ export function ChatHeader({
               {t('pillarOverride.finder')}
             </ToggleGroupItem>
             {/* Reply pillar (Phase 4). Selecting Reply with no leadId triggers the
-                lead-selector in chat-shell before dispatch. */}
-            <ToggleGroupItem value="reply" className={pillarItemClass} aria-label={t('pillarOverride.reply')}>
-              {t('pillarOverride.reply')}
-            </ToggleGroupItem>
+                lead-selector in chat-shell before dispatch.
+                Hidden behind REPLY_PILLAR_ENABLED (quick-kayinleong-075). */}
+            {REPLY_PILLAR_ENABLED && (
+              <ToggleGroupItem
+                value="reply"
+                className={pillarItemClass}
+                aria-label={t('pillarOverride.reply')}
+              >
+                {t('pillarOverride.reply')}
+              </ToggleGroupItem>
+            )}
           </ToggleGroup>
         </div>
 

@@ -21,6 +21,7 @@
     "heroGreeting": "Hi {name}, ready to close your first deal?",
     "heroGreetingNoName": "Ready to close your first deal?",
     "heroSubtitle": "Ask about D2 projects, sales SOPs, or your onboarding journey. Or paste a client message and I'll draft a reply in your voice.",
+    "heroSubtitleNoReply": "Ask about D2 projects, sales SOPs, or your onboarding journey.",
     "footerDisclosure": "You're chatting with AI. Escalate to your coach any time.",
     "suggestions": {
       "finder": "Find me a 2-bedroom in Bangsar, budget 900k",

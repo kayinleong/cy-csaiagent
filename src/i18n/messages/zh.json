@@ -23,6 +23,7 @@
     "heroGreeting": "你好 {name}，准备好完成你的第一单交易了吗？",
     "heroGreetingNoName": "准备好完成你的第一单交易了吗？",
     "heroSubtitle": "询问 D2 项目、销售 SOP 或你的入职培训旅程。或粘贴客户消息，我会用你的语气起草回复。",
+    "heroSubtitleNoReply": "询问 D2 项目、销售 SOP 或你的入职培训旅程。",
     "footerDisclosure": "你正在与 AI 对话。随时可升级联系你的教练。",
     "suggestions": {
       "finder": "帮我找 Bangsar 的两房单位，预算 90 万",

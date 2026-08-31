@@ -20,15 +20,26 @@ import { useTranslations } from 'next-intl'
 import { onAuthStateChanged } from 'firebase/auth'
 import { clientAuth } from '@/src/firebase/client'
 import { cn } from '@/lib/utils'
-import type { PillarOverride } from './chat-header'
+import { REPLY_PILLAR_ENABLED, type PillarOverride } from './chat-header'
 
 /** Suggestion cards — i18n key for the prompt + the pillar it routes to. */
-const SUGGESTIONS: { key: string; pillar: PillarOverride }[] = [
+const ALL_SUGGESTIONS: { key: string; pillar: PillarOverride }[] = [
   { key: 'finder', pillar: 'finder' },
   { key: 'coachViewing', pillar: 'coach' },
   { key: 'reply', pillar: 'reply' },
   { key: 'coachPricing', pillar: 'coach' },
 ]
+
+/**
+ * The cards actually offered, filtered by the same flag the header tab reads
+ * (quick-kayinleong-075).
+ *
+ * Tapping a card PINS its pillar, so leaving the Reply card while the Reply tab is hidden
+ * would give an agent a one-tap route into a mode the header says does not exist.
+ */
+const SUGGESTIONS = ALL_SUGGESTIONS.filter(
+  (s) => s.pillar !== 'reply' || REPLY_PILLAR_ENABLED,
+)
 
 interface HeroEmptyStateProps {
   /** Fired when a suggestion card is tapped — seeds + sends the prompt. */
@@ -61,7 +72,7 @@ export function HeroEmptyState({ onSuggestion }: HeroEmptyStateProps) {
           {greeting}
         </h1>
         <p className="mx-auto mt-3 max-w-md text-balance text-center text-sm text-muted-foreground sm:text-base">
-          {t('heroSubtitle')}
+          {t(REPLY_PILLAR_ENABLED ? 'heroSubtitle' : 'heroSubtitleNoReply')}
         </p>
 
         {/* ── Suggestion cards (2×2) ───────────────────────────────────────── */}

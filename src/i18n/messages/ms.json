@@ -23,6 +23,7 @@
     "heroGreeting": "Hai {name}, bersedia untuk menutup jualan pertama anda?",
     "heroGreetingNoName": "Bersedia untuk menutup jualan pertama anda?",
     "heroSubtitle": "Tanya tentang projek D2, SOP jualan, atau perjalanan onboarding anda. Atau tampal mesej pelanggan dan saya akan draf balasan dalam gaya anda.",
+    "heroSubtitleNoReply": "Tanya tentang projek D2, SOP jualan, atau perjalanan onboarding anda.",
     "footerDisclosure": "Anda sedang berbual dengan AI. Hubungi jurulatih anda pada bila-bila masa.",
     "suggestions": {
       "finder": "Cari saya unit 2 bilik di Bangsar, bajet 900k",
