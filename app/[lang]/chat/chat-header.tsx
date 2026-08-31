@@ -29,7 +29,7 @@ import { useLocale, useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { LogOut } from 'lucide-react'
+import { LogOut, LifeBuoy } from 'lucide-react'
 import { useSignOut } from '../_components/use-sign-out'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
@@ -134,7 +134,9 @@ export function ChatHeader({
   }
 
   const pillarItemClass =
-    'h-7 rounded-full px-3 text-xs font-medium text-muted-foreground transition-colors ' +
+    // px-2 below sm (quick-kayinleong-081) — four tabs at px-3 need ~210px and a 375px
+    // header has ~70 to give.
+    'h-7 shrink-0 rounded-full px-2 text-xs font-medium text-muted-foreground transition-colors sm:px-3 ' +
     'hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-foreground ' +
     'data-[state=on]:shadow-sm'
 
@@ -156,10 +158,14 @@ export function ChatHeader({
             <HistoryIcon className="h-4 w-4" />
           </Button>
 
-          {/* D2 lime logo mark */}
+          {/* D2 lime logo mark — hidden below sm (quick-kayinleong-081).
+              It is decorative (aria-hidden) and the wordmark beside it is already hidden on
+              mobile, so this was 40px of branding taken from the pillar selector, which is
+              the primary control. The AI badge stays: CHAT-05 requires that one to be
+              persistent. */}
           <div
             aria-hidden="true"
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-[0.8rem] font-bold tracking-tight text-primary-foreground"
+            className="hidden size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-[0.8rem] font-bold tracking-tight text-primary-foreground sm:flex"
           >
             D2
           </div>
@@ -180,7 +186,12 @@ export function ChatHeader({
         </div>
 
         {/* ── CENTER: segmented pillar tabs (FIND-11) ────────────────────────── */}
-        <div className="flex flex-1 justify-center overflow-x-auto">
+        {/* justify-START below sm (quick-kayinleong-081). `justify-center` on a container
+            that is also `overflow-x-auto` clips BOTH ends once the content is wider than the
+            box — at 375px the tabs read "ach … Find", with Auto and Reply gone entirely.
+            Left-aligned overflow starts at Auto and scrolls, which is at least usable.
+            min-w-0 lets the flex item actually shrink so the scroll box forms. */}
+        <div className="flex min-w-0 flex-1 justify-start overflow-x-auto sm:justify-center">
           <ToggleGroup
             type="single"
             value={pillarOverride ?? 'auto'}
@@ -234,13 +245,19 @@ export function ChatHeader({
             ))}
           </div>
 
+          {/* Icon-only below sm (quick-kayinleong-081). The full pill is ~135px of a 375px
+              header, and it was taking that space from the pillar selector — which is the
+              primary control on this surface. aria-label carries the meaning either way. */}
           <Button
             data-slot="talk-to-coach-button"
             onClick={() => void handleHandoff()}
             disabled={isHandoffPending}
-            className="h-8 shrink-0 rounded-full px-3 text-xs font-semibold"
+            aria-label={t('talkToCoach')}
+            title={t('talkToCoach')}
+            className="size-8 shrink-0 rounded-full p-0 text-xs font-semibold sm:h-8 sm:w-auto sm:px-3"
           >
-            {t('talkToCoach')}
+            <LifeBuoy className="h-4 w-4 sm:hidden" aria-hidden="true" />
+            <span className="hidden sm:inline">{t('talkToCoach')}</span>
           </Button>
 
           {/* Sign out (quick-kayinleong-074). The chat surface renders no sidebar, so this

@@ -176,7 +176,9 @@ export function ConversationList({
       <SheetContent
         side="left"
         data-slot="conversation-list"
-        className="w-80 flex flex-col p-0"
+        // w-80 is 320px, which on a 360px phone leaves 40px of scrim to dismiss by tapping
+        // outside. Cap it against the viewport on small screens (quick-kayinleong-081).
+        className="w-[85vw] max-w-80 sm:w-80 flex flex-col p-0"
       >
         <SheetHeader className="px-4 py-3 border-b">
           <SheetTitle className="text-sm font-semibold">{t('history')}</SheetTitle>
@@ -215,7 +217,17 @@ export function ConversationList({
             already as tall as its content has nothing to scroll, so older conversations
             were unreachable. Same defect quick-020 fixed on the message list; see the
             matching comment at message-list.tsx:69. */}
-        <ScrollArea className="flex-1 min-h-0">
+        {/* The `[&>…viewport]>div` override is load-bearing (quick-kayinleong-081).
+            Radix renders `<div style="min-width:100%;display:table">` inside its Viewport,
+            and a table box sizes to its CONTENT — so `w-full` on the row button resolved
+            against the widest title rather than the sheet, `truncate` never engaged, and at
+            375px the titles ran past the sheet edge and were clipped mid-word with no
+            ellipsis. Forcing that wrapper to `block` makes the row width the sheet width.
+
+            Scoped here rather than in components/ui/scroll-area.tsx: that component is
+            shared with the message list, which has its own carefully-tuned sizing
+            (quick-020/052). */}
+        <ScrollArea className="flex-1 min-h-0 [&>[data-radix-scroll-area-viewport]>div]:!block">
           {isLoading ? (
             <ul className="py-1" data-slot="conversation-list-loading" aria-busy="true">
               {[0, 1, 2, 3, 4].map((i) => (
