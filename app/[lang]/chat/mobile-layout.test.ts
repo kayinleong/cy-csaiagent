@@ -14,29 +14,30 @@ const HEADER = readFileSync(new URL('./chat-header.tsx', import.meta.url), 'utf8
 const LIST = readFileSync(new URL('./conversation-list.tsx', import.meta.url), 'utf8')
 
 describe('chat header at 375px', () => {
-  it('gives the pillar strip its own full-width row on mobile', () => {
-    // quick-081 left-aligned the overflow, which fixed 375px and still clipped at 320px
-    // ("Finde", Reply off-screen). Trading header items against tab width only ever buys one
-    // breakpoint. `basis-full` + `order-last` wraps the strip onto its own row instead, so it
-    // fits at ANY width — verified at 320 and 375.
+  it('gives the pillar strip its own row only on genuinely narrow screens', () => {
     expect(HEADER).toContain('order-last flex min-w-0 basis-full justify-center')
   })
 
-  it('restores the single centred row from sm upwards', () => {
-    // Desktop must be untouched: sm:basis-0 + sm:flex-1 is the original flex-1 behaviour.
-    expect(HEADER).toContain('sm:order-none sm:basis-0 sm:flex-1 sm:justify-center')
+  it('gates the wrap at 400px, NOT at sm', () => {
+    // The bug this pins. quick-082 gated on `sm`, and Tailwind's `sm` is 640px — so a 440px
+    // iPhone 16 Pro Max got a two-row header despite fitting one comfortably. Measured after
+    // the fix: 399px -> two rows, 400px -> one row, 56px tall, no overflow.
+    expect(HEADER).toContain('min-[400px]:flex-nowrap')
+    expect(HEADER).toContain('min-[400px]:order-none min-[400px]:basis-0 min-[400px]:flex-1')
+    expect(HEADER).toContain('min-[400px]:flex-none')
   })
 
-  it('lets the header wrap, and grow, only below sm', () => {
+  it('does not gate the wrap on sm anywhere', () => {
+    // A stray sm:-gated wrap rule would reintroduce the 440px regression.
+    expect(HEADER).not.toContain('sm:flex-nowrap')
+    expect(HEADER).not.toContain('sm:basis-0')
+  })
+
+  it('lets the header grow when it wraps', () => {
     // A fixed h-14 would clip the second row rather than making room for it.
     expect(HEADER).toContain('min-h-14')
     expect(HEADER).toContain('flex-wrap')
-    expect(HEADER).toContain('sm:h-14')
-    expect(HEADER).toContain('sm:flex-nowrap')
-  })
-
-  it('lets the left group fill row 1 so the right group sits at the edge', () => {
-    expect(HEADER).toContain('flex min-w-0 flex-1 items-center gap-2 sm:flex-none')
+    expect(HEADER).toContain('min-[400px]:h-14')
   })
 
   it('makes "Talk to my coach" icon-only on mobile', () => {
