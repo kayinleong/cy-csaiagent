@@ -309,8 +309,14 @@ function useChatStream({
         if (status === 400) {
           const body = (await response.json().catch(() => ({}))) as { error?: string }
           if (body.error === LEAD_REQUIRED_ERROR && onLeadRequired) {
-            // Drop the empty assistant placeholder — the turn has not happened yet.
-            setMessages((prev) => prev.filter((m) => m.id !== assistantMsgId))
+            // Nothing to clean up: the assistant placeholder is created BELOW this block,
+            // so on a non-ok response it does not exist yet.
+            //
+            // quick-kayinleong-079: quick-077 removed a placeholder here by id, and
+            // `assistantMsgId` is declared further down — so the reference sat in its
+            // temporal dead zone, threw ReferenceError on every call, and the outer catch
+            // turned it into "Something went wrong". tsc allowed it because the reference
+            // was inside a setMessages callback, where TS cannot know when it runs.
             setIsStreaming(false)
             onLeadRequired(text)
             return

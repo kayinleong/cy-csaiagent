@@ -38,10 +38,31 @@ describe('the 400 opens the lead picker instead of a generic error', () => {
     expect(INPUT).toContain('onLeadRequired(text)')
   })
 
-  it('clears the empty assistant placeholder — the turn has not happened yet', () => {
-    // Otherwise the agent is left with a blank bubble under their question while a modal
-    // asks them something unrelated-looking.
-    expect(INPUT).toMatch(/filter\(\(m\) => m\.id !== assistantMsgId\)/)
+  it('never touches assistantMsgId before it is declared (quick-kayinleong-079)', () => {
+    // THE BUG THIS REPLACES. quick-077 removed an "empty assistant placeholder" here by id,
+    // but the placeholder is created BELOW the error block — so the reference sat in
+    // assistantMsgId's temporal dead zone, threw ReferenceError on every call, and the outer
+    // catch turned it into "Something went wrong. Please try again."
+    //
+    // tsc allowed it: the reference was inside a setMessages callback, and TS cannot know
+    // when a callback runs, so TDZ is not a compile error there.
+    //
+    // The test it replaces asserted the source CONTAINED that line — which proved it was
+    // present, something never in doubt, and could not tell me it threw. This one compares
+    // positions, which is what actually matters.
+    // Comments are stripped first — several of them mention the identifier precisely
+    // because they explain this bug, and a prose mention is not a reference.
+    const code = INPUT.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+
+    const declaration = code.indexOf('const assistantMsgId =')
+    expect(declaration).toBeGreaterThan(-1)
+
+    const firstUse = code.indexOf('assistantMsgId')
+    expect(
+      firstUse,
+      `assistantMsgId is used at ${firstUse}, before its declaration at ${declaration} — ` +
+        'that is a temporal dead zone and throws at runtime',
+    ).toBe(declaration + 'const '.length)
   })
 
   it('the shell opens the picker on the server-side refusal', () => {
