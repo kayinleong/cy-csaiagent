@@ -365,6 +365,16 @@ export interface KbChunkDoc {
    */
   pillar?: 'coach' | 'finder' | 'reply'
   /**
+   * Denormalized from the parent kbDoc.category (quick-kayinleong-078).
+   *
+   * `retrieveReplySop` narrows results by category IN MEMORY —
+   * `results.filter((r) => r.category === category)` — so a chunk without this field is
+   * dropped by every categorised Reply lookup. Until this was written that filter removed
+   * EVERYTHING, and the Reply agent answered `no_sop_match` even with SOPs in the corpus
+   * and retrieval scoring 0.69. Same denormalization `pillar` needs, for the same reason.
+   */
+  category?: string
+  /**
    * 1024-d normalized vector (Gemini gemini-embedding-001, DOT_PRODUCT).
    *
    * MUST be written as `FieldValue.vector(numbers)`, never as a bare array
@@ -384,6 +394,11 @@ export interface KbChunkDoc {
 }
 
 export interface KbIngestionJobDoc {
+  /**
+   * SOP category, carried from the kbDoc so processBatch can denormalize it onto every
+   * chunk (quick-kayinleong-078). Optional — only Reply SOPs use it today.
+   */
+  category?: string
   tenantId: TenantId
   fileHash: string
   total: number

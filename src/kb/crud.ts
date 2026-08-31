@@ -153,7 +153,14 @@ export async function createDoc(
   await docRef.set({ ...docData, tenantId: TENANT_ID } as KbDocDoc)
 
   // Shard the content into a kbIngestionJobs doc
-  const job = await shardJobForContent(input.content, docId, input.lang, input.pillar)
+  const job = await shardJobForContent(
+    input.content,
+    docId,
+    input.lang,
+    input.pillar,
+    undefined,
+    input.category,
+  )
 
   return { docId, jobId: job.jobId, total: job.total, remaining: job.remaining }
 }
@@ -930,6 +937,8 @@ async function shardJobForContent(
   lang: 'en' | 'ms' | 'zh',
   pillar: 'coach' | 'finder' | 'reply',
   supersedesId?: string,
+  /** Carried onto every chunk so retrieveReplySop can match it (quick-kayinleong-078). */
+  category?: string,
 ): Promise<ShardJobResult> {
   return shardJob({
     buffer: Buffer.from(content, 'utf-8'),
@@ -939,5 +948,6 @@ async function shardJobForContent(
     lang,
     pillar,
     ...(supersedesId ? { supersedesId } : {}),
+    ...(category ? { category } : {}),
   })
 }

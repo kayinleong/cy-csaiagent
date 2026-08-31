@@ -51,6 +51,11 @@ export interface IngestFile {
   lang: 'en' | 'ms' | 'zh'
   /** Which pillar this KB document belongs to */
   pillar: 'coach' | 'finder' | 'reply'
+  /**
+   * SOP category, carried through to every chunk (quick-kayinleong-078) because
+   * retrieveReplySop filters on `chunk.category` in memory.
+   */
+  category?: string
   /** If this is a NEW VERSION, the old kbDoc ID to mark superseded on ingest completion. */
   supersedesId?: string
 }
@@ -173,6 +178,7 @@ export async function shardJob(file: IngestFile): Promise<ShardJobResult> {
     docId: file.docId,
     lang: file.lang,
     pillar: file.pillar,
+    ...(file.category ? { category: file.category } : {}),
     // Carry the supersede target so processBatch can retire the old version on completion.
     ...(file.supersedesId ? { supersedesId: file.supersedesId } : {}),
     tenantId: TENANT_ID,
@@ -224,6 +230,7 @@ export async function processBatch(jobId: string, limit: number): Promise<Proces
     docId,
     lang,
     pillar,
+    category,
     supersedesId,
   } = jobData
 
@@ -262,6 +269,10 @@ export async function processBatch(jobId: string, limit: number): Promise<Proces
       lang,
       pillar,
       ownerCollection: 'kbDocs',
+      // Denormalized so retrieveReplySop's in-memory category filter can match
+      // (quick-kayinleong-078). Omitted rather than written as undefined when the doc has
+      // no category — Firestore rejects undefined field values.
+      ...(category ? { category } : {}),
       // FieldValue.vector(), NOT the bare array (quick-kayinleong-066). A Firestore vector
       // index only covers fields stored as the VECTOR type — a plain number[] is silently
       // skipped, so findNearest returns zero rows with no error anywhere and every Coach
