@@ -634,6 +634,7 @@ export function ChatInput({
   pillarOverride,
   leadId,
   onBeforeSend,
+  onLeadRequired,
   submittedSuggestion,
   placeholder = 'Ask anything about D2 properties, SOPs, or your onboarding journey…',
   sendLabel = 'Send',
@@ -649,6 +650,10 @@ export function ChatInput({
     pillarOverride,
     leadId,
     onBeforeSend,
+    // quick-kayinleong-079: forwarding is hand-written here, so a new prop is
+    // silently dropped unless it is added. That is exactly what happened — the prop
+    // reached ChatInput and stopped, and the handler saw `undefined`.
+    onLeadRequired,
     submittedSuggestion,
   })
 

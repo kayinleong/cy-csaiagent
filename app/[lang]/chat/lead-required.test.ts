@@ -65,6 +65,39 @@ describe('the 400 opens the lead picker instead of a generic error', () => {
     ).toBe(declaration + 'const '.length)
   })
 
+  it('ChatInput FORWARDS every prop useChatStream asks for (quick-kayinleong-079)', () => {
+    // THE BUG THIS CATCHES, and it is the second false-confidence miss in a row.
+    //
+    // chat-input.tsx has TWO components: useChatStream (which does the work) and ChatInput
+    // (which wraps it). ChatInput hand-lists what it forwards. quick-077 added
+    // `onLeadRequired` to ChatInputProps, to useChatStream's signature, and to the shell's
+    // JSX — all three greppable, all three asserted, all three passing — but never to
+    // ChatInput's forwarding list. So the prop reached ChatInput and stopped, and the
+    // handler read `undefined`. Proven in a browser: `hasCallback: undefined`.
+    //
+    // tsc cannot catch it: an optional prop that is simply not destructured is legal.
+    //
+    // So instead of grepping for a line, compare the two lists.
+    const picked = INPUT.match(/\}: Pick<\s*ChatInputProps,([\s\S]*?)>\s*\)/)
+    expect(picked, 'could not find useChatStream\'s Pick<> prop list').toBeTruthy()
+    const consumed = [...picked![1].matchAll(/'([^']+)'/g)].map((m) => m[1])
+    expect(consumed.length).toBeGreaterThan(5)
+
+    // Anchored on `= useChatStream({` — the CALL. Matching bare `useChatStream({` finds the
+    // hook's own DECLARATION first, and then the check compares the prop list against
+    // itself and can never fail. It did exactly that on the first attempt.
+    const call = INPUT.match(/=\s*useChatStream\(\{([\s\S]*?)\n  \}\)/)
+    expect(call, 'could not find the useChatStream CALL site').toBeTruthy()
+    const forwarded = call![1]
+    expect(forwarded, 'matched the declaration, not the call').not.toContain('Pick<')
+
+    const dropped = consumed.filter((prop) => !new RegExp(`\\b${prop}\\b`).test(forwarded))
+    expect(
+      dropped,
+      `ChatInput does not forward: ${dropped.join(', ')} — useChatStream will read undefined`,
+    ).toEqual([])
+  })
+
   it('the shell opens the picker on the server-side refusal', () => {
     expect(SHELL).toContain('const handleLeadRequired = (text: string)')
     expect(SHELL).toContain('onLeadRequired={handleLeadRequired}')
