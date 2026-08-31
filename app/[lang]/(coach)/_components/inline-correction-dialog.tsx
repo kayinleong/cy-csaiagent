@@ -204,7 +204,7 @@ export function InlineCorrectionDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('correctionDialogTitle')}</DialogTitle>
           <DialogDescription>

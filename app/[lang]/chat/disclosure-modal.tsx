@@ -82,7 +82,12 @@ export function DisclosureModal({ onAck }: DisclosureModalProps) {
       {/* Prevent closing via overlay click or Escape — user MUST acknowledge */}
       <DialogContent
         data-slot="disclosure-modal"
-        className="max-w-sm mx-4"
+        // No width override (quick-kayinleong-084). components/ui/dialog.tsx already ships
+        // `w-full max-w-[calc(100%-2rem)] … sm:max-w-sm`: 16px gutters on a phone, 384px
+        // from sm up. The previous `max-w-sm mx-4` broke both halves of that —
+        // `max-w-sm` unprefixed replaced the mobile gutter rule at every width, and `mx-4`
+        // added margin-left to an element centred with `left-1/2 -translate-x-1/2`, so it
+        // sat 32px right of centre. Measured at 440px: 44px left gutter, 12px right.
         showCloseButton={false}
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}

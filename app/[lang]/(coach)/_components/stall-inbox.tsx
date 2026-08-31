@@ -148,7 +148,7 @@ export function StallInbox({ stalls: initialStalls }: StallInboxProps) {
           }
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{t('chatHistoryTitle')}</DialogTitle>
             <DialogDescription>{t('chatHistoryDescription')}</DialogDescription>

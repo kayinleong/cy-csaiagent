@@ -236,7 +236,7 @@ export function ConversationViewer({ lang: _lang }: ConversationViewerProps) {
 
       {/* Thread viewer dialog — READ-ONLY (HR-5) */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog() }}>
-        <DialogContent className="w-[calc(100%-2rem)] max-w-lg">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{t('pageTitle')}</DialogTitle>
             <DialogDescription className="font-mono text-xs text-muted-foreground">
@@ -321,7 +321,7 @@ export function ConversationViewer({ lang: _lang }: ConversationViewerProps) {
 
       {/* Flag-conversation reason dialog (FLAG-02) — sends only conversationId + reason (D-10). */}
       <Dialog open={flagDialogOpen} onOpenChange={(open) => { if (!open) setFlagDialogOpen(false) }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{tf('flagDialogTitle')}</DialogTitle>
             <DialogDescription>{tf('flagDialogBody')}</DialogDescription>
