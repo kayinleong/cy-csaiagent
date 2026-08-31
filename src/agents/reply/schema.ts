@@ -31,6 +31,17 @@ import { z } from 'zod'
  * (the grounding trail is mandatory; mirrors FinderMatchSchema's projectId-is-real
  * invariant at finder/schema.ts:133-166).
  */
+/**
+ * The exact `error` string /api/chat returns when a Reply turn has no lead attached
+ * (D-07 fail-closed, HTTP 400) — quick-kayinleong-077.
+ *
+ * Shared because the client MATCHES on it: seeing this specific error is what tells the
+ * chat shell to open the lead picker and re-send, rather than showing a generic failure.
+ * Two hand-typed copies of a string one side compares and the other emits is a silent
+ * break waiting to happen.
+ */
+export const LEAD_REQUIRED_ERROR = 'leadId required for reply'
+
 export const ReplyDraftSchema = z.object({
   /** The drafted reply text in the agent's language. Already PDPA-redacted upstream. */
   text: z.string().min(1),

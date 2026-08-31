@@ -44,7 +44,7 @@ import { routeAsync } from '@/src/router'
 import { coachAgent } from '@/src/agents/coach'
 import { finderAgent } from '@/src/agents/finder'
 import { replyAgent } from '@/src/agents/reply'
-import { ReplyOutputSchema } from '@/src/agents/reply/schema'
+import { ReplyOutputSchema, LEAD_REQUIRED_ERROR } from '@/src/agents/reply/schema'
 // Shared decoders — the SAME code the client renders with, so the server-side health
 // check cannot drift from what the agent actually sees (quick-kayinleong-053).
 import {
@@ -546,7 +546,7 @@ export async function POST(req: Request): Promise<Response> {
   // MUST also fail closed: return 400 BEFORE streamText so no model spend occurs.
   // Coach/Finder keep leadId optional — this gate is Reply-only.
   if (pillar === 'reply' && !leadId) {
-    return new Response(JSON.stringify({ error: 'leadId required for reply' }), {
+    return new Response(JSON.stringify({ error: LEAD_REQUIRED_ERROR }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     })

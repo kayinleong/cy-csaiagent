@@ -98,10 +98,15 @@ export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
   // blocks dispatch until the agent picks one (HR-3, no auto-inference).
   const [leadId, setLeadId] = useState<string | undefined>(undefined)
   const [leadSelectorOpen, setLeadSelectorOpen] = useState(false)
-  // True while a Reply dispatch is pending a lead pick — once the lead is chosen
-  // we have the leadId in state and the agent re-sends (text is preserved in the
-  // input). We do not auto-fire to avoid racing React state.
-  const [pendingReplySend, setPendingReplySend] = useState(false)
+  /**
+   * The message a Reply turn was blocked on, held until a lead is picked
+   * (quick-kayinleong-077).
+   *
+   * This was a bare boolean that the component voided out with a comment calling auto-resume
+   * "reserved" — so the agent had to press Send a second time, and in Auto they got a bare
+   * error instead of a picker. Holding the TEXT is what lets the pick dispatch it.
+   */
+  const [pendingReplyText, setPendingReplyText] = useState<string | null>(null)
 
   // ── Conversation history drawer (CHAT-07) ────────────────────────────────────
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -216,32 +221,55 @@ export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
   // ── Reply lead gate (D-07) ────────────────────────────────────────────────────
   // Return false to BLOCK dispatch: a Reply turn (override === 'reply') with no
   // active leadId opens the lead-selector before any send. All other turns proceed.
-  const handleBeforeSend = (_text: string, pillar?: PillarOverride): boolean => {
+  const handleBeforeSend = (text: string, pillar?: PillarOverride): boolean => {
     // `pillar` is the pillar THIS dispatch will actually use (a hero card's pillar, or
     // the header chip). Falls back to the chip for direct sends.
     const effective = pillar ?? pillarOverride
     if (effective === 'reply' && !leadId) {
-      setPendingReplySend(true)
+      // Hold the text so the pick can dispatch it (quick-kayinleong-077). Before this it
+      // was left sitting in the input and the agent had to press Send a second time.
+      setPendingReplyText(text)
       setLeadSelectorOpen(true)
       return false // block — dispatch resumes after the agent picks a lead
     }
     return true
   }
 
+  /**
+   * The SERVER refused a Reply turn for want of a lead (D-07, HTTP 400).
+   *
+   * This is the AUTO case, which `handleBeforeSend` structurally cannot catch: the router
+   * decides the pillar server-side, so the client had no idea this was a Reply turn until
+   * the 400 came back. The agent never chose Reply, so a generic error told them nothing
+   * about the lead they were supposed to attach (quick-kayinleong-077).
+   */
+  const handleLeadRequired = (text: string) => {
+    setPendingReplyText(text)
+    setLeadSelectorOpen(true)
+  }
+
   const handleLeadPicked = (picked: string) => {
     setLeadId(picked)
     setLeadSelectorOpen(false)
-    setPendingReplySend(false)
-    // The blocked text is still in the ChatInput; the agent presses Send again
-    // (now leadId is set, so handleBeforeSend returns true and dispatch proceeds).
+
+    // Send it for them. Reusing the hero-card dispatch path (submittedSuggestion seeds the
+    // input and fires) rather than adding a second one — and pinning 'reply' because that
+    // is what the turn was, whether the agent chose it or the router did.
+    //
+    // `leadId` is set in the same batch, so it is current by the time the dispatch effect
+    // in ChatInput reads the prop.
+    if (pendingReplyText) {
+      setSubmittedSuggestion({ id: Date.now(), text: pendingReplyText, pillar: 'reply' })
+      setPendingReplyText(null)
+    }
   }
 
   const handleLeadSelectorCancel = () => {
     setLeadSelectorOpen(false)
-    setPendingReplySend(false)
-    // Cancel = no lead picked → no dispatch (the text remains in the input).
+    // Cancel = no lead picked → no dispatch. Drop the held text so a later, unrelated
+    // Reply turn cannot resurrect it.
+    setPendingReplyText(null)
   }
-  void pendingReplySend // reserved for an auto-resume affordance; currently re-send is manual
 
   return (
     <>
@@ -298,6 +326,7 @@ export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
         pillarOverride={pillarOverride}
         leadId={leadId}
         onBeforeSend={handleBeforeSend}
+        onLeadRequired={handleLeadRequired}
         submittedSuggestion={submittedSuggestion}
         placeholder={placeholder}
         sendLabel={sendLabel}

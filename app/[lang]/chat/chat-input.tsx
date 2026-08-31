@@ -31,6 +31,7 @@ import { useTranslations } from 'next-intl'
 import { toast } from 'sonner'
 import { useRouter, useParams } from 'next/navigation'
 import { signInUrlFor } from '@/src/auth/next-path'
+import { LEAD_REQUIRED_ERROR } from '@/src/agents/reply/schema'
 import { loadConversationMessages } from './load-conversation-messages'
 import { clientAuth } from '@/src/firebase/client'
 import { Textarea } from '@/components/ui/textarea'
@@ -110,6 +111,14 @@ interface ChatInputProps {
    */
   onBeforeSend?: (text: string, pillar?: 'coach' | 'finder' | 'reply') => boolean
   /**
+   * The server refused a Reply turn because no lead is attached (D-07, HTTP 400).
+   *
+   * Only the SERVER knows the pillar in Auto mode, so `onBeforeSend` — which runs
+   * client-side off the chip or hero card — cannot catch this case. The shell opens the
+   * lead picker and re-dispatches `text` once a lead is chosen (quick-kayinleong-077).
+   */
+  onLeadRequired?: (text: string) => void
+  /**
    * One-shot suggestion send (redesign). When this changes to a new id, the input
    * seeds the text and dispatches it (subject to the same onBeforeSend gate).
    */
@@ -130,6 +139,7 @@ function useChatStream({
   pillarOverride,
   leadId,
   onBeforeSend,
+  onLeadRequired,
   submittedSuggestion,
 }: Pick<
   ChatInputProps,
@@ -141,6 +151,7 @@ function useChatStream({
   | 'pillarOverride'
   | 'leadId'
   | 'onBeforeSend'
+  | 'onLeadRequired'
   | 'submittedSuggestion'
 >) {
   // Localized copy for the failed-turn bubble. Reuses the existing `chat.error` key
@@ -290,6 +301,22 @@ function useChatStream({
 
       if (!response.ok) {
         const status = response.status
+
+        // A Reply turn with no lead attached (D-07). Not an error the agent can act on
+        // from a toast — they need to pick a lead, and in Auto they never chose Reply at
+        // all (quick-kayinleong-077). Hand it to the shell, which opens the picker and
+        // re-sends this exact text once a lead is chosen.
+        if (status === 400) {
+          const body = (await response.json().catch(() => ({}))) as { error?: string }
+          if (body.error === LEAD_REQUIRED_ERROR && onLeadRequired) {
+            // Drop the empty assistant placeholder — the turn has not happened yet.
+            setMessages((prev) => prev.filter((m) => m.id !== assistantMsgId))
+            setIsStreaming(false)
+            onLeadRequired(text)
+            return
+          }
+        }
+
         if (status === 401) {
           // The cookie holds a raw ID token that expires after an hour (quick-059), so a
           // long-lived tab lands here routinely. A toast alone left the agent stuck.
@@ -564,7 +591,7 @@ function useChatStream({
     } finally {
       setIsStreaming(false)
     }
-  }, [input, isStreaming, messages, langOverride, pillarOverride, leadId, onBeforeSend, t, bounceToSignIn])
+  }, [input, isStreaming, messages, langOverride, pillarOverride, leadId, onBeforeSend, onLeadRequired, t, bounceToSignIn])
 
   // ── Suggestion-card dispatch (redesign) ──────────────────────────────────────
   // When a hero card is tapped, chat-shell pins the pillar override then bumps
