@@ -87,7 +87,17 @@
     "history": "Conversation history",
     "historyEmpty": "No past conversations yet.",
     "searchPlaceholder": "Search conversations…",
-    "newConversation": "New conversation"
+    "newConversation": "New conversation",
+    "matchTable": {
+      "colSize": "Size (sqft)",
+      "colHighlight": "Highlight",
+      "showMore": "Details",
+      "showMoreAria": "Show details and supporting documents for {name}",
+      "showMorePrompt": "Tell me more about {name} ({projectId}) — full details and all supporting documents.",
+      "priceUnknown": "Price not on record",
+      "rowCount": "{count} matching projects",
+      "notOnRecord": "Not on record"
+    }
   },
   "handoff": {
     "kbMiss": "I couldn't find a D2 knowledge base article for this. Your senior coach has been notified.",

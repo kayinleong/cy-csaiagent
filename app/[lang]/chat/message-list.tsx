@@ -55,6 +55,14 @@ interface MessageListProps {
   messages: ChatMessage[]
   /** True while the assistant is streaming a response */
   isStreaming?: boolean
+  /**
+   * Dispatch a follow-up chat turn for one project (quick-kayinleong-085).
+   * Forwarded from chat-shell straight through to MatchList -> MatchTable's row button.
+   *
+   * ⚠ This file hand-lists the props it forwards, which is exactly how quick-080 silently
+   * dropped `onLeadRequired`. A guard test in match-table.test.ts pins the forward.
+   */
+  onAsk?: (prompt: string) => void
   className?: string
 }
 
@@ -64,7 +72,7 @@ interface MessageListProps {
  * The list auto-scrolls via a ref scroll-into-view (handled in the parent
  * client island chat-input.tsx where the ref updates on message change).
  */
-export function MessageList({ messages, isStreaming, className }: MessageListProps) {
+export function MessageList({ messages, isStreaming, onAsk, className }: MessageListProps) {
   return (
     <ScrollArea
       data-slot="chat-message-list"
@@ -128,7 +136,7 @@ export function MessageList({ messages, isStreaming, className }: MessageListPro
               className="flex justify-start"
               data-role="assistant"
             >
-              <MatchList output={msg.finderOutput} className="max-w-[90%]" />
+              <MatchList output={msg.finderOutput} onAsk={onAsk} className="max-w-[90%]" />
             </div>
           ) : (
             // Assistant turn — Card with answer + citations footer

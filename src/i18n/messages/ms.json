@@ -89,7 +89,17 @@
     "history": "Sejarah perbualan",
     "historyEmpty": "Tiada perbualan lalu lagi.",
     "searchPlaceholder": "Cari perbualan…",
-    "newConversation": "Perbualan baru"
+    "newConversation": "Perbualan baru",
+    "matchTable": {
+      "colSize": "Saiz (kaki persegi)",
+      "colHighlight": "Ciri utama",
+      "showMore": "Butiran",
+      "showMoreAria": "Tunjukkan butiran dan dokumen sokongan untuk {name}",
+      "showMorePrompt": "Beritahu saya lebih lanjut tentang {name} ({projectId}) — butiran penuh dan semua dokumen sokongan.",
+      "priceUnknown": "Harga belum direkodkan",
+      "rowCount": "{count} projek yang sepadan",
+      "notOnRecord": "Tiada dalam rekod"
+    }
   },
   "handoff": {
     "kbMiss": "Saya tidak dapat mencari artikel pangkalan pengetahuan D2 untuk ini. Jurulatih kanan anda telah dimaklumkan.",

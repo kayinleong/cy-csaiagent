@@ -89,7 +89,17 @@
     "history": "对话历史",
     "historyEmpty": "暂无历史对话。",
     "searchPlaceholder": "搜索对话…",
-    "newConversation": "新对话"
+    "newConversation": "新对话",
+    "matchTable": {
+      "colSize": "面积（平方尺）",
+      "colHighlight": "亮点",
+      "showMore": "详情",
+      "showMoreAria": "显示 {name} 的详情与支援文件",
+      "showMorePrompt": "请详细介绍 {name}（{projectId}）——完整资料以及所有支援文件。",
+      "priceUnknown": "价格尚未记录",
+      "rowCount": "{count} 个符合条件的项目",
+      "notOnRecord": "无记录"
+    }
   },
   "handoff": {
     "kbMiss": "我在D2知识库中未能找到相关文章，您的高级教练已收到通知。",

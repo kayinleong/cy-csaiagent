@@ -312,6 +312,11 @@ export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
         <MessageList
           messages={messages}
           isStreaming={isStreaming}
+          // A Finder table row's "Details" button (quick-kayinleong-085). Reuses the
+          // existing one-shot suggestion path exactly — handleSuggestion sets
+          // submittedSuggestion, which chat-input.tsx picks up by id and dispatches with
+          // that pillar for that send only. No new dispatch mechanism.
+          onAsk={(prompt) => handleSuggestion(prompt, 'finder')}
           className="flex-1"
         />
       )}

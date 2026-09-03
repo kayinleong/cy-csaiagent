@@ -1,8 +1,11 @@
 /**
- * app/[lang]/chat/match-list.tsx — Finder match-card renderer.
+ * app/[lang]/chat/match-list.tsx — Finder match renderer.
  *
- * RSC-compatible render-only component (no "use client" needed).
- * Composes vendored Card, Badge from @/components/ui — do NOT re-add shadcn.
+ * Render-only. Composes vendored Card, Badge from @/components/ui — do NOT re-add shadcn.
+ * It now also composes a CLIENT child (`MatchTable`, which needs usePagination and
+ * useTranslations). That is fine and needs no "use client" here: the whole subtree already
+ * sits inside the `chat-shell.tsx` client island, so the `onAsk` function prop crosses no
+ * server/client boundary (quick-kayinleong-085).
  *
  * Renders one of three states (FIND-01/04):
  *   1. Matches found  → ranked project cards with rationale + matched-criteria
@@ -25,12 +28,21 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { FinderOutput, FinderMatch } from '@/src/agents/finder/schema'
 import { MarkdownMessage } from './markdown-message'
+import { MatchTable } from './match-table'
 import { presentCollateral, type CollateralKind } from './collateral-label'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface MatchListProps {
   output: FinderOutput
+  /**
+   * Dispatch a follow-up chat turn for one project (quick-kayinleong-085).
+   *
+   * Forwarded chat-shell -> MessageList -> here -> MatchTable's per-row button. Optional,
+   * so a caller that does not want the action still renders the table (with the buttons
+   * disabled).
+   */
+  onAsk?: (prompt: string) => void
   className?: string
 }
 
@@ -62,8 +74,8 @@ function isWebUrl(value: unknown): value is string {
   }
 }
 
-export function MatchList({ output, className }: MatchListProps) {
-  const { matches, refusal, clarifyingQuestion, answer } = output
+export function MatchList({ output, onAsk, className }: MatchListProps) {
+  const { matches, refusal, clarifyingQuestion, answer, rows } = output
 
   // ── State 3: Clarifying question ─────────────────────────────────────────
   if (clarifyingQuestion) {
@@ -123,6 +135,25 @@ export function MatchList({ output, className }: MatchListProps) {
 
   // ── State 1: Ranked project matches ──────────────────────────────────────
   if (matches.length > 0) {
+    // The TABLE is the primary rendering (quick-kayinleong-085): it shows every project
+    // the tool returned with its real attributes, which the card list structurally could
+    // not — the attributes died at the tool boundary before `rows` existed.
+    //
+    // MatchCard stays the fallback for an empty `rows`: an older persisted turn, or a turn
+    // whose rows never arrived. Losing the whole answer because the rows are missing would
+    // be a worse trade than showing the cards it used to show.
+    if (rows.length > 0) {
+      return (
+        <div
+          data-slot="match-list"
+          data-state="matches"
+          className={cn('flex w-full flex-col gap-3', className)}
+        >
+          <MatchTable rows={rows} matches={matches} onAsk={onAsk} />
+        </div>
+      )
+    }
+
     return (
       <div
         data-slot="match-list"
