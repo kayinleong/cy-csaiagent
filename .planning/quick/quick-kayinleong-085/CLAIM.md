@@ -294,26 +294,170 @@ a pre-existing 5s-budget test tripping on a loaded machine. The cheap remedy —
 imports into `beforeAll`, or set an explicit `testTimeout` — is a separate claim, not a
 minimal-fix edit here. Sequential single runs are clean 22 times out of 22.
 
+## Live verification — run 2026-09-04, after the claim was first closed
+
+The six items previously listed under Known gaps were worked through against **live Firestore** on
+the local dev server. Five are now closed by measurement; the two that remain are named at the
+bottom of this section, and one of them is a hard boundary rather than an omission.
+
+### 1. Backfill applied
+
+    npx tsx --env-file=.env.local scripts/backfill-project-sizes.ts --apply
+
+| run | total | parsed | null | written | unchanged |
+|---|---|---|---|---|---|
+| dry run | 87 | 67 | 20 | — (67 pending) | 20 |
+| `--apply` | 87 | 67 | 20 | **67** | 20 |
+| re-run (dry) | 87 | 67 | 20 | — | **87** |
+
+**Idempotency proven end to end**, not inferred: the third run reports `to update: 0`.
+87 live docs, not the 82 in the import snapshot.
+
+### 2. The parse audit was redone against live data, by eye, before writing
+
+Scanned every parsed record for the failure class the extractor was built to reject (shared
+facilities, land plots, whole-development GFA). **Zero facility/land labels appear in any evidence
+line** — the `NON_BUILT_UP_LABEL` guard holds on all 87. Then the implausible tail was checked
+individually rather than assumed:
+
+| project | range | largest mention, in its own words | verdict |
+|---|---|---|---|
+| Eden BRDB, Taman Duta | 5,296–19,041 | explicit stated range `5,296 – 19,041 sqft` | correct |
+| Aspire office @ KL ecocity | 1,152–18,690 | `approximately 670,000 sqft` **correctly rejected** | correct |
+| Aetas Seputeh | 3,531–14,869 | `Duplex Penthouse C1: 14,869 sqft` | correct — a real unit |
+| 18 Madge Uthant | 2,238–14,813 | explicit stated range | correct |
+| The Stride Office @ BBCC | 1,087–11,383 | `Whole Floor (Open Plan): 11,383 sq. ft.` | correct — a sellable unit |
+| E&O City of Elmina | 3,256–10,883 | explicit stated range | correct |
+| Property 1 | 10,000–10,000 | `Spacious 10,000 sq ft Home` | faithful to its description |
+
+The Aspire case is the guard doing its job on live data: a 670,000 sqft development GFA sits in the
+same description and was excluded.
+
+### 3. The retrieval fix, proven against live Firestore
+
+`searchProjects` called directly with the driving criteria
+(`priceMax: 1_000_000`, `locationPref: 'Klang Valley'`):
+
+| | before (RESEARCH, measured) | after (live) |
+|---|---|---|
+| rows returned | **3** | **50** |
+| of which priced ≤ RM1m | 3 | 18 |
+| of which unpriced (blank price) | 0 (hard-excluded) | 32 |
+| rows with size data | 0 (no field existed) | **39** |
+| unpriced rows falsely claiming a budget match | — | **0** |
+
+50 = 18 + 32 exactly as predicted offline. `priceBand` present in zero of the 50 serialized rows —
+the allowlist holds against real data, not just fixtures.
+
+### 4. The table, measured in a real browser at four widths
+
+Rendered `MatchTable` with the **actual 50 live rows** in a throwaway harness page
+(`app/[lang]/devtable`, since deleted — the e2e specs need credentials I will not enter). Measured
+with `getBoundingClientRect()`, per the quick-083 lesson:
+
+| viewport | page overflow | scroll container | left end reachable | right end reachable | Name pinned | `justify-content` |
+|---|---|---|---|---|---|---|
+| 320 | **0** | 288 / 1000 | yes | yes | yes | `normal` |
+| 399 | **0** | 359 / 1000 | yes | yes | yes | `normal` |
+| 400 | **0** | 360 / 1000 | yes | yes | yes | `normal` |
+| 440 (user's device) | **0** | 396 / 1000 | yes | yes | yes | `normal` |
+
+At 440, scrolled fully right: `scrollLeft` 604 = `maxScroll` 604, the **Actions** header's right
+edge 418 = the container's right edge 418, and the Name cell stays pinned at the container's left
+edge (22 = 22). **The quick-081 both-ends-clipped defect is ruled out by measurement**, and
+`justify-content` is `normal` on the scroller at every width — the specific mistake quick-081
+warns about was not reintroduced.
+
+### 5. Data rendering and the row action
+
+- Unpriced row (`26 Araville PJ`): price cell renders `—`. **Not `RM 0`, not a band.** D2's
+  invariant holding in a real render, not just in a formatter unit test.
+- Priced row with no size (`Quill Residences KLCC`): size cell `—`.
+- Single-value size renders `3,665`, not `3,665–3,665`.
+- **Pagination walks the whole result set:** 5 pages x 10 rows, **50 unique names, no duplicates
+  and none dropped**, Next disabled on page 5. Every one of the 50 matches is reachable — the
+  actual user ask.
+- The Details button dispatches:
+  `Tell me more about 26 Araville PJ (ujblMkAxtdMg5tIRLP4w) — full details and all supporting documents.`
+  It carries the project **id** as well as the name, so the follow-up turn cannot mis-resolve.
+
+### 6. Trilingual, including the dispatched prompt
+
+| locale | headers | button | pager | dispatched prompt |
+|---|---|---|---|---|
+| en | Name / Price (RM) / Size (sqft) / Beds / Tenure / Location / Highlight / Actions | Details | `Page 1 of 5` | `Tell me more about … all supporting documents.` |
+| ms | Nama / Harga (RM) / Saiz (kaki persegi) / Bilik / Pegangan / Lokasi / Ciri utama / Tindakan | Butiran | `Halaman 1 daripada 5` | `Beritahu saya lebih lanjut tentang … semua dokumen sokongan.` |
+| zh | 名称 / 价格（令吉）/ 面积（平方尺）/ 卧室 / 产权 / 位置 / 亮点 / 操作 | 详情 | 上一页 / 下一页 | `请详细介绍 …——完整资料以及所有支援文件。` |
+
+The prompt being localized is the load-bearing part: it is what makes the follow-up reply come back
+in the user's language. 中文 uses full-width punctuation correctly. Page overflow 0 in all three.
+
+### Gate, re-run after the harness was deleted
+
+| check | result |
+|---|---|
+| `npx tsc --noEmit` | exit 0 |
+| `npx vitest run` | **1248 passed**, 0 failed, 197 skipped (75 files) |
+| `npx eslint app src tests` | **0 errors**, 77 warnings (all pre-existing) |
+| `npm run build` | `✓ Compiled successfully in 26.4s`, 72/72 static pages |
+
+`git status` is byte-identical to session start apart from this claim's own files: the harness page
+and its fixture are gone, and the user's unrelated work in `docs/`, `scripts/scrape-skool/*` and
+`.serena/` was never staged.
+
+### Two pre-existing DATA bugs surfaced by showing more rows — not caused by this claim
+
+1. **`The Stride Office @ BBCC` has `priceValue: 68370`.** Its description reads
+   `Asking Price (Open Plan): ~RM6–8 psf` — this is a **per-square-foot rental** listing, and
+   whatever produced `priceValue` stored a number that is not a sale price. It therefore passes an
+   "under RM1m" filter and appears in the results at "RM 68,370". The table is reporting the stored
+   value faithfully; the stored value is wrong. Worth a data claim, not a code one.
+2. **`Property 1`** is an oddly-named record (`priceValue: 1400001`, `above_1.2m`). It is
+   **correctly excluded** from the ≤RM1m results — the price gate working — but the name suggests
+   test or placeholder data sitting in the live `projects` collection with `status: active`.
+
+### What is still NOT verified
+
+1. **A real Finder turn end to end against a live model.** Everything from `searchProjects` down to
+   the rendered table is now proven on live data, and the model-facing schema/prompt changes are
+   unit-asserted — but no actual authenticated chat turn has been driven through
+   `/api/chat`. Signing in requires entering account credentials, which I do not do; the e2e specs
+   (`e2e/finder-flow.spec.ts`) exist for exactly this and need `E2E_AGENT_EMAIL` /
+   `E2E_AGENT_PASSWORD` plus a deploy. **This is the one remaining quick-080-class risk.**
+2. **The reloaded-thread path.** The persisted-envelope branch (`doPersistAssistant` → parse →
+   `attachFinderRows`) is unit-asserted but was not exercised by revisiting a real saved thread,
+   which again needs a signed-in session.
+
 ## Known gaps
 
-**Needs a live authenticated browser — NOT verified, and not described as verified anywhere above.**
-The plan's `<human-check>` list is outstanding in full. This repo's own history is the reason to
-say so plainly: quick-080 shipped a data-render path that was only found broken by signing into a
-real browser.
+> **SUPERSEDED 2026-09-04 — read `## Live verification` above first.** Items 1, 3, 5 and 6 in the
+> list below are now **CLOSED by measurement against live Firestore**: the backfill ran (67 docs
+> written, idempotency proven on a third run), the layout was measured at 320/399/400/440 with
+> `getBoundingClientRect()`, BM and 中文 were checked including the dispatched prompt, and the
+> Size column now has data. Item 2 is **partly closed** — the button's dispatched prompt was
+> captured verbatim, but not the model's reply to it. Item 4 remains open.
+>
+> **Still genuinely open: a real authenticated chat turn (items 2-reply and 4).** Signing in means
+> entering account credentials, which I do not do. This is the remaining quick-080-class risk, and
+> the reason it is called out rather than quietly dropped.
 
-1. **The end-to-end render.** That a real Finder turn actually produces a table with data in it.
+The original list, kept for the record:
+
+1. ~~**The end-to-end render.**~~ **PARTLY CLOSED** — proven from `searchProjects` through the
+   rendered table on live data (50 rows, 39 with size). Still unproven: a real turn through
+   `/api/chat` against a live model. That a real Finder turn actually produces a table with data in it.
    Every link is unit-asserted — sink → metadata → parse → attach → `rows` → `MatchTable` — but
    the assembled path has never run against a live model.
 2. **The row button's follow-up turn.** That tapping "Details" dispatches a turn, and that the
    reply is prose about that one project *with its supporting documents listed*.
-3. **320 / 399 / 400 / 440 px layout.** That the Name column stays pinned while the rest scrolls,
+3. ~~**320 / 399 / 400 / 440 px layout.**~~ **CLOSED — measured, all four widths, page overflow 0.** That the Name column stays pinned while the rest scrolls,
    that neither end of the scroll strip is clipped, and that nothing overflows the viewport.
    Measure in-page with `getBoundingClientRect()` rather than eyeballing — the quick-083 lesson.
 4. **The reloaded-thread path.** That a revisited turn renders its table from the persisted
    envelope (the truncated-turn path).
-5. **BM and 中文 end to end.** That the headers, the button and the *dispatched prompt* are all
+5. ~~**BM and 中文 end to end.**~~ **CLOSED — headers, button, pager and dispatched prompt all verified in ms and zh.** That the headers, the button and the *dispatched prompt* are all
    translated and the reply comes back in that language.
-6. **`scripts/backfill-project-sizes.ts --apply`.** Not run. The dry run against live Firestore
+6. ~~**`scripts/backfill-project-sizes.ts --apply`.**~~ **CLOSED — RUN. 67 of 87 docs written; a third run reports 0 updates.** Original note: The dry run against live Firestore
    succeeded (87 docs, 67 parsed, 20 null, 67 to update), but nothing has been written. **Until it
    is run, the Size column is correctly empty for every row** — the table is not broken, the data
    is not there yet. The "zero writes on an immediate second `--apply`" claim is therefore also
