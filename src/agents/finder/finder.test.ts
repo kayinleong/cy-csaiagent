@@ -98,6 +98,9 @@ const seedProjectMatch = {
   foreignEligible: true,
   bedrooms: 3,
   locationText: 'Cheras, Kuala Lumpur — near LRT Taman Connaught',
+  // Stored built-up range (quick-085 / D1) — read from ProjectDoc, never re-parsed.
+  sizeMinSqft: 1_045,
+  sizeMaxSqft: 1_185,
   score: 0.87,
   matchedCriteria: {
     segment: 'own_stay' as const,

@@ -38,10 +38,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { ChatMessage } from './message-list'
+import type { FinderRow } from '@/src/agents/finder/schema'
 import {
   decodeReplyOutput,
   decodeFinderOutput,
   attachCollateral,
+  attachFinderRows,
   salvageStructuredText,
 } from './decode-structured-output'
 import {
@@ -369,6 +371,9 @@ function useChatStream({
       // the tool results server-side, because the model chose a different subset of URLs to
       // transcribe on every run — 19, then 10, then 9 for the same projects.
       let serverCollateral: Record<string, Array<{ type: string; url: string }>> | undefined
+      // The COMPLETE Finder result table, server-derived (quick-085). Undefined on a
+      // truncated turn — the persisted envelope carries the rows for that path.
+      let serverFinderRows: FinderRow[] | undefined
       // Did the stream reach its `finish` chunk? A turn cut short by the platform never
       // does, and that is where the server's collateral map rides (quick-kayinleong-072).
       let sawFinish = false
@@ -412,6 +417,7 @@ function useChatStream({
             if (meta.citations) serverCitations = meta.citations
             if (meta.kbMiss !== undefined) kbMiss = meta.kbMiss
             if (meta.collateralByProject) serverCollateral = meta.collateralByProject
+            if (meta.finderRows) serverFinderRows = meta.finderRows
             // `citations` and `kbMiss` only ever ride on `finish`, so their presence is how
             // we know the turn completed.
             if (meta.kbMiss !== undefined || meta.citations) sawFinish = true
@@ -515,7 +521,9 @@ function useChatStream({
         // Merge the server's collateral over whatever the model did or did not emit
         // (quick-071). The same map is written into the persisted envelope server-side, so
         // a revisited turn shows exactly these files too.
-        const finderOutput = decoded ? attachCollateral(decoded, serverCollateral) : null
+        const finderOutput = decoded
+          ? attachFinderRows(attachCollateral(decoded, serverCollateral), serverFinderRows)
+          : null
         if (finderOutput) {
           setMessages((prev) =>
             prev.map((m) =>

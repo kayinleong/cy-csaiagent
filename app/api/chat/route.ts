@@ -49,10 +49,12 @@ import { ReplyOutputSchema, LEAD_REQUIRED_ERROR } from '@/src/agents/reply/schem
 // check cannot drift from what the agent actually sees (quick-kayinleong-053).
 import {
   attachCollateral,
+  attachFinderRows,
   decodeFinderOutput,
   decodeReplyOutput,
   salvageStructuredText,
 } from '@/app/[lang]/chat/decode-structured-output'
+import type { FinderRow } from '@/src/agents/finder/schema'
 import { modelFor } from '@/src/llm/provider'
 import {
   appendMessage,
@@ -596,6 +598,17 @@ export async function POST(req: Request): Promise<Response> {
    */
   const collateralByProject: Record<string, Array<{ type: string; url: string }>> = {}
 
+  /**
+   * The COMPLETE Finder result table for this turn (quick-kayinleong-085).
+   *
+   * Filled by the searchProjects tool, which is constructed per request — so this is
+   * request-scoped and cannot leak between conversations. Read twice: once into
+   * `messageMetadata` for the live turn, and once in `doPersistAssistant` so a reloaded
+   * thread still has a table. The model never sees this array; `toModelOutput` bounds its
+   * view at MAX_MATCHES.
+   */
+  const finderRowSink = { rows: [] as FinderRow[] }
+
   // ── Guaranteed assistant-message persistence (quick-kayinleong-055) ─────────
   // onFinish used to be the ONLY path that wrote an assistant message, so any turn that
   // errored or aborted saved the user's question and nothing else. Measured: 19 lost
@@ -661,11 +674,23 @@ export async function POST(req: Request): Promise<Response> {
     // quick-056's repair means a truncated envelope usually still decodes, so the stored
     // partial comes out as complete, enriched JSON. Best-effort: if it does not decode, the
     // raw text is stored exactly as before.
-    if (pillar === 'finder' && body.length > 0 && Object.keys(collateralByProject).length > 0) {
+    //
+    // quick-kayinleong-085 widens the condition to fire when EITHER collateral or rows
+    // exist, and attaches both. This is load-bearing, not tidiness: `messageMetadata` only
+    // fires on `start` and `finish` (see the note at the messageMetadata callback), so a
+    // truncated turn's rows must already be in the persisted row or a reloaded thread
+    // renders an empty table and falls back to the cards.
+    if (
+      pillar === 'finder' &&
+      body.length > 0 &&
+      (Object.keys(collateralByProject).length > 0 || finderRowSink.rows.length > 0)
+    ) {
       try {
         const decoded = decodeFinderOutput(body)
         if (decoded && decoded.matches.length > 0) {
-          body = JSON.stringify(attachCollateral(decoded, collateralByProject))
+          body = JSON.stringify(
+            attachFinderRows(attachCollateral(decoded, collateralByProject), finderRowSink.rows),
+          )
         }
       } catch {
         // Never lose a reply over formatting.
@@ -780,7 +805,7 @@ export async function POST(req: Request): Promise<Response> {
       // (the builder only reads it for context injection; no structural mutation)
       leadContext: storedFinderSlot ? (storedFinderSlot as unknown as Record<string, unknown>) : undefined,
     })
-    agentTools = finderAgent.makeTools(userLang, uid, leadId)
+    agentTools = finderAgent.makeTools(userLang, uid, leadId, finderRowSink)
   } else if (pillar === 'reply') {
     // Reply branch (Plan 04-06) — mirrors the Finder branch shape.
     // leadId is GUARANTEED present here (the required-leadId fail-closed gate above
@@ -1244,6 +1269,13 @@ export async function POST(req: Request): Promise<Response> {
           collateralByProject:
             pillar === 'finder' && Object.keys(collateralByProject).length > 0
               ? collateralByProject
+              : undefined,
+          // The COMPLETE result table, derived from the tool result rather than from what
+          // the model chose to retype (quick-085). Same argument as collateralByProject
+          // above; the model only ever saw MAX_MATCHES of these.
+          finderRows:
+            pillar === 'finder' && finderRowSink.rows.length > 0
+              ? finderRowSink.rows
               : undefined,
         }
       }

@@ -586,8 +586,15 @@ describe('Test 12 (03-07): finder dispatch — routeAsync→finder routes to fin
     await POST(req)
 
     expect(mocks.mockFinderBuildSystemPrompt).toHaveBeenCalled()
-    // userLang depends on detectLang mock; assert uid + leadId positional args 1+2
-    expect(mocks.mockFinderMakeTools).toHaveBeenCalledWith(expect.any(String), 'uid-001', undefined)
+    // userLang depends on detectLang mock; assert uid + leadId positional args 1+2.
+    // Arg 4 is the request-scoped Finder row sink (quick-085) — asserted by shape rather
+    // than identity, since the route owns the object.
+    expect(mocks.mockFinderMakeTools).toHaveBeenCalledWith(
+      expect.any(String),
+      'uid-001',
+      undefined,
+      { rows: [] },
+    )
     expect(mocks.mockModelFor).toHaveBeenCalledWith('finder')
   })
 
@@ -616,7 +623,12 @@ describe('Test 12 (03-07): finder dispatch — routeAsync→finder routes to fin
 
     await POST(req)
 
-    expect(mocks.mockFinderMakeTools).toHaveBeenCalledWith(expect.any(String), 'uid-001', 'lead-001')
+    expect(mocks.mockFinderMakeTools).toHaveBeenCalledWith(
+      expect.any(String),
+      'uid-001',
+      'lead-001',
+      { rows: [] },
+    )
   })
 })
 

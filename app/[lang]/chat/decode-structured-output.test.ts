@@ -14,6 +14,7 @@ import {
   normalizeFinderShape,
   repairTruncatedJson,
   attachCollateral,
+  attachFinderRows,
 } from './decode-structured-output'
 
 const replyDraftJson = JSON.stringify({
@@ -567,5 +568,125 @@ describe('FinderMatch.matchedCriteria is forgiving (quick-071)', () => {
       segment: 'unknown', priceMax: null, nationality: 'unknown',
       bumiputera: null, locationPref: null, bedrooms: null,
     })
+  })
+})
+
+// ─── quick-kayinleong-085: the server's result table ─────────────────────────
+
+describe('attachFinderRows', () => {
+  const criteria = {
+    segment: 'unknown' as const, priceMax: null, nationality: 'unknown' as const,
+    bumiputera: null, locationPref: null, bedrooms: null,
+  }
+  const out = (matches: Array<Record<string, unknown>>, rows: unknown[] = []) =>
+    ({ matches, rows } as unknown as Parameters<typeof attachFinderRows>[0])
+
+  const row = (i: number) => ({
+    projectId: `p${i}`,
+    name: `Project ${i}`,
+    priceValue: i % 2 === 0 ? 0 : 700_000,
+    bedrooms: 2,
+    tenure: 'Freehold',
+    locationText: `Area ${i}`,
+    vpStatus: false,
+    bumiQuota: false,
+    foreignEligible: true,
+    sizeMinSqft: 600 + i,
+    sizeMaxSqft: 1_200 + i,
+    score: 0.9 - i / 1000,
+  })
+
+  it('ADDS rows the model never emitted — the whole point of the cap split', () => {
+    // The model narrates a shortlist of 2; the tool returned 40. The table shows 40.
+    const serverRows = Array.from({ length: 40 }, (_, i) => row(i))
+    const result = attachFinderRows(
+      out([
+        { projectId: 'p0', rationale: 'r', matchedCriteria: criteria },
+        { projectId: 'p1', rationale: 'r', matchedCriteria: criteria },
+      ]),
+      serverRows as never,
+    )
+    expect(result.rows).toHaveLength(40)
+    // And the narrative shortlist is untouched.
+    expect(result.matches).toHaveLength(2)
+  })
+
+  it('preserves the server ordering — that ordering IS the ranking', () => {
+    const serverRows = [row(3), row(1), row(2)]
+    const result = attachFinderRows(out([]), serverRows as never)
+    expect(result.rows.map((r) => r.projectId)).toEqual(['p3', 'p1', 'p2'])
+  })
+
+  it('replaces anything the model wrote into rows (it is told to omit the field)', () => {
+    const modelRows = [{ ...row(99), name: 'A project the model made up' }]
+    const result = attachFinderRows(out([], modelRows), [row(1)] as never)
+    expect(result.rows.map((r) => r.projectId)).toEqual(['p1'])
+  })
+
+  it('is a no-op for undefined and for an empty array (older persisted turn)', () => {
+    const input = out([{ projectId: 'p1', rationale: 'r', matchedCriteria: criteria }])
+    expect(attachFinderRows(input, undefined)).toBe(input)
+    expect(attachFinderRows(input, [])).toBe(input)
+  })
+
+  it('never mutates the input', () => {
+    const input = out([{ projectId: 'p1', rationale: 'r', matchedCriteria: criteria }])
+    const mapped = attachFinderRows(input, [row(1)] as never)
+    expect(mapped).not.toBe(input)
+    expect(input.rows).toEqual([])
+  })
+})
+
+describe('quick-085: highlight and rows survive a decode round trip', () => {
+  const match = (extra: Record<string, unknown> = {}) => ({
+    projectId: 'p1',
+    name: 'Project One',
+    rationale: 'Within budget and in the requested area.',
+    ...extra,
+  })
+
+  it('keeps a model-authored highlight', () => {
+    const decoded = decodeFinderOutput(JSON.stringify({ matches: [match({ highlight: 'VP completed, 904-4,855 sqft layouts' })] }))
+    expect(decoded?.matches[0].highlight).toBe('VP completed, 904-4,855 sqft layouts')
+  })
+
+  it('a match that OMITS highlight is still renderable (quick-056 lesson)', () => {
+    // dropUnrenderableMatches validates each match against FinderMatchSchema, so a
+    // REQUIRED highlight would have deleted every real match that omitted it.
+    const decoded = decodeFinderOutput(JSON.stringify({ matches: [match()] }))
+    expect(decoded?.matches).toHaveLength(1)
+    expect(decoded?.matches[0].highlight).toBeUndefined()
+  })
+
+  it('an over-long highlight drops only that match, never the envelope', () => {
+    const decoded = decodeFinderOutput(
+      JSON.stringify({
+        matches: [match({ highlight: 'x'.repeat(200) }), { ...match(), projectId: 'p2' }],
+      }),
+    )
+    expect(decoded?.matches.map((m) => m.projectId)).toEqual(['p2'])
+  })
+
+  it('rows default to [] on an envelope written before this claim', () => {
+    const decoded = decodeFinderOutput(JSON.stringify({ matches: [match()] }))
+    expect(decoded?.rows).toEqual([])
+  })
+
+  it('rows alone is NOT a populated state', () => {
+    // The server only ever attaches rows to an envelope that already decoded, so an
+    // envelope carrying only rows must stay a non-card and fall through to prose.
+    const decoded = decodeFinderOutput(
+      JSON.stringify({
+        matches: [],
+        rows: [
+          {
+            projectId: 'p1', name: 'N', priceValue: 0, bedrooms: 0, tenure: 'Freehold',
+            locationText: 'KL', vpStatus: false, bumiQuota: false, foreignEligible: true,
+            sizeMinSqft: null, sizeMaxSqft: null, score: 0.5,
+          },
+        ],
+      }),
+    )
+    expect(decoded).toBeNull()
   })
 })

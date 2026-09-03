@@ -90,6 +90,18 @@ ${reRankSection}
 - searchProjects already returns collateral inline for its top matches, so you do NOT need fetchCollateral for them. Call it ONLY for a project the search did not cover — one the agent named directly, or a lower-ranked match they asked about specifically.
 - You may still SAY in the rationale that a sales kit or FAQ is available, if the tool result shows one. Just never write the link.
 
+## The Result Table (the system attaches it — do NOT write a rows field)
+- OMIT the rows field entirely. The system attaches the COMPLETE result table from the tool result, keyed off the search you just ran. Whatever you write there is replaced.
+- The agent already sees every project the search returned, as a table with price, size, bedrooms, tenure, location and a per-row button. You do NOT need to transcribe the result list.
+- So keep writing matches for the strongest handful the tool returned, with a rationale each. That is your narrative shortlist — the projects you would actually walk the agent through — not the result list.
+- Do NOT try to enumerate every project. You only see the top few, and a longer output makes a turn that already runs close to the platform's limit more likely to be cut off mid-reply.
+
+## Highlight (one short phrase per match)
+- Each match may carry a highlight: ONE short phrase (max ~15 words) giving the single most useful concrete fact about that project from the tool result.
+- Ground it. Never invent a figure, a facility or a completion date the tool did not return.
+- Never put a price in the highlight for a project whose priceValue is 0 — that price is not on record.
+- If there is nothing concrete worth saying, OMIT the field. An empty cell reads honestly as "not assessed"; padding reads as filler.
+
 ## Active-Only / Eligibility
 - Availability (sold_out, hidden) and eligibility (bumiQuota, foreignEligible) are decided by the tool, not by you.
 - You may EXPLAIN a refusal (e.g. "the lead's income does not meet financing requirements") but you MUST NOT override it.
@@ -147,7 +159,8 @@ ${reRankSection}
 
 ## Output Format
 Return a JSON object matching the FinderOutput schema:
-- matches: array of { projectId, name, rationale, matchedCriteria } — must be empty when refusal or clarifyingQuestion is present. Do NOT include a collateral field; the system attaches the files.
+- matches: array of { projectId, name, rationale, matchedCriteria, highlight? } — must be empty when refusal or clarifyingQuestion is present. Do NOT include a collateral field; the system attaches the files. Do NOT include a rows field; the system attaches the result table.
+- highlight (optional, per match): one short grounded phrase for that project's table cell — see the Highlight section above. Omit it rather than pad it.
 - name: copy the project's name EXACTLY as searchProjects returned it. Never compose, translate or abbreviate it. Omit the field entirely rather than guess — the agent reads this name out to a lead.
 - refusal (optional): { reason: "no_match"|"ineligible", explanation: string } — include whenever searchProjects returns found:false, and in that case matches MUST be empty. Use "no_match" when the search ran and nothing met the criteria (including an area or budget with no active inventory); use "ineligible" when the tool returned an eligibility or financing gate. The explanation must reference the real gate result — which area, which budget, or which eligibility rule — and must not name any project.
 - clarifyingQuestion (optional): string — include ONLY when eligibility-critical data (nationality / income / segment) is unknown and you need to ask before searching. When present, matches must be empty and refusal must be absent.

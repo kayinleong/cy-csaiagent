@@ -10,6 +10,8 @@
  * legacy v4 data-stream format (`0:"token"`).
  */
 
+import { FinderRowSchema, type FinderRow } from '@/src/agents/finder/schema'
+
 /**
  * Parse one UI Message Stream SSE data line and return its text content.
  *
@@ -96,6 +98,17 @@ export interface StreamMessageMetadata {
    * project showed a different file count each time.
    */
   collateralByProject?: Record<string, Array<{ type: string; url: string }>>
+  /**
+   * The COMPLETE Finder result table for this turn (quick-kayinleong-085).
+   *
+   * Derived server-side from the searchProjects tool result, like `citations` and
+   * `collateralByProject`, because the model only ever sees `MAX_MATCHES` (8) of these and
+   * is told not to transcribe them. The client renders every row.
+   *
+   * Absent on a truncated turn — `messageMetadata` fires only on `start` and `finish`. The
+   * persisted envelope carries the rows for that case (see `attachFinderRows`).
+   */
+  finderRows?: FinderRow[]
 }
 
 /**
@@ -150,6 +163,17 @@ export function parseMessageMetadata(line: string): StreamMessageMetadata | null
         if (clean.length > 0) byProject[pid] = clean
       }
       if (Object.keys(byProject).length > 0) out.collateralByProject = byProject
+    }
+
+    // Validated ITEM BY ITEM, same discipline as collateralByProject above: one malformed
+    // row must cost that row, not the whole table. A non-array value yields no finderRows
+    // at all rather than a half-built one.
+    if (Array.isArray(m.finderRows)) {
+      const rows = m.finderRows
+        .map((r) => FinderRowSchema.safeParse(r))
+        .filter((r) => r.success)
+        .map((r) => r.data)
+      if (rows.length > 0) out.finderRows = rows
     }
 
     return Object.keys(out).length > 0 ? out : null

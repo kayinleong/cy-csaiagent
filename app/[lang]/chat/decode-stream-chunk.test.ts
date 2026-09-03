@@ -296,3 +296,55 @@ describe('quick-054: separator fires on REPEATED block ids', () => {
     ).toBe('a\n\nb\n\nc')
   })
 })
+
+// ─── quick-kayinleong-085: finderRows on the finish chunk ────────────────────
+
+describe('parseMessageMetadata: finderRows', () => {
+  const row = (i: number) => ({
+    projectId: `p${i}`,
+    name: `Project ${i}`,
+    priceValue: 0,
+    bedrooms: 0,
+    tenure: 'Freehold',
+    locationText: 'Kuala Lumpur',
+    vpStatus: false,
+    bumiQuota: false,
+    foreignEligible: true,
+    sizeMinSqft: 904,
+    sizeMaxSqft: 4855,
+    score: 0.7,
+  })
+
+  const finish = (meta: Record<string, unknown>) =>
+    JSON.stringify({ type: 'finish', messageMetadata: { pillar: 'finder', ...meta } })
+
+  it('recovers the rows from a finish chunk', () => {
+    const meta = parseMessageMetadata(finish({ finderRows: [row(1), row(2)] }))
+    expect(meta?.finderRows).toHaveLength(2)
+    expect(meta?.finderRows?.map((r) => r.projectId)).toEqual(['p1', 'p2'])
+  })
+
+  it('drops a malformed entry ITEM BY ITEM while its valid siblings survive', () => {
+    // One bad row must cost that row, not the whole table — same discipline as
+    // collateralByProject.
+    const meta = parseMessageMetadata(
+      finish({ finderRows: [row(1), { projectId: '' }, null, 'nope', row(2)] }),
+    )
+    expect(meta?.finderRows?.map((r) => r.projectId)).toEqual(['p1', 'p2'])
+  })
+
+  it('yields no finderRows for a non-array value', () => {
+    expect(parseMessageMetadata(finish({ finderRows: { p1: row(1) } }))?.finderRows).toBeUndefined()
+    expect(parseMessageMetadata(finish({ finderRows: 'p1' }))?.finderRows).toBeUndefined()
+  })
+
+  it('yields no finderRows when every entry is malformed', () => {
+    expect(parseMessageMetadata(finish({ finderRows: [{}, null] }))?.finderRows).toBeUndefined()
+  })
+
+  it('a turn with no finderRows key is unaffected', () => {
+    const meta = parseMessageMetadata(finish({ citations: ['c1'] }))
+    expect(meta?.pillar).toBe('finder')
+    expect(meta?.finderRows).toBeUndefined()
+  })
+})

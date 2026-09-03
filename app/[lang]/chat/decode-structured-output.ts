@@ -19,6 +19,7 @@ import {
   FinderOutputSchema,
   FinderMatchSchema,
   type FinderOutput,
+  type FinderRow,
 } from '@/src/agents/finder/schema'
 
 // ─── Truncated-envelope repair (quick-kayinleong-056) ─────────────────────────
@@ -395,6 +396,32 @@ export function attachCollateral(
       return { ...m, collateral: server }
     }),
   }
+}
+
+/**
+ * Attach the SERVER's complete result table to a decoded Finder output
+ * (quick-kayinleong-085).
+ *
+ * Sibling of `attachCollateral` above, with ONE deliberate difference: `attachCollateral`
+ * only enriches matches the model already emitted, whereas this ADDS rows the model never
+ * emitted at all. That is the entire point of the cap split — the model sees at most
+ * `MAX_MATCHES` (8) projects and narrates a shortlist, while the table renders every
+ * project `searchProjects` returned (up to `MAX_ROWS`). It is also why the table reads
+ * `output.rows` and not `output.matches`.
+ *
+ * Pure, and server-truth-wins: whatever the model wrote into `rows` (it is told to omit
+ * the field) is replaced.
+ *
+ * A no-op when `rows` is undefined or empty, so an older persisted turn — one written
+ * before this claim, or a turn whose rows never arrived — decodes and renders exactly as
+ * it did before, falling back to the MatchCard list.
+ */
+export function attachFinderRows(
+  output: FinderOutput,
+  rows: FinderRow[] | undefined,
+): FinderOutput {
+  if (!rows || rows.length === 0) return output
+  return { ...output, rows }
 }
 
 /**

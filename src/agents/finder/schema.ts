@@ -204,6 +204,68 @@ export const FinderMatchSchema = z.object({
    * Never a Drive API link (D-09/C2).
    */
   collateral: z.array(CollateralItemSchema).optional(),
+
+  /**
+   * One short model-authored phrase for the table's Highlight cell
+   * (quick-kayinleong-085 / D3).
+   *
+   * PRESENTATION ONLY. It must never be load-bearing for filtering, ranking or
+   * `matchedCriteria` — those are all decided by the tool. Run-to-run wording variance is
+   * accepted (the D3 decision explicitly does), which is exactly why nothing may depend on
+   * it: quick-071 is the record of what happens when a model-authored field becomes
+   * load-bearing.
+   *
+   * `.optional()` and never required, and that is not stylistic.
+   * `dropUnrenderableMatches` (app/[lang]/chat/decode-structured-output.ts) validates each
+   * match against THIS schema, so a required new field would delete every real match that
+   * omitted it — the quick-056 failure, where one over-strict requirement cost the agent
+   * their whole answer. A missing highlight degrades to an empty cell.
+   *
+   * Capped at 120 chars so a chatty model cannot blow out a table row, and rendered as
+   * plain text (never markdown, never dangerouslySetInnerHTML).
+   */
+  highlight: z.string().min(1).max(120).optional(),
+})
+
+/**
+ * ONE ROW of the Finder result table — SERVER-attached, never model-authored
+ * (quick-kayinleong-085).
+ *
+ * The model sees at most `MAX_MATCHES` (8) projects and writes a narrative shortlist into
+ * `matches`. The client table renders THIS array instead, which the route fills from the
+ * `searchProjects` tool result — so the table shows every relevant project (up to
+ * `MAX_ROWS`) without the model having to retype any of them into its output. That is the
+ * whole point of the cap split, and it is why the rows are trustworthy: they are tool
+ * truth, not a transcription.
+ *
+ * THIS IS AN ALLOWLIST, and the omissions are deliberate:
+ *   - NO `priceBand`. `priceBandFor(0) === 'under_500k'`, so every unpriced project is
+ *     labelled the cheapest band. A client that never receives the band cannot render an
+ *     unpriced project as cheap — this is D2's second hard invariant, enforced by making
+ *     the data unavailable rather than by asking a renderer to remember.
+ *   - NO `description` (2,553 chars average). It would multiply the persisted message doc
+ *     and the metadata payload by ~50x for content no cell shows.
+ *   - NO `embedding` (~8 KB per project). Never belongs in a client payload.
+ * Zod `z.object` strips anything else, so an accidental addition upstream cannot leak.
+ */
+export const FinderRowSchema = z.object({
+  /** Firestore projects/{pid} — the grounding citation (D-04) and the admin key. */
+  projectId: z.string().min(1),
+  name: z.string().min(1),
+  /** Asking price in RM. 0 means UNKNOWN — the cell renders empty, never "RM 0". */
+  priceValue: z.number(),
+  /** 0 means UNKNOWN (29 of 82 projects) — the cell renders an em dash, not "0 beds". */
+  bedrooms: z.number(),
+  tenure: z.string(),
+  locationText: z.string(),
+  vpStatus: z.boolean(),
+  bumiQuota: z.boolean(),
+  foreignEligible: z.boolean(),
+  /** Built-up sqft range from the stored ProjectDoc fields (D1). null = no size on record. */
+  sizeMinSqft: z.number().nullable().default(null),
+  sizeMaxSqft: z.number().nullable().default(null),
+  /** Stage-B dot product — carried so the client can preserve the server's ranking. */
+  score: z.number(),
 })
 
 /**
@@ -266,9 +328,26 @@ export const FinderOutputSchema = z.object({
    * When present, `matches` must be empty and `refusal` absent.
    */
   answer: z.string().min(1).optional(),
+
+  /**
+   * The complete result table — SERVER-ATTACHED, never model-authored
+   * (quick-kayinleong-085).
+   *
+   * The model is told to OMIT this field; whatever it writes is replaced by
+   * `attachFinderRows`, exactly as `collateral` is replaced by `attachCollateral`
+   * (quick-071). Rows come from the `searchProjects` tool result, so the table is complete
+   * and stable even though the model only ever saw `MAX_MATCHES` of them.
+   *
+   * Defaults to `[]`, which makes an older persisted turn decode unchanged and renders the
+   * MatchCard fallback rather than an empty table. `rows` alone is NOT a populated state
+   * in `decodeFinderOutput` — the server only attaches rows to an envelope that already
+   * decoded.
+   */
+  rows: z.array(FinderRowSchema).default([]),
 })
 
 export type FinderOutput = z.infer<typeof FinderOutputSchema>
 export type FinderMatch = z.infer<typeof FinderMatchSchema>
+export type FinderRow = z.infer<typeof FinderRowSchema>
 export type FinderRefusal = z.infer<typeof FinderRefusalSchema>
 export type CollateralItem = z.infer<typeof CollateralItemSchema>

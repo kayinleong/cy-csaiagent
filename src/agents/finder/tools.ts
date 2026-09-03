@@ -22,10 +22,12 @@
 
 import { tool } from 'ai'
 import { z } from 'zod'
-import { searchProjects, queryInventory } from '@/src/inventory/search'
+import { searchProjects, queryInventory, MAX_MATCHES } from '@/src/inventory/search'
 import { collateralRef } from '@/src/firebase/collections'
-import type { SearchResult, InventoryFilters } from '@/src/inventory/search'
+import type { SearchResult, InventoryFilters, ProjectMatch } from '@/src/inventory/search'
 import type { ProjectDoc } from '@/src/firebase/collections'
+import type { FinderRow } from './schema'
+import type { JSONValue } from '@ai-sdk/provider'
 
 // ─── Infra-failure guard (quick-kayinleong-040) ───────────────────────────────
 
@@ -142,6 +144,45 @@ async function runReadOnly<T>(
 // ─── 1. makeSearchProjectsTool ────────────────────────────────────────────────
 
 /**
+ * Request-scoped collector the searchProjects tool writes its FULL row set into
+ * (quick-kayinleong-085).
+ *
+ * WHY A SINK AND A `toModelOutput` BOTH EXIST — they do different jobs and neither is
+ * redundant:
+ *   - `toModelOutput` bounds what the MODEL sees (the context/token constraint).
+ *   - the sink is what the ROUTE reads, to put rows on `messageMetadata` and into the
+ *     persisted envelope.
+ * Whether `onStepFinish` receives the raw or the projected tool output is an SDK-semantics
+ * question this claim cannot settle offline, and getting it wrong renders an empty table.
+ * Reading an explicit sink takes that question off the critical path. Do not delete either
+ * mechanism as duplication.
+ */
+export type FinderRowSink = { rows: FinderRow[] }
+
+/**
+ * Project a `ProjectMatch` down to the client row allowlist.
+ *
+ * Nothing is computed here — every value is copied from the tool result. `priceBand`,
+ * `description` and `embedding` are dropped on purpose; see `FinderRowSchema`.
+ */
+function toFinderRow(m: ProjectMatch): FinderRow {
+  return {
+    projectId: m.projectId,
+    name: m.name,
+    priceValue: m.priceValue,
+    bedrooms: m.bedrooms,
+    tenure: m.tenure,
+    locationText: m.locationText,
+    vpStatus: m.vpStatus,
+    bumiQuota: m.bumiQuota,
+    foreignEligible: m.foreignEligible,
+    sizeMinSqft: m.sizeMinSqft,
+    sizeMaxSqft: m.sizeMaxSqft,
+    score: m.score,
+  }
+}
+
+/**
  * AI SDK tool wrapping `searchProjects` — the two-stage active/eligibility filter
  * (Stage A: deterministic Firestore) + in-memory dot-product re-rank (Stage B).
  *
@@ -152,8 +193,11 @@ async function runReadOnly<T>(
  * searchProjects ALWAYS enforces status:'active' (D-03 / grounding mandate).
  *
  * @param userLang  Injected via closure for future i18n of tool descriptions.
+ * @param sink      Optional request-scoped collector for the FULL row set. Optional so the
+ *                  offline/test path and `ReturnType<typeof finderAgent.makeTools>` are
+ *                  unchanged.
  */
-export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh') {
+export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: FinderRowSink) {
   // userLang is available for future description localisation
   void userLang
 
@@ -230,7 +274,7 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh') {
           ),
         )
 
-        return {
+        const enriched = {
           ...result,
           matches: result.matches.map((m, i) =>
             i < top.length && collaterals[i].length > 0
@@ -238,7 +282,42 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh') {
               : m,
           ),
         }
+
+        // Hand the ROUTE the complete row set (quick-kayinleong-085). REPLACE, never
+        // append: the prompt already tells the model that only the CURRENT search result
+        // counts, so the last search of the turn is the table. Appending would show a
+        // narrowed re-search stacked on top of the query it replaced.
+        if (sink) sink.rows = enriched.matches.map(toFinderRow)
+
+        return enriched
       }),
+
+    /**
+     * What the MODEL sees — at most `MAX_MATCHES` entries (quick-kayinleong-085).
+     *
+     * `execute` now returns up to `MAX_ROWS` (100) matches so the client table is
+     * complete. That array must NOT reach the model: the tool result is re-sent on every
+     * step of the 5-step Finder loop, and 82 uncapped projects measured ~10,100 tokens per
+     * step — ~50k tokens on one turn against a 300,000/24h TOKEN_CAP.
+     *
+     * Per-match shape is preserved exactly (including the inline collateral on the top
+     * `INLINE_COLLATERAL_MATCHES`), so no prompt rule changes; only the LENGTH is bounded.
+     * A found:false result passes through untouched — the refusal signal is the payload.
+     *
+     * Returns the SDK's tool-result envelope (`{ type: 'json', value }`), which is what
+     * `LanguageModelV2ToolResultOutput` requires — verified against the installed
+     * ai@5.0.193 types at node_modules/@ai-sdk/provider-utils/dist/index.d.ts:772.
+     */
+    toModelOutput: (output) => {
+      if (!output || typeof output !== 'object' || !('found' in output) || !output.found) {
+        return { type: 'json', value: output as unknown as JSONValue }
+      }
+      const bounded = {
+        ...output,
+        matches: (output.matches ?? []).slice(0, MAX_MATCHES),
+      }
+      return { type: 'json', value: bounded as unknown as JSONValue }
+    },
   })
 }
 

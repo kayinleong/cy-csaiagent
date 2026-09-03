@@ -37,7 +37,8 @@
  *     Sort by score descending. Inventory is assumed ≤ a few hundred projects (A5 in
  *     03-RESEARCH.md) so in-memory scoring is viable and avoids the findNearest
  *     range-filter limitation (Pitfall 6).
- *     A MIN_RELEVANCE floor then drops noise, and MAX_MATCHES caps the payload.
+ *     A MIN_RELEVANCE floor then drops noise, and MAX_ROWS caps the returned payload
+ *     (MAX_MATCHES separately caps what reaches the MODEL — see both constants).
  *
  *   SEGMENT WEIGHTS (FIND-09):
  *     applySegmentWeights() reorders Stage-B output WITHIN a relevance tier:
@@ -126,6 +127,13 @@ export interface ProjectMatch {
   foreignEligible: boolean
   bedrooms: number
   locationText: string
+  /**
+   * Built-up sqft range, read STRAIGHT from the stored `ProjectDoc` fields
+   * (quick-kayinleong-085 / D1) — never re-parsed from `description` here or at render
+   * time. `null` means the project has no size on record; the table shows an empty cell.
+   */
+  sizeMinSqft: number | null
+  sizeMaxSqft: number | null
   /** Dot-product score from Stage B (normalized unit vectors → range 0–1). */
   score: number
   /** Criteria fields that drove this match — grounding citation. */
@@ -209,18 +217,42 @@ export const DSR_MULTIPLE = 4.5
 export const MIN_RELEVANCE = 0.20
 
 /**
- * Maximum number of projects returned to the model (quick-kayinleong-050).
+ * Maximum number of projects handed to the MODEL (quick-kayinleong-050).
  *
- * Sizing: the previous uncapped result was all 83 active projects ≈ 36,400 chars
- * ≈ 10,100 tokens, and the tool result is re-sent on EVERY step of the Finder's
- * `stopWhen: stepCountIs(5)` loop — so one Finder turn could burn ~50k tokens on
- * inventory payload alone. At ~122 tokens/project, 8 matches is ~1,000 tokens/step.
+ * ⚠ THIS IS NO LONGER THE SLICE. As of quick-kayinleong-085 `searchProjects` returns up to
+ * `MAX_ROWS` and this constant is consumed in `src/agents/finder/tools.ts`, by the
+ * `toModelOutput` projection that bounds what reaches the model's context. The cap was
+ * split rather than raised, because the two consumers have opposite requirements: the
+ * client table wants every relevant row, the model context cannot afford them.
+ *
+ * Sizing (unchanged, and the reason the MODEL cap has to stay small): the previous
+ * uncapped result was all 83 active projects ≈ 36,400 chars ≈ 10,100 tokens, and the tool
+ * result is re-sent on EVERY step of the Finder's `stopWhen: stepCountIs(5)` loop — so one
+ * Finder turn could burn ~50k tokens on inventory payload alone, against a `TOKEN_CAP` of
+ * 300,000 per 24h per agent (`src/ratelimit/window.ts`). At ~122 tokens/project, 8 matches
+ * is ~1,000 tokens/step.
  *
  * Why 8 and not 3: the model still has to apply segment/eligibility judgement and to
  * narrate a shortlist, and a hard cap of 3 leaves no headroom when the top entries are
  * poor narrative fits. 8 is enough to choose from, ~90% smaller than the status quo.
  */
 export const MAX_MATCHES = 8
+
+/**
+ * Maximum number of matches `searchProjects` returns — the CLIENT table's payload ceiling
+ * (quick-kayinleong-085).
+ *
+ * This is a sanity ceiling, not a relevance decision. The corpus is 82 active projects
+ * today, so 100 means "return everything relevant" while still bounding the array that
+ * reaches `messageMetadata` and the persisted message doc (a 50-row envelope is roughly
+ * 10-12 KB of JSON against Firestore's 1 MB doc limit). Revisit above a few hundred
+ * projects, at which point the honest fix is server-side pagination rather than a bigger
+ * number here.
+ *
+ * Returning more rows costs ZERO extra Firestore reads: Stage A already pulls every active
+ * doc into memory and scoring is an in-memory dot product.
+ */
+export const MAX_ROWS = 100
 
 /**
  * Width of a "relevance tier" for segment weighting (quick-kayinleong-050).
@@ -756,7 +788,11 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   // ── TOP-N CAP (quick-kayinleong-050) ─────────────────────────────────────
   // Uncapped, this returned all 83 active projects ≈ 10,100 tokens, re-sent on every
   // step of the Finder's 5-step loop. See MAX_MATCHES for the sizing.
-  const reranked = applySegmentWeights(relevant, criteria.segment).slice(0, MAX_MATCHES)
+  //
+  // quick-kayinleong-085 SPLIT the cap: this slice is now MAX_ROWS (the client table's
+  // ceiling) and MAX_MATCHES bounds only what `toModelOutput` hands the model. Slicing
+  // here at MAX_MATCHES was capping the TABLE at 8 rows for a query with 50 real answers.
+  const reranked = applySegmentWeights(relevant, criteria.segment).slice(0, MAX_ROWS)
 
   // ── Map to ProjectMatch ──────────────────────────────────────────────────
   const matches: ProjectMatch[] = reranked.map(({ id, doc, score }) => ({
@@ -770,6 +806,10 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
     foreignEligible: doc.foreignEligible,
     bedrooms: doc.bedrooms,
     locationText: doc.locationText,
+    // Stored fields, coerced to null for a doc written before the backfill ran
+    // (quick-kayinleong-085 / D1).
+    sizeMinSqft: typeof doc.sizeMinSqft === 'number' ? doc.sizeMinSqft : null,
+    sizeMaxSqft: typeof doc.sizeMaxSqft === 'number' ? doc.sizeMaxSqft : null,
     score,
     // GROUNDING (quick-kayinleong-050): echo ONLY criteria genuinely applied to THIS
     // project. This object is rendered under the heading "Matched criteria" by

@@ -1100,8 +1100,15 @@ describe('quick-kayinleong-050: relevance floor, top-N cap, and segment weightin
     }
   })
 
-  it('results are capped at MAX_MATCHES (payload guard — was all 83 active projects)', async () => {
-    // 12 relevant projects → must be truncated to MAX_MATCHES.
+  it('results are capped at MAX_ROWS, not MAX_MATCHES (quick-085 cap split)', async () => {
+    // The cap was SPLIT, not raised. MAX_MATCHES (8) now bounds only what
+    // `toModelOutput` hands the model (src/agents/finder/tools.ts); the returned array is
+    // the client table's payload and slices at MAX_ROWS. Slicing here at MAX_MATCHES was
+    // capping a 50-answer query's TABLE at 8 rows.
+    const { searchProjects, MAX_MATCHES, MAX_ROWS } = await import('@/src/inventory/search')
+    expect(MAX_ROWS).toBeGreaterThan(MAX_MATCHES)
+
+    // More than MAX_MATCHES but fewer than MAX_ROWS → nothing is truncated.
     mockProjectsGet.mockResolvedValueOnce(
       makeAdHocSnap(
         Array.from({ length: 12 }, (_, i) => ({
@@ -1111,13 +1118,50 @@ describe('quick-kayinleong-050: relevance floor, top-N cap, and segment weightin
       ),
     )
     mockEmbedText.mockResolvedValueOnce(STUB_QUERY_VECTOR)
+    const kept = await searchProjects(BASE)
+    expect(kept.found).toBe(true)
+    if (kept.found) expect(kept.matches.length).toBe(12)
 
-    const { searchProjects, MAX_MATCHES } = await import('@/src/inventory/search')
+    // More than MAX_ROWS → truncated to exactly MAX_ROWS.
+    mockProjectsGet.mockResolvedValueOnce(
+      makeAdHocSnap(
+        Array.from({ length: MAX_ROWS + 7 }, (_, i) => ({
+          id: `proj-many-${i}`,
+          doc: { ...FIXTURES['proj-active-a'], priceValue: 500_000 + i },
+        })),
+      ),
+    )
+    mockEmbedText.mockResolvedValueOnce(STUB_QUERY_VECTOR)
+    const capped = await searchProjects(BASE)
+    expect(capped.found).toBe(true)
+    if (capped.found) expect(capped.matches.length).toBe(MAX_ROWS)
+  })
+
+  it('a match carries the stored size fields, defaulting to null (quick-085 / D1)', async () => {
+    // The table reads these; nothing re-parses `description` at render time.
+    mockProjectsGet.mockResolvedValueOnce(
+      makeAdHocSnap([
+        {
+          id: 'proj-sized',
+          doc: { ...FIXTURES['proj-active-a'], sizeMinSqft: 904, sizeMaxSqft: 4855 },
+        },
+        // No size fields at all — a doc written before the backfill ran.
+        { id: 'proj-unsized', doc: { ...FIXTURES['proj-active-a'] } },
+      ]),
+    )
+    mockEmbedText.mockResolvedValueOnce(STUB_QUERY_VECTOR)
+
+    const { searchProjects } = await import('@/src/inventory/search')
     const result = await searchProjects(BASE)
 
     expect(result.found).toBe(true)
     if (result.found) {
-      expect(result.matches.length).toBe(MAX_MATCHES)
+      const sized = result.matches.find((m) => m.projectId === 'proj-sized')
+      const unsized = result.matches.find((m) => m.projectId === 'proj-unsized')
+      expect(sized?.sizeMinSqft).toBe(904)
+      expect(sized?.sizeMaxSqft).toBe(4855)
+      expect(unsized?.sizeMinSqft).toBeNull()
+      expect(unsized?.sizeMaxSqft).toBeNull()
     }
   })
 

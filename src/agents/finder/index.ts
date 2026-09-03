@@ -39,6 +39,7 @@ import {
   makeQueryInventoryTool,
   makeFetchCollateralTool,
 } from './tools'
+import type { FinderRowSink } from './tools'
 import { FinderOutputSchema } from './schema'
 import type { FinderOutput } from './schema'
 import type { SearchResult } from '@/src/inventory/search'
@@ -107,14 +108,24 @@ export const finderAgent = {
    * @param userLang  Injected via closure so tools can localise descriptions.
    * @param agentUid  The authenticated agent's UID (for audit / future tool needs).
    * @param leadId    The current lead ID (for future per-lead tools if needed).
+   * @param rowSink   Request-scoped collector the searchProjects tool fills with the FULL
+   *                  row set (quick-085). Optional, so this signature — and therefore
+   *                  `ReturnType<typeof finderAgent.makeTools>`, which app/api/chat/route.ts
+   *                  declares its `agentTools` union from — is unchanged for callers that
+   *                  do not want rows.
    */
-  makeTools(userLang: 'en' | 'ms' | 'zh', agentUid?: string, leadId?: string) {
+  makeTools(
+    userLang: 'en' | 'ms' | 'zh',
+    agentUid?: string,
+    leadId?: string,
+    rowSink?: FinderRowSink,
+  ) {
     // agentUid and leadId are available for future tool needs
     void agentUid
     void leadId
 
     return {
-      searchProjects: makeSearchProjectsTool(userLang),
+      searchProjects: makeSearchProjectsTool(userLang, rowSink),
       queryInventory: makeQueryInventoryTool(userLang),
       fetchCollateral: makeFetchCollateralTool(userLang),
     }
@@ -156,6 +167,9 @@ export const finderAgent = {
     // return a placeholder (the real streaming path goes through route.ts).
     const defaultOutput: FinderOutput = {
       matches: [],
+      // SERVER-attached on the streaming path only (quick-085) — the offline path has no
+      // request-scoped row sink, so the table falls back to MatchCard.
+      rows: [],
     }
     const validated = FinderOutputSchema.parse(defaultOutput)
     return { output: validated }
@@ -203,6 +217,7 @@ function buildOutputFromSearchResult(
 
       return {
         matches: [],
+        rows: [],
         clarifyingQuestion: questions.join(' '),
       }
     }
@@ -226,6 +241,7 @@ function buildOutputFromSearchResult(
 
       return {
         matches: [],
+        rows: [],
         refusal: {
           reason: 'ineligible',
           explanation,
@@ -236,6 +252,7 @@ function buildOutputFromSearchResult(
     // no_match
     return {
       matches: [],
+      rows: [],
       refusal: {
         reason: 'no_match',
         explanation:
@@ -265,7 +282,8 @@ function buildOutputFromSearchResult(
     }
   })
 
-  return { matches }
+  // `rows` is attached by the route from the tool result — not composed here.
+  return { matches, rows: [] }
 }
 
 // ─── Rationale builder ────────────────────────────────────────────────────────
