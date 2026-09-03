@@ -270,17 +270,29 @@ Everything that reads the Finder path. Enumerated, not assumed:
 | check | result |
 |---|---|
 | `npx tsc --noEmit` | exit 0 |
-| `npx vitest run` | **1248 passed**, 0 failed, 197 skipped (79 files) — ten consecutive clean runs |
+| `npx vitest run` | **1248 passed**, 0 failed, 197 skipped (79 files) — 22 of 25 runs clean; the 3 failing runs are a load-induced timeout, diagnosed below |
 | `npx eslint app src tests` | **0 errors**, 77 warnings (all pre-existing; same count as quick-084 recorded) |
 | `npx eslint scripts` | 49 errors — **all pre-existing** in `scripts/scrape-skool/*`, confirmed by re-running with `scripts/` stashed. `scripts/backfill-project-sizes.ts` linted alone: clean |
 | `npm run build` | `✓ Compiled successfully in 22.1s` |
 
-**One unexplained single-test blip, reported rather than buried.** One full-suite run showed
-`1 failed | 1247 passed`. I captured only the summary line, so I do not know which test it was —
-that is a real gap in this report. Ten subsequent full runs are clean at 1248/1248. STATE.md
-notes a prior flake in `src/agents/reply/reply.test.ts` from stale `it.fails` markers, but those
-markers are no longer in that file (only its header comment mentions them), so I cannot attribute
-the blip to it. If it recurs, capture the test name before re-running.
+**A load-induced timeout flake, diagnosed rather than hand-waved.** Three of 25 full-suite runs
+came back with 1, 1 and 4 failures. I initially captured only the summary line — a real reporting
+gap — then reproduced it deliberately by running two full suites concurrently, which named it:
+
+| symptom | evidence |
+|---|---|
+| the failure is always a TIMEOUT, never an assertion | `Error: Test timed out in 5000ms` (vitest's default `testTimeout`; the repo sets none) |
+| the affected tests do a dynamic `await import(...)` INSIDE the test body | `reply.test.ts:53`, so cold module resolution is charged against the 5s budget |
+| the flaking runs have ~3x the module-import time | 57.9s / 63.7s / 49.6s vs ~20s on every clean run |
+| the two files involved touch NOTHING this claim changed | `src/agents/reply` imports nothing from `src/inventory` or `src/agents/finder`; the only file of mine in their graph is `src/firebase/collections.ts`, whose entire runtime diff is two optional TYPE-only fields |
+| run in isolation under the same concurrency, they pass | 3 concurrent runs of just those two files: 18 passed, 0 failed, three times |
+| there is prior record of it | STATE.md notes a flake in this exact file after quick-084 |
+
+**Honest caveat about my own contribution:** this claim adds 4 test files and ~98 tests, which
+makes the whole suite heavier. I did not cause the timeout, but a heavier suite raises the odds of
+a pre-existing 5s-budget test tripping on a loaded machine. The cheap remedy — hoist those dynamic
+imports into `beforeAll`, or set an explicit `testTimeout` — is a separate claim, not a
+minimal-fix edit here. Sequential single runs are clean 22 times out of 22.
 
 ## Known gaps
 

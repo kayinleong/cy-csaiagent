@@ -113,8 +113,10 @@ Mutation 8 found a real gap the plan predicted: a `priceBand` leak into `FinderR
 hazard D2 rests on - passed the entire 1,412-test suite silently. That gap is now closed by a
 schema-shape allowlist assertion.
 
-Gates: `tsc --noEmit` exit 0 - `vitest run` 1248 passed / 0 failed (ten consecutive clean runs) -
-`eslint app src tests` 0 errors, 77 pre-existing warnings - `npm run build` compiled successfully.
+Gates: `tsc --noEmit` exit 0 - `vitest run` 1248 passed / 0 failed (22 of 25 runs clean; the 3
+others are a pre-existing 5s-timeout flake in `src/agents/reply/reply.test.ts` under machine load,
+diagnosed in `CLAIM.md`) - `eslint app src tests` 0 errors, 77 pre-existing warnings -
+`npm run build` compiled successfully.
 
 Full regression report, mutation table, parse audit and gate table: `CLAIM.md`.
 
