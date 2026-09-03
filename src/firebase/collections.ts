@@ -267,6 +267,31 @@ export interface ProjectDoc {
    * structured bedroom-count filtering in `queryInventory` (FIND-07).
    */
   bedrooms: number
+  /**
+   * Built-up size range in square feet, across ALL layouts the project offers
+   * (quick-kayinleong-085 / D1). `sizeMinSqft` is the smallest layout, `sizeMaxSqft` the
+   * largest — e.g. a project offering "1 Bedroom: 904 sqft | Penthouses: 2,900 – 4,855
+   * sqft" stores 904 / 4855.
+   *
+   * `null` / absent means UNKNOWN, not zero: 21 of 82 project descriptions state no sqft
+   * figure at all. The Finder table renders an empty Size cell for those rows.
+   *
+   * Populated deterministically — never model-authored. `extractSizeRange` in
+   * `src/inventory/size-extract.ts` parses them out of `description`, and
+   * `scripts/backfill-project-sizes.ts` persists them. Nothing at render time re-parses
+   * prose; the table reads these fields.
+   *
+   * DELIBERATELY NOT in `EMBEDDING_RELEVANT_FIELDS` (`src/inventory/crud.ts`) per D1. The
+   * sqft text already lives inside the embedded `description`, so the semantic content is
+   * present; adding numeric mirrors would only force a needless re-embed of all 82
+   * projects. Do not add them there without re-deciding that.
+   *
+   * ⚠ New inventory imports do NOT populate these (`createProject` and
+   * `scripts/scrape-skool/to-inventory.ts` are untouched by D1's one-off scope). Re-run
+   * the backfill after an import, or the new projects show an empty Size cell.
+   */
+  sizeMinSqft?: number | null
+  sizeMaxSqft?: number | null
   /** 1024-d normalized vector (Gemini gemini-embedding-001) */
   embedding: number[]
 }

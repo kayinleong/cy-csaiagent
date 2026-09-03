@@ -712,6 +712,38 @@ describe('quick-kayinleong-050: locationPref is a hard filter', () => {
     expect(result.found).toBe(true)
   })
 
+  it('D4: a REGION preference ("Klang Valley") skips the gate and claims no location match', async () => {
+    // quick-kayinleong-085 / D4. "Klang Valley" is not a neighbourhood — every active D2
+    // project is inside it — but the gate matched it as a literal substring of
+    // name + locationText, so only 5 of 82 real projects survived and 3 once a budget
+    // applied. That was the reported "too few results" defect; MAX_MATCHES never engaged.
+    //
+    // Skipping the gate is only honest if nothing then claims the match, hence the
+    // locationPref assertion: same contract as the bare-"KL" case above.
+    const { searchProjects } = await import('@/src/inventory/search')
+    const QUERY = {
+      ...CHERAS_QUERY,
+      priceMax: null,
+      bedrooms: null,
+      freeText: 'show me a list of 1mil property within Klang Valley',
+    }
+
+    const withRegion = await searchProjects({ ...QUERY, locationPref: 'Klang Valley' })
+    const withNoPref = await searchProjects({ ...QUERY, locationPref: null })
+
+    expect(withRegion.found).toBe(true)
+    expect(withNoPref.found).toBe(true)
+    if (withRegion.found && withNoPref.found) {
+      // Identical result sets: stating the region filtered nothing out. (Comparing to the
+      // no-preference run is stronger than a count — it cannot be satisfied by a gate that
+      // happens to keep the same NUMBER of different projects.)
+      expect(withRegion.matches.map((m) => m.projectId)).toEqual(
+        withNoPref.matches.map((m) => m.projectId),
+      )
+      expect(withRegion.matches.every((m) => m.matchedCriteria.locationPref === null)).toBe(true)
+    }
+  })
+
   it('proximity prose does NOT count as a location match (false-positive guard)', async () => {
     // HAZARD: locationText is prose that name-drops NEARBY landmarks. 27 of 83 active
     // projects mention KLCC; most are not in KLCC. A naive substring match would match
@@ -832,9 +864,12 @@ describe('quick-kayinleong-050: priceMax/priceMin are hard filters', () => {
     }
   })
 
-  it('an UNPRICED project (priceValue 0 = unknown) is excluded when a budget is stated', async () => {
-    // 32 of 83 active projects carry priceValue 0. That means UNKNOWN, not free — we
-    // must not assert "within budget" for a price we do not hold.
+  it('D2: an UNPRICED project (priceValue 0 = unknown) is ADMITTED when a budget is stated', async () => {
+    // REVERSED by quick-kayinleong-085 / D2. This case previously asserted the opposite.
+    // 32 of 82 active projects carry priceValue 0, which means UNKNOWN — and "unknown" is
+    // not "out of range". Excluding them hid 32 of 82 projects from the driving query.
+    // The honesty half of the decision is the next test: an admitted project must not
+    // claim the budget match.
     mockProjectsGet.mockResolvedValueOnce(makeProjectSnap(['proj-unpriced', 'proj-active-b']))
 
     const { searchProjects } = await import('@/src/inventory/search')
@@ -842,7 +877,40 @@ describe('quick-kayinleong-050: priceMax/priceMin are hard filters', () => {
 
     expect(result.found).toBe(true)
     if (result.found) {
-      expect(result.matches.map((m) => m.projectId)).not.toContain('proj-unpriced')
+      expect(result.matches.map((m) => m.projectId)).toContain('proj-unpriced')
+    }
+  })
+
+  it('D2: an unpriced survivor claims NO budget match while a priced one does', async () => {
+    // The invariant the loosening rests on. `matchedCriteria` is rendered under "Matched
+    // criteria" and handed to the model verbatim, so a blanket `priceApplied` here would
+    // make a project whose price we do not hold assert "within budget (max RM800k)".
+    mockProjectsGet.mockResolvedValueOnce(makeProjectSnap(['proj-unpriced', 'proj-active-b']))
+
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({ ...BASE, priceMax: 800_000 })
+
+    expect(result.found).toBe(true)
+    if (result.found) {
+      const unpriced = result.matches.find((m) => m.projectId === 'proj-unpriced')
+      const priced = result.matches.find((m) => m.projectId === 'proj-active-b')
+      expect(unpriced).toBeDefined()
+      expect(priced).toBeDefined()
+      expect(unpriced!.matchedCriteria.priceMax).toBeNull()
+      expect(priced!.matchedCriteria.priceMax).toBe(800_000)
+    }
+  })
+
+  it('D2: an over-budget PRICED project is still excluded', async () => {
+    // The loosening applies only to unknown prices. A known 950k must not survive 800k.
+    mockProjectsGet.mockResolvedValueOnce(makeProjectSnap(['proj-active-a', 'proj-active-b']))
+
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({ ...BASE, priceMax: 800_000 })
+
+    expect(result.found).toBe(true)
+    if (result.found) {
+      expect(result.matches.map((m) => m.projectId)).not.toContain('proj-active-a')
     }
   })
 

@@ -17,11 +17,13 @@
  *     An empty post-gate set → {found:false, reason:'no_match'} — the Finder refuses
  *     rather than substituting a different area.
  *
- *   PRICE GATE (quick-kayinleong-050):
+ *   PRICE GATE (quick-kayinleong-050, loosened by quick-kayinleong-085 / D2):
  *     `priceMin` / `priceMax` were likewise never applied — "budget 800k" did nothing.
  *     They are now hard in-memory bounds on `priceValue`. Projects with an UNKNOWN price
- *     (`priceValue <= 0`, ~39% of the imported corpus) are excluded whenever a bound is
- *     stated: a hard filter cannot assert "within budget" for a price we do not hold.
+ *     (`priceValue <= 0`, 32 of the 82 imported) are ADMITTED — "unknown" is not "out of
+ *     range" — and `matchedCriteria.priceMax` is nulled per project so none of them
+ *     claims a budget match. See `projectMatchesPrice` for the two invariants that makes
+ *     safe.
  *
  *   AFFORDABILITY (FIND-10 — T-03-06):
  *     `affordabilityCeiling(monthlyIncome)` filters the Stage-A set in-memory by priceValue.
@@ -247,6 +249,37 @@ const LOCATION_QUALIFIER_TOKENS = new Set([
 ])
 
 /**
+ * Multi-token REGION names that contain essentially the whole D2 corpus
+ * (quick-kayinleong-085 / D4).
+ *
+ * `LOCATION_QUALIFIER_TOKENS` above handles the single-token case ("KL", "Selangor").
+ * It cannot handle "Klang Valley", because neither word is a qualifier on its own — so
+ * the gate matched it as a literal substring of `name + locationText` and behaved like a
+ * narrow neighbourhood filter. MEASURED against the real 82-project corpus:
+ * "Klang Valley" survived 5 of 82 projects, and 3 of 82 once a RM1,000,000 budget was
+ * applied. That was the reported defect ("show me a list of 1mil property within Klang
+ * Valley" returned almost nothing), NOT the MAX_MATCHES cap — the cap never engaged.
+ *
+ * Every active D2 project sits inside this region, so a region name carries no
+ * discriminating information. The correct behaviour is identical to the existing bare
+ * "Kuala Lumpur" handling: nothing discriminating survives, so the gate is SKIPPED (all
+ * candidates pass) and `matchedCriteria.locationPref` stays null so no row claims a
+ * location match it cannot back up.
+ *
+ * This is deliberately NOT a region-to-area mapping table. No adjacency or drive-time
+ * data exists anywhere in this codebase and inventing one was ruled out of scope (D4 and
+ * the KNOWN LIMITATION note on `locationNeedles` below). Adding a region here means
+ * "do not filter on this", never "expand this into a list of areas".
+ */
+const REGION_ALIASES = new Set([
+  'klang valley',
+  'greater kl',
+  'greater kuala lumpur',
+  'lembah klang',
+  '巴生谷',
+])
+
+/**
  * Generic place-type prefixes (Malay + property boilerplate).
  *
  * These are excluded from the SINGLE-TOKEN fallback tier only — never from the phrase
@@ -377,10 +410,22 @@ export function locationNeedles(pref: string): LocationNeedleGroup[] | null {
     const segment = normalizeLocationText(rawSegment)
     if (segment.length === 0) continue
 
+    // REGION tier (quick-kayinleong-085 / D4). A segment that IS a region name carries no
+    // discriminating information — see REGION_ALIASES. Dropped exactly like an
+    // all-qualifier segment, so a pref made only of regions yields no groups and this
+    // function returns null (gate skipped).
+    if (REGION_ALIASES.has(segment)) continue
+
     const meaningful = segment
       .split(' ')
       .filter((t) => t.length > 0 && !LOCATION_QUALIFIER_TOKENS.has(t))
     if (meaningful.length === 0) continue
+
+    // Also drop a segment that REDUCES to a region once qualifier tokens are removed, so
+    // "in the Klang Valley area" behaves the same as bare "Klang Valley". Checked after
+    // the raw check above because the two catch different phrasings: "greater kl" only
+    // matches raw (its "kl" is a qualifier), "in the klang valley area" only matches here.
+    if (REGION_ALIASES.has(meaningful.join(' '))) continue
 
     const tokens = meaningful.filter(
       (t) =>
@@ -415,25 +460,42 @@ export function projectMatchesLocation(doc: ProjectDoc, needles: LocationNeedleG
  * Hard price-bound test against the project's real `priceValue` field (RM).
  * Both bounds are INCLUSIVE — a project priced at exactly `priceMax` is within budget.
  *
- * UNPRICED PROJECTS (`priceValue <= 0`) ARE EXCLUDED whenever a bound is stated.
- * 32 of 83 active projects carry priceValue 0, which means UNKNOWN, not free. This is a
- * deliberate and contestable call:
- *   - Including them would hand a lead who said "budget 800k" projects whose price we do
- *     not hold, and `buildRationale` renders those as "Price: RM0k". That is precisely the
- *     false grounding claim this change exists to remove.
- *   - Excluding them can turn a DATA GAP into a "no match". That is the accepted cost; the
- *     remedy is to backfill `priceValue`, not to loosen the gate.
+ * UNPRICED PROJECTS (`priceValue <= 0`) PASS the bound test (quick-kayinleong-085 / D2).
+ * 32 of 82 active projects carry priceValue 0, which means UNKNOWN, not free — and
+ * "unknown" is not the same as "out of range".
  *
- * `priceBand` was considered as a coarser fallback and REJECTED: it is derived via
- * `priceBandFor(priceValue)` at import (scripts/scrape-skool/to-inventory.ts:262,374) and
- * `priceBandFor(0) === 'under_500k'`, so every unpriced project is labelled 'under_500k'
- * (34 of 83 sit in that band against 32 unpriced). Filtering on priceBand would actively
- * assert that unpriced projects are cheap — worse than excluding them.
+ * This reverses the earlier call. Until 085 this function returned false for them
+ * whenever a bound was stated, and the comment here said "the remedy is to backfill
+ * priceValue, not to loosen the gate". THE USER WAS SHOWN THAT TRADEOFF AND CHOSE TO
+ * LOOSEN IT: excluding an unpriced project turns a DATA GAP into an invisible project,
+ * and for the driving query ("1mil within Klang Valley") that silently hid 32 of 82
+ * projects — 18 priced survivors versus 50 with unpriced admitted.
+ *
+ * The choice is only safe because of two HARD INVARIANTS enforced elsewhere. Breaking
+ * either one turns this into a false grounding claim:
+ *   1. `matchedCriteria.priceMax` is set PER PROJECT in `searchProjects` below — the
+ *      requested bound only when this project's own `priceValue` is a real positive
+ *      number, null otherwise. An unpriced survivor must never report a verified budget
+ *      match.
+ *   2. The price cell renders EMPTY for these rows (`formatPrice` in
+ *      app/[lang]/chat/match-table.tsx returns null for `priceValue <= 0`), and
+ *      `priceBand` is never used as a price fallback anywhere. `priceBand` is derived via
+ *      `priceBandFor(priceValue)` at import and `priceBandFor(0) === 'under_500k'`, so it
+ *      labels every unpriced project as the cheapest band. That is why `priceBand` is
+ *      excluded from `FinderRow` entirely — a client that never receives it cannot render
+ *      an unpriced project as cheap.
+ *
+ * Known prices are still compared exactly, and both bounds remain INCLUSIVE — a project
+ * priced at exactly `priceMax` is within budget.
+ *
+ * Exported so `tests/finder-corpus-gates.test.ts` can run it directly over the real
+ * 82-project corpus.
  */
-function projectMatchesPrice(doc: ProjectDoc, priceMin: number | null, priceMax: number | null): boolean {
+export function projectMatchesPrice(doc: ProjectDoc, priceMin: number | null, priceMax: number | null): boolean {
   if (priceMin === null && priceMax === null) return true
   const price = doc.priceValue
-  if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return false
+  // Unknown price — admitted, not asserted. See invariants 1 and 2 above.
+  if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return true
   if (priceMax !== null && price > priceMax) return false
   if (priceMin !== null && price < priceMin) return false
   return true
@@ -718,8 +780,19 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
     // without changing them (both are null-guarded).
     matchedCriteria: {
       segment: criteria.segment,
-      // Only when the price gate ran — and every survivor has a KNOWN price within bounds.
-      priceMax: priceApplied ? criteria.priceMax : null,
+      // Only when the price gate ran AND this project's own price is actually known
+      // (quick-kayinleong-085 / D2). The gate now ADMITS unpriced projects, so the old
+      // blanket `priceApplied ? criteria.priceMax : null` would have made a project whose
+      // price we do not hold claim a verified budget match — the exact false grounding
+      // claim `matchedCriteria` exists to prevent. This is invariant 1 of two named in
+      // the projectMatchesPrice doc comment above.
+      priceMax:
+        priceApplied &&
+        typeof doc.priceValue === 'number' &&
+        Number.isFinite(doc.priceValue) &&
+        doc.priceValue > 0
+          ? criteria.priceMax
+          : null,
       nationality: criteria.nationality,
       bumiputera: criteria.bumiputera,
       // Only when the location gate ran — and every survivor passed it.
