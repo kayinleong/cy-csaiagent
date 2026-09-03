@@ -118,3 +118,17 @@ Do **not** build a region→area mapping table — explicitly out of scope.
 - `./CLAUDE.md` — hard constraints, Next.js 16 gotchas
 - `.planning/TSD.md` §3–§4 — component map, Firestore data model
 </canonical_refs>
+
+---
+
+## D3 addendum — confirmed 2026-09-03
+
+The model can only author a `highlight` for the matches it actually sees, and the token cap holds
+that at `MAX_MATCHES` (~8). On a larger table the Highlight/Features column is therefore populated
+for the top-ranked handful and **empty below**.
+
+User was shown this and chose **"leave them empty"** over a deterministic description-snippet
+fallback: an empty cell honestly reads as "not assessed", whereas filler would mix curated
+highlights and truncated blurbs in one column. The concrete attribute columns (price, size, rooms,
+tenure, location) still carry **every** row. This ratifies the behaviour already specified in
+PLAN.md — no plan change required.
