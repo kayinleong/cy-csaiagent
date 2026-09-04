@@ -4,7 +4,7 @@
 - branch: main
 - started: 2026-09-04
 - status: done
-- summary: the "still only one result" report was a STALE DEV SERVER running pre-fix code, proved by simulating the old gate (4 survivors, exactly 1 above RM1.5M = AT6, the project in the screenshot) — and the new code was verified end-to-end against the real model, closing quick-085's biggest open risk
+- summary: the "still only one result" report was a STALE BUILD — the work was never pushed, so the App Hosting deployment could not contain it. Proved by simulating the old gate (4 survivors, exactly 1 above RM1.5M = AT6, the exact project in the screenshot) and by verifying the new code end-to-end against the real model
 
 ## What is wrong
 
@@ -56,8 +56,25 @@ the exact id. Under the old gate the model's line — *"The only active D2 proje
 priced above RM1.5M"* — was **true and correctly grounded**. It was not a hallucination; I was
 wrong to call it a grounding violation.
 
-**Root cause: the dev server process serving those turns is running pre-quick-085 code.** Nothing
-in the repository is defective. The fix is to restart it.
+**Root cause: the deployment serving those turns predates quick-085.** Nothing in the repository is
+defective.
+
+I first wrote this up as a stale *local dev server* and told the user to restart it. That was
+wrong, and a third report proved it: a fresh turn landed at `2026-09-04T03:49:21Z` with the same
+`matches=1 ROWS=ABSENT`. Two checks settled it:
+
+    lsof -nP -iTCP:3000 -sTCP:LISTEN   ->  nothing listening
+    git rev-list --left-right --count origin/main...HEAD  ->  behind 0, AHEAD 15
+
+**There is no local dev server at all — the user is testing the deployed App Hosting app, and all
+15 commits of this work are unpushed on local `main`.** App Hosting builds from the remote, so the
+deployed build provably cannot contain the fix.
+
+Why it stayed unpushed: STATE.md carries a standing instruction — *"do NOT push to any remote
+without explicit confirmation"* — which was correctly honoured. The gap was mine: I verified the
+code thoroughly and then reported it as working *for the user*, without checking that the artifact
+they were exercising could contain it. Verification that stops at the local working tree is not
+verification of what the user sees.
 
 ## What changed
 
@@ -110,8 +127,16 @@ session.
 
 ## The lesson
 
-Two rounds were spent on a code hunt for a defect that was a stale process. What broke the loop
-was reproducing the failure numerically — simulating the *old* gate and finding it produced the
-user's exact project and id. Before assuming the code is wrong, check that the code under test is
-the code that ran; when a report and a measurement disagree, one of them is measuring a different
-build.
+Three rounds were spent on a code hunt for a defect that was a delivery gap. Reproducing the
+failure numerically — simulating the *old* gate and getting the user's exact project and id — was
+what proved the code was innocent. But I then guessed at *which* stale build it was and guessed
+wrong, costing another round.
+
+Two rules earned here:
+
+1. **Check that the artifact under test can contain the fix, before diagnosing the fix.** One
+   `lsof` and one `git rev-list` would have answered in round one what three rounds of retrieval
+   forensics did not.
+2. **"Verified locally" is not "delivered."** A standing no-push rule is correct, but it means
+   local verification says nothing about what the user is looking at. When work is gated behind a
+   push the user must authorise, say so up front instead of reporting the work as done.
