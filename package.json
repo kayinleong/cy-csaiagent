@@ -14,6 +14,9 @@
     "eval": "promptfoo eval -c promptfooconfig.yaml",
     "set-claims": "tsx --env-file=.env.local scripts/set-claims.ts"
   },
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.80",
     "@ai-sdk/google": "^2.0.74",
