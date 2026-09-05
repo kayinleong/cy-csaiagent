@@ -23,6 +23,7 @@ import type { ProjectMatch, SearchResult } from '@/src/inventory/search'
 
 const mocks = vi.hoisted(() => ({
   mockSearchProjects: vi.fn(),
+  mockQueryInventory: vi.fn(),
   mockCollateralGet: vi.fn(async () => ({ empty: true, docs: [] })),
 }))
 
@@ -35,7 +36,8 @@ vi.mock('@/src/firebase/admin', () => ({ adminDb: {}, adminAuth: {}, remoteConfi
 
 vi.mock('@/src/inventory/search', () => ({
   searchProjects: mocks.mockSearchProjects,
-  queryInventory: vi.fn(),
+  queryInventory: mocks.mockQueryInventory,
+  getProjectDetail: vi.fn(),
   // The real value — the projection under test consumes it.
   MAX_MATCHES: 8,
 }))

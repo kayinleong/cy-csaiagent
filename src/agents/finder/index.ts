@@ -38,6 +38,7 @@ import {
   makeSearchProjectsTool,
   makeQueryInventoryTool,
   makeFetchCollateralTool,
+  makeProjectDetailTool,
 } from './tools'
 import type { FinderRowSink } from './tools'
 import { FinderOutputSchema } from './schema'
@@ -128,6 +129,12 @@ export const finderAgent = {
       searchProjects: makeSearchProjectsTool(userLang, rowSink),
       queryInventory: makeQueryInventoryTool(userLang),
       fetchCollateral: makeFetchCollateralTool(userLang),
+      // The by-id lookup (quick-kayinleong-088). Registered as a fourth key rather than
+      // folded into searchProjects because the two answer different questions and must
+      // not share a gate: searchProjects RECOMMENDS and so hard-filters status:'active',
+      // while projectDetail answers "what is X?" about a project the agent already named
+      // and therefore does not filter (it warns instead — see makeProjectDetailTool).
+      projectDetail: makeProjectDetailTool(userLang),
     }
   },
 

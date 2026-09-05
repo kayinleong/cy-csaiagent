@@ -83,7 +83,7 @@
  */
 
 import { projectsRef } from '@/src/firebase/collections'
-import type { PriceBand, ProjectDoc } from '@/src/firebase/collections'
+import type { PriceBand, ProjectDoc, UnitTypeEntry } from '@/src/firebase/collections'
 import { embedText } from '@/src/rag/embed'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -892,4 +892,164 @@ export async function queryInventory(
     ...(d.data() as ProjectDoc),
     projectId: d.id,
   }))
+}
+
+// ─── Single-project detail lookup (quick-kayinleong-088) ──────────────────────
+
+/**
+ * One project's full record as the Finder's `projectDetail` tool returns it —
+ * everything on the doc EXCEPT the 1024-float `embedding` (quick-kayinleong-088).
+ *
+ * WHY THIS TYPE EXISTS AT ALL: `ProjectMatch` (the shape every other Finder path
+ * produces) copies 12 scalars and drops `description` — and `description` is where every
+ * Quick Fact a D2 agent needs actually lives. `to-inventory.ts` writes the whole Skool
+ * write-up into it (developer, land tenure, sizes by layout, maintenance fee, booking fee,
+ * furnishing, facilities), so the data was in Firestore the whole time and no tool ever
+ * handed it to the model. That is a carry-through gap, not a source-data gap.
+ *
+ * It is safe to carry `description` HERE and nowhere else because this shape is only ever
+ * produced for ONE explicitly-named project. A search result carries up to `MAX_ROWS`
+ * projects and is re-sent on every step of the Finder's 5-step loop — 82 descriptions in
+ * that position measured ~10,100 tokens per step (see `MAX_MATCHES`). One is ~700.
+ *
+ * `embedding` is structurally absent, not merely omitted at the call site: the mapper
+ * below builds this object field-by-field rather than spreading the doc, so a new field
+ * added to `ProjectDoc` cannot leak into a model payload by accident.
+ */
+export interface ProjectDetail {
+  projectId: string
+  name: string
+  /**
+   * Availability. `projectDetail` deliberately does NOT filter on this — see the
+   * `getProjectDetail` doc comment for the decision and its guard rail. Read it before
+   * assuming every value here is `'active'`.
+   */
+  status: ProjectDoc['status']
+  /** Asking price in RM. 0 means UNKNOWN — never render or quote it as a price. */
+  priceValue: number
+  priceBand: PriceBand
+  /** Stated asking rate per sqft. null = no rate on record. NEVER multiply by a size. */
+  pricePsfMin: number | null
+  pricePsfMax: number | null
+  /** Where `priceValue` came from. Absent on legacy docs → 'unknown'. */
+  priceProvenance: NonNullable<ProjectDoc['priceProvenance']>
+  tenure: string
+  vpStatus: boolean
+  /** ISO-8601 date string, or null when VP is not yet completed / no date on record. */
+  vpDate: string | null
+  bumiQuota: boolean
+  foreignEligible: boolean
+  bedrooms: number
+  locationText: string
+  sizeMinSqft: number | null
+  sizeMaxSqft: number | null
+  /** Per-layout breakdown. Empty when the write-up states no layout table. */
+  unitTypes: UnitTypeEntry[]
+  /** The full stored write-up — the Quick Facts prose. Never truncated here. */
+  description: string
+}
+
+export type ProjectDetailResult =
+  | { found: true; project: ProjectDetail }
+  | { found: false; reason: 'not_found'; projectId: string }
+
+/** ISO-8601 for a Firestore Timestamp / Date / null, without throwing on anything else. */
+function toIsoDate(value: unknown): string | null {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString()
+  }
+  // Firestore returns a Timestamp, which has toDate(). Do not import the class — this
+  // module is used offline in tests with plain-object fixtures.
+  if (
+    value !== null &&
+    typeof value === 'object' &&
+    'toDate' in value &&
+    typeof (value as { toDate: unknown }).toDate === 'function'
+  ) {
+    const d = (value as { toDate: () => Date }).toDate()
+    return d instanceof Date && !Number.isNaN(d.getTime()) ? d.toISOString() : null
+  }
+  return null
+}
+
+/** A finite number, or null. Guards `0`-vs-absent and any legacy string value. */
+function finiteOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+/**
+ * Read ONE project by its Firestore document ID — no vector search, no guessing
+ * (quick-kayinleong-088).
+ *
+ * This is the lookup the repo did not have. `grep "where('name'"` returned zero hits and
+ * `queryInventory`'s filters are VP-date / priceBand / vpStatus only, so there was no way
+ * to address a specific project: the Finder's "Details" action re-ran the same semantic
+ * search, which is capped at `MAX_MATCHES` for the model, so clicking row 37 of 50 handed
+ * the model eight OTHER projects and it correctly reported it could not find the one the
+ * agent had clicked. A direct `doc(id).get()` cannot fail that way.
+ *
+ * ── STATUS DECISION (deliberate, and the reason for the `status` field above) ──
+ * `searchProjects` and `queryInventory` both hard-filter `status:'active'` and MUST keep
+ * doing so: they RECOMMEND, and a recommendation is where a sold-out project does real
+ * damage (D-03 / the grounding mandate).
+ *
+ * This function does NOT filter on status, because it does not recommend. It answers
+ * "what is X?" about a project the agent has already named or clicked — most often
+ * BECAUSE a lead asked about it. Filtering here would make a sold-out project return
+ * `not_found`, and "I have no record of that project" is a worse, less true answer than
+ * "that project is sold out — here are its details". An agent who cannot look up a
+ * sold-out project cannot tell a lead it is sold out.
+ *
+ * The guard rail that makes this safe is that the status travels WITH the payload and the
+ * tool wrapper (`makeProjectDetailTool`) raises a `availability` warning string for
+ * anything not `'active'`, which the system prompt requires the agent to lead with. The
+ * gate that matters — "never put a non-active project in a shortlist" — is unchanged and
+ * still enforced in code by `searchProjects`, not by this function's silence.
+ *
+ * READ-ONLY. Reads through `projectsRef()` (the same accessor every other inventory read
+ * uses), so it inherits the caller's credentials rather than escalating: on the chat path
+ * that is the server's service account acting for an authenticated, tenant-scoped user
+ * request, exactly as `searchProjects` does one function above.
+ *
+ * @param projectId  Firestore `projects/{pid}` document ID — the grounding citation (D-04).
+ */
+export async function getProjectDetail(projectId: string): Promise<ProjectDetailResult> {
+  const trimmed = projectId.trim()
+  if (trimmed.length === 0) {
+    return { found: false, reason: 'not_found', projectId }
+  }
+
+  const snap = await projectsRef().doc(trimmed).get()
+  if (!snap.exists) {
+    return { found: false, reason: 'not_found', projectId: trimmed }
+  }
+
+  const doc = snap.data() as ProjectDoc
+
+  // Field-by-field, NOT a spread: `embedding` must be structurally unreachable from this
+  // payload, and a future ProjectDoc field must not become a model payload by default.
+  const project: ProjectDetail = {
+    projectId: trimmed,
+    name: doc.name ?? '',
+    status: doc.status,
+    priceValue: finiteOrNull(doc.priceValue) ?? 0,
+    priceBand: doc.priceBand,
+    pricePsfMin: finiteOrNull(doc.pricePsfMin),
+    pricePsfMax: finiteOrNull(doc.pricePsfMax),
+    // Absent on every doc written before quick-088 — treat as unverified, not as 'stated'.
+    priceProvenance: doc.priceProvenance ?? 'unknown',
+    tenure: doc.tenure ?? '',
+    vpStatus: doc.vpStatus === true,
+    vpDate: toIsoDate(doc.vpDate),
+    bumiQuota: doc.bumiQuota === true,
+    foreignEligible: doc.foreignEligible === true,
+    bedrooms: finiteOrNull(doc.bedrooms) ?? 0,
+    locationText: doc.locationText ?? '',
+    sizeMinSqft: finiteOrNull(doc.sizeMinSqft),
+    sizeMaxSqft: finiteOrNull(doc.sizeMaxSqft),
+    unitTypes: Array.isArray(doc.unitTypes) ? doc.unitTypes : [],
+    description: typeof doc.description === 'string' ? doc.description : '',
+  }
+
+  return { found: true, project }
 }

@@ -5,6 +5,8 @@
  *   1. makeSearchProjectsTool    — wraps searchProjects (two-stage active/eligibility filter + vector re-rank)
  *   2. makeQueryInventoryTool    — wraps queryInventory (structured VP/priceBand filters, no vector, FIND-07)
  *   3. makeFetchCollateralTool   — reads collateralRef for a projectId → {type, url} (Storage path or externalUrl)
+ *   4. makeProjectDetailTool     — reads projects/{pid} BY ID + its collateral + finder kbChunks
+ *                                  (quick-kayinleong-088; the only path that carries `description`)
  *
  * Security (TSD §3.3, T-03-14 carried from T-02-15):
  *   - Tools are READ-ONLY: no Firestore writes (no .set(), .add(), .update()) inside execute().
@@ -22,9 +24,20 @@
 
 import { tool } from 'ai'
 import { z } from 'zod'
-import { searchProjects, queryInventory, MAX_MATCHES } from '@/src/inventory/search'
+import {
+  searchProjects,
+  queryInventory,
+  getProjectDetail,
+  MAX_MATCHES,
+} from '@/src/inventory/search'
 import { collateralRef } from '@/src/firebase/collections'
-import type { SearchResult, InventoryFilters, ProjectMatch } from '@/src/inventory/search'
+import { retrieve, buildCitations, isRetrievalMiss } from '@/src/rag'
+import type {
+  SearchResult,
+  InventoryFilters,
+  ProjectMatch,
+  ProjectDetail,
+} from '@/src/inventory/search'
 import type { ProjectDoc } from '@/src/firebase/collections'
 import type { FinderRow } from './schema'
 import type { JSONValue } from '@ai-sdk/provider'
@@ -535,4 +548,198 @@ async function collateralFor(projectId: string): Promise<Array<{ type: string; u
 
         return ranked
   }
+}
+
+// ─── 4. makeProjectDetailTool (quick-kayinleong-088) ─────────────────────────
+
+/**
+ * How many `kbChunks` of sales-kit prose are attached to one detail lookup.
+ *
+ * Five, matching the Coach's `retrieveKnowledge` cap (`src/agents/coach/tools.ts`), for
+ * the same reason: the tool result is re-sent to the model on EVERY step of the Finder's
+ * 5-step loop, so the cost of a chunk is paid up to five times.
+ */
+export const KB_CHUNKS_FOR_DETAIL = 5
+
+/**
+ * Per-chunk character cap for the attached KB prose.
+ *
+ * Measured on the live finder corpus (400-chunk sample, 2026-09-05): min 80, median 956,
+ * p90 1,340, p99 1,694, max 2,027 chars. 1,600 therefore passes ~99% of chunks through
+ * whole while still bounding the worst case, so five chunks cost at most ~8,000 chars
+ * (~2,200 tokens) per step instead of an unbounded amount.
+ */
+export const KB_CHUNK_CHARS = 1_600
+
+/**
+ * The default retrieval topics when the model asks for a project's details without
+ * naming a specific question.
+ *
+ * These are the Quick-Facts headings that actually appear in the D2 sales kits and that
+ * a D2 agent is expected to be able to recite to a client. They are RETRIEVAL TERMS, not
+ * content: nothing here is asserted about the project, and a topic with no matching chunk
+ * simply returns nothing.
+ */
+const DETAIL_TOPICS =
+  'quick facts developer land tenure built-up sizes layouts price per square foot ' +
+  'maintenance fee booking fee panel bankers margin of finance parking bays facilities ' +
+  'furnishing selling points VP target completion'
+
+/** What `projectDetail` hands the model. `embedding` is absent by construction. */
+export type ProjectDetailToolResult =
+  | {
+      found: true
+      project: ProjectDetail
+      /**
+       * Present ONLY when `project.status !== 'active'`. A plain sentence the prompt
+       * requires the agent to lead with, so a sold-out or hidden project can be looked
+       * up (see `getProjectDetail`) without ever being presented as available.
+       */
+      availability?: string
+      collateral: Array<{ type: string; url: string }>
+      /** Sales-kit prose from `kbChunks` (pillar:'finder') with its citation IDs. */
+      kb: {
+        found: boolean
+        citations: Array<{ chunkId: string; docId: string; snippet: string }>
+        context: string
+      }
+    }
+  | { found: false; reason: 'not_found'; projectId: string; message: string }
+
+/**
+ * AI SDK tool that returns EVERYTHING on record for ONE named project
+ * (quick-kayinleong-088).
+ *
+ * WHY IT EXISTS — two defects, one tool:
+ *
+ * 1. **Output depth.** Every other Finder path produces `ProjectMatch`, which copies 12
+ *    scalars and drops `description` (`src/inventory/search.ts` → `ProjectMatch`). But
+ *    `description` is the whole Skool write-up — developer, land tenure, sizes by layout,
+ *    maintenance fee, booking fee, furnishing, facilities. So the agent could see a price
+ *    and a bedroom count and nothing a client would actually ask about, even though the
+ *    prose was sitting in Firestore the entire time. This tool carries it.
+ *
+ * 2. **Wrong project.** The "Details" button used to push a canned sentence back through
+ *    a normal Finder turn, which re-ran `searchProjects` — a semantic re-rank capped at
+ *    `MAX_MATCHES` for the model. Clicking row 37 of 50 handed the model eight OTHER
+ *    projects, and the prompt then correctly made it say it could not find the project
+ *    the agent had just clicked. A `projects/{pid}` read cannot miss.
+ *
+ * It ALSO retrieves from `kbChunks` (pillar:'finder') — 25,153 chunks of ingested Drive
+ * sales kits that, until this claim, NO Finder tool queried. That is where the panel
+ * bankers, margin-of-finance percentages and "top reasons to invest" content lives; the
+ * Skool write-ups do not have it (2 of 82). Live probe: "panel bankers loan margin for
+ * Imperial Residences" retrieves at 0.8337 similarity. Those chunks come back WITH their
+ * chunk IDs so the answer stays citable (grounding is mandatory).
+ *
+ * READ-ONLY: `projects/{pid}` read + `collateral` read + `kbChunks` findNearest. No writes.
+ * Authenticates through the same accessors as every other inventory read — as the user's
+ * request, never an escalated admin path from a user-facing surface.
+ *
+ * @param userLang  Language of the turn — threaded into `retrieve` for the lang pre-filter.
+ */
+export function makeProjectDetailTool(userLang: 'en' | 'ms' | 'zh') {
+  return tool({
+    description:
+      'Get the FULL record for ONE specific D2 project by its projectId: every stored field, ' +
+      'the complete project write-up, the per-layout size/price table when one is on record, ' +
+      'the shareable documents, and the matching sales-kit knowledge-base extracts. ' +
+      'USE THIS — never searchProjects — whenever the agent asks about a project they have ' +
+      'already named or whose projectId is in the message (for example after tapping the ' +
+      'Details button on a result row). searchProjects is a ranked semantic search: it can ' +
+      'return eight DIFFERENT projects and miss the one that was asked about. This tool reads ' +
+      'the document directly and cannot. ' +
+      'Cite the kb chunkIds for any fact you take from the knowledge-base extracts. ' +
+      'If it returns found:false the projectId does not exist — say so plainly, never substitute ' +
+      'another project. If it returns an "availability" warning the project is NOT active: lead ' +
+      'with that and do not present it as available inventory.',
+    inputSchema: z.object({
+      projectId: z
+        .string()
+        .min(1)
+        .describe(
+          'The Firestore projects/{pid} document ID, copied EXACTLY from the search result ' +
+            'row, from the agent\'s message, or from an earlier citation. Never invent or ' +
+            'reconstruct one.',
+        ),
+      question: z
+        .string()
+        .nullable()
+        .optional()
+        .describe(
+          'What the agent actually wants to know, in their own words (e.g. "panel bankers and ' +
+            'loan margin", "price per layout", "maintenance fee"). Sharpens the knowledge-base ' +
+            'retrieval. Omit or null for a general overview.',
+        ),
+    }),
+    execute: async ({ projectId, question }): Promise<ProjectDetailToolResult | ToolFailure> =>
+      // READ-ONLY: three reads, no writes. Infra errors become a grounded
+      // inventory_unavailable signal rather than a raw provider error.
+      runReadOnly('projectDetail', async () => {
+        const detail = await getProjectDetail(projectId)
+
+        if (!detail.found) {
+          return {
+            found: false as const,
+            reason: 'not_found' as const,
+            projectId: detail.projectId,
+            message:
+              'No project exists with that ID. Do not substitute a different project — ' +
+              'tell the agent the project is not in the D2 inventory record.',
+          }
+        }
+
+        const project = detail.project
+
+        // Collateral and KB retrieval are independent — run them together rather than
+        // paying two sequential round trips inside a step that is already open. A Finder
+        // turn has run past the platform's function timeout before (quick-067).
+        const [collateral, kbResults] = await Promise.all([
+          collateralFor(project.projectId).catch(() => {
+            // A collateral read must never fail the lookup. The stored record is still
+            // the ground truth; the agent just gets no files.
+            console.warn(`[projectDetail] collateral read failed for ${project.projectId}`)
+            return [] as Array<{ type: string; url: string }>
+          }),
+          // The sales-kit half. Scoped to pillar:'finder' so a project lookup can never
+          // cite a Coach SOP or a Reply template as project data.
+          retrieve(
+            `${project.name} ${question?.trim() || DETAIL_TOPICS}`,
+            userLang,
+            { pillar: 'finder' },
+          ).catch(() => {
+            console.warn(`[projectDetail] kb retrieval failed for ${project.projectId}`)
+            return []
+          }),
+        ])
+
+        const kbMiss = isRetrievalMiss(kbResults)
+        const kept = kbResults.slice(0, KB_CHUNKS_FOR_DETAIL)
+        const { citations } = buildCitations(kept)
+
+        return {
+          found: true as const,
+          project,
+          // Availability travels WITH the payload, as a sentence the model cannot skim
+          // past. getProjectDetail deliberately does not filter on status — see its doc
+          // comment — so this warning is the guard rail that makes that safe.
+          ...(project.status !== 'active'
+            ? {
+                availability:
+                  `NOT AVAILABLE: this project's status is "${project.status}". ` +
+                  'Lead with that. Answer the factual question if asked, but do NOT ' +
+                  'present it as available inventory and do NOT put it in a shortlist.',
+              }
+            : {}),
+          collateral,
+          kb: {
+            found: !kbMiss,
+            citations,
+            context: kept
+              .map((r) => `[KB:${r.chunkId}]\n${r.text.slice(0, KB_CHUNK_CHARS)}`)
+              .join('\n\n---\n\n'),
+          },
+        }
+      }),
+  })
 }
