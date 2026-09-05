@@ -44,8 +44,14 @@ across their 8 source documents:
 
 The property docs:
 - `Bangsar Hill Park — FAQ - Tower B, C.pdf (OCR)` — **21 chunks**, 45% of the whole coach
-  corpus on its own. Carries `copiedFromId` pointing at **itself**, so it arrived through
-  `copyDocsToPillar` and the copy's id collided with the source id.
+  corpus on its own. Arrived through `copyDocsToPillar`.
+
+  > **Correction (quick-kayinleong-089).** This section originally said its `copiedFromId`
+  > pointed at *itself* and that the copy id had "collided" with the source id. That was
+  > wrong, and the cause was my own reporting: the audit truncated ids to 8 characters, so
+  > the copy `0uFVYzDdnkSsPMYlxPiQ--coach` and its source `0uFVYzDdnkSsPMYlxPiQ` printed
+  > identically. The copy scheme works exactly as `KbDocDoc.copiedFromId` documents — the
+  > copy's id is derived from the source's with a `--coach` suffix. Nothing was colliding.
 - `Core Residence @ TRX — Emailing 629-TRX-ARC-CA-ENL-TWR3-108-A1n-RFi-35` — 5 chunks, no
   `copiedFromId` at all, so it was ingested directly as `pillar:'coach'`. An architect's
   email about a tower drawing, filed as onboarding material.
