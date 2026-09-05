@@ -172,8 +172,14 @@ describe('Test 2: retrieveKnowledge tool returns real chunk-ID citations from ra
     // Resolve: execute may return AsyncIterable or a direct value
     const result = rawResult as import('./tools').RetrieveResult
 
-    // rag.retrieve was called with the query and userLang
-    expect(mocks.mockRetrieve).toHaveBeenCalledWith('What is the D2 onboarding process?', 'en')
+    // rag.retrieve was called with the query, userLang AND pillar:'coach'.
+    // The pillar is load-bearing (quick-kayinleong-088): without it the Coach searches a
+    // corpus that is 99.8% property chunks and is scored against the finder similarity
+    // floor, which measured 0 hits for real onboarding questions. This assertion is the
+    // regression guard — do not relax it back to two arguments.
+    expect(mocks.mockRetrieve).toHaveBeenCalledWith('What is the D2 onboarding process?', 'en', {
+      pillar: 'coach',
+    })
 
     // Tool returns real chunk IDs — not fabricated
     expect(result.found).toBe(true)
@@ -193,7 +199,7 @@ describe('Test 2: retrieveKnowledge tool returns real chunk-ID citations from ra
     const executeImpl = toolMs.execute as NonNullable<typeof toolMs.execute>
     await executeImpl({ query: 'apa itu D2?' }, {} as never)
 
-    expect(mocks.mockRetrieve).toHaveBeenCalledWith('apa itu D2?', 'ms')
+    expect(mocks.mockRetrieve).toHaveBeenCalledWith('apa itu D2?', 'ms', { pillar: 'coach' })
   })
 
   it('returns miss signal when retrieval returns no results', async () => {

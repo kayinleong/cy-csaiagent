@@ -102,7 +102,22 @@ export function makeRetrieveKnowledgeTool(userLang: 'en' | 'ms' | 'zh') {
         ),
     }),
     execute: async ({ query }): Promise<RetrieveResult> => {
-      const results: RetrievalResult[] = await retrieve(query, userLang)
+      // pillar:'coach' is REQUIRED, not an optimisation (quick-kayinleong-088).
+      //
+      // This call passed no pillar. That was harmless only while every finder chunk was
+      // unreachable — they were stored as plain number[] arrays that no vector index
+      // covered, so an unfiltered query could physically only match coach chunks. Once
+      // 25,153 finder chunks became reachable, the corpus went 99.8% finder and an
+      // unfiltered onboarding query started answering from property sales kits:
+      // "what is the D2 onboarding process for a new agent" returned 8 hits, 6 of them
+      // finder chunks.
+      //
+      // It also silently broke the Coach outright. The similarity floor is per-pillar, and
+      // a query with no pillar has to assume the finder corpus (0.65). Coach content scores
+      // lower — "how do I get my REN tag" tops out at 0.5632 — so it fell under the finder
+      // floor and returned NOTHING. Measured: 2 of 4 onboarding questions went to 0 hits
+      // unfiltered, and to 1 and 8 hits respectively with the pillar passed.
+      const results: RetrievalResult[] = await retrieve(query, userLang, { pillar: 'coach' })
 
       if (isRetrievalMiss(results)) {
         return { found: false, reason: 'kb_miss' }
@@ -221,7 +236,9 @@ export function makeGetCheckpointContentTool(userLang: 'en' | 'ms' | 'zh') {
       // Retrieve KB content by querying the checkpoint's primary topic.
       // Build a query from the checkpoint ID to find relevant chunks.
       const query = `D2 onboarding ${checkpointId.replace(/-/g, ' ')}`
-      const results: RetrievalResult[] = await retrieve(query, userLang)
+      // pillar:'coach' — same reasoning as retrieveKnowledge above. A checkpoint query is
+      // onboarding content by definition and must never resolve against the property corpus.
+      const results: RetrievalResult[] = await retrieve(query, userLang, { pillar: 'coach' })
 
       if (isRetrievalMiss(results)) {
         return {
