@@ -1,0 +1,27 @@
+{
+  // Standalone type-check config for `npm run typecheck` (quick-kayinleong-088).
+  //
+  // WHY THIS EXISTS — a real incident, not a preference.
+  //
+  // The base tsconfig includes `.next/dev/types/**/*.ts`, which Next.js writes for route
+  // type validation. A `next dev` run interrupted mid-write leaves that file TRUNCATED, and
+  // a truncated .ts file is a SYNTAX error (TS1146 "Declaration expected", TS1128). tsc
+  // reports the parse failure and does not proceed to semantic checking, so
+  // `tsc --noEmit` emits only those two errors and reports NOTHING about the source tree.
+  //
+  // On 2026-09-05 that masked every semantic error in the repo for an entire session. The
+  // two errors looked like harmless generated-file noise, were filtered out of the output as
+  // such, and three parallel agents each reported "typecheck clean" while a genuine
+  // `number | null` mismatch sat in src/inventory/unit-types.ts. Only `next build` caught
+  // it — because a fresh build had rewritten the broken file first.
+  //
+  // Excluding Next's generated artifacts makes this gate depend on source alone, so it
+  // cannot be silenced by a stale dev artifact. Route-type validation is not lost: it still
+  // runs inside `next build`, which regenerates those files before checking them.
+  //
+  // If this gate reports errors under `.next/`, do NOT filter them out — the gate is telling
+  // you it could not do its job. Delete `.next/` and re-run.
+  "extends": "./tsconfig.json",
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "**/*.mts"],
+  "exclude": ["node_modules", ".next"]
+}

@@ -10,7 +10,7 @@
     "test": "vitest run",
     "test:rules": "vitest run src/firebase/__tests__/rules",
     "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "eval": "promptfoo eval -c promptfooconfig.yaml",
     "set-claims": "tsx --env-file=.env.local scripts/set-claims.ts"
   },

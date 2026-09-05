@@ -245,7 +245,11 @@ describe('the Details button resolves the project it was clicked on', () => {
     const t = makeSearchProjectsTool('en')
     const execute = t.execute as NonNullable<typeof t.execute>
     const toModelOutput = t.toModelOutput as NonNullable<typeof t.toModelOutput>
-    const view = toModelOutput((await execute(input, {} as never)) as never) as {
+    // `as unknown as` is required: toModelOutput's declared return is the AI SDK's
+    // LanguageModelV2ToolResultOutput union, whose `content` arm does not overlap this
+    // shape, so a direct assertion is rejected. Narrowing to the shape this tool actually
+    // returns is the point of the test.
+    const view = toModelOutput((await execute(input, {} as never)) as never) as unknown as {
       value: { matches: Array<{ projectId: string }> }
     }
 
@@ -341,7 +345,9 @@ describe('projectDetail tool payload', () => {
     // Not vacuous: the stored doc really does carry one.
     expect(PROJECTS[TARGET_ID].embedding.length).toBe(VEC_DIM)
     // And structurally absent, not merely stringified away.
-    const project = (out as { project: Record<string, unknown> }).project
+    // `as unknown as`: execute()'s declared return includes an AsyncIterable arm, which
+    // does not overlap this object shape. The tool returns the object form here.
+    const project = (out as unknown as { project: Record<string, unknown> }).project
     expect('embedding' in project).toBe(false)
   })
 

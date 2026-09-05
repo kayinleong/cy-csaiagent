@@ -479,7 +479,14 @@ export function extractUnitTypes(description: string): Array<{
     }
     // Keep whichever row states more. A second mention of the same layout usually adds
     // the bedroom count or the price the first mention omitted.
-    const richness = (e: typeof entry) =>
+    //
+    // Typed by the two fields it actually reads, NOT `typeof entry`. `entry.sizeSqft` is
+    // narrowed to `number` by the `sizeSqft === null` guard above, while `existing` comes
+    // back from the map as `number | null` — so `typeof entry` rejected `existing` and the
+    // production build failed to type check. Naming the real dependency is both correct and
+    // honest about what "richness" means. Kept as a structural literal so this module stays
+    // import-free and portable.
+    const richness = (e: { bedrooms: number | null; priceMinRM: number | null }) =>
       Number(e.bedrooms !== null) + Number(e.priceMinRM !== null)
     if (richness(entry) > richness(existing)) byKey.set(key, entry)
   }
