@@ -95,28 +95,95 @@ const FIND_NEAREST_LIMIT = 8
  * is populated, every query would return 8 chunks and the Coach would cite whatever
  * came back, turning a truthful `kb_miss` into a confidently-wrong grounded answer.
  *
- * MEASURED at last, against live Firestore (quick-kayinleong-066). The previous value of
- * 0.35 was a guess, and its own note said it had "NOT been validated against real content" —
- * it could not be, because quick-066 found that kbChunks stored `embedding` as a plain
- * number[], which a vector index does not cover, so findNearest returned zero rows for
- * every query and nothing ever reached this floor.
+ * ── RE-MEASURED 2026-09-05 (quick-kayinleong-088), and the value is now PER-PILLAR ──
  *
- * With the chunks converted to the VECTOR type, the top score per query separates cleanly
- * (coach corpus, 14 chunks):
+ * The previous number (0.55) was measured by quick-066 against a **14-chunk** coach
+ * corpus and its own note said to re-measure once real content landed. Real content
+ * landed: 25,153 `kbChunks` with `pillar:'finder'` (the ingested Drive sales kits). They
+ * had been unreachable — stored as plain `number[]`, which a vector index does not cover —
+ * so findNearest returned zero rows for every Finder query and nothing ever reached this
+ * floor. With them converted to the VECTOR type, 0.55 no longer separates: "banana bread
+ * recipe" cleared it with 8 chunks the model could have cited.
  *
- *   RELEVANT     0.6060 .. 0.6496   ("Core Residence @ TRX", "what unit types are available")
- *   OFF-TOPIC    0.4587 .. 0.4924   ("banana bread recipe", "capital of France", "car tyre")
+ * Method: 10 real questions + 10 deliberately off-topic controls per pillar, run against
+ * live Firestore with NO `distanceThreshold` so the raw distribution is visible.
  *
- * 0.55 sits in the gap with ~0.06 of clearance either side. At the old 0.35, "banana bread
- * recipe" returned 8 chunks and the Coach would have cited TRX pricing for it — a
- * confidently-wrong grounded answer, which is worse than an honest kb_miss (D-10).
+ *   pillar=finder (25,153 chunks)
+ *     RELEVANT  top   0.7114 .. 0.8337   (median 0.7437)   all 80 chunks: min 0.6884
+ *     CONTROL   top   0.5423 .. 0.6152   (median 0.5890)   all 80 chunks: max 0.6152
+ *     → gap 0.6152 → 0.6884.  At 0.55, 52 of 80 control chunks were admitted.
  *
- * ⚠ STILL THIN. That is 14 chunks from ONE project. As the corpus grows both distributions
- * move — off-topic queries find something nearer, and questions about other projects land
- * differently. Re-measure when real coach content is loaded; `score` carries
- * `_vectorDistance` on every result, so the distribution is observable.
+ *   pillar=coach (47 chunks)
+ *     RELEVANT  top   0.5632 .. 0.7076   all 64 chunks: min 0.5395
+ *     CONTROL   top   0.4701 .. 0.5321   all 80 chunks: max 0.5321
+ *     → gap 0.5321 → 0.5395, only 0.0074 wide.  At 0.55, 0 of 80 control chunks were
+ *       admitted.  NOTE 0.55 sits ABOVE that gap, not inside it: it drops the tail of
+ *       the top-8 on weakly-matching questions. Deliberate — the gap is too narrow to
+ *       target on a 47-chunk corpus, and the TOP chunk of every measured real question
+ *       (min 0.5632) still clears 0.55, so no real question is silenced.
+ *
+ *   pillar=reply (10 chunks)
+ *     RELEVANT  top   0.6228 .. 0.7457   all 64 chunks: min 0.5666
+ *     CONTROL   top   0.4448 .. 0.5328   all 80 chunks: max 0.5328
+ *     → gap 0.5328 → 0.5666.  At 0.55, 0 of 80 control chunks were admitted.
+ *
+ * ONE NUMBER CANNOT SERVE ALL THREE, so do not collapse this back into a single constant.
+ * Gemini similarity sits HIGHER across the board on the finder corpus — long marketing
+ * write-ups score ~0.6 against almost any English text — so the finder floor must be
+ * ~0.65. Applying 0.65 to coach would silently kill real coach questions: "how do I get
+ * my REN tag" tops out at 0.5632, so it would return nothing. Applying 0.55 to finder
+ * admits banana bread. The floors are 0.65 / 0.55 / 0.55, each measured on its own corpus.
+ *
+ * `MIN_SIMILARITY` is the DEFAULT, used when the caller passes no pillar — and it is 0.65,
+ * the FINDER number, because an unfiltered query searches one corpus that is 25,153 of
+ * 25,210 chunks (99.8%) finder content. Measured on that path: "banana bread recipe"
+ * returned 8 chunks at 0.5700 and "python pandas groupby" 8 at 0.6152, all `pillar:finder`.
+ * Sizing the default for the corpus that is actually searched is the only defensible
+ * choice; sizing it for a 47-chunk pillar the query does not restrict to is not.
+ *
+ * ⚠ KNOWN CONSEQUENCE, and it is a truthfulness fix rather than a regression:
+ * `src/agents/coach/tools.ts` calls `retrieve(query, userLang)` with NO pillar, so a coach
+ * question is answered from the finder corpus today ("how do I get my REN tag" → 8
+ * property write-up chunks, zero coach chunks). Under 0.65 those return nothing and the
+ * Coach emits an honest `kb_miss` + handoff (D-10) instead of citing project marketing at
+ * an onboarding question. The real fix is for the Coach to pass `{ pillar: 'coach' }`, at
+ * which point it gets its own measured 0.55 back — that is a separate claim, in a file
+ * this one does not own.
+ *
+ * ⚠ coach/reply remain THIN: 47 and 10 chunks, and the coach gap is only 0.0074 wide
+ * (0.5321 → 0.5395). Re-measure both when real coach/reply content is ingested. Every
+ * result carries `_vectorDistance`, so the distribution stays observable.
  */
-export const MIN_SIMILARITY = 0.55
+export const MIN_SIMILARITY = 0.65
+
+/**
+ * Per-pillar similarity floors — see the `MIN_SIMILARITY` comment for the measurements
+ * each one comes from (quick-kayinleong-088).
+ *
+ * Keyed by pillar rather than tuned as one number because the three corpora score on
+ * genuinely different scales: long finder write-ups sit ~0.1 higher against arbitrary
+ * English than short coach SOPs do. A single floor is either too low for finder or too
+ * high for coach; there is no value that is right for both.
+ */
+export const MIN_SIMILARITY_BY_PILLAR: Record<'coach' | 'finder' | 'reply', number> = {
+  /** 47 chunks. Relevant chunks reach 0.5395; controls top out at 0.5321. */
+  coach: 0.55,
+  /** 25,153 chunks. Relevant chunks reach 0.6884; controls top out at 0.6152. */
+  finder: 0.65,
+  /** 10 chunks. Relevant chunks reach 0.5666; controls top out at 0.5328. */
+  reply: 0.55,
+}
+
+/**
+ * Resolve the similarity floor for a retrieval call.
+ *
+ * @param pillar  The pillar pre-filter this query will apply, if any. Undefined means the
+ *                query searches ALL pillars, which in practice means the finder corpus
+ *                (99.8% of chunks) — hence the `MIN_SIMILARITY` default.
+ */
+export function minSimilarityFor(pillar?: 'coach' | 'finder' | 'reply'): number {
+  return pillar ? MIN_SIMILARITY_BY_PILLAR[pillar] : MIN_SIMILARITY
+}
 
 /**
  * Field name Firestore writes the computed similarity into on each returned doc.
@@ -193,7 +260,13 @@ export async function firestoreRetrieve(
       // Similarity FLOOR — see MIN_SIMILARITY. Without this, a non-empty pre-filter
       // set always yields FIND_NEAREST_LIMIT rows regardless of relevance, so a real
       // retrieval miss could never be distinguished from an irrelevant match.
-      distanceThreshold: MIN_SIMILARITY,
+      //
+      // PER-PILLAR (quick-kayinleong-088): the floor tracks the corpus this query will
+      // actually search, because the three corpora score on different scales. Passing the
+      // pillar here and in the pre-filter above keeps the two in step — a query filtered
+      // to `coach` is scored against the coach floor, and only an unfiltered query falls
+      // back to the finder-sized default.
+      distanceThreshold: minSimilarityFor(opts?.pillar),
       // Surface the computed similarity so `score` below is real (and MIN_SIMILARITY
       // is tunable against observed data instead of guessed).
       distanceResultField: DISTANCE_RESULT_FIELD,

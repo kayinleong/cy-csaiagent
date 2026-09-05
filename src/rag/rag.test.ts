@@ -480,3 +480,108 @@ describe('retrieve — pillar filter (REPLY-01, GREEN as of Plan 04-03)', () => 
     expect(results[0].docId).toBe('sop-obj-001')
   })
 })
+
+// ─── quick-kayinleong-088: the similarity floor is PER-PILLAR ─────────────────
+//
+// MIN_SIMILARITY was 0.55, measured by quick-066 against a 14-chunk coach corpus. Once
+// the 25,153 finder chunks became reachable, 0.55 stopped separating: a live probe put
+// off-topic control queries ("banana bread recipe" 0.5700, "python pandas groupby"
+// 0.6152) above the floor with 8 citable chunks each, while relevant finder chunks sit at
+// 0.6884 and above. Coach and reply, measured on their own corpora, still separate at
+// 0.55 and would produce FALSE MISSES at the finder floor ("how do I get my REN tag"
+// tops out at 0.5632).
+//
+// So there is no single correct number, and these tests pin the pillar→floor mapping AND
+// the fact that it reaches Firestore. Asserting only the exported constant would pass
+// vacuously if the wiring in firestoreRetrieve were dropped.
+
+describe('MIN_SIMILARITY is per-pillar (quick-kayinleong-088)', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  it('the finder floor sits ABOVE every measured off-topic control top', async () => {
+    const { MIN_SIMILARITY_BY_PILLAR } = await import('@/src/rag/search')
+    // Measured 2026-09-05, live, pillar='finder' (25,153 chunks), 10 control queries.
+    const CONTROL_TOP_MAX = 0.6152 // "python pandas groupby multiple columns"
+    const RELEVANT_CHUNK_MIN = 0.6884 // lowest chunk of any of the 10 real questions
+    expect(MIN_SIMILARITY_BY_PILLAR.finder).toBeGreaterThan(CONTROL_TOP_MAX)
+    // And BELOW the worst relevant chunk, or the floor buys precision with false misses.
+    expect(MIN_SIMILARITY_BY_PILLAR.finder).toBeLessThan(RELEVANT_CHUNK_MIN)
+  })
+
+  it('the coach floor separates its own corpus and would break at the finder floor', async () => {
+    const { MIN_SIMILARITY_BY_PILLAR } = await import('@/src/rag/search')
+    // Measured 2026-09-05, live, pillar='coach' (47 chunks).
+    const COACH_CONTROL_TOP_MAX = 0.5321
+    const COACH_WEAKEST_REAL_QUESTION_TOP = 0.5632 // "how do I get my REN tag"
+    expect(MIN_SIMILARITY_BY_PILLAR.coach).toBeGreaterThan(COACH_CONTROL_TOP_MAX)
+    // NOTE the coach bound is the weakest real question's TOP score, not its lowest
+    // chunk (0.5395). The coach gap is only 0.0074 wide, so 0.55 sits ABOVE it: it drops
+    // the tail of the top-8 for weak questions. That is the deliberate trade — every
+    // measured real question still returns its best chunk, and no control chunk gets in.
+    expect(MIN_SIMILARITY_BY_PILLAR.coach).toBeLessThan(COACH_WEAKEST_REAL_QUESTION_TOP)
+    // THE REASON ONE NUMBER CANNOT SERVE BOTH: the finder floor would return nothing at
+    // all for that same real coach question — a silent, invisible failure.
+    expect(MIN_SIMILARITY_BY_PILLAR.finder).toBeGreaterThan(COACH_WEAKEST_REAL_QUESTION_TOP)
+  })
+
+  it('the reply floor separates its own corpus', async () => {
+    const { MIN_SIMILARITY_BY_PILLAR } = await import('@/src/rag/search')
+    // Measured 2026-09-05, live, pillar='reply' (10 chunks).
+    expect(MIN_SIMILARITY_BY_PILLAR.reply).toBeGreaterThan(0.5328)
+    expect(MIN_SIMILARITY_BY_PILLAR.reply).toBeLessThan(0.5666)
+  })
+
+  it('the no-pillar default is the FINDER floor — an unfiltered query searches that corpus', async () => {
+    const { MIN_SIMILARITY, MIN_SIMILARITY_BY_PILLAR, minSimilarityFor } = await import(
+      '@/src/rag/search'
+    )
+    // 25,153 of 25,210 chunks (99.8%) are pillar:'finder', and the unfiltered probe
+    // confirmed it: every one of the 8 chunks returned for "banana bread recipe" on the
+    // no-filter path was a finder chunk, at 0.5700.
+    expect(MIN_SIMILARITY).toBe(MIN_SIMILARITY_BY_PILLAR.finder)
+    expect(minSimilarityFor(undefined)).toBe(MIN_SIMILARITY_BY_PILLAR.finder)
+    expect(minSimilarityFor('coach')).toBe(MIN_SIMILARITY_BY_PILLAR.coach)
+    expect(minSimilarityFor('finder')).toBe(MIN_SIMILARITY_BY_PILLAR.finder)
+    expect(minSimilarityFor('reply')).toBe(MIN_SIMILARITY_BY_PILLAR.reply)
+  })
+
+  it('the resolved floor is what reaches findNearest, per pillar', async () => {
+    // The wiring assertion. A correct constant with the old hard-coded threshold still
+    // in firestoreRetrieve would leak every control chunk.
+    const thresholds: Array<number | undefined> = []
+    const mockGetFn = vi.fn(async () => ({ docs: [] }))
+    const mockFindNearestFn = vi.fn((opts: { distanceThreshold?: number }) => {
+      thresholds.push(opts.distanceThreshold)
+      return { get: mockGetFn }
+    })
+    const mockWhereFn = vi.fn(() => ({ where: mockWhereFn, findNearest: mockFindNearestFn }))
+    const mockCollectionFn = vi.fn(() => ({ where: mockWhereFn }))
+
+    vi.doMock('@/src/firebase/admin', () => ({
+      adminDb: { collection: mockCollectionFn },
+    }))
+    vi.doMock('@/src/rag/embed', () => ({
+      embedText: vi.fn(async () => Array.from({ length: 1024 }, () => 0.001)),
+    }))
+
+    const { firestoreRetrieve, MIN_SIMILARITY_BY_PILLAR, MIN_SIMILARITY } = await import(
+      '@/src/rag/search'
+    )
+
+    await firestoreRetrieve('q', 'en', { pillar: 'finder' })
+    await firestoreRetrieve('q', 'en', { pillar: 'coach' })
+    await firestoreRetrieve('q', 'en', { pillar: 'reply' })
+    await firestoreRetrieve('q', 'en')
+
+    expect(thresholds).toEqual([
+      MIN_SIMILARITY_BY_PILLAR.finder,
+      MIN_SIMILARITY_BY_PILLAR.coach,
+      MIN_SIMILARITY_BY_PILLAR.reply,
+      MIN_SIMILARITY,
+    ])
+    // Not vacuous: coach and finder must actually differ, or this test proves nothing.
+    expect(MIN_SIMILARITY_BY_PILLAR.coach).not.toBe(MIN_SIMILARITY_BY_PILLAR.finder)
+  })
+})
