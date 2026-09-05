@@ -59,6 +59,20 @@ firebase-adminsdk-*.json
 /projects.inventory.json
 /drive-documents.json
 
+# quick-kayinleong-088: the Drive ingest ledger. Regenerable from Firestore via
+# scripts/scrape-skool/rebuild-kb-ledger.ts, and it names every Drive file — same
+# contact-info exposure as the dumps above.
+/drive-kb-ledger.json
+
+# Scraper session state — these hold LIVE Skool and Google auth cookies. Committing one
+# hands over an authenticated session. `.env*` above already covers env files; these are
+# the browser-session equivalents and were not covered by any pattern.
+/skool-state.json
+/google-state.json
+/google-profile/
+/google-login.ok
+/google-login.fail
+
 # vercel
 .vercel
 

@@ -28,16 +28,26 @@
  *
  * WHAT IT CANNOT RECOVER — read before trusting the output
  * -------------------------------------------------------
- *   1. `skipped-empty` entries. Image-only PDFs never produced a kbDoc, so they leave no
- *      trace in Firestore and cannot be reconstructed. They come back as "remaining to
+ *   1. `skipped-empty` entries. MOST image-only PDFs never produced a kbDoc, so they leave
+ *      no trace in Firestore and cannot be reconstructed. They come back as "remaining to
  *      ingest". Re-running `to-kb.ts --apply` re-downloads them, finds < KB_MIN_CHARS and
  *      re-marks them `skipped-empty` — which restores exactly the queue `to-kb-ocr.ts`
  *      needs. The OCR stage therefore has to run AFTER a full text pass, not before.
+ *
+ *      ⚠ CORRECTION (quick-kayinleong-088, measured on live Firestore): "never produced a
+ *      kbDoc" is not universally true. 88 kbDocs hold ZERO chunks, 40 of which match a
+ *      text-bearing Drive file by exact title — including `Aetas Seputeh Sales Kit V1.2`
+ *      and `Sentral Suites - MRCB Sales Kit (All Towers)`. A kbDoc was created and no
+ *      chunk followed. Trusting kbDoc existence alone marked these `ingested`, so
+ *      `to-kb.ts` skipped them on status and the richest collateral in the corpus stayed
+ *      permanently unretrievable. The build step below now requires a matched kbDoc to
+ *      have ≥1 chunk, and excludes it otherwise. See the comment there.
  *   2. `partial` entries. A kbDoc created but not fully embedded is indistinguishable
  *      from a finished one by title alone, so everything matched is recorded as
- *      `ingested`. This is deliberate: `kb-cleanup.ts` DELETES kbDocs for `partial`
- *      entries, and guessing wrong there destroys good data. A genuinely half-embedded
- *      doc will simply stay half-embedded — detectable later by comparing kbChunks counts.
+ *      `ingested` — EXCEPT the zero-chunk case above, which is now detected. This
+ *      remains deliberate for genuinely half-embedded docs: `kb-cleanup.ts` DELETES
+ *      kbDocs for `partial` entries, and guessing wrong there destroys good data. A
+ *      half-embedded doc stays half-embedded — detectable by comparing kbChunks counts.
  *   3. `jobId` / `total`. Only ever read when resuming a `partial` entry, which this
  *      rebuild never emits. Omitted rather than fabricated.
  *
@@ -226,11 +236,54 @@ async function main() {
     if (snap.size < PAGE) break;
   }
 
+  // ─── which kbDocs actually produced chunks? ───────────────────────────────
+  //
+  // A kbDoc's existence does NOT mean the file was usefully ingested. Measured on live
+  // Firestore (quick-kayinleong-088): 88 kbDocs hold ZERO chunks — 65 of them Drive PDFs,
+  // all with `status:'published'`. They are scanned/image-only PDFs whose text extraction
+  // returned nothing, so a kbDoc was created and no chunk ever followed.
+  //
+  // This contradicts assumption (1) in this file's header ("Image-only PDFs never produced
+  // a kbDoc, so they leave no trace"). They DO leave a trace, and treating that trace as
+  // `ingested` is the worst outcome available: `to-kb.ts` skips the file on status alone, so
+  // 65 sales-kit PDFs — exactly the floor plans and per-layout price tables this claim is
+  // chasing — would be marked done and stay permanently unretrievable.
+  //
+  // So a file is only `ingested` if its kbDoc has at least one chunk. Files whose kbDoc is
+  // empty are left OUT of the ledger entirely, which makes `to-kb.ts` treat them as never
+  // ingested and re-process them.
+  //
+  // ⚠ Those stale empty kbDocs must be deleted before re-ingest, or the second pass lands a
+  // duplicate kbDoc alongside the empty one. `kb-cleanup.ts` is the tool for that. The
+  // summary below prints the count so this cannot be missed.
+  const docIdsWithChunks = new Set<string>();
+  {
+    const { kbChunksRef } = await import("@/src/firebase/collections");
+    const rawChunks = kbChunksRef().withConverter(null);
+    let c: string | null = null;
+    for (;;) {
+      let q = rawChunks.select("docId").orderBy(FieldPath.documentId()).limit(PAGE);
+      if (c) q = q.startAfter(c);
+      const snap = await q.get();
+      if (snap.empty) break;
+      for (const d of snap.docs) docIdsWithChunks.add(String(d.get("docId") || ""));
+      c = snap.docs[snap.docs.length - 1].id;
+      if (snap.size < PAGE) break;
+    }
+  }
+
   // ─── build the ledger ─────────────────────────────────────────────────────
   const ledger: LedgerEntry[] = [];
+  const emptyKbDocFiles: string[] = [];
   for (const f of files) {
     const m = matched.get(f.id);
     if (!m) continue;
+    // m.docId === "" is an ambiguous same-title twin with no docId to check — it is already
+    // inert (no docId in the entry), so leave that path exactly as it was.
+    if (m.docId && !docIdsWithChunks.has(m.docId)) {
+      emptyKbDocFiles.push(`${f.name}  [kbDoc ${m.docId}]`);
+      continue;
+    }
     const entry: LedgerEntry = {
       fileId: f.id,
       name: f.name,
@@ -267,16 +320,27 @@ async function main() {
   console.log(`  already have a kbDoc          ${ledger.length}  (${((ledger.length / files.length) * 100).toFixed(1)}%)`);
   console.log(`    of which OCR-ingested       ${ocrCount}`);
   console.log(`    claimed without a docId     ${noDocId}  (same-title twins; inert, skipped by to-kb.ts)`);
+  console.log(`  kbDoc exists but ZERO chunks  ${emptyKbDocFiles.length}  (EXCLUDED from the ledger → will be re-ingested)`);
   console.log(`  REMAINING TO INGEST           ${remaining}  (${((remaining / files.length) * 100).toFixed(1)}%)`);
   console.log("─".repeat(72));
   if (unmatchedTitles.length) {
     console.log(`Sample unmatched kbDoc titles (first 10 of ${unmatchedTitles.length}):`);
     for (const t of unmatchedTitles.slice(0, 10)) console.log(`  · ${t.slice(0, 100)}`);
   }
+  if (emptyKbDocFiles.length) {
+    console.log("");
+    console.log(`⚠ ${emptyKbDocFiles.length} Drive file(s) have a kbDoc that produced NO chunks — text`);
+    console.log(`  extraction returned nothing (scanned / image-only PDFs). They are NOT recorded as`);
+    console.log(`  ingested, so to-kb.ts will re-process them. DELETE the stale empty kbDocs first`);
+    console.log(`  (kb-cleanup.ts), or the re-ingest lands a duplicate kbDoc beside the empty one.`);
+    console.log(`  These need the OCR path, not the text path. First 10:`);
+    for (const n of emptyKbDocFiles.slice(0, 10)) console.log(`  · ${n.slice(0, 100)}`);
+  }
   console.log("");
   console.log(`NOTE: 'skipped-empty' (image-only PDF) entries cannot be reconstructed — they`);
   console.log(`      never produced a kbDoc. They are counted in REMAINING above. A full`);
   console.log(`      to-kb.ts --apply pass re-marks them, which is what to-kb-ocr.ts needs.`);
+  console.log(`      Files whose kbDoc IS present but empty are the separate bucket above.`);
 
   if (!APPLY) {
     console.log(`\n[dry-run] would write ${ledger.length} entries → ${LEDGER}`);
