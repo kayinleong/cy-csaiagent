@@ -264,3 +264,131 @@ describe('searchProjects tool: the MODEL gets a bounded view', () => {
     expect(toModelOutput(output as never)).toEqual({ type: 'json', value: refusal })
   })
 })
+
+// ─── queryInventory: the 1024-float embedding never reaches the model ─────────
+//
+// quick-kayinleong-088. `queryInventory` returned the raw `ProjectDoc` — including the
+// 1024-float `embedding` and the full ~2,150-char `description` — for EVERY active
+// project, with no cap of any kind, and the result is re-sent on every step of the
+// stepCountIs(5) loop. `searchProjects` was capped for exactly this reason in quick-050
+// and again in quick-085; this path was simply missed.
+//
+// MEASURED LIVE against 83 active projects, one call:
+//   full rows                  2,067,567 chars  ≈ 558,800 tokens
+//   embedding stripped           254,375 chars  ≈  68,750 tokens  (-87.7%)
+//   + description capped @300     59,469 chars  ≈  16,073 tokens  (-97.1%)
+// Per project: embedding 21,857 chars, description 2,150, everything else 416 — the
+// vector was 98% of the payload, and nothing could use it. TOKEN_CAP is 300,000 per
+// agent per 24h, so ONE broad call could exceed a full day's budget nearly ten times.
+//
+// These tests reproduce the OLD payload from the same fixtures before asserting the new
+// one, so the reduction is demonstrated rather than claimed.
+
+describe('queryInventory strips the embedding (quick-kayinleong-088)', () => {
+  const EMBED_DIM = 1024
+  const DESCRIPTION_CHARS = 2_150 // the live per-project average
+
+  /** A project as Firestore actually returns it — vector, write-up and all. */
+  function makeProjectDoc(i: number) {
+    return {
+      projectId: `proj-${i}`,
+      tenantId: 'd2' as const,
+      name: `Project ${i}`,
+      status: 'active' as const,
+      priceBand: '800k_1.2m' as const,
+      priceValue: 900_000,
+      tenure: 'Freehold',
+      vpStatus: false,
+      vpDate: null,
+      bumiQuota: false,
+      foreignEligible: true,
+      description: `Quick Facts for project ${i}. `.padEnd(DESCRIPTION_CHARS, 'x'),
+      locationText: 'Kuala Lumpur',
+      bedrooms: 2,
+      embedding: Array.from({ length: EMBED_DIM }, (_, d) => (d + i) / 3_301),
+    }
+  }
+
+  const LIVE_PROJECT_COUNT = 83
+  const DOCS = Array.from({ length: LIVE_PROJECT_COUNT }, (_, i) => makeProjectDoc(i))
+
+  it('the OLD payload really was enormous — the baseline is not hypothetical', () => {
+    const before = JSON.stringify(DOCS).length
+    // Same order of magnitude as the live measurement (2,067,567 chars over 83 projects).
+    expect(before).toBeGreaterThan(1_500_000)
+    // And it is the vector, not the prose: ~22k chars of embedding per project.
+    expect(JSON.stringify(DOCS[0].embedding).length).toBeGreaterThan(15_000)
+  })
+
+  it('projecting the rows cuts the payload by more than 95%', async () => {
+    const { toInventoryRows } = await import('./tools')
+    const before = JSON.stringify(DOCS).length
+    const after = JSON.stringify(toInventoryRows(DOCS)).length
+
+    expect(after).toBeLessThan(before * 0.05)
+    // Absolute guard too, so a future fixture change cannot make the ratio pass trivially.
+    expect(after).toBeLessThan(80_000)
+  })
+
+  it('no row carries an embedding, by key or by content', async () => {
+    const { toInventoryRows } = await import('./tools')
+    const rows = toInventoryRows(DOCS)
+    const serialized = JSON.stringify(rows)
+    expect(serialized).not.toContain('embedding')
+    for (const row of rows) {
+      expect('embedding' in row).toBe(false)
+    }
+    // Prove the assertion is not vacuous: the input rows DO carry one.
+    expect(JSON.stringify(DOCS)).toContain('embedding')
+  })
+
+  it('the write-up is excerpted, with a flag telling the model to look further', async () => {
+    const { toInventoryRows, INVENTORY_DESCRIPTION_CHARS } = await import('./tools')
+    const rows = toInventoryRows(DOCS)
+    expect(rows[0].descriptionExcerpt.length).toBe(INVENTORY_DESCRIPTION_CHARS)
+    expect(rows[0].descriptionExcerpt).toBe(
+      DOCS[0].description.slice(0, INVENTORY_DESCRIPTION_CHARS),
+    )
+    // The flag is what stops the excerpt from reading as the whole record — projectDetail
+    // is the path that carries the full write-up.
+    expect(rows[0].descriptionTruncated).toBe(true)
+    expect('description' in rows[0]).toBe(false)
+  })
+
+  it('a short write-up is not flagged as truncated', async () => {
+    const { toInventoryRows } = await import('./tools')
+    const rows = toInventoryRows([{ ...makeProjectDoc(0), description: 'Short.' }])
+    expect(rows[0].descriptionExcerpt).toBe('Short.')
+    expect(rows[0].descriptionTruncated).toBe(false)
+  })
+
+  it('the scalar fields the tool exists to answer with all survive', async () => {
+    const { toInventoryRows } = await import('./tools')
+    const row = toInventoryRows(DOCS)[0]
+    // FIND-07 is "which projects completed VP this year" — dropping vpStatus/vpDate or
+    // the identity fields to save tokens would break the tool instead of bounding it.
+    expect(row).toMatchObject({
+      projectId: 'proj-0',
+      name: 'Project 0',
+      status: 'active',
+      priceValue: 900_000,
+      vpStatus: false,
+      tenure: 'Freehold',
+      locationText: 'Kuala Lumpur',
+      bedrooms: 2,
+    })
+  })
+
+  it('the tool execute returns the projected rows, not the raw docs', async () => {
+    // The wiring assertion: a correct projection that execute never calls is worthless.
+    const { makeQueryInventoryTool } = await import('./tools')
+    mocks.mockQueryInventory.mockResolvedValue(DOCS)
+    const t = makeQueryInventoryTool('en')
+    const execute = t.execute as NonNullable<typeof t.execute>
+    const out = await execute({}, {} as never)
+    const serialized = JSON.stringify(out)
+    expect(serialized).not.toContain('embedding')
+    expect(serialized.length).toBeLessThan(80_000)
+    expect((out as Array<{ descriptionTruncated: boolean }>)[0].descriptionTruncated).toBe(true)
+  })
+})

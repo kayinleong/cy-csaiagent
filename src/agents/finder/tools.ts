@@ -337,12 +337,74 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: Find
 // ─── 2. makeQueryInventoryTool ────────────────────────────────────────────────
 
 /**
+ * Characters of `description` kept per project in a `queryInventory` row
+ * (quick-kayinleong-088).
+ *
+ * `queryInventory` answers LIST questions ("which projects completed VP this year"), and a
+ * list does not need 83 full marketing write-ups — measured at 2,150 chars each. 300 is
+ * enough for the model to recognise a project and decide whether to look it up properly;
+ * `projectDetail` is the path that carries the whole write-up, for one project at a time.
+ */
+export const INVENTORY_DESCRIPTION_CHARS = 300
+
+/** One project as `queryInventory` hands it to the model — no `embedding`, ever. */
+export type InventoryRow = Omit<ProjectDoc, 'embedding' | 'description'> & {
+  projectId: string
+  /** First `INVENTORY_DESCRIPTION_CHARS` chars only. Call projectDetail for the rest. */
+  descriptionExcerpt: string
+  /** True when the write-up was longer than the excerpt — so the model knows to look. */
+  descriptionTruncated: boolean
+}
+
+/**
+ * Strip a `queryInventory` result down to what the model can actually use
+ * (quick-kayinleong-088).
+ *
+ * MEASURED against live Firestore, 83 active projects, one call:
+ *
+ *   full ProjectDoc rows (what shipped before)  2,067,567 chars  ≈ 558,800 tokens
+ *   `embedding` removed                           254,375 chars  ≈  68,750 tokens  (-87.7%)
+ *   + `description` capped at 300                  59,469 chars  ≈  16,073 tokens  (-97.1%)
+ *
+ * Per project: `embedding` 21,857 chars, `description` 2,150, everything else 416. So the
+ * 1024-float vector was **98%** of the payload and was pure waste — the model cannot use a
+ * vector, and nothing downstream read it.
+ *
+ * The 558,800-token figure is the point: `TOKEN_CAP` is 300,000 per agent per 24h
+ * (`src/ratelimit/window.ts`), and this result is re-sent on every step of the Finder's
+ * `stepCountIs(5)` loop. ONE broad `queryInventory` call could exceed a full day's budget
+ * nearly ten times over. `searchProjects` was capped for exactly this reason in quick-050
+ * and quick-085; this path was simply missed.
+ *
+ * Exported so the test can assert the reduction on real-shaped rows.
+ */
+export function toInventoryRows(
+  rows: Array<ProjectDoc & { projectId: string }>,
+): InventoryRow[] {
+  return rows.map((row) => {
+    // Destructured out by name, so the vector cannot survive a future field addition.
+    const { embedding: _embedding, description, ...rest } = row
+    void _embedding
+    const text = typeof description === 'string' ? description : ''
+    return {
+      ...rest,
+      descriptionExcerpt: text.slice(0, INVENTORY_DESCRIPTION_CHARS),
+      descriptionTruncated: text.length > INVENTORY_DESCRIPTION_CHARS,
+    }
+  })
+}
+
+/**
  * AI SDK tool wrapping `queryInventory` — structured Firestore query for
  * inventory questions like "which projects completed VP this year" (FIND-07).
  *
  * READ-ONLY: only calls queryInventory() — no Firestore writes.
  * embedText is NOT called from this tool — pure structured/filtered query.
  * Always enforces status:'active' (done inside queryInventory).
+ *
+ * The result is projected through `toInventoryRows` before the model sees it: the raw
+ * `ProjectDoc` carries a 1024-float `embedding` that was 98% of a 558,800-token payload
+ * (quick-kayinleong-088). See `toInventoryRows` for the measurements.
  *
  * @param userLang  Injected via closure for future i18n of tool descriptions.
  */
@@ -355,7 +417,10 @@ export function makeQueryInventoryTool(userLang: 'en' | 'ms' | 'zh') {
       'Use this for inventory questions like "which projects completed VP this year" or ' +
       '"show active leasehold projects under RM500k". ' +
       'This tool does NOT do semantic/vector matching — use searchProjects for lead matching. ' +
-      'Always returns only active projects.',
+      'Always returns only active projects. ' +
+      'Each row carries a SHORT descriptionExcerpt only; when descriptionTruncated is true and ' +
+      'you need the full write-up, layouts, fees or documents for a project, call projectDetail ' +
+      'with its projectId.',
     inputSchema: z.object({
       vpDateFrom: z
         .string()
@@ -378,10 +443,10 @@ export function makeQueryInventoryTool(userLang: 'en' | 'ms' | 'zh') {
         .optional()
         .describe('Filter by VP completion status. Omit for all statuses.'),
     }),
-    execute: async (input): Promise<Array<ProjectDoc & { projectId: string }> | ToolFailure> =>
+    execute: async (input): Promise<InventoryRow[] | ToolFailure> =>
       // READ-ONLY: calls queryInventory, no Firestore writes.
       // Infra errors are caught and returned as a grounded inventory_unavailable signal.
-      runReadOnly('queryInventory', () => {
+      runReadOnly('queryInventory', async () => {
         const filters: InventoryFilters = {}
 
         if (input.vpDateFrom) {
@@ -397,7 +462,11 @@ export function makeQueryInventoryTool(userLang: 'en' | 'ms' | 'zh') {
           filters.vpStatus = input.vpStatus
         }
 
-        return queryInventory(filters)
+        // Project BEFORE returning, not in a toModelOutput: nothing anywhere wants the
+        // vector, so it should not exist on this path at all. `searchProjects` uses
+        // toModelOutput because its raw result IS needed (by the route, for the client
+        // table); this one has no second consumer.
+        return toInventoryRows(await queryInventory(filters))
       }),
   })
 }
