@@ -11,9 +11,15 @@ collateral, and imports the result into the app's **inventory** (`projects` +
 login.ts ─▶ scrape.ts ─▶ projects.json ─▶ to-inventory.ts (dry-run ─▶ --apply) ─▶ Firestore
                               │
 gdrive-login.ts ─▶ gdrive-crawl.ts ─▶ drive-documents.json  (index of every Drive file)
+                                              │
+                                              ▼
+                    to-kb.ts (text) ─▶ to-kb-ocr.ts (image-only PDFs) ─▶ kbDocs / kbChunks
+                              └── both gated by drive-kb-ledger.json ──┘
 ```
 
 ## Files
+
+### Scrape → inventory
 
 | File | Role |
 | --- | --- |
@@ -21,8 +27,20 @@ gdrive-login.ts ─▶ gdrive-crawl.ts ─▶ drive-documents.json  (index of ev
 | `scrape.ts` | Reads the classroom tree, opens every project, writes `projects.json` |
 | `extract.ts` | Attachment → text (pdfjs / mammoth / word-extractor / xlsx) |
 | `gdrive-login.ts` | One-time **interactive** Google login → saves `google-state.json` |
+| `gdrive-save-state.ts` | Rescues a sign-in `gdrive-login.ts` discarded: re-verifies the saved `google-profile` by URL instead of one brittle selector, then writes `google-state.json` |
 | `gdrive-crawl.ts` | Walks all Drive folders, indexes every file → `drive-documents.json` |
 | `to-inventory.ts` | `projects.json` → inventory (LLM-extract → dry-run → `--apply` + token meter) |
+
+### Drive → knowledge base
+
+| File | Role |
+| --- | --- |
+| `to-kb.ts` | Text-bearing Drive docs → `kbDocs`/`kbChunks` (dry-run → `--apply`); marks image-only PDFs `skipped-empty` for OCR |
+| `to-kb-ocr.ts` | Picks up those `skipped-empty` PDFs → Gemini vision transcription → KB. Run **after** `to-kb.ts` |
+| `rebuild-kb-ledger.ts` | Reconstructs a lost `drive-kb-ledger.json` from Firestore, joining kbDoc title back to the Drive index |
+| `kb-cleanup.ts` | ⚠ **Destructive, no dry-run:** deletes the kbDoc + job + chunks behind every `partial` ledger row, then strips those rows. Defines what `partial` means |
+| `kb-token-sum.ts` | Read-only accounting: kbDocs / OCR docs / chunks / total Gemini embedding tokens |
+| `ocr-token-split.ts` | Read-only accounting: the same totals split by source (OCR vs WhatsApp vs Drive text) |
 
 ## Outputs
 
@@ -32,6 +50,7 @@ gdrive-login.ts ─▶ gdrive-crawl.ts ─▶ drive-documents.json  (index of ev
 | `drive-documents.json` | Full index of every Drive file (name, type, folder, project) |
 | `projects.inventory.json` | Dry-run preview: each project mapped to a `ProjectDoc` + collateral |
 | `projects.tokens.json` | Per-project token usage for the LLM extraction + embedding |
+| `drive-kb-ledger.json` | Per-Drive-file KB ingest status — the idempotency guard for `to-kb.ts` / `to-kb-ocr.ts`. Losing it blocks the OCR stage entirely; `rebuild-kb-ledger.ts` reconstructs it |
 
 ## Auth — why the interactive logins
 
