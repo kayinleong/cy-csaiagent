@@ -185,6 +185,20 @@ export interface LeadContextDoc {
  * no magic strings in callers.
  */
 export const PRICE_BANDS = [
+  /**
+   * No asking price on record (`priceValue <= 0`).
+   *
+   * quick-kayinleong-088: before this band existed, `priceBandFor(0)` returned
+   * `'under_500k'`, so 36 of 87 projects with no price were stored — and
+   * pre-filtered — as if they were the cheapest stock in the inventory. A client
+   * asking for "under RM500k" got a list dominated by projects whose price is
+   * simply unknown. `src/agents/finder/schema.ts` had already documented the trap
+   * and worked around it by omitting `priceBand` from the model-facing row.
+   *
+   * 'price_unknown' is deliberately NOT a price. Never render it as one, and never
+   * treat it as satisfying a budget bound.
+   */
+  'price_unknown',
   'under_500k',
   '500k_800k',
   '800k_1.2m',
@@ -200,12 +214,16 @@ export type PriceBand = typeof PRICE_BANDS[number]
  * the stored `priceBand` is always consistent with the stored `priceValue`.
  *
  * Band boundaries (v1 — confirm with Derek if revised):
+ *   <= 0              → 'price_unknown'   ← no price on record, NOT "cheap"
  *   < 500,000         → 'under_500k'
  *   500,000 – 799,999 → '500k_800k'
  *   800,000 – 1,199,999 → '800k_1.2m'
  *   ≥ 1,200,000       → 'above_1.2m'
  */
 export function priceBandFor(priceValue: number): PriceBand {
+  // `0` is the encoded "unknown" sentinel the importer writes when the source
+  // write-up states no total price. It must not fall through to 'under_500k'.
+  if (!Number.isFinite(priceValue) || priceValue <= 0) return 'price_unknown'
   if (priceValue < 500_000) return 'under_500k'
   if (priceValue < 800_000) return '500k_800k'
   if (priceValue < 1_200_000) return '800k_1.2m'
@@ -292,8 +310,81 @@ export interface ProjectDoc {
    */
   sizeMinSqft?: number | null
   sizeMaxSqft?: number | null
+  /**
+   * Stated **asking** price per square foot, in RM (quick-kayinleong-088).
+   *
+   * Many D2 write-ups quote ONLY a psf rate and never a total — "Gross Price: RM720 psf",
+   * "Price: RM1,400 psf (Gross)", "RM900-1000psf". Before these fields existed the
+   * extractor turned those rates into a total by multiplying by a square footage it
+   * invented, producing prices that appear authoritative and are simply wrong (Luminar
+   * Residence Subang was stored as RM360,000 from "RM720 psf" on a write-up that says
+   * "Prices below RM800K"). Storing the rate as a rate is the honest representation.
+   *
+   * ⚠ Do NOT confuse with the maintenance / sinking-fund psf, which is RM0.20–2.00 psf.
+   * An asking rate is RM200–5,000 psf. The two are one line apart in most write-ups and
+   * conflating them is the single easiest way to corrupt this field.
+   *
+   * `null` / absent means no rate stated. Never multiply these by a size to synthesise a
+   * total — that is the exact defect these fields exist to prevent.
+   */
+  pricePsfMin?: number | null
+  pricePsfMax?: number | null
+  /**
+   * Where `priceValue` came from (quick-kayinleong-088). Guards against silently
+   * re-introducing model-authored prices.
+   *
+   *   'stated'  — a total price is written verbatim in the source text
+   *   'psf_only'— the source states only a psf rate; `priceValue` is 0 and the rate lives
+   *               in `pricePsfMin`/`pricePsfMax`
+   *   'unknown' — the source states no price of any kind
+   *
+   * Absent on legacy docs written before this field existed. Treat absent as unverified.
+   */
+  priceProvenance?: 'stated' | 'psf_only' | 'unknown'
+  /**
+   * Per-layout breakdown: size → bedrooms → price range (quick-kayinleong-088).
+   *
+   * Backs the "more details" answer a D2 agent is expected to give a client, e.g.
+   * "504sf Studio — from RM1.24–1.8mil / 770sf 1+1 Room — from RM1.8–2.7mil". A single
+   * project-level `priceValue` + sqft span cannot express that.
+   *
+   * Populated **deterministically** from the stored `description` — never model-authored.
+   * This follows the `sizeMinSqft`/`sizeMaxSqft` precedent set by D1: parse in
+   * `src/inventory/unit-types.ts`, persist via a backfill script, and have nothing at
+   * render time re-parse prose. `raw` keeps the verbatim source line so every rendered
+   * figure stays auditable back to the write-up (grounding is mandatory).
+   *
+   * Absent / empty means the write-up has no per-layout table — true for most projects.
+   * Render nothing rather than guessing.
+   */
+  unitTypes?: UnitTypeEntry[]
   /** 1024-d normalized vector (Gemini gemini-embedding-001) */
   embedding: number[]
+}
+
+/**
+ * One layout a project offers (quick-kayinleong-088).
+ *
+ * Every numeric field is nullable because write-ups are inconsistent: some state size and
+ * bedrooms with no price, some a price with no size, some a type code only ("Type H1
+ * (North Wing), 4+1 rooms, 3380sft"). `null` means "not stated" — never zero, never a
+ * guess.
+ */
+export interface UnitTypeEntry {
+  /** Layout label as written, e.g. 'Studio', '1+1 Room', 'Type H1 (North Wing)'. */
+  label: string
+  /** Built-up size in sqft, or null when unstated. */
+  sizeSqft: number | null
+  /**
+   * Bedroom count. `1+1` layouts store 1 — the "+1" is a study/utility room, not a
+   * bedroom, and counting it inflates matches against a client's bedroom requirement.
+   */
+  bedrooms: number | null
+  /** Price range in RM for this layout. Both null when the write-up states no price. */
+  priceMinRM: number | null
+  priceMaxRM: number | null
+  /** Verbatim source line this entry was parsed from — the audit trail for grounding. */
+  raw: string
 }
 
 export interface CollateralDoc {
