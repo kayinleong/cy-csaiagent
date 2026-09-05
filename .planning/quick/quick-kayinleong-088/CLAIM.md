@@ -85,8 +85,26 @@ re-running the same semantic search. The model sees only `MAX_MATCHES=8`, so cli
   `backfill-kbchunk-vectors.ts --pillar finder --apply` (25,153 converted; the other 57 were
   already done by quick-066). Zero token cost — it re-wraps existing vectors.
 
+- **Finder retrieval lane — DONE** (commits `8ba6992`, `a0c90d2`, `f8a1871`, `981ccc5`):
+  - `src/inventory/search.ts` — new `getProjectDetail(projectId)` + `ProjectDetail` type. A
+    direct `projects/{pid}` read; the repo had no by-id or by-name lookup at all. Built
+    field-by-field, never a spread, so `embedding` is structurally unreachable from a model
+    payload and a future `ProjectDoc` field cannot leak into one by default.
+  - `src/agents/finder/tools.ts` — `makeProjectDetailTool`: the scalars **plus
+    `description`**, `unitTypes`, `pricePsfMin/Max`, `priceProvenance`, ranked `collateral`,
+    and `retrieve(name + question, lang, { pillar:'finder' })` for the sales-kit prose with
+    its chunk IDs. Registered as a fourth tool in `finder/index.ts`.
+  - `src/agents/finder/prompt.ts` — a "DETAIL REQUEST" section binding the marker
+    `projectId: <id>` to `projectDetail` and forbidding `searchProjects` for it; plus the
+    `unitTypes`-verbatim, psf-is-a-rate-not-a-total, cite-the-KB and no-bank-in-details rules.
+  - `src/i18n/messages/{en,ms,zh}.json` + `match-table.tsx` — the Details button now emits
+    that marker in all three languages (marker deliberately untranslated).
+  - `src/agents/finder/tools.ts` — `toInventoryRows` strips `embedding` from
+    `queryInventory`'s result and excerpts `description`.
+  - `src/rag/search.ts` — `MIN_SIMILARITY` re-measured and now **per-pillar**
+    (`MIN_SIMILARITY_BY_PILLAR` + `minSimilarityFor`).
+
 In flight (parallel executors): unit-type parser + price correction + completeness report;
-`projectDetail` tool + Details-button fix + embedding cap + similarity-floor re-measurement;
 ETL provider switch + prompt hardening + Drive ledger rebuild.
 
 ## Verification
@@ -110,11 +128,89 @@ hour earlier:
 The Task 1 reference content — panel bankers with margins, selling prices, maintenance fee psf,
 per-unit SPA price tables — **is in the corpus and now reachable.**
 
+### Finder retrieval lane — measured results
+
+**`projectDetail`, live, on the real corpus** (`PDH: Imperial Residences RA`,
+`WsCKdwpNCvFwHy5cHTH6`): `found:true`, **2,827 chars of write-up** (the field every other
+Finder path dropped), 12 ranked collateral items out of 288, **5 KB citations** whose top
+chunk is `Panel Bankers EF for Imperial Residences RA: 1. MBB (Margin up to 90%} 2. CIMB
+(Margin up to 85%)…` — content the prior research measured as **0 of 82** in the Skool
+corpus. Whole payload 13,078 chars (~3,535 tokens) for one project; no `embedding`; an
+unknown ID returns `found:false`.
+
+**Status decision.** `projectDetail` does NOT filter `status:'active'`; `searchProjects` and
+`queryInventory` still do and were not touched. A detail lookup is not a recommendation —
+an agent who cannot look up a sold-out project cannot tell a lead it is sold out. The guard
+rail is that `status` travels with the payload and a loud `availability` warning is raised
+for anything non-active, which the prompt requires the agent to lead with. Pinned by test
+(`sold_out` and `hidden` both flagged; `active` carries no warning field, so the field keeps
+its meaning; `searchProjects` still asserts `['status','==','active']`).
+
+**Details-button fix, proved by reproducing the failure.** On a real 50-project search with
+the Details sentence as `freeText`, the target sits at index **36** of the raw result and is
+**absent** from the tool's actual `toModelOutput` projection, which carries eight different
+projects (`proj-0` first). The by-id read then resolves that same ID with no embed call and
+no collection scan. All 50 resolve by ID.
+
+**Embedding payload, measured through the real code path** (83 active projects, one call):
+`2,067,567 chars ≈ 558,800 tokens` → `62,374 chars ≈ 16,858 tokens`, **−96.98%**. Per
+project the vector was 21,857 of ~24,400 chars (**98%**). Against a `TOKEN_CAP` of 300,000
+per agent per 24h, one broad call could have exceeded a full day's budget ~10x.
+
+**Similarity floor, re-measured 2026-09-05** — 10 relevant + 10 off-topic controls per
+pillar, `findNearest` with no threshold:
+
+| pillar | chunks | RELEVANT top | CONTROL top | all-chunk gap | floor |
+|---|---|---|---|---|---|
+| finder | 25,153 | 0.7114 – 0.8337 | 0.5423 – 0.6152 | 0.6152 → 0.6884 | **0.65** |
+| coach | 47 | 0.5632 – 0.7076 | 0.4701 – 0.5321 | 0.5321 → 0.5395 | **0.55** |
+| reply | 10 | 0.6228 – 0.7457 | 0.4448 – 0.5328 | 0.5328 → 0.5666 | **0.55** |
+
+At 0.55, **52 of 80** finder control chunks were admitted. One number cannot serve all
+three: 0.65 on coach would return nothing for "how do I get my REN tag" (top 0.5632); 0.55
+on finder admits banana bread. The no-pillar default is the finder number because an
+unfiltered query searches a corpus that is 99.8% finder chunks — verified on that path.
+Two caveats recorded in the code comment, not smoothed over: 0.55 sits *above* the 0.0074-wide
+coach gap (drops the tail of the top-8, keeps every real question's best chunk), and
+coach/reply remain thin at 47 and 10 chunks.
+
 ### Regression surface opened by this claim
-- `MIN_SIMILARITY = 0.55` was measured against a **14-chunk** corpus and its own comment says to
-  re-measure. On the now-reachable 25,153-chunk corpus the controls clear it (0.5700 > 0.55), so
-  off-topic questions can return citable chunks. **Assigned for re-measurement.** This exposure
-  is *created* by enabling retrieval, so it is in scope, not a separate concern.
+- ~~`MIN_SIMILARITY = 0.55` needs re-measurement~~ **DONE** (`981ccc5`) — see the table
+  above. Per-pillar floors; `src/rag/search.ts` is the only consumer, so no call site changed.
+- **Known behaviour change, and it is a truthfulness fix.** `src/agents/coach/tools.ts` calls
+  `retrieve(query, userLang)` with **no pillar**, so coach questions are answered from the
+  finder corpus today ("how do I get my REN tag" → 8 property write-up chunks, 0 coach
+  chunks). Under the 0.65 default those return nothing and the Coach emits an honest
+  `kb_miss` + handoff (D-10) instead of citing project marketing at an onboarding question.
+  The real fix is for the Coach to pass `{ pillar: 'coach' }` — separate claim, a file this
+  lane does not own.
+- **`queryInventory`'s tool-result shape changed** (`ProjectDoc` → `InventoryRow`:
+  no `embedding`, `description` → `descriptionExcerpt` + `descriptionTruncated`). Ruled out:
+  the route does not read this tool's result (only `searchProjects`' sink feeds
+  `messageMetadata`), nothing persists it, and every scalar FIND-07 answers with is
+  untouched — asserted by test.
+- **Adding a fourth tool key** widens `ReturnType<typeof finderAgent.makeTools>`, which
+  `app/api/chat/route.ts` derives `agentTools` from. Typecheck clean; `route.test.ts` green.
+- Ruled out for `getProjectDetail`: purely additive to `src/inventory/search.ts` (161
+  insertions, 1 deletion — an import line), and it shares no code path with the Stage-A/B
+  search. `searchProjects`, `queryInventory` and the location/price/affordability gates are
+  byte-identical.
+
+### Test evidence
+`npm run typecheck` clean apart from the two pre-existing `.next/dev/types/validator.ts`
+generated-file errors. `npx vitest run src/agents/finder src/inventory/search.test.ts
+src/inventory/crud.test.ts src/rag "app/[lang]/chat"` → **19 files, 408 passed, 4 skipped**.
+New: `src/agents/finder/project-detail.test.ts` (22), plus blocks appended to
+`tools.test.ts`, `rag.test.ts` and `match-table.test.ts`.
+
+⚠ **Unrelated failures seen in the full-suite run, NOT from this lane:**
+`tests/finder-corpus-gates.test.ts` (7) and `src/inventory/size-extract.test.ts` (10) assert
+corpus counts read from `projects.inventory.json` — a **gitignored local fixture**
+(`.gitignore:59`) that a parallel executor regenerated at 22:25 with **3 records** instead
+of the 82 those tests were measured against. Neither file imports anything this lane
+changed (`locationNeedles`, `projectMatchesLocation`, `projectMatchesPrice`,
+`extractSizeRange` are all untouched). Regenerate the full 82-record fixture before reading
+those suites.
 - Adding `'price_unknown'` to `PRICE_BANDS` widens a model-facing tool enum
   (`finder/tools.ts:359`). Typecheck found no exhaustive-switch breakage.
 - Nulling 21 prices means more `priceValue: 0` rows. `priceBand` text sits inside the project
