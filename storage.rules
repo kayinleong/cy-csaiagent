@@ -30,6 +30,25 @@ service firebase.storage {
                    && request.resource.size < 200 * 1024 * 1024;
     }
 
+    // Raw WhatsApp export archives (quick-kayinleong-088).
+    //
+    // The admin WhatsApp-import surface parses an export in-browser and ingests only the
+    // transcript + media. The raw .zip was previously discarded, so a chat that failed to
+    // chunk left nothing to re-ingest from — 20 WhatsApp kbDocs hold zero chunks and their
+    // source is unrecoverable, because kbDocs stores no text. Archiving the .zip makes a
+    // re-ingest possible without asking the operator to find the file again.
+    //
+    // ⚠ READ IS ADMIN-ONLY — deliberately stricter than `collateral/` above. A raw export
+    // is unredacted: participant phone numbers, names and message bodies. Under the PDPA
+    // posture this is the most sensitive object the app stores, and `isSignedIn()` would
+    // expose it to every new agent. Do not relax this to match collateral.
+    match /whatsapp-imports/{allPaths=**} {
+      allow read: if isAdmin();
+      // 1 GB: a media-heavy export is far larger than any single collateral asset.
+      allow write: if isAdmin()
+                   && request.resource.size < 1024 * 1024 * 1024;
+    }
+
     // Deny everything not explicitly matched above.
     match /{allPaths=**} {
       allow read, write: if false;

@@ -63,6 +63,23 @@ interface ParsedZip {
 
 type StepStatus = 'pending' | 'running' | 'done' | 'error'
 
+/**
+ * Progress of archiving the RAW .zip to Storage (quick-kayinleong-088).
+ *
+ * Separate from `Progress` below because it is not part of the ingest pipeline: it runs at
+ * parse time, before a target project even exists, and a failure here must not block the
+ * operator from ingesting. `path` is the Storage object path, which the UI shows so it can
+ * be quoted when asking for a re-ingest.
+ */
+interface ArchiveState {
+  status: StepStatus
+  path: string
+  bytes: number
+  /** 0–100, from the resumable upload's byte counters. */
+  pct: number
+  error?: string
+}
+
 interface Progress {
   projectStep: StepStatus
   kbStep: StepStatus
@@ -95,6 +112,15 @@ function safeStorageName(name: string): string {
   return base.replace(/[^\w.\-() ]+/g, '_')
 }
 
+/** Human-readable byte size for the archive summary (locale-independent, so no ICU needed). */
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  const value = bytes / 1024 ** i
+  return `${value >= 10 || i === 0 ? Math.round(value) : value.toFixed(1)} ${units[i]}`
+}
+
 interface Props {
   lang: string
   projects: ProjectOption[]
@@ -119,6 +145,76 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
 
   // The parsed JSZip is retained so media blobs can be pulled lazily at ingest time.
   const zipRef = useRef<JSZip | null>(null)
+  // Raw-.zip archive to Storage (quick-kayinleong-088) — independent of ingest.
+  const [archive, setArchive] = useState<ArchiveState | null>(null)
+
+  // ── Step 1b: archive the RAW .zip to Storage ───────────────────────────────
+  /**
+   * Upload the untouched .zip to `whatsapp-imports/` (quick-kayinleong-088).
+   *
+   * WHY: the import previously kept only what it could parse. When chunking produced
+   * nothing, the source was gone — 20 WhatsApp kbDocs currently hold zero chunks and
+   * `KbDocDoc` stores no text, so there is nothing in Firestore to re-ingest from and the
+   * operator has to locate the original export by hand. Keeping the archive makes a
+   * re-ingest a server-side job instead of a request to the person who uploaded it.
+   *
+   * Deliberately NON-FATAL. It runs at parse time, before a target project exists, and a
+   * Storage misconfiguration must not stop the operator ingesting — the archive is a
+   * safety net, not a precondition. Failure is surfaced in the UI and logged, and the
+   * pipeline continues.
+   *
+   * Uses `uploadBytesResumable`, not `uploadBytes` + a timeout like the media loop below:
+   * a media file is small enough that a 30 s ceiling means "hung", but an export .zip can
+   * be hundreds of MB where the same ceiling would abort a healthy upload. Resumable
+   * gives real byte progress instead, so a slow upload is visibly slow rather than dead.
+   */
+  async function archiveZip(file: File) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const path = `whatsapp-imports/${stamp}__${safeStorageName(file.name)}`
+    setArchive({ status: 'running', path, bytes: file.size, pct: 0 })
+    try {
+      // Same lazy-import discipline as the media loop (quick-kayinleong-046): never hoist
+      // `firebase/storage` to module scope — it is a ~353 KB chunk.
+      const [{ ref: storageRef, uploadBytesResumable }, storage] = await Promise.all([
+        import('firebase/storage'),
+        getClientStorage(),
+      ])
+      // storage.rules gates this on the `admin` custom claim; refresh so a stale token
+      // cannot fail the write with a misleading permission error.
+      await getFreshIdToken()
+
+      const task = uploadBytesResumable(storageRef(storage, path), file, {
+        contentType: 'application/zip',
+        // Metadata only — never message content. Enough to identify the archive later
+        // without opening it.
+        customMetadata: {
+          originalName: file.name,
+          uploadedBy: clientAuth.currentUser?.uid ?? 'unknown',
+          uploadedAt: new Date().toISOString(),
+        },
+      })
+
+      await new Promise<void>((resolve, reject) => {
+        task.on(
+          'state_changed',
+          (snap) => {
+            const pct = snap.totalBytes > 0 ? Math.round((snap.bytesTransferred / snap.totalBytes) * 100) : 0
+            setArchive((a) => (a ? { ...a, pct } : a))
+          },
+          reject,
+          () => resolve(),
+        )
+      })
+
+      setArchive({ status: 'done', path, bytes: file.size, pct: 100 })
+      toast.success(t('archiveDone'))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setArchive({ status: 'error', path, bytes: file.size, pct: 0, error: message })
+      // Warning, not error: ingest is still fully available.
+      toast.warning(`${t('archiveFailed')}: ${message}`)
+    }
+  }
 
   // ── Step 1: parse the uploaded zip in-browser ──────────────────────────────
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -127,6 +223,7 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
     setBusy(true)
     setClassification(null)
     setProgress(null)
+    setArchive(null)
     try {
       const zip = await JSZip.loadAsync(file)
       zipRef.current = zip
@@ -158,6 +255,11 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
       setMode('new')
       setSelectedProjectId(initialProjects[0]?.id ?? '')
       setPhase('parsed')
+
+      // Archive the raw .zip in the background. Deliberately not awaited: the operator can
+      // classify and ingest while a large upload finishes, and only a VALID export is
+      // archived because this runs after `_chat.txt` parsed successfully.
+      void archiveZip(file)
 
       if (transcript.length > MAX_TRANSCRIPT_CHARS) {
         toast.warning(t('transcriptLarge'))
@@ -468,6 +570,54 @@ export function WhatsAppImportForm({ lang, projects: initialProjects }: Props) {
               <dt className="text-muted-foreground">{t('mediaFiles')}</dt>
               <dd className="font-medium">{parsed.mediaEntries.length}</dd>
             </dl>
+          )}
+
+          {/* Raw-.zip archive (quick-kayinleong-088). Shown separately from the parse
+              summary because it is not part of ingest — it can still be uploading, or have
+              failed, while classify/ingest proceed normally. The path is rendered in full
+              and selectable so it can be quoted when requesting a re-ingest. */}
+          {archive && (
+            <div className="mt-4 rounded-md border bg-muted/40 p-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted-foreground">{t('archiveLabel')}</span>
+                <span
+                  className={
+                    archive.status === 'done'
+                      ? 'font-medium text-emerald-600 dark:text-emerald-400'
+                      : archive.status === 'error'
+                        ? 'font-medium text-destructive'
+                        : 'font-medium text-muted-foreground'
+                  }
+                >
+                  {archive.status === 'done'
+                    ? t('archiveStatusDone', { size: formatBytes(archive.bytes) })
+                    : archive.status === 'error'
+                      ? t('archiveStatusError')
+                      : t('archiveStatusRunning', { pct: archive.pct })}
+                </span>
+              </div>
+
+              {archive.status === 'running' && (
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{ width: `${archive.pct}%` }}
+                  />
+                </div>
+              )}
+
+              {archive.status === 'done' && (
+                <p className="mt-2 font-mono text-xs break-all select-all text-muted-foreground">
+                  {archive.path}
+                </p>
+              )}
+
+              {archive.status === 'error' && (
+                <p className="mt-2 text-xs text-destructive">{archive.error}</p>
+              )}
+
+              <p className="mt-2 text-xs text-muted-foreground">{t('archiveHint')}</p>
+            </div>
           )}
         </CardContent>
         {parsed && phase === 'parsed' && (
