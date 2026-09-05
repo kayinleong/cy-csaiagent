@@ -3,7 +3,7 @@
 - session: claude-code
 - branch: main
 - started: 2026-09-05
-- status: in-progress
+- status: done
 - summary: the Finder's Price column was not a render bug — 36 of 87 projects hold no price, and 21 of the 51 that do were INVENTED by the extractor multiplying a psf rate by a square footage it made up. Separately, all 25,153 finder kbChunks were stored as plain arrays, so `findNearest` silently returned nothing and the entire Skool/Drive/WhatsApp knowledge base was unreachable
 
 ## The two reported symptoms
@@ -104,8 +104,38 @@ re-running the same semantic search. The model sees only `MAX_MATCHES=8`, so cli
   - `src/rag/search.ts` — `MIN_SIMILARITY` re-measured and now **per-pillar**
     (`MIN_SIMILARITY_BY_PILLAR` + `minSimilarityFor`).
 
-In flight (parallel executors): unit-type parser + price correction + completeness report;
-ETL provider switch + prompt hardening + Drive ledger rebuild.
+- **Data lane — DONE** (`faae499`, `d87ee10`, `f01a3b3`, plus the price apply):
+  - `src/inventory/unit-types.ts` + 50 tests — deterministic regex parser, no LLM, mirroring
+    the `size-extract.ts` / D1 precedent. Handles both corpus orderings, `sf`/`sft`/`sqft`,
+    `k`/`m`/`mil`, and treats `1+1Room` as 1 bedroom. Every guard mutation-tested by
+    reintroducing the bug, which exposed a psf guard that could never fire (removed rather
+    than shipped as untested dead weight). **50 of 82 write-ups tabulate layouts** — the
+    opposite of the 7/82 the earlier research implied, which counted only layout tables that
+    also carry prices.
+  - `scripts/fix-fabricated-prices.ts --apply` — classified all 87 from the live
+    `description`: **stated 32 · psf_only 20 · unknown 35**. 21 `priceValue` → 0 (exactly the
+    21 predicted), 57 `priceBand` recomputed, 20 psf rates stored, provenance on all 87.
+    Idempotent; re-run is a no-op.
+  - `scripts/backfill-unit-types.ts --apply` — 50 projects, **261 layout entries** (24
+    priced, 180 with bedrooms). Not re-embedded, per D1.
+  - `scripts/data-completeness-report.ts` → `DATA-COMPLETENESS.md`.
+- **ETL lane — DONE** (`66c4328`, `89f88cf`, `d9f98c1`):
+  - `to-inventory.ts` — one `buildExtractModel()` helper behind an `EXTRACT_PROVIDER` switch
+    (`google` → `@ai-sdk/google`; unset/`anthropic` → unchanged, `/v1` pin intact) so the
+    provider cannot drift between call sites.
+  - Prompt + schema hardened against the fabrication, with **mechanical guards** rather than
+    prompt text alone: `priceEvidence` requires the model to quote the verbatim substring and
+    the price is zeroed if it is not found in the source; `sanePsf()` clamps to RM200–5,000
+    so a RM0.88 maintenance fee can never land in a price field. Truncation raised
+    6,000 → 24,000 chars (longest write-up is 6,855 — Royal Lexis's price sat at 6,332).
+  - `rebuild-kb-ledger.ts` — reconstructs the lost ledger from Firestore. My follow-up fix:
+    a matched kbDoc must have **≥1 chunk** to count as ingested, which pulled 40 scanned
+    sales-kit PDFs back into the queue instead of marking them done forever.
+  - `.gitignore` — `skool-state.json` / `google-state.json` / `google-profile/` hold **live
+    auth cookies** and matched no ignore pattern.
+- **`scripts/reembed-projects.ts --apply`** — 87 vectors refreshed after the band change.
+- **`src/agents/coach/tools.ts`** — `{ pillar: 'coach' }` on both retrieve calls (see
+  Regression surface).
 
 ## Verification
 
@@ -203,24 +233,115 @@ src/inventory/crud.test.ts src/rag "app/[lang]/chat"` → **19 files, 408 passed
 New: `src/agents/finder/project-detail.test.ts` (22), plus blocks appended to
 `tools.test.ts`, `rag.test.ts` and `match-table.test.ts`.
 
-⚠ **Unrelated failures seen in the full-suite run, NOT from this lane:**
-`tests/finder-corpus-gates.test.ts` (7) and `src/inventory/size-extract.test.ts` (10) assert
-corpus counts read from `projects.inventory.json` — a **gitignored local fixture**
-(`.gitignore:59`) that a parallel executor regenerated at 22:25 with **3 records** instead
-of the 82 those tests were measured against. Neither file imports anything this lane
-changed (`locationNeedles`, `projectMatchesLocation`, `projectMatchesPrice`,
-`extractSizeRange` are all untouched). Regenerate the full 82-record fixture before reading
-those suites.
-- Adding `'price_unknown'` to `PRICE_BANDS` widens a model-facing tool enum
-  (`finder/tools.ts:359`). Typecheck found no exhaustive-switch breakage.
-- Nulling 21 prices means more `priceValue: 0` rows. `priceBand` text sits inside the project
-  embedding, so corrected projects are candidates for re-embedding — to be quantified, not
-  silently skipped.
+**Full suite, after the fixture was restored: 77 files passed / 4 skipped · 1337 tests
+passed / 197 skipped · 0 failures.**
 
-### Still outstanding
-- Drive coverage: ~90–133 text-bearing files unaccounted for, 94 OCR'd PDFs unrecovered, and
-  **3,573 images with no ingest path at all** — likely where the remaining per-layout price
-  tables and floor plans live.
-- `drive-kb-ledger.json` and the `google-profile` session dir are gone from disk; the ledger
-  must be rebuilt from Firestore before any re-ingest, or `to-kb.ts --apply` duplicates
-  everything.
+The 17 failures a parallel lane reported were mine: my 3-project live Gemini test overwrote
+`projects.inventory.json`, a gitignored 82-record fixture that `finder-corpus-gates.test.ts`
+and `size-extract.test.ts` read. Regenerating it in full both repaired the fixture and
+validated the new extraction across the whole corpus — **82 mapped, 0 validation errors, 0
+extraction failures, 34 psf rates captured, 0 unverifiable prices**.
+
+### Corpus gates re-baselined — the movement IS the result
+`tests/finder-corpus-gates.test.ts` pinned pre-correction counts. Updated, with the reason
+recorded in the test:
+
+| Gate | Before | After |
+|---|---|---|
+| unpriced projects | 32 | **52** |
+| survive a RM1m budget | 50 | **61** |
+| priced *within* that budget | 18 | **9** |
+
+That last row is the sharpest measure of what this was worth: of 18 projects that matched a
+RM1m budget on a real-looking number, only **9** had a total price written anywhere in
+source. Nine were arithmetic. More rows survive now, not fewer, because an unpriced project
+passes any bound — the table is honest about what it does not know instead of filling the
+column with invention.
+
+### Stale vectors — closed
+`composeProjectEmbeddingText` includes `priceBand`, and the price fix recomputed the band for
+57 of 87 projects by writing Firestore directly, bypassing `updateProject`'s
+embed-on-relevant-change guard. Left alone, that reproduces the original bug in the vector
+space: 36 unpriced projects were embedded as `under_500k`, so a semantic query for cheap
+stock keeps matching them.
+
+`scripts/reembed-projects.ts --apply` → **87 embedded, 0 failed, 0 dim mismatch**, written
+with `FieldValue.vector()`. Final band distribution:
+
+```
+price_unknown 57 · above_1.2m 19 · 500k_800k 7 · 800k_1.2m 4     (under_500k: 0, was 38)
+```
+
+### Live end-state of the projects the audit named
+
+| Project | `priceValue` | psf | provenance | band | layouts | vector |
+|---|---:|---|---|---|---:|---|
+| Luminar Residence Subang | 0 | 720 | psf_only | price_unknown | 5 | ✓ |
+| Bangsar Hill Park | 0 | 900–1000 | psf_only | price_unknown | 6 | ✓ |
+| PDH: Imperial Residences RA | 0 | **1700–2300** | psf_only | price_unknown | 4 | ✓ |
+| The Lantern Bangsar | 0 | 1400 | psf_only | price_unknown | 5 | ✓ |
+| Pinnacle Bangsar Residence | 0 | 1100–1300 | psf_only | price_unknown | 3 | ✓ |
+
+Imperial Residences reads `1700–2300` psf, which is verbatim its source
+("Price range: Rm1700 - Rm2300 per sft"). It was previously stored as RM1,700,000 —
+1700 × an invented 1,000 sqft.
+
+### Data completeness (the report the user asked for)
+`DATA-COMPLETENESS.md`, live-measured. 87 projects / 83 active. What a client asking
+"how much?" can be told:
+
+| Price signal | All 87 | Active |
+|---|---:|---:|
+| a stated total | 30 (34.5%) | 30 (36.1%) |
+| a psf rate only | 20 (23.0%) | 20 (24.1%) |
+| per-layout prices only | 0 | 0 |
+| **nothing** | **37 (42.5%)** | **33 (39.8%)** |
+
+Missing-field ranking: `pricePsf` 67 · `vpDate` 64 · `priceValue` 57 · `unitTypes` 37 ·
+`bedrooms` 33 · `size` 20 · `tenure`/`locationText` 4 (all hidden docs) · `collateral` 1 ·
+`description` 0.
+
+### Regression surface
+- `'price_unknown'` widens a model-facing tool enum (`finder/tools.ts:359`). Typecheck found
+  no exhaustive-switch breakage; full suite green.
+- **Coach retrieval regression, found and fixed inside this claim.** Both `retrieve()` calls
+  in `src/agents/coach/tools.ts` passed no pillar — harmless only while finder chunks were
+  unreachable. Making them reachable meant onboarding questions resolved against a corpus
+  that is 99.8% property content, and the new per-pillar floor (no-pillar ⇒ finder's 0.65)
+  pushed lower-scoring coach content under the bar. Measured: "how do I get my REN tag" and
+  "what training do I need in my first week" both went to **0 hits**; "what is the D2
+  onboarding process" returned 8 hits of which **6 were finder chunks**. Fixed by passing
+  `{ pillar: 'coach' }`; the two tests that broke were pinning the old two-argument call and
+  now assert the pillar, so they guard the fix.
+- 2 projects are classified `stated` but hold 0 — the price exists and was lost: Royal Lexis
+  KL (RM1.72M, past the old 6,000-char truncation) and d'Brightton (priced but all sold out).
+  Which figure is the asking price is Derek's call, not a code fix.
+
+## Still outstanding — blocked, not forgotten
+
+**Further Drive ingestion requires a human Google sign-in. I cannot do this step.**
+`drive-documents.json` records `downloadedBytes: 0` — the crawl only ever *enumerated*
+metadata, and no payload directory exists on disk. `google-state.json` / `google-profile`
+are gone. `gdrive-login.ts` opens a headed browser for a person to complete password + 2FA
+and states "No Google credentials are handled here — the human signs in."
+
+Queue once signed in (`SCRAPE_OUT` must be set — `to-kb.ts` asserts it and cannot read a
+repo-root ledger):
+1. `gdrive-login.ts` → `GDRIVE_PHASE=download` → `to-kb.ts --apply` → `to-kb-ocr.ts`
+2. **128 text-bearing Drive files**: 88 with no kbDoc + **40 whose kbDoc holds zero chunks**
+   (scanned PDFs — `Aetas Seputeh Sales Kit V1.2`, `Sentral Suites - MRCB Sales Kit (All
+   Towers)`, `PAVILION SQUARE LR PROJECT BRIEF`). Delete the stale empty kbDocs first
+   (`kb-cleanup.ts`) or re-ingest duplicates them.
+3. **3,573 images have no ingest path at all.** Triage before spending: only ~180 have
+   document-like filenames, 1,234 are generic camera/WhatsApp names, and many are Facebook
+   ad creatives. Sample and measure the yield rather than OCR-ing all of them into the
+   corpus — retrieval precision is already the thin margin here.
+4. **20 WhatsApp kbDocs hold zero chunks** (Eaton, The MET, Conlay, d'Brightton,
+   Ritz-Carlton, OAKA, The Atera, Royal Suites). `KbDocDoc` has no text field, so nothing is
+   recoverable from Firestore — these need the original zip re-imported through the admin
+   WhatsApp surface. **Not blocked on Google**; blocked on the user having the zip.
+
+Deliberately not done: `unitTypes` adds no new price signal for any project (0 projects are
+"per-layout only"), so the 24 priced layout entries enrich detail answers without changing
+match counts. The similarity floor is measured on Imperial-Residences-weighted queries
+against one corpus and should be re-measured as content grows.
