@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { extractSizeRange } from './size-extract'
 
 // ─── Fixture traps ────────────────────────────────────────────────────────────
@@ -113,13 +113,49 @@ describe('extractSizeRange: rejection traps', () => {
 
 // ─── Corpus sweep (all 82 real records) ───────────────────────────────────────
 
-interface CorpusRecord {
-  input: { name: string; description: string }
+interface ScrapeRecord {
+  titleClean: string
+  body?: { text?: string }
 }
 
-const CORPUS = JSON.parse(
-  readFileSync(new URL('../../projects.inventory.json', import.meta.url), 'utf8'),
-) as { count: number; records: CorpusRecord[] }
+const CORPUS_PATH = new URL('../../projects.json', import.meta.url)
+const EXPECTED_CORPUS_SIZE = 82
+
+/**
+ * Load the scrape, or `null` if it is absent or not the full 82 records
+ * (quick-kayinleong-089).
+ *
+ * TWO reasons this sweep must skip rather than throw:
+ *
+ * 1. `projects.json` is a gitignored scrape artifact (`.gitignore:57`). It is NEVER present
+ *    in CI, so a top-level `readFileSync` made this file impossible to run there at all.
+ *
+ * 2. A PARTIAL artifact is worse than a missing one. During quick-kayinleong-088 a
+ *    `to-inventory.ts --limit 3` dry run overwrote the corpus with 3 records, and this sweep
+ *    reported ten "X missing from corpus" failures that read exactly like an extractor
+ *    regression. Nothing about the extractor had changed. Gating on the record COUNT, not
+ *    mere existence, is what makes that impossible.
+ *
+ * Source note: this reads `projects.json` (the raw scrape), NOT `projects.inventory.json`
+ * (the dry-run preview) which it used to read. `to-inventory.ts` rewrites the preview on
+ * every run — including a `--limit N` dry run — whereas the raw scrape only changes on a
+ * full re-scrape. Both produce IDENTICAL results here, verified 2026-09-05 before switching:
+ * 82 records, 66 parsed, 16 null, and all spot checks matching, because `to-inventory.ts`
+ * stores `description: p.body.text` verbatim. No pinned count below was altered — the counts
+ * are still the ones reviewed by eye on 2026-09-03. This also matches `unit-types.test.ts`,
+ * so both corpus sweeps now load the same file the same way.
+ *
+ * The fixture traps above carry the behavioural contract and run everywhere. The sweep is
+ * corpus verification, and is only meaningful against the corpus it was reviewed on.
+ */
+function loadCorpus(): ScrapeRecord[] | null {
+  if (!existsSync(CORPUS_PATH)) return null
+  const parsed = JSON.parse(readFileSync(CORPUS_PATH, 'utf8')) as { projects?: ScrapeRecord[] }
+  const projects = parsed.projects ?? []
+  return projects.length === EXPECTED_CORPUS_SIZE ? projects : null
+}
+
+const CORPUS = loadCorpus()
 
 /**
  * Counts REVIEWED BY EYE against the source description text on 2026-09-03, all 82 lines.
@@ -135,14 +171,15 @@ const CORPUS = JSON.parse(
 const EXPECTED_PARSED = 66
 const EXPECTED_NULL = 16
 
-describe('extractSizeRange over the real 82-project corpus', () => {
-  const results = CORPUS.records.map((r) => ({
-    name: r.input.name,
-    range: extractSizeRange(r.input.description ?? ''),
+describe.skipIf(CORPUS === null)('extractSizeRange over the real 82-project corpus', () => {
+  const projects = CORPUS ?? []
+  const results = projects.map((p) => ({
+    name: p.titleClean,
+    range: extractSizeRange(String(p.body?.text ?? '')),
   }))
 
   it('the corpus is the 82 records this sweep was reviewed against', () => {
-    expect(CORPUS.records.length).toBe(82)
+    expect(results.length).toBe(EXPECTED_CORPUS_SIZE)
   })
 
   it('parses 66 of 82 and leaves 16 null', () => {
