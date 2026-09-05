@@ -345,3 +345,76 @@ Deliberately not done: `unitTypes` adds no new price signal for any project (0 p
 "per-layout only"), so the 24 priced layout entries enrich detail answers without changing
 match counts. The similarity floor is measured on Imperial-Residences-weighted queries
 against one corpus and should be re-measured as content grows.
+
+---
+
+## Follow-up — Google session, zip archiving, and a broken gate (same claim)
+
+User asked to be re-prompted for the Google login, and for the WhatsApp page to archive the
+uploaded .zip to Storage.
+
+### The Google sign-in blocker is cleared
+`google-state.json` is saved. **`SCRAPE_OUT` is now `~/Documents/cy-csaiagent-scrape`** — a
+durable path, deliberately not a session scratch dir, because that is why the previous
+profile and ledger vanished.
+
+Two failed attempts first, and the cause was not the sign-in:
+`gdrive-login.ts` declares success only by counting `[data-id]` elements carrying an
+aria-label inside a **hardcoded default folder**, and writes the state file only on that
+path. `gdrive-crawl.ts` then hard-fails without it. Measured: the operator signed in fine,
+the browser sat on the folder URL for 2+ minutes, and the selector matched 1 element —
+because the signed-in account **has no access to that default folder** (`denied: true`). The
+Imperial Residences folder the stakeholder actually named opens fine: 41 `[data-id]`, 13
+rows, 59 items.
+
+`scripts/scrape-skool/gdrive-save-state.ts` reuses the same persistent profile (no re-login)
+and gates on evidence that does not rest on one selector: a Drive folder URL, not signed
+out, no access-denied text. Item counts are probed across five selectors and **reported, not
+required** — an empty folder is legitimate, an unauthenticated one is not. Result: 53
+cookies saved across the Google domains.
+
+### WhatsApp .zip archiving — shipped
+- `whatsapp-imports/<timestamp>__<name>.zip`, uploaded with `uploadBytesResumable` and real
+  byte progress. Non-fatal and not awaited: it runs at parse time before a target project
+  exists, so a Storage problem cannot block ingest. Only a valid export is archived (it
+  fires after `_chat.txt` parses).
+- `storage.rules`: `whatsapp-imports/**` is **admin read AND write** — deliberately stricter
+  than `collateral/**`, which allows any signed-in read. A raw export is unredacted
+  (participant numbers, names, message bodies), so `isSignedIn()` would expose it to every
+  new agent. 1 GB cap.
+- **Rules deployed to `cy-csaiagent`.** The first deploy failed 403 on
+  `firebasestorage.defaultBucket.get` for `ka.yin.leong@accenture.com`; it succeeded under
+  the other account the CLI already held. Without this deploy the upload is denied, so it
+  was a precondition, not a nicety.
+- EN/BM/ZH added together with key parity asserted (65 keys each).
+- `scripts/list-whatsapp-imports.ts` — lists/downloads/peeks archives server-side so a
+  re-ingest never depends on the operator still holding the file. Verified live against the
+  bucket (prefix empty, as expected pre-upload). `--peek` prints zip entry NAMES only, never
+  message text.
+
+### ⚠ The typecheck gate was passing vacuously for the whole session
+`npm run typecheck` reported clean while a real `number | null` error sat in
+`src/inventory/unit-types.ts`. Only `next build` caught it.
+
+`tsconfig.json` includes `.next/dev/types/**/*.ts`. An interrupted `next dev` left that
+generated file **truncated**, and a truncated `.ts` is a **syntax** error (TS1146/TS1128).
+`tsc` reports the parse failure and never reaches semantic checking — so it printed those two
+errors and said nothing at all about the source tree.
+
+I read them as generated-file noise, filtered them out, and told all three parallel agents to
+ignore "exactly those two". They were not noise; they were the gate reporting it could not
+run. **Every "typecheck clean" in this session — mine and all three agents' — was worthless.**
+
+- `tsconfig.typecheck.json` excludes `.next` entirely, so the gate depends on source alone
+  and cannot be silenced by a stale dev artifact. Route-type validation still runs in
+  `next build`, which regenerates those files first.
+- Proven by reintroducing the exact bug: fails TS2345 at `unit-types.ts:491`, passes once
+  restored.
+- Two genuine errors it had been hiding are fixed (`unit-types.ts` richness param;
+  two `as unknown as` assertions in `project-detail.test.ts` where the AI SDK return unions
+  genuinely do not overlap).
+
+**Final state: typecheck genuinely clean · 1337 tests pass / 0 fail · `next build`
+succeeds.** The admin route correctly 307s to sign-in, so the new UI could not be
+browser-verified without credentials I will not enter — the production build is the
+substitute evidence, and it compiles the form and all three locales.
