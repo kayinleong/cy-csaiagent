@@ -204,10 +204,19 @@ export function MatchTable({ rows, matches, onAsk, className }: MatchTableProps)
                       onAsk?.(
                         // A TRANSLATED prompt, not an English literal: the agent replies in
                         // the language of the incoming message, so an English prompt would
-                        // flip a BM or 中文 conversation to English. The projectId is
-                        // included because it is the grounding citation and it lets the
-                        // Finder's answer branch and fetchCollateral pick up files the
-                        // search's inline top-3 missed.
+                        // flip a BM or 中文 conversation to English.
+                        //
+                        // THE projectId IS THE POINT (quick-kayinleong-088). It used to
+                        // ride along as parenthetical decoration while the model was left
+                        // to re-run searchProjects — a semantic re-rank whose top 8 is all
+                        // the model ever sees, so tapping row 37 of 50 handed it eight
+                        // OTHER projects and it correctly reported it could not find this
+                        // one. All three locales now emit the marker `projectId: <id>`
+                        // (the marker itself deliberately UNtranslated), which the Finder
+                        // system prompt binds to the `projectDetail` tool — a direct
+                        // projects/{pid} read that cannot resolve to the wrong project.
+                        // Change this string only together with the "DETAIL REQUEST"
+                        // section of src/agents/finder/prompt.ts.
                         t('showMorePrompt', { name: row.name, projectId: row.projectId }),
                       )
                     }

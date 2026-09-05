@@ -95,7 +95,7 @@
       "colHighlight": "亮点",
       "showMore": "详情",
       "showMoreAria": "显示 {name} 的详情与支援文件",
-      "showMorePrompt": "请详细介绍 {name}（{projectId}）——完整资料以及所有支援文件。",
+      "showMorePrompt": "请提供 {name} 的完整资料 — projectId: {projectId}。包括各户型与面积、价格、关键资料，以及所有支援文件。",
       "priceUnknown": "价格尚未记录",
       "rowCount": "{count} 个符合条件的项目",
       "notOnRecord": "无记录"

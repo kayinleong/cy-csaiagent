@@ -280,3 +280,52 @@ describe('no cell can render a price band', () => {
     expect(TABLE).toContain('row.bedrooms > 0 ? row.bedrooms : EM_DASH')
   })
 })
+
+// ─── The Details button addresses ONE project (quick-kayinleong-088) ──────────
+//
+// The button used to push a canned sentence back through a normal Finder turn, which
+// re-ran searchProjects — a semantic re-rank whose top MAX_MATCHES (8) is all the model
+// ever sees. Tapping row 37 of 50 handed it eight OTHER projects and it correctly said it
+// could not find the project. The projectId was already in the string, but only as
+// parenthetical decoration; nothing bound it to a lookup.
+//
+// The fix has three parts that MUST stay in step, which is what these tests pin:
+//   1. all three locales emit the marker "projectId: <id>",
+//   2. the marker text itself is NOT translated, and
+//   3. the Finder system prompt keys on that exact marker to reach `projectDetail`.
+// The behavioural half — that the old semantic re-run really does lose row 37, and that
+// the by-id read really does find it — is proved in
+// src/agents/finder/project-detail.test.ts.
+
+describe('the Details prompt binds to a by-id lookup', () => {
+  const MARKER = 'projectId: {projectId}'
+
+  for (const [lang, catalog] of Object.entries({ en, ms, zh })) {
+    it(`${lang}.json carries the untranslated projectId marker`, () => {
+      const prompt = resolve(catalog as Catalog, 'chat.matchTable.showMorePrompt') as string
+      // A translated marker ("ID projek: …", "项目编号：…") would break the binding for
+      // exactly the non-English agents this product exists to serve, so the marker is
+      // deliberately English in all three catalogues even though the sentence is not.
+      expect(prompt, lang).toContain(MARKER)
+    })
+  }
+
+  it('the three prompts are genuinely translated around that marker', () => {
+    // Guard against "fixing" the binding by pasting the English string into ms/zh.
+    const en_ = en.chat.matchTable.showMorePrompt
+    const ms_ = ms.chat.matchTable.showMorePrompt
+    const zh_ = zh.chat.matchTable.showMorePrompt
+    expect(new Set([en_, ms_, zh_]).size).toBe(3)
+    expect(ms_).toMatch(/Butiran penuh/i)
+    expect(zh_).toContain('完整资料')
+  })
+
+  it('the Finder system prompt keys on the SAME marker', async () => {
+    // The load-bearing join. If either side is reworded alone, the button silently goes
+    // back to a semantic re-run and the row-37 bug returns with no test failing.
+    const { FINDER_SYSTEM_PROMPT } = await import('@/src/agents/finder/prompt')
+    expect(FINDER_SYSTEM_PROMPT).toContain('projectId: <id>')
+    expect(FINDER_SYSTEM_PROMPT).toContain('projectDetail')
+    expect(FINDER_SYSTEM_PROMPT).toContain('Do NOT call searchProjects for it')
+  })
+})

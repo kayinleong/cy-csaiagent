@@ -95,7 +95,7 @@
       "colHighlight": "Ciri utama",
       "showMore": "Butiran",
       "showMoreAria": "Tunjukkan butiran dan dokumen sokongan untuk {name}",
-      "showMorePrompt": "Beritahu saya lebih lanjut tentang {name} ({projectId}) — butiran penuh dan semua dokumen sokongan.",
+      "showMorePrompt": "Butiran penuh untuk {name} — projectId: {projectId}. Susun atur dan saiz, harga, fakta utama, dan semua dokumen sokongan.",
       "priceUnknown": "Harga belum direkodkan",
       "rowCount": "{count} projek yang sepadan",
       "notOnRecord": "Tiada dalam rekod"

@@ -93,7 +93,7 @@
       "colHighlight": "Highlight",
       "showMore": "Details",
       "showMoreAria": "Show details and supporting documents for {name}",
-      "showMorePrompt": "Tell me more about {name} ({projectId}) — full details and all supporting documents.",
+      "showMorePrompt": "Full details for {name} — projectId: {projectId}. Layouts and sizes, pricing, the key facts, and all supporting documents.",
       "priceUnknown": "Price not on record",
       "rowCount": "{count} matching projects",
       "notOnRecord": "Not on record"
