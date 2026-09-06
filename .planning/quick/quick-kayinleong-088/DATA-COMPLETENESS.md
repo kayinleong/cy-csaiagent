@@ -28,7 +28,7 @@ Measured against **live Firestore**. Read-only — this report changes nothing.
 | `vpDate` | 64 | 73.6% | 60 | 72.3% |
 | `unitTypes` | 37 | 42.5% | 33 | 39.8% |
 | `bedrooms` | 33 | 37.9% | 29 | 34.9% |
-| `priceValue` | 30 | 34.5% | 29 | 34.9% |
+| `priceValue` | 27 | 31.0% | 26 | 31.3% |
 | `size` | 20 | 23.0% | 16 | 19.3% |
 | `tenure` | 4 | 4.6% | 0 | 0.0% |
 | `locationText` | 4 | 4.6% | 0 | 0.0% |
@@ -42,10 +42,10 @@ fallbacks (a stated psf rate, and per-layout prices). These four buckets are the
 
 | Price signal | All 87 | % | Active | % |
 |---|---:|---:|---:|---:|
-| total | 57 | 65.5% | 54 | 65.1% |
+| total | 60 | 69.0% | 57 | 68.7% |
 | psf rate only | 20 | 23.0% | 20 | 24.1% |
 | per-layout prices only | 0 | 0.0% | 0 | 0.0% |
-| nothing | 10 | 11.5% | 9 | 10.8% |
+| nothing | 7 | 8.0% | 6 | 7.2% |
 
 ## No stored price — recoverable, or genuinely dark?
 
@@ -56,7 +56,7 @@ can answer "how much?" — those are the rows that need a human.
 
 | | Projects |
 |---|---:|
-| recoverable (KB content exists) | 10 |
+| recoverable (KB content exists) | 7 |
 | **DARK** (no price, no KB content) | **0** |
 
 ## Per project — most missing first
@@ -69,13 +69,13 @@ can answer "how much?" — those are the rows that need a human.
 | 7 | Tribeca Bukit Bintang | hidden | ✓ | — | — | — | — | — | — | — | ✓ | ✓ | 59 | 160 | 117 |
 | 6 | Aetas Taman Desa | active | — | — | — | — | ✓ | ✓ | — | — | ✓ | ✓ | 1473 | 66 | 125 |
 | 6 | Exsim Project | active | — | — | — | — | ✓ | ✓ | — | — | ✓ | ✓ | 1926 | 13 | 646 |
-| 6 | The Manor KLCC | active | — | — | — | — | ✓ | ✓ | — | — | ✓ | ✓ | 702 | 107 | 101 |
 | 5 | 26 Araville PJ | active | — | — | — | ✓ | ✓ | ✓ | — | — | ✓ | ✓ | 1318 | 16 | 36 |
 | 5 | Anyara Hills | active | ✓ | — | — | — | ✓ | ✓ | — | — | ✓ | ✓ | 3362 | 517 | 347 |
 | 5 | Aria Luxury Residence @ KLCC | active | ✓ | — | — | — | ✓ | ✓ | — | — | ✓ | ✓ | 796 | 170 | 140 |
 | 5 | Melbourne Square | active | — | — | ✓ | — | ✓ | ✓ | — | — | ✓ | ✓ | 889 | 9 | 19 |
 | 5 | Sierra Hijau (Landed) | active | ✓ | — | — | — | ✓ | ✓ | — | — | ✓ | ✓ | 1449 | 1 | **none** |
 | 5 | The Cedar Damansara Heights | active | ✓ | — | — | — | ✓ | ✓ | — | — | ✓ | ✓ | 2026 | 248 | 526 |
+| 5 | The Manor KLCC | active | ✓ | — | — | — | ✓ | ✓ | — | — | ✓ | ✓ | 702 | 107 | 101 |
 | 5 | The Stride Office @ BBCC | active | — | — | — | ✓ | ✓ | ✓ | — | — | ✓ | ✓ | 1862 | 1 | 10 |
 | 5 | Times Square 2 Residences Kuala Lumpur | active | ✓ | — | — | — | ✓ | ✓ | — | — | ✓ | ✓ | 572 | 98 | 176 |
 | 4 | 18 Madge Uthant | active | ✓ | — | — | ✓ | ✓ | ✓ | — | — | ✓ | ✓ | 1657 | 147 | 222 |
@@ -85,19 +85,18 @@ can answer "how much?" — those are the rows that need a human.
 | 4 | E&O – City of Elmina (Laman Embun Commercial) | active | ✓ | — | — | ✓ | ✓ | ✓ | — | — | ✓ | ✓ | 2086 | 1 | 14 |
 | 4 | Eden BRDB, Taman Duta | active | ✓ | — | — | ✓ | ✓ | ✓ | — | — | ✓ | ✓ | 2660 | 58 | 294 |
 | 4 | IJM Sierra Hijauan | active | ✓ | — | ✓ | — | ✓ | ✓ | — | — | ✓ | ✓ | 1592 | 303 | 230 |
-| 4 | Pavilion Damansara Heights | active | — | — | — | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | 1680 | 5 | 301 (+219?) |
 | 4 | Sentral Suites @ KL Sentral | active | ✓ | — | — | ✓ | ✓ | ✓ | — | — | ✓ | ✓ | 3694 | 6 | 202 |
 | 4 | The MET, Corporate Tower | active | — | ✓ | — | — | ✓ | ✓ | ✓ | — | ✓ | ✓ | 2142 | 129 | 207 (+200?) |
 | 3 | Armani Hallson @ Jalan Ampang | active | — | ✓ | — | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | 2294 | 1 | 197 |
 | 3 | Aspire office @ KL ecocity | active | — | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | 5051 | 33 | 74 |
 | 3 | Enlace Suites @ Pantai Sentral Park | active | ✓ | — | — | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | 3179 | 29 | 188 |
+| 3 | Pavilion Damansara Heights | active | ✓ | — | — | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | 1680 | 5 | 301 (+219?) |
 | 3 | Platinum Face Suite 2 KLCC | active | — | ✓ | — | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | 1951 | 39 | 25 |
 | 3 | Property 1 | active | ✓ | — | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ | — | 1351 | 0 | **none** |
 | 3 | PSQ Pavilion Square | active | — | ✓ | — | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | 3151 | 7 | 72 |
 | 3 | Rafflesia @ Hill 2, 3 & 4 | active | ✓ | — | ✓ | — | ✓ | ✓ | — | ✓ | ✓ | ✓ | 3534 | 4 | **none** |
 | 3 | Rhombus | active | ✓ | — | — | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | 1012 | 72 | 115 |
 | 3 | Rimbun Saujana Residency | active | ✓ | — | ✓ | — | ✓ | ✓ | — | ✓ | ✓ | ✓ | 2103 | 81 | 171 |
-| 3 | Royal Lexis KL | active | — | — | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | 6855 | 103 | 256 |
 | 3 | St. Regis Residences Kuala Lumpur | active | ✓ | — | — | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | 2027 | 10 | 5 |
 | 3 | Star Residences KLCC | active | — | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | 2486 | 378 | 537 |
 | 3 | SWNK Houze @ BBCC (Bukit Bintang City Centre) | active | — | ✓ | — | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | 2147 | 155 | 248 (+139?) |
@@ -132,6 +131,7 @@ can answer "how much?" — those are the rows that need a human.
 | 2 | Puncak Wangsamas Phase 2 | active | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | 3802 | 73 | 122 |
 | 2 | Quill Residences KLCC | active | ✓ | — | ✓ | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | 1795 | 377 | 428 |
 | 2 | Riana Trees Residences | active | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | 1673 | 51 | 147 |
+| 2 | Royal Lexis KL | active | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | 6855 | 103 | 256 |
 | 2 | Senja The Jewel Collection | active | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | 1981 | 106 | 255 |
 | 2 | SO Sofitel Residences KLCC | active | ✓ | — | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | 3202 | 12 | 621 |
 | 2 | Southpoint Residences (IGB ) | active | ✓ | — | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | 1694 | 71 | 355 |

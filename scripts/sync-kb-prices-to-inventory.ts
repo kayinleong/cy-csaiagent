@@ -133,6 +133,14 @@ interface Row {
   id: string
   name: string
   status: string
+  /**
+   * The project's OWN write-up. Included because reading only `kbChunks` missed prices
+   * sitting in plain sight (quick-kayinleong-089): Royal Lexis KL states "All from
+   * RM1.72mil" in its description, and the first pass left it price-less because this
+   * script started from the KB. The description is a FIRST-PARTY source and is stronger
+   * evidence than chat, so it is offered to the extractor first.
+   */
+  description: string
 }
 
 async function main() {
@@ -163,6 +171,7 @@ async function main() {
       id,
       name: String(data.name ?? ''),
       status: String(data.status ?? '?'),
+      description: String(data.description ?? ''),
     }))
     .filter((p) => !ONLY || p.name.toLowerCase().includes(ONLY))
 
@@ -192,8 +201,12 @@ async function main() {
     const docIds = kbDocs.filter((k) => k.category === key2 || k.subject === key2).map((k) => k.id)
     const label = `[${i + 1}/${targets.length}] ${p.name.slice(0, 40).padEnd(40)}`
 
-    if (docIds.length === 0) {
-      console.log(`${label} — no kbDocs matched`)
+    // The project's own write-up counts as a source. `to-inventory.ts` stores the whole
+    // Skool body here, so a stated price often lives in it.
+    const ownDesc = MONEY_RX.test(p.description) ? p.description : ''
+
+    if (docIds.length === 0 && ownDesc === '') {
+      console.log(`${label} — no kbDocs matched and no money text in its own description`)
       noChunks++
       continue
     }
@@ -209,6 +222,7 @@ async function main() {
         texts.push({ chunkId: c.id, text: t, hits })
       }
     }
+    if (ownDesc) texts.push({ chunkId: `description:${p.id}`, text: ownDesc, hits: 999 })
     scanned++
     if (texts.length === 0) {
       console.log(`${label} — ${docIds.length} docs, 0 money-bearing chunks`)
@@ -287,7 +301,14 @@ async function main() {
     // ── GUARD 5: cite the source ──────────────────────────────────────────────
     const src = picked.find((t) => norm(t.text).includes(ev))
     patch.priceSourceChunkId = src?.chunkId ?? picked[0].chunkId
-    patch.priceSource = 'whatsapp-kb'
+    // A figure from the project's own write-up is first-party, not chat — do not brand it
+    // 'whatsapp-kb' and send Derek to review a source he already owns.
+    const fromOwnDescription = String(patch.priceSourceChunkId ?? '').startsWith('description:')
+    if (fromOwnDescription) {
+      delete patch.priceSourceChunkId
+    } else {
+      patch.priceSource = 'whatsapp-kb'
+    }
 
     console.log(`${label} ✓ ${summary}`)
     console.log(`      evidence: "${ex.evidence.replace(/\s+/g, ' ').slice(0, 90)}"`)
