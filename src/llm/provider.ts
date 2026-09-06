@@ -24,6 +24,7 @@
  */
 
 import { anthropic } from '@ai-sdk/anthropic'
+import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { appConfigRef, MODEL_CONFIG_DOC_ID } from '@/src/firebase/collections'
 import type { LanguageModel } from 'ai'
 
@@ -85,5 +86,43 @@ export async function modelFor(pillar: Pillar): Promise<LanguageModel> {
     // Production always has ADC available via App Hosting.
   }
 
+  return providerFor(modelId)
+}
+
+/**
+ * Build a model handle for whichever PROVIDER the id belongs to
+ * (quick-kayinleong-089).
+ *
+ * This used to be `return anthropic(modelId)`, which quietly made the
+ * "model-agnostic, ids live in Firestore" design Anthropic-only: publishing a Gemini id
+ * into `appConfig/modelConfig` sent it to `anthropic()` and failed at runtime, so the one
+ * swap surface the project has could not actually reach a second provider.
+ *
+ * WHY IT MATTERS NOW: the app runs on Netlify, whose function ceiling kills a request at
+ * exactly 30s. A full `projectDetail` answer measured **39.9s on claude-sonnet-4-6** — over
+ * budget, which is what truncated the unit-price tables. Measured alternatives on the same
+ * prompt:
+ *
+ *   claude-sonnet-4-6   39.9s   1538 out tok   3858 chars   OVER
+ *   gemini-3.5-flash    20.3s   1450 out tok   3819 chars   fits, same detail
+ *   claude-haiku-4-5    15.5s    882 out tok   2401 chars   fits, less detail
+ *
+ * So the fix is a faster model at equal detail — which is precisely the change this
+ * indirection was designed to make cheap, and it could not be made until now.
+ *
+ * Dispatch is on the id prefix rather than a config field so the Firestore document keeps
+ * its existing shape and no admin surface has to change.
+ */
+function providerFor(modelId: string): LanguageModel {
+  if (modelId.startsWith('gemini-') || modelId.startsWith('models/gemini-')) {
+    // Gemini Developer API (NOT Vertex — CLAUDE.md hard constraint), using the same key
+    // the app already uses for embeddings. Statically imported: `@ai-sdk/google` is already
+    // in the graph via src/rag/embed.ts, so there is nothing to save by deferring it, and a
+    // `require()` in an ESM module is a needless hazard under Next's bundler.
+    const google = createGoogleGenerativeAI({
+      apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+    })
+    return google(modelId)
+  }
   return anthropic(modelId)
 }
