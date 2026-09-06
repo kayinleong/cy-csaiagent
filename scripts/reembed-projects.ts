@@ -44,7 +44,6 @@
  */
 
 import { adminDb } from '@/src/firebase/admin'
-import { FieldValue } from 'firebase-admin/firestore'
 import type { ProjectDoc } from '@/src/firebase/collections'
 import { composeProjectEmbeddingText, embedProject } from '@/src/inventory/embedText'
 
@@ -92,9 +91,20 @@ async function main() {
         continue
       }
       if (APPLY) {
-        // FieldValue.vector() is mandatory: a plain number[] is not covered by a vector
-        // index, which is exactly the defect that made 25,153 kbChunks unretrievable.
-        await doc.ref.update({ embedding: FieldValue.vector(vec) })
+        // A PLAIN number[] — deliberately NOT FieldValue.vector() (quick-kayinleong-089).
+        //
+        // This comment previously said the opposite, and calling `FieldValue.vector()` here
+        // broke the Finder completely: `searchProjects` scores this collection with
+        // IN-MEMORY dot products and never calls `findNearest`, so it reads
+        // `doc.embedding` expecting an array. A VectorValue has no `.length`, so every
+        // project scored 0, fell under MIN_RELEVANCE, and every search returned
+        // "NO MATCH FOUND" with nothing thrown or logged.
+        //
+        // The VECTOR-type rule applies to `kbChunks`, which IS queried with `findNearest`
+        // and whose index does not cover plain arrays. It does not generalise to every
+        // collection holding a vector. `ProjectDoc.embedding` is declared `number[]`;
+        // match the declaration.
+        await doc.ref.update({ embedding: vec })
       }
       done++
       if (done % 10 === 0) console.log(`  … ${done} embedded`)

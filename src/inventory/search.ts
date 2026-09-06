@@ -626,6 +626,36 @@ function dotProduct(a: number[], b: number[]): number {
   return sum
 }
 
+/**
+ * Read a stored project embedding as a plain `number[]` (quick-kayinleong-089).
+ *
+ * `ProjectDoc.embedding` is DECLARED `number[]`, and this collection is scored with
+ * in-memory dot products — it never uses `findNearest`, so a plain array is the correct
+ * storage shape here. That is the opposite of `kbChunks`, which MUST be the Firestore
+ * VECTOR type because a vector index does not cover plain arrays.
+ *
+ * THE INCIDENT THIS EXISTS TO PREVENT: `scripts/reembed-projects.ts` wrote these with
+ * `FieldValue.vector()` after a bulk price correction, applying the kbChunks rule to the
+ * wrong collection. The field then read back as a `VectorValue`, whose `.length` is
+ * `undefined`. The scoring line was `doc.embedding.length > 0 ? dotProduct(…) : 0`, so
+ * `undefined > 0` was false, EVERY project scored 0, every score fell under
+ * `MIN_RELEVANCE`, and the Finder answered "NO MATCH FOUND" for every query — including
+ * ones with 67 valid candidates past the gates. Nothing threw. Nothing logged.
+ *
+ * So this accepts either shape, and returns `[]` only when there is genuinely no vector.
+ * A caller that gets `[]` should treat it as missing data, not as a zero score.
+ */
+export function readEmbedding(raw: unknown): number[] {
+  if (Array.isArray(raw)) return raw as number[]
+  // Firestore VectorValue — duck-typed rather than imported, so this file stays free of a
+  // firebase-admin value import (core/shell rule; it only imports types today).
+  if (raw && typeof (raw as { toArray?: unknown }).toArray === 'function') {
+    const arr = (raw as { toArray: () => number[] }).toArray()
+    return Array.isArray(arr) ? arr : []
+  }
+  return []
+}
+
 // ─── Main search function ────────────────────────────────────────────────────
 
 /**
@@ -767,11 +797,23 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   // and avoids the findNearest range-filter limitation (Pitfall 6).
   const queryVector = await embedText(criteria.freeText, { inputType: 'query' })
 
-  const scored = affordableDocs.map(({ id, doc }) => ({
-    id,
-    doc,
-    score: doc.embedding.length > 0 ? dotProduct(queryVector, doc.embedding) : 0,
-  }))
+  // readEmbedding, NOT `doc.embedding.length` — see its doc comment. A VectorValue has no
+  // `.length`, so the old guard scored every project 0 and the relevance floor below then
+  // rejected the entire corpus, silently.
+  const scored = affordableDocs.map(({ id, doc }) => {
+    const vec = readEmbedding(doc.embedding)
+    return { id, doc, score: vec.length > 0 ? dotProduct(queryVector, vec) : 0 }
+  })
+
+  // A corpus-wide zero means the embeddings are unreadable, not that nothing is relevant.
+  // Distinguishing the two matters: 'no_match' tells the agent to widen the client's
+  // criteria, which is advice that cannot help when the real cause is a data-shape bug.
+  if (scored.length > 0 && scored.every(({ score }) => score === 0)) {
+    throw new Error(
+      `searchProjects: all ${scored.length} candidates scored 0 — projects.embedding is unreadable ` +
+        `(expected number[] or VectorValue). This is a data-shape fault, not an empty result.`,
+    )
+  }
 
   // ── RELEVANCE FLOOR (quick-kayinleong-050) ───────────────────────────────
   // Mirrors the KB retriever's MIN_SIMILARITY gate (src/rag/search.ts). Inventory had

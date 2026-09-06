@@ -1333,3 +1333,47 @@ describe('composeProjectEmbeddingText', () => {
     expect(result).toHaveLength(1024)
   })
 })
+
+// ─── readEmbedding + the corpus-wide-zero guard (quick-kayinleong-089) ───────
+//
+// THE INCIDENT: scripts/reembed-projects.ts wrote projects.embedding with
+// FieldValue.vector(), applying the kbChunks VECTOR-type rule to a collection that is
+// scored with in-memory dot products and never calls findNearest. The field then read back
+// as a VectorValue, whose `.length` is undefined. The scoring guard was
+// `doc.embedding.length > 0 ? dotProduct(…) : 0`, so `undefined > 0` was false, EVERY
+// project scored 0, every score fell under MIN_RELEVANCE, and the Finder answered
+// "NO MATCH FOUND" for every query — with 67 valid candidates sitting past the gates.
+// Nothing threw and nothing logged.
+describe('readEmbedding: tolerates either stored vector shape', () => {
+  it('returns a plain number[] unchanged', async () => {
+    const { readEmbedding } = await import('@/src/inventory/search')
+    expect(readEmbedding([1, 2, 3])).toEqual([1, 2, 3])
+  })
+
+  it('unwraps a Firestore VectorValue via toArray()', async () => {
+    const { readEmbedding } = await import('@/src/inventory/search')
+    // Shape-compatible stand-in: duck-typed exactly as the production reader checks.
+    const vectorValue = { toArray: () => [0.1, 0.2, 0.3] }
+    expect(readEmbedding(vectorValue)).toEqual([0.1, 0.2, 0.3])
+  })
+
+  it('returns [] for a missing or unusable embedding rather than throwing', async () => {
+    const { readEmbedding } = await import('@/src/inventory/search')
+    expect(readEmbedding(undefined)).toEqual([])
+    expect(readEmbedding(null)).toEqual([])
+    expect(readEmbedding({})).toEqual([])
+    expect(readEmbedding('not a vector')).toEqual([])
+    // toArray present but not returning an array — still [] rather than a crash.
+    expect(readEmbedding({ toArray: () => null })).toEqual([])
+  })
+
+  it('REGRESSION: a VectorValue has no .length, which is why .length was the bug', async () => {
+    const vectorValue = { toArray: () => [1, 2, 3] } as unknown as { length?: number }
+    // This is the expression that silently zeroed the whole corpus.
+    expect(vectorValue.length).toBeUndefined()
+    expect(vectorValue.length! > 0).toBe(false)
+    // And this is what replaced it.
+    const { readEmbedding } = await import('@/src/inventory/search')
+    expect(readEmbedding(vectorValue).length).toBe(3)
+  })
+})
