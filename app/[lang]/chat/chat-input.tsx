@@ -367,6 +367,7 @@ function useChatStream({
       let serverPillar: 'coach' | 'finder' | 'reply' | undefined
       let serverCitations: string[] = []
       let kbMiss = false
+      let truncated = false
       // Authoritative collateral keyed by projectId (quick-kayinleong-071). Derived from
       // the tool results server-side, because the model chose a different subset of URLs to
       // transcribe on every run — 19, then 10, then 9 for the same projects.
@@ -416,6 +417,7 @@ function useChatStream({
             if (meta.pillar) serverPillar = meta.pillar
             if (meta.citations) serverCitations = meta.citations
             if (meta.kbMiss !== undefined) kbMiss = meta.kbMiss
+            if (meta.truncated) truncated = true
             if (meta.collateralByProject) serverCollateral = meta.collateralByProject
             if (meta.finderRows) serverFinderRows = meta.finderRows
             // `citations` and `kbMiss` only ever ride on `finish`, so their presence is how
@@ -554,6 +556,16 @@ function useChatStream({
               ? { ...m, citations: serverCitations.map((chunkId) => ({ chunkId })) }
               : m,
           ),
+        )
+      }
+
+      // The server said this turn did not end cleanly (quick-kayinleong-089). Mark it so
+      // MessageList can SAY so: a truncated envelope fails to decode, the turn falls back
+      // to rendering salvaged prose, and a price table that stopped mid-row is otherwise
+      // indistinguishable from a finished answer.
+      if (truncated) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsgId ? { ...m, truncated: true } : m)),
         )
       }
 

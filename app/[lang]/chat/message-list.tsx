@@ -49,6 +49,15 @@ export interface ChatMessage {
    * MatchList variant instead of the plain text bubble (FIND-01/03).
    */
   finderOutput?: FinderOutput
+  /**
+   * The server reported this turn did not finish cleanly (quick-kayinleong-089).
+   *
+   * Rendered as a visible notice because the failure is otherwise INVISIBLE: a truncated
+   * JSON envelope fails to decode, the message falls back to the salvaged prose, and a
+   * unit-price table that stopped mid-row looks exactly like a finished answer. An agent
+   * could quote it to a client believing it complete.
+   */
+  truncated?: boolean
 }
 
 interface MessageListProps {
@@ -162,6 +171,15 @@ export function MessageList({ messages, isStreaming, onAsk, className }: Message
                   className="px-4 py-3 text-sm md:text-[0.8125rem] leading-relaxed"
                 >
                   <MarkdownMessage content={msg.content} />
+                  {msg.truncated && (
+                    <p
+                      data-slot="truncated-notice"
+                      className="mt-3 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700 ring-1 ring-amber-500/25 dark:text-amber-400"
+                    >
+                      ⚠ This answer was cut off before it finished. Ask again, or narrow the
+                      question — do not treat the list above as complete.
+                    </p>
+                  )}
                 </CardContent>
 
                 {/* Citations footer — the visible grounding proof (D-09) */}

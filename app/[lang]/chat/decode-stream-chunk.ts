@@ -91,6 +91,18 @@ export interface StreamMessageMetadata {
   /** True when a Coach turn ran retrieval and got nothing back (D-10). */
   kbMiss?: boolean
   /**
+   * The turn did NOT end cleanly — the server saw a finishReason other than 'stop'
+   * (quick-kayinleong-089).
+   *
+   * WHY THE CLIENT NEEDS THIS: a Finder/Reply turn streams a JSON envelope. When that
+   * envelope arrives truncated, `decodeFinderOutput` fails, `finderOutput` stays undefined,
+   * and the message falls back to rendering the SALVAGED prose — which looks like a clean,
+   * finished answer while silently missing everything after the cut. A user reported a unit
+   * price table that stopped mid-row and had no way to tell whether that was all the data
+   * or a broken turn. The server knows; it just never said so.
+   */
+  truncated?: boolean
+  /**
    * projectId -> the collateral the TOOLS returned (quick-kayinleong-071).
    *
    * Derived server-side, like `citations`, because the model transcribed a different subset
@@ -147,6 +159,7 @@ export function parseMessageMetadata(line: string): StreamMessageMetadata | null
       out.citations = citations.filter((c): c is string => typeof c === 'string')
     }
     if (typeof m.kbMiss === 'boolean') out.kbMiss = m.kbMiss
+    if (m.truncated === true) out.truncated = true
 
     // Validated item by item — this drives what the agent forwards to a lead, so a
     // malformed entry is dropped rather than rendered as a broken link.

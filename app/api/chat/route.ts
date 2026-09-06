@@ -627,6 +627,18 @@ export async function POST(req: Request): Promise<Response> {
    * view at MAX_MATCHES.
    */
   const finderRowSink = { rows: [] as FinderRow[] }
+  /**
+   * finishReason of the completed turn, captured for the CLIENT (quick-kayinleong-089).
+   *
+   * onFinish already logs a non-'stop' reason, which only ever helped someone reading
+   * server logs. The person who needs it is the agent looking at a price table that
+   * stopped mid-row: a truncated JSON envelope fails to decode, the UI falls back to the
+   * salvaged prose, and a broken turn is indistinguishable from a complete one.
+   *
+   * Read defensively at the emit site: whichever of onFinish / the finish part lands
+   * first, the flag is correct.
+   */
+  let lastFinishReason: string | null = null
 
   // ── Guaranteed assistant-message persistence (quick-kayinleong-055) ─────────
   // onFinish used to be the ONLY path that wrote an assistant message, so any turn that
@@ -1031,6 +1043,7 @@ export async function POST(req: Request): Promise<Response> {
       // 'tool-calls' rather than 'stop', meaning the model was cut off mid-loop and never
       // wrote its closing text. The SDK reports it; nothing here read it, which made that
       // failure mode unfalsifiable. Counts only, no content (quick-050).
+      lastFinishReason = final.finishReason ?? null
       if (final.finishReason && final.finishReason !== 'stop') {
         console.warn('[chat] turn did not finish cleanly', {
           pillar,
@@ -1299,6 +1312,15 @@ export async function POST(req: Request): Promise<Response> {
         return {
           pillar,
           routeDecision,
+          // Tell the CLIENT the turn was cut off (quick-kayinleong-089). onFinish already
+          // logs this server-side, which helped nobody looking at the screen: a truncated
+          // JSON envelope fails to decode, so the UI renders the salvaged prose and a
+          // half-written price table is indistinguishable from a complete one.
+          truncated: (() => {
+            const fromPart = (part as { finishReason?: unknown }).finishReason
+            const reason = typeof fromPart === 'string' ? fromPart : lastFinishReason
+            return reason !== null && reason !== undefined && reason !== 'stop'
+          })(),
           citations: Array.from(new Set(grounding.citations)),
           // A Coach turn that looked something up and came back with nothing is a real
           // KB miss (D-10). Greetings/meta questions never call a retrieval tool, so
