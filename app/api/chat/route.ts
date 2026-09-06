@@ -18,7 +18,8 @@
  * Load-bearing SSE headers (SPIKE-DEPLOY):
  *   Content-Type: text/event-stream  — set by toUIMessageStreamResponse()
  *   Cache-Control: no-store          — prevents proxy/CDN buffering
- *   X-Accel-Buffering: no            — disables nginx buffering on App Hosting
+ *   X-Accel-Buffering: no            — disables proxy buffering (deployed on NETLIFY;
+ *                                      see the 30s function-ceiling note at the headers)
  *
  * Stream method: result.toUIMessageStreamResponse() — the correct method name
  * for ai@5.0.193. (SPIKES.md documents this as "toDataStreamResponse" but that
@@ -1277,7 +1278,26 @@ export async function POST(req: Request): Promise<Response> {
   // The AI SDK sets Content-Type: text/event-stream automatically.
   // Cache-Control and X-Accel-Buffering are added manually (SPIKE-DEPLOY headers).
   //
-  // X-Accel-Buffering: no — disables nginx buffering on App Hosting (CRITICAL for SSE)
+  // X-Accel-Buffering: no — disables proxy buffering (CRITICAL for SSE).
+  //
+  // ⚠ DEPLOYMENT REALITY (quick-kayinleong-089): this app runs on NETLIFY, not Firebase
+  // App Hosting, whatever the planning docs say. That matters HERE because a Netlify
+  // Function is killed at a hard wall-clock ceiling — seen in production logs as
+  // `Duration: 30000 ms` EXACTLY, against 5187.21 ms for a healthy request on this same
+  // route. When that kill lands mid-stream:
+  //   - the JSON envelope never closes, so decodeFinderOutput fails and the client falls
+  //     back to salvaged prose that LOOKS like a finished answer
+  //   - `finish` never fires, so no messageMetadata is emitted: no citations and no
+  //     finderRows, which is why the Finder renders cards instead of the result table
+  //   - onFinish never runs, so nothing is logged, and consumeStream() cannot help — the
+  //     process is gone, not merely disconnected
+  // None of it reproduces locally, where there is no wall.
+  //
+  // The client now infers the cut from the ABSENCE of `finish` (chat-input.tsx) and says
+  // so. The durable fix is keeping a turn UNDER the ceiling: the dominant cost is the model
+  // retyping a full unit table into `answer`, which is why populating `ProjectDoc.unitTypes`
+  // matters — structured rows the UI renders beat prose the model must rewrite. Raising the
+  // ceiling is a Netlify site setting (Site settings → Functions), not something set here.
   // Force the stream to completion server-side even if the browser goes away
   // (quick-kayinleong-046 / RC-2). onFinish runs from the UI-message stream's
   // TransformStream `flush`, which is SKIPPED on consumer cancel — so a refresh

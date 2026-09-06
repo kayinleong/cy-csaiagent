@@ -559,16 +559,6 @@ function useChatStream({
         )
       }
 
-      // The server said this turn did not end cleanly (quick-kayinleong-089). Mark it so
-      // MessageList can SAY so: a truncated envelope fails to decode, the turn falls back
-      // to rendering salvaged prose, and a price table that stopped mid-row is otherwise
-      // indistinguishable from a finished answer.
-      if (truncated) {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === assistantMsgId ? { ...m, truncated: true } : m)),
-        )
-      }
-
       // ── Truncated turn → reload the row the server actually stored (quick-072) ──
       //
       // The server checkpoints the reply mid-generation (quick-070) and attaches the real
@@ -578,6 +568,28 @@ function useChatStream({
       //
       // Only on the truncated path. A completed turn already has everything and must not
       // pay a Firestore read.
+      // NO `finish` metadata means the stream DIED rather than ended (quick-kayinleong-089).
+      //
+      // This is the case the server-reported `truncated` flag cannot cover: when the Netlify
+      // function is killed at its 30s ceiling the process is gone, so onFinish never runs,
+      // no finish metadata is ever emitted, and nothing server-side gets a chance to say so.
+      // Observed in production: `Duration: 30000 ms` exactly, against 5187.21 ms for a
+      // healthy request on the same route — a wall-clock kill, not a slow answer.
+      //
+      // The absence of `finish` IS the signal, and the client is the only party still
+      // running. Without this, a turn cut off mid unit-price table renders as a clean,
+      // finished answer.
+      if (!sawFinish) truncated = true
+
+      // Written HERE, after both signals are known — the server's `truncated` metadata AND
+      // the missing-`finish` inference above. An earlier write would miss the timeout case
+      // entirely, which is the one that actually happens.
+      if (truncated) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === assistantMsgId ? { ...m, truncated: true } : m)),
+        )
+      }
+
       const liveCid = cidRef.current
       if (!sawFinish && liveCid) {
         try {
