@@ -118,3 +118,69 @@ retrieval tuning substitutes for it.
 failed / 197 skipped**. One transient failure was observed while a parallel agent was running
 (suite 12.4s vs 9.7s) and did not reproduce on a clean re-run — consistent with the
 load-sensitive 5s timeout diagnosed in quick-085, not this diff.
+
+---
+
+## Follow-up — the WhatsApp archives, ingested (same claim)
+
+The user uploaded **75 archives / 9.5 GB** through the new admin surface, then asked for them
+to be read.
+
+### The real root cause of "uploaded but not ingested"
+Found in this session (`2d42a8d`): `shardJob` stored every chunk's text **inline** on the job
+document as `chunkTexts`. Firestore caps a document at 1 MiB, so ingestion silently stopped
+around **~650 chunks** — and `set()` threw AFTER `createDoc` had already written the kbDoc.
+The operator was left with a **published document holding zero chunks and no error
+connecting the two**.
+
+That is the mechanism behind all 34 empty kbDocs, including `WhatsApp — TRX Residence`, whose
+540 MB export failed this way in the browser and again on re-ingest. So the user's original
+report was never a missing upload — it was a document-size limit reporting success at the
+only layer they could see. Oversized jobs now spill into a `shards` subcollection; jobs under
+700 KB keep the inline field, so in-flight jobs survive the change.
+
+### Ingest
+`scripts/ingest-whatsapp-archives.ts` reads the archives back from Storage and pushes each
+transcript through the **same** pipeline the browser drives (`createDoc` → `processBatch`),
+so there is one ingestion path, not two. Transcript only — media is the bulk of those 9.5 GB
+and contributes nothing to text retrieval.
+
+Validated end-to-end on the two smallest first (607 chunks / 3,376 messages, 0 failures), and
+confirmed the chunks land as the Firestore **VECTOR** type at 1024-d rather than the plain
+`number[]` that made 25,153 chunks silently unretrievable in 088.
+
+### Dedupe — and the check that prevented data loss
+`scripts/dedupe-whatsapp-kbdocs.ts`, two passes, safest first:
+
+| Pass | Result |
+|---|---|
+| `--keep-empty` | 28 zero-chunk docs deleted, **0 chunks lost** |
+| full | 6 docs / 1,384 chunks deleted, all verified **100% covered** |
+
+⚠ **"Keep the most chunks" would have destroyed real data.** `WhatsApp — Conlay by E&O` had
+two chunked docs, 1,118 and 619 chunks — and the 619 measured only **5% covered** by the
+1,118. It is a *different chat* that collided on title, because the import titles by project
+rather than by source archive. The script now gates every chunked deletion on measured
+coverage (95%), reports what it kept and why, and backs up everything first. Retitled to
+`WhatsApp — The Conlay KLCC` so the collision is gone without losing either chat.
+
+### Final measured state
+
+```
+kbChunks 34,476  (was 25,210 at the start of 088)
+kbDocs    1,080   ·  WhatsApp docs 108  ·  WhatsApp chunks 24,866
+zero-chunk WhatsApp docs: 0   (was 34)
+duplicate titles: 0
+```
+
+Live retrieval, `pillar:'finder'`, **7/7 at 0.7366–0.7903** — including every newly ingested
+project (SOKL KLCC, Riana Trees, 26 Araville, Jewel KLCC, Padang Kota Semarak, Conlay) and
+`Imperial Residences panel bankers margin` at 0.7903.
+
+typecheck clean · full suite 1337 passed / 0 failed.
+
+⚠ One caveat carried forward: my `--only`/skip matching uses fuzzy title matching, so the
+dry run once reported "0 to ingest" while zero-chunk docs still existed — it had matched
+those archives to a *good sibling* under a similar title. The conclusion happened to be
+right, reached by luck. Anything relying on that matcher should verify against chunk counts
+directly, as the audit here did.
