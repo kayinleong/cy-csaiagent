@@ -58,6 +58,11 @@ interface Row {
   present: Record<Field, boolean>
   descriptionChars: number
   collateralCount: number
+  /** Chunks in kbDocs matched to this project by category/title (exact convention). */
+  kbChunksExact: number
+  /** Chunks matched only by normalised substring — reported separately, never merged. */
+  kbChunksFuzzy: number
+  kbDocs: number
   missingCount: number
   /** Whether ANY layout row in `unitTypes` carries a price. */
   layoutPriced: boolean
@@ -106,10 +111,82 @@ async function main() {
     collateralByProject.set(pid, (collateralByProject.get(pid) ?? 0) + 1)
   }
 
+  // ─── KB coverage per project (quick-kayinleong-089) ─────────────────────────
+  //
+  // A structured field being blank is only half the question. After 43 WhatsApp archives
+  // were ingested there are 24,866 chat chunks in the corpus, so a project with no stored
+  // `priceValue` may still have 800 chunks of chat in which an agent quoted the price —
+  // retrievable by the Finder even though the column is empty. A project with neither is a
+  // genuinely dark one, and those are the rows worth escalating.
+  //
+  // Linking kbDocs to projects is done on the two deterministic conventions the ingest
+  // paths actually use, in priority order:
+  //   1. `kbDoc.category === project.name`         (to-kb.ts sets category per project)
+  //   2. title `"<project name> — …"` or `"WhatsApp — <project name>"`
+  // A normalised-substring fallback follows, and is COUNTED SEPARATELY so a fuzzy total can
+  // never be mistaken for an exact one. Earlier in this claim a fuzzy title matcher reported
+  // "0 to ingest" while empty docs still existed; the lesson was to keep fuzzy matches
+  // visible rather than silently folded into the number.
+  const kbNorm = (s: string) =>
+    s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+  const kbDocsSnap = await adminDb.collection('kbDocs').select('title', 'category').get()
+  const chunkCountByDoc = new Map<string, number>()
+  {
+    let cur: FirebaseFirestore.QueryDocumentSnapshot | null = null
+    for (;;) {
+      let q = adminDb.collection('kbChunks').select('docId').orderBy('__name__').limit(2000)
+      if (cur) q = q.startAfter(cur)
+      const s = await q.get()
+      if (s.empty) break
+      for (const d of s.docs) {
+        const id = String(d.get('docId'))
+        chunkCountByDoc.set(id, (chunkCountByDoc.get(id) ?? 0) + 1)
+      }
+      cur = s.docs[s.docs.length - 1]
+      if (s.size < 2000) break
+    }
+  }
+  const kbDocs = kbDocsSnap.docs.map((d) => {
+    const x = d.data() as { title?: unknown; category?: unknown }
+    const title = typeof x.title === 'string' ? x.title : ''
+    return {
+      id: d.id,
+      title,
+      category: typeof x.category === 'string' ? x.category : '',
+      chunks: chunkCountByDoc.get(d.id) ?? 0,
+      // "WhatsApp — X" and "X — file.pdf" both reduce to X.
+      subject: kbNorm(title.replace(/^WhatsApp —\s*/i, '').split('—')[0] ?? ''),
+    }
+  })
+
+  function kbCoverage(projectName: string): { exact: number; fuzzy: number; docs: number } {
+    const key = kbNorm(projectName)
+    if (!key) return { exact: 0, fuzzy: 0, docs: 0 }
+    let exact = 0
+    let fuzzy = 0
+    let docs = 0
+    for (const k of kbDocs) {
+      if (k.chunks === 0) continue
+      const isExact = kbNorm(k.category) === key || k.subject === key
+      const isFuzzy =
+        !isExact &&
+        key.length >= 8 &&
+        (k.subject.includes(key) || key.includes(k.subject)) &&
+        k.subject.length >= 8
+      if (!isExact && !isFuzzy) continue
+      docs++
+      if (isExact) exact += k.chunks
+      else fuzzy += k.chunks
+    }
+    return { exact, fuzzy, docs }
+  }
+
   const rows: Row[] = snap.docs.map((doc) => {
     const d = doc.data() as Record<string, unknown>
     const descriptionChars = typeof d.description === 'string' ? d.description.length : 0
     const collateralCount = collateralByProject.get(doc.id) ?? 0
+    const kb = kbCoverage(hasNonEmptyString(d.name) ? String(d.name) : '')
 
     const present: Record<Field, boolean> = {
       priceValue: hasPositiveNumber(d.priceValue),
@@ -135,6 +212,9 @@ async function main() {
       present,
       descriptionChars,
       collateralCount,
+      kbChunksExact: kb.exact,
+      kbChunksFuzzy: kb.fuzzy,
+      kbDocs: kb.docs,
       missingCount: FIELDS.filter((f) => !present[f]).length,
       layoutPriced: layouts.some((e) => hasPositiveNumber(e.priceMinRM)),
     }
@@ -161,6 +241,30 @@ async function main() {
       `  ${field.padEnd(14)} ${String(missing).padStart(14)} ${pct(missing, total).padStart(6)}% ` +
         `${String(am).padStart(17)} ${pct(am, active.length).padStart(6)}%`,
     )
+  }
+
+  // ── the rollup that actually drives action (quick-kayinleong-089) ──
+  //
+  // Cross the price question with KB coverage. A project with no stored price but a large
+  // chat corpus is probably ANSWERABLE — an agent quoted a figure in the thread and the
+  // Finder can retrieve it. A project with neither is dark: nothing in the app can answer
+  // "how much?" for it, and no amount of parsing will change that. Only the second group
+  // needs a human to go and find the information.
+  const priceless = (r: Row) => priceBucket(r) === 'nothing'
+  const kbTotal = (r: Row) => r.kbChunksExact + r.kbChunksFuzzy
+  const darkRows = rows.filter((r) => priceless(r) && kbTotal(r) === 0)
+  const recoverable = rows.filter((r) => priceless(r) && kbTotal(r) > 0)
+
+  console.log()
+  console.log('  ── no stored price: recoverable from the KB, or genuinely dark? ──')
+  console.log(`  ${'recoverable (chat/doc content exists)'.padEnd(42)} ${String(recoverable.length).padStart(3)}`)
+  console.log(`  ${'DARK (no price, no KB content at all)'.padEnd(42)} ${String(darkRows.length).padStart(3)}`)
+  if (darkRows.length) {
+    console.log()
+    console.log('  the dark ones — nothing in the app can answer "how much?" for these:')
+    for (const r of darkRows.sort((a, b) => a.name.localeCompare(b.name))) {
+      console.log(`    · ${r.name.slice(0, 52).padEnd(52)} ${r.status}`)
+    }
   }
 
   // ── the price question, answered honestly ──
@@ -190,14 +294,15 @@ async function main() {
   console.log(
     `  ${'miss'.padStart(4)} ${'project'.padEnd(44)} ${'status'.padEnd(8)} ` +
       FIELDS.map((f) => f.slice(0, 4).padStart(5)).join('') +
-      `  ${'desc'.padStart(6)} ${'coll'.padStart(5)}`,
+      `  ${'desc'.padStart(6)} ${'coll'.padStart(5)}  ${'kb'.padStart(8)}`,
   )
   console.log(`  ${'─'.repeat(140)}`)
   for (const r of sorted) {
     console.log(
       `  ${String(r.missingCount).padStart(4)} ${r.name.slice(0, 44).padEnd(44)} ${r.status.padEnd(8)} ` +
         FIELDS.map((f) => (r.present[f] ? '   ✓ ' : '   · ')).join('') +
-        `  ${String(r.descriptionChars).padStart(6)} ${String(r.collateralCount).padStart(5)}`,
+        `  ${String(r.descriptionChars).padStart(6)} ${String(r.collateralCount).padStart(5)}` +
+        `  ${(r.kbChunksExact + r.kbChunksFuzzy === 0 ? 'NONE' : String(r.kbChunksExact + (r.kbChunksFuzzy ? `+${r.kbChunksFuzzy}?` : ''))).padStart(8)}`,
     )
   }
 
@@ -253,15 +358,35 @@ async function main() {
       md.push(`| ${bucket} | ${n} | ${pct(n, total)}% | ${an} | ${pct(an, active.length)}% |`)
     }
     md.push('')
+    md.push('## No stored price — recoverable, or genuinely dark?')
+    md.push('')
+    md.push('A blank price column is not the same as an unanswerable question. Where chat or')
+    md.push('document content exists for the project, an agent very likely quoted a figure in')
+    md.push('the thread and the Finder can retrieve it. Where neither exists, nothing in the app')
+    md.push('can answer "how much?" — those are the rows that need a human.')
+    md.push('')
+    md.push('| | Projects |')
+    md.push('|---|---:|')
+    md.push(`| recoverable (KB content exists) | ${recoverable.length} |`)
+    md.push(`| **DARK** (no price, no KB content) | **${darkRows.length}** |`)
+    md.push('')
+    if (darkRows.length) {
+      md.push('**The dark ones:**')
+      md.push('')
+      for (const r of [...darkRows].sort((a, b) => a.name.localeCompare(b.name))) {
+        md.push(`- ${r.name} (${r.status})`)
+      }
+      md.push('')
+    }
     md.push('## Per project — most missing first')
     md.push('')
-    md.push(`| Missing | Project | Status | ${FIELDS.map((f) => `\`${f}\``).join(' | ')} | desc chars | collateral |`)
-    md.push(`|---:|---|---|${FIELDS.map(() => ':-:').join('|')}|---:|---:|`)
+    md.push(`| Missing | Project | Status | ${FIELDS.map((f) => `\`${f}\``).join(' | ')} | desc chars | collateral | KB chunks |`)
+    md.push(`|---:|---|---|${FIELDS.map(() => ':-:').join('|')}|---:|---:|---:|`)
     for (const r of sorted) {
       md.push(
         `| ${r.missingCount} | ${r.name.replace(/\|/g, '/')} | ${r.status} | ` +
           FIELDS.map((f) => (r.present[f] ? '✓' : '—')).join(' | ') +
-          ` | ${r.descriptionChars} | ${r.collateralCount} |`,
+          ` | ${r.descriptionChars} | ${r.collateralCount} | ${r.kbChunksExact + r.kbChunksFuzzy === 0 ? '**none**' : r.kbChunksExact + (r.kbChunksFuzzy ? ` (+${r.kbChunksFuzzy}?)` : '')} |`,
       )
     }
     md.push('')
