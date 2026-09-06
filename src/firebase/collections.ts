@@ -342,6 +342,26 @@ export interface ProjectDoc {
    */
   priceProvenance?: 'stated' | 'psf_only' | 'unknown'
   /**
+   * Where a price recovered from the knowledge base came from (quick-kayinleong-089).
+   *
+   * `'whatsapp-kb'` means the figure was extracted from an ingested WhatsApp transcript by
+   * `scripts/sync-kb-prices-to-inventory.ts`, not from the project's own write-up or sales
+   * kit. That is deliberately marked because chat is WEAKER evidence: an agent may have
+   * quoted a specific unit, a completed transaction, or a competitor's project.
+   *
+   * Absent means the price came from the normal inventory path. The distinction exists so
+   * Derek can review exactly the chat-derived rows instead of re-checking all 87.
+   */
+  priceSource?: 'whatsapp-kb'
+  /**
+   * The `kbChunks/{id}` the price was quoted from — the audit trail (quick-kayinleong-089).
+   *
+   * Grounding is mandatory in this project, and a price is the single most consequential
+   * number the app shows. This makes any recovered figure traceable back to the exact
+   * message it came from, so a disputed price can be checked rather than argued about.
+   */
+  priceSourceChunkId?: string
+  /**
    * Per-layout breakdown: size → bedrooms → price range (quick-kayinleong-088).
    *
    * Backs the "more details" answer a D2 agent is expected to give a client, e.g.
