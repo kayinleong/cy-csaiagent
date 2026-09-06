@@ -1278,26 +1278,40 @@ export async function POST(req: Request): Promise<Response> {
   // The AI SDK sets Content-Type: text/event-stream automatically.
   // Cache-Control and X-Accel-Buffering are added manually (SPIKE-DEPLOY headers).
   //
-  // X-Accel-Buffering: no — disables proxy buffering (CRITICAL for SSE).
+  // X-Accel-Buffering: no — disables proxy buffering (CRITICAL for SSE). Required by any
+  // nginx-fronted host (Firebase App Hosting); harmless elsewhere.
   //
-  // ⚠ DEPLOYMENT REALITY (quick-kayinleong-089): this app runs on NETLIFY, not Firebase
-  // App Hosting, whatever the planning docs say. That matters HERE because a Netlify
-  // Function is killed at a hard wall-clock ceiling — seen in production logs as
-  // `Duration: 30000 ms` EXACTLY, against 5187.21 ms for a healthy request on this same
-  // route. When that kill lands mid-stream:
+  // ⚠ A STREAMING TURN HAS A WALL-CLOCK BUDGET, and it is set by the HOST, not this code
+  // (quick-kayinleong-089). Know the number for wherever this is deployed:
+  //
+  //   Firebase App Hosting (Cloud Run)  request timeout is minutes, configurable.
+  //                                     A ~40s Finder answer fits comfortably.
+  //   Netlify Functions                 HARD 30s on the plan this was tried on, and not
+  //                                     raisable without an upgrade.
+  //
+  // MEASURED on Netlify: `Duration: 30000 ms` EXACTLY, against 5187.21 ms for a healthy
+  // request on this same route. A full projectDetail answer needs 39.9s on
+  // claude-sonnet-4-6 (1,538 output tokens — generation IS the time), so it was killed
+  // mid-stream every time. What that looks like, because none of it is obvious:
   //   - the JSON envelope never closes, so decodeFinderOutput fails and the client falls
   //     back to salvaged prose that LOOKS like a finished answer
-  //   - `finish` never fires, so no messageMetadata is emitted: no citations and no
-  //     finderRows, which is why the Finder renders cards instead of the result table
-  //   - onFinish never runs, so nothing is logged, and consumeStream() cannot help — the
+  //   - `finish` never fires, so no messageMetadata: no citations, no finderRows, which is
+  //     why the Finder renders cards instead of the result table
+  //   - onFinish never runs, so nothing is logged and consumeStream() cannot help — the
   //     process is gone, not merely disconnected
-  // None of it reproduces locally, where there is no wall.
+  //   - none of it reproduces locally, where there is no wall
   //
-  // The client now infers the cut from the ABSENCE of `finish` (chat-input.tsx) and says
-  // so. The durable fix is keeping a turn UNDER the ceiling: the dominant cost is the model
-  // retyping a full unit table into `answer`, which is why populating `ProjectDoc.unitTypes`
-  // matters — structured rows the UI renders beat prose the model must rewrite. Raising the
-  // ceiling is a Netlify site setting (Site settings → Functions), not something set here.
+  // The client now infers the cut from the ABSENCE of `finish` and says so
+  // (chat-input.tsx), which is host-agnostic and worth keeping regardless of platform.
+  //
+  // If a future host imposes a tight ceiling again, the levers in order of preference:
+  //   1. populate `ProjectDoc.unitTypes` so the UI renders the table instead of the model
+  //      retyping it in prose — that is the dominant output cost
+  //   2. publish a faster model id for the `finder` pillar in appConfig/modelConfig.
+  //      MEASURED: claude-haiku-4-5 does DETAIL in 18.4s and SEARCH in 14.1s keeping
+  //      rows=50/matches=5. gemini-3.5-flash is NOT a substitute despite matching Sonnet's
+  //      detail length — it returns a clarifyingQuestion with rows=0 for a search, so no
+  //      table renders at all.
   // Force the stream to completion server-side even if the browser goes away
   // (quick-kayinleong-046 / RC-2). onFinish runs from the UI-message stream's
   // TransformStream `flush`, which is SKIPPED on consumer cancel — so a refresh
