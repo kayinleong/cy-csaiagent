@@ -520,8 +520,26 @@ export interface KbIngestionJobDoc {
   total: number
   remaining: number
   status: 'pending' | 'processing' | 'complete' | 'error'
-  /** All chunk texts (stored so the process worker can embed them in batches) */
-  chunkTexts: string[]
+  /**
+   * All chunk texts, stored inline so the process worker can embed them in batches.
+   *
+   * ABSENT when `shardsInSubcollection` is true. A Firestore document is capped at 1 MiB,
+   * and this field is the whole document's text, so inline storage silently limited
+   * ingestion to roughly 650 chunks — beyond that `set()` threw `3 INVALID_ARGUMENT` AFTER
+   * the kbDoc had already been created, leaving a published document with zero chunks
+   * (quick-kayinleong-089). Exactly one of `chunkTexts` / `shardsInSubcollection` is set.
+   */
+  chunkTexts?: string[]
+  /**
+   * True when the shards live in the `shards` subcollection of this job instead of inline
+   * (quick-kayinleong-089), because they would breach the 1 MiB document cap.
+   *
+   * Shard ids are zero-padded (`000000`, `000001`, …) so lexicographic `__name__` ordering
+   * matches numeric order — `processBatch` resumes by offset, and "10" must not sort before
+   * "9". Absent on every job written before this existed, which is why the reader treats
+   * absent as "inline".
+   */
+  shardsInSubcollection?: boolean
   /** The kbDocs document this job belongs to */
   docId: string
   /** Language of the document */

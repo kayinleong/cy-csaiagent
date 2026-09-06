@@ -98,6 +98,21 @@ export class IngestionError extends Error {
   }
 }
 
+/**
+ * Byte ceiling for storing `chunkTexts` inline on the job document
+ * (quick-kayinleong-089).
+ *
+ * Firestore caps a document at 1 MiB (1,048,576 bytes) including field names, overhead and
+ * every other field on the job. 700 KB leaves generous headroom for that overhead while
+ * still keeping the common case — one read, no query — on the inline path. Anything larger
+ * spills into the `shards` subcollection.
+ *
+ * Do not raise this to "use more of the 1 MiB". The failure mode it guards is not a clean
+ * error: `set()` throws AFTER `createDoc` has already written the kbDoc, so the operator is
+ * left with a published document holding zero chunks and nothing linking the two.
+ */
+const INLINE_CHUNK_TEXTS_MAX_BYTES = 700_000
+
 export async function shardJob(file: IngestFile): Promise<ShardJobResult> {
   // Step 1: compute sha256 idempotency key
   const fileHash = crypto.createHash('sha256').update(file.buffer).digest('hex')
@@ -169,12 +184,26 @@ export async function shardJob(file: IngestFile): Promise<ShardJobResult> {
   // Use a deterministic job ID based on fileHash to make the creation idempotent
   const jobId = `job-${fileHash.slice(0, 16)}`
 
+  // A Firestore document is capped at 1 MiB, and `chunkTexts` is the whole document's text.
+  // Inline storage therefore silently caps ingestion at roughly 650 chunks
+  // (quick-kayinleong-089): a larger file threw `3 INVALID_ARGUMENT` from set(), AFTER
+  // createDoc had already written the kbDoc — leaving a published kbDoc with zero chunks and
+  // no error the operator would connect to it. That is the mechanism behind the 34 empty
+  // kbDocs in this corpus, including "WhatsApp — TRX Residence" (a 540 MB export).
+  //
+  // Oversized jobs spill their shards into a `shards` subcollection instead. Small jobs keep
+  // the inline field: it is one read instead of a query, and rewriting every existing job
+  // would be churn for no gain. `processBatch` handles both, so jobs already in flight when
+  // this shipped continue to work.
+  const inlineBytes = Buffer.byteLength(JSON.stringify(chunkTexts), 'utf8')
+  const useSubcollection = inlineBytes > INLINE_CHUNK_TEXTS_MAX_BYTES
+
   const jobDoc = {
     fileHash,
     total,
     remaining: total,
     status: 'pending' as const,
-    chunkTexts,
+    ...(useSubcollection ? { shardsInSubcollection: true } : { chunkTexts }),
     docId: file.docId,
     lang: file.lang,
     pillar: file.pillar,
@@ -185,7 +214,25 @@ export async function shardJob(file: IngestFile): Promise<ShardJobResult> {
     createdAt: new Date(),
   }
 
-  await kbIngestionJobsRef().doc(jobId).set(jobDoc)
+  const jobRef = kbIngestionJobsRef().doc(jobId)
+  await jobRef.set(jobDoc)
+
+  if (useSubcollection) {
+    // Ids are zero-padded so lexicographic __name__ ordering equals numeric ordering —
+    // processBatch resumes by ordered offset, and "10" must not sort before "9".
+    const shards = jobRef.collection('shards')
+    const BATCH_WRITE = 400 // Firestore caps a batch at 500 ops; leave headroom.
+    // Reach the Firestore instance through the ref rather than importing adminDb: this
+    // module is unit-tested with `firebase-admin/firestore` mocked, and a direct adminDb
+    // import drags getFirestore() into that mock's surface for no benefit.
+    for (let i = 0; i < chunkTexts.length; i += BATCH_WRITE) {
+      const batch = jobRef.firestore.batch()
+      for (let j = i; j < Math.min(i + BATCH_WRITE, chunkTexts.length); j++) {
+        batch.set(shards.doc(String(j).padStart(6, '0')), { text: chunkTexts[j] })
+      }
+      await batch.commit()
+    }
+  }
 
   return {
     jobId,
@@ -225,6 +272,7 @@ export async function processBatch(jobId: string, limit: number): Promise<Proces
   const jobData = jobSnap.data()!
   const {
     chunkTexts,
+    shardsInSubcollection,
     remaining,
     total,
     docId,
@@ -239,10 +287,26 @@ export async function processBatch(jobId: string, limit: number): Promise<Proces
   }
 
   // Determine the slice of chunks to process in this batch.
-  // chunkTexts is the full array (index 0 = first chunk).
   // Already-processed chunks are the first (total - remaining).
   const processedCount = total - remaining
-  const batchTexts = chunkTexts.slice(processedCount, processedCount + limit)
+
+  // Two storage shapes (quick-kayinleong-089). Small jobs keep `chunkTexts` inline — one
+  // read, and the shape every job written before this change used. Jobs whose text would
+  // breach Firestore's 1 MiB document cap store shards in a subcollection instead. Reading
+  // both keeps in-flight jobs working across the deploy.
+  let batchTexts: string[]
+  if (shardsInSubcollection) {
+    // Zero-padded ids make __name__ ordering numeric, so offset/limit resumes correctly.
+    const shardSnap = await jobDoc
+      .collection('shards')
+      .orderBy('__name__')
+      .offset(processedCount)
+      .limit(limit)
+      .get()
+    batchTexts = shardSnap.docs.map((d) => String(d.get('text') ?? ''))
+  } else {
+    batchTexts = (chunkTexts as string[]).slice(processedCount, processedCount + limit)
+  }
   const batchSize = batchTexts.length
 
   // Embed and write each chunk
