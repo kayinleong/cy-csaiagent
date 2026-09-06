@@ -86,6 +86,25 @@ import { dayKey } from '@/src/usage/types'
  * a long one is checkpointed a handful of times. A 3184-char Finder envelope generated over
  * ~28s costs roughly 5-8 extra updates — cheap next to losing the answer.
  */
+/**
+ * Ceiling on model output tokens per turn (quick-kayinleong-089).
+ *
+ * Explicit because the Anthropic API REQUIRES `max_tokens`, so leaving it unset does not
+ * mean "unlimited" — it means whatever `@ai-sdk/anthropic` picks for the model id, and the
+ * ids this project resolves from `appConfig/modelConfig` are not in the SDK's known-model
+ * table. Pinning it removes that dependency on a provider default we do not control.
+ *
+ * ⚠ HONEST SCOPE: this was NOT the cause of the reported truncation. Measured on the live
+ * model with the cap unset, a deliberately long prompt produced 9,450 output tokens and
+ * finished with `stop` — so the inherited default was already generous. The value here is
+ * that the budget is now stated rather than inherited, not that it fixed the bug.
+ *
+ * Generous on purpose: these answers carry per-unit price tables and Quick-Facts blocks
+ * that are legitimately long. `@ai-sdk/anthropic` clamps this to the real per-model ceiling
+ * for any model it knows, so a value above a model's limit is corrected, not rejected.
+ */
+const MAX_OUTPUT_TOKENS = 32_000
+
 const FLUSH_EVERY_MS = 2000
 const FLUSH_EVERY_CHARS = 600
 
@@ -863,7 +882,32 @@ export async function POST(req: Request): Promise<Response> {
     //  the loop the instant it called retrieveKnowledge — so every retrieval-triggering
     //  Coach turn returned an EMPTY response. Coach is a retrieve-then-answer agent, so a
     //  1-step budget is a bug, not a default.)
-    stopWhen: stepCountIs(5),
+    // Raised 5 -> 12 (quick-kayinleong-089).
+    //
+    // onFinish above already warns that exhausting this budget finishes a turn as
+    // 'tool-calls' rather than 'stop', "meaning the model was cut off mid-loop and never
+    // wrote its closing text". That is precisely the reported symptom: a detail answer
+    // stopping mid-table.
+    //
+    // 5 was sized when the Finder had three tools. quick-088 added a fourth
+    // (`projectDetail`), so a single detail request can now spend steps on searchProjects
+    // -> projectDetail -> fetchCollateral before it has written a word of the answer,
+    // leaving almost no budget for a reply that carries a full unit-price table.
+    //
+    // This also explains the Finder rendering CARDS instead of the result table, which
+    // looked like a separate defect: the complete row set reaches the client on
+    // `messageMetadata`, and the AI SDK emits that only on `start` and `finish`. A turn
+    // that halts on step exhaustion never emits `finish`, so `finderRows` never arrives,
+    // `rows` stays empty, and MatchList falls back to the cards BY DESIGN. The rows are
+    // still attached to the PERSISTED envelope, which is why a reloaded thread shows the
+    // table and the live turn did not — the table was never broken, the turn was.
+    //
+    // Cost is still bounded, just less tightly. The original 5 was chosen to prevent
+    // unbounded cost (T-03-30 / T-04-COST / D-05), and 12 keeps a hard ceiling while
+    // leaving room for a four-tool answer. Revisit if a pillar grows more tools again.
+    stopWhen: stepCountIs(12),
+    // Output budget, stated rather than inherited — see MAX_OUTPUT_TOKENS.
+    maxOutputTokens: MAX_OUTPUT_TOKENS,
     // Track tool-derived grounding as each step lands, so the response's
     // messageMetadata can report the authoritative citations + kb-miss signal to the
     // client (quick-kayinleong-046). Bookkeeping only — never fails a turn.

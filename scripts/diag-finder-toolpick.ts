@@ -47,7 +47,9 @@ async function main() {
 
   const res = await generateText({
     model: anthropic(modelId), system, tools,
-    stopWhen: stepCountIs(5),
+    // Must MIRROR the route's budget or this diagnostic stops reflecting production
+    // (raised 5 -> 12 in quick-kayinleong-089).
+    stopWhen: stepCountIs(12),
     messages: [{ role: 'user', content: prompt }],
   })
 
@@ -68,6 +70,15 @@ async function main() {
     }
   }
   console.log(`\nSINK ROWS: ${sink.rows.length}   <-- 0 means NO TABLE can render`)
+
+  // finishReason + output size (quick-kayinleong-089). The row sink can be FULL and the
+  // table still not render: the route puts rows on `messageMetadata`, which the AI SDK
+  // emits only on `start` and `finish`. A turn that runs out of output tokens finishes as
+  // 'length' and the client never receives the rows, so MatchList falls back to the cards.
+  // A truncated envelope also fails to JSON.parse, which is the visible symptom.
+  console.log(`FINISH REASON: ${res.finishReason}   <-- 'length' means TRUNCATED: no finish metadata, no rows, cards not table`)
+  console.log(`OUTPUT TOKENS: ${res.usage?.outputTokens ?? '?'}  (total ${res.usage?.totalTokens ?? '?'})`)
+  console.log(`TEXT LENGTH:   ${(res.text ?? '').length} chars`)
   const text = res.text ?? ''
   try {
     const o = JSON.parse(text) as Record<string, unknown>
