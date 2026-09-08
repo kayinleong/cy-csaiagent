@@ -18,11 +18,11 @@
     "node": ">=22.13.0"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^2.0.80",
-    "@ai-sdk/google": "^2.0.74",
+    "@ai-sdk/anthropic": "^2.0.101",
+    "@ai-sdk/google": "^2.0.96",
     "@anthropic-ai/sdk": "^0.100.1",
     "@base-ui/react": "^1.5.0",
-    "ai": "^5.0.193",
+    "ai": "^5.0.253",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
