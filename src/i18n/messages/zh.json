@@ -259,6 +259,7 @@
     "flags": "已标记",
     "auditLog": "审计日志",
     "modelConfig": "模型配置",
+    "priorityList": "优先顺序清单",
     "pdpaSettings": "PDPA 设置",
     "daysToFirstClose": "首次成交天数",
     "leads": "客户线索"
@@ -679,6 +680,23 @@
     "reloadCta": "重新加载",
     "cancelCta": "取消",
     "genericError": "出现问题。您的更改未保存——请重试。"
+  },
+  "adminPriorityList": {
+    "pageTitle": "优先顺序清单",
+    "pageSubtitle": "告诉助手在推荐楼盘时应优先列出哪些项目。",
+    "fieldLabel": "排序指示",
+    "fieldPlaceholder": "例如：优先推荐 Residensi Alam。其次优先赛城（Cyberjaya）仍有土著固打的项目。已竣工的项目请排在在建项目之前。",
+    "helpText": "此指示决定哪些项目排在前面。它只会重新排序已符合买家地区、预算与购买资格的项目——绝不会推出已售罄的项目，也不会推出询问地区以外的项目。留空即可关闭优先顺序清单。",
+    "publishButton": "发布优先顺序清单",
+    "confirmTitle": "发布此优先顺序清单？",
+    "confirmBody": "新的推荐将采用此排序。它只会重新排序已符合买家条件的项目——绝不会加入已售罄或地区不符的项目。您可以随时修改或清空。",
+    "confirmAction": "发布",
+    "cancel": "取消",
+    "publishedToast": "已发布。新的推荐将很快采用此排序。",
+    "conflictError": "自您打开后此优先顺序清单已更改。请重新加载查看最新版本，然后重新发布。",
+    "tooLongError": "优先顺序清单过长。请控制在 4,000 个字符以内。",
+    "genericError": "出现问题。您的优先顺序清单未保存——请重试。",
+    "reloadCta": "重新加载"
   },
   "adminAuditLog": {
     "pageTitle": "审计日志",

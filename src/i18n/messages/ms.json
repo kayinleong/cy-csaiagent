@@ -259,6 +259,7 @@
     "flags": "Ditanda",
     "auditLog": "Log audit",
     "modelConfig": "Konfigurasi model",
+    "priorityList": "Senarai keutamaan",
     "pdpaSettings": "Tetapan PDPA",
     "daysToFirstClose": "Hari ke penutupan pertama",
     "leads": "Prospek"
@@ -679,6 +680,23 @@
     "reloadCta": "Muat semula",
     "cancelCta": "Batal",
     "genericError": "Sesuatu tidak kena. Perubahan anda tidak disimpan — sila cuba lagi."
+  },
+  "adminPriorityList": {
+    "pageTitle": "Senarai keutamaan",
+    "pageSubtitle": "Beritahu pembantu AI projek mana yang perlu didahulukan semasa ia mengesyorkan padanan.",
+    "fieldLabel": "Arahan susunan",
+    "fieldPlaceholder": "cth. Dahulukan Residensi Alam. Selepas itu, utamakan projek di Cyberjaya yang kuota bumiputeranya masih terbuka. Sebut projek yang sudah siap sebelum projek yang masih dalam pembinaan.",
+    "helpText": "Arahan ini menetapkan projek mana yang perlu didahulukan. Ia hanya menyusun semula projek yang sudah pun memenuhi kawasan, bajet dan kelayakan pembeli — ia tidak sekali-kali boleh memaparkan projek yang sudah habis dijual, atau projek di luar kawasan yang ditanya oleh ejen. Biarkan ruangan ini kosong untuk mematikan senarai keutamaan.",
+    "publishButton": "Terbitkan senarai keutamaan",
+    "confirmTitle": "Terbitkan senarai keutamaan ini?",
+    "confirmBody": "Syor baharu akan menggunakan susunan ini. Ia hanya menyusun semula projek yang sudah memenuhi keperluan pembeli — ia tidak pernah menambah projek yang habis dijual atau di luar kawasan yang ditanya. Anda boleh mengubah atau mengosongkannya pada bila-bila masa.",
+    "confirmAction": "Terbitkan",
+    "cancel": "Batal",
+    "publishedToast": "Diterbitkan. Syor baharu akan menggunakan susunan ini sebentar lagi.",
+    "conflictError": "Senarai keutamaan ini telah berubah sejak anda membukanya. Muat semula untuk melihat versi terkini, kemudian terbitkan semula.",
+    "tooLongError": "Senarai keutamaan itu terlalu panjang. Hadkan kepada 4,000 aksara atau kurang.",
+    "genericError": "Sesuatu tidak kena. Senarai keutamaan anda tidak disimpan — sila cuba lagi.",
+    "reloadCta": "Muat semula"
   },
   "adminAuditLog": {
     "pageTitle": "Log audit",

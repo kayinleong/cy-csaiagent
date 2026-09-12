@@ -210,7 +210,11 @@ function toFinderRow(m: ProjectMatch): FinderRow {
  *                  offline/test path and `ReturnType<typeof finderAgent.makeTools>` are
  *                  unchanged.
  */
-export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: FinderRowSink) {
+export function makeSearchProjectsTool(
+  userLang: 'en' | 'ms' | 'zh',
+  sink?: FinderRowSink,
+  priorityText?: string,
+) {
   // userLang is available for future description localisation
   void userLang
 
@@ -259,7 +263,7 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: Find
           locationPref: input.locationPref,
           bedrooms: input.bedrooms,
           freeText: input.freeText,
-        })
+        }, priorityText)
 
         // Attach collateral INLINE for the top matches (quick-kayinleong-067).
         //

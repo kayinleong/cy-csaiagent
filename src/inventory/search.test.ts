@@ -1100,6 +1100,92 @@ describe('quick-kayinleong-050: relevance floor, top-N cap, and segment weightin
     }
   })
 
+  // ── quick-kayinleong-090: admin Priority List boost ───────────────────────
+
+  it('hoists an admin-prioritised project into the top of matches, ahead of the MAX_MATCHES window', async () => {
+    // The point of doing this INSIDE searchProjects rather than in the prompt: the model
+    // only ever sees the first MAX_MATCHES (8) of this array. A project ranked 12th is
+    // invisible to a prompt instruction no matter how it is worded.
+    const { searchProjects, MAX_MATCHES } = await import('@/src/inventory/search')
+
+    const bulk = Array.from({ length: 12 }, (_, i) => ({
+      id: `proj-rank-${i}`,
+      doc: { ...FIXTURES['proj-active-a'], name: `Filler Tower ${i}`, priceValue: 500_000 + i },
+    }))
+    // The prioritised project sits last, well outside the model's window.
+    bulk.push({
+      id: 'proj-royal',
+      doc: { ...FIXTURES['proj-active-a'], name: 'Royal Suites, Pavilion Damansara Heights (phase 2)', priceValue: 600_000 },
+    })
+
+    mockProjectsGet.mockResolvedValueOnce(makeAdHocSnap(bulk))
+    mockEmbedText.mockResolvedValueOnce(NEUTRAL_VECTOR)
+
+    const result = await searchProjects(BASE, 'Always lead with Royal Suites.')
+    expect(result.found).toBe(true)
+    if (!result.found) return
+
+    expect(result.matches[0].projectId).toBe('proj-royal')
+    // And therefore inside what the model actually receives.
+    expect(result.matches.slice(0, MAX_MATCHES).map((m) => m.projectId)).toContain('proj-royal')
+    // Reorder only — nothing added, nothing dropped.
+    expect(result.matches).toHaveLength(13)
+  })
+
+  it('leaves ordering untouched when no priority list is configured', async () => {
+    const { searchProjects } = await import('@/src/inventory/search')
+    const bulk = Array.from({ length: 5 }, (_, i) => ({
+      id: `proj-plain-${i}`,
+      doc: { ...FIXTURES['proj-active-a'], name: `Filler Tower ${i}`, priceValue: 500_000 + i },
+    }))
+
+    mockProjectsGet.mockResolvedValueOnce(makeAdHocSnap(bulk))
+    mockEmbedText.mockResolvedValueOnce(NEUTRAL_VECTOR)
+    const baseline = await searchProjects(BASE)
+
+    mockProjectsGet.mockResolvedValueOnce(makeAdHocSnap(bulk))
+    mockEmbedText.mockResolvedValueOnce(NEUTRAL_VECTOR)
+    const withEmpty = await searchProjects(BASE, '')
+
+    expect(baseline.found && withEmpty.found).toBe(true)
+    if (!baseline.found || !withEmpty.found) return
+    expect(withEmpty.matches.map((m) => m.projectId)).toEqual(baseline.matches.map((m) => m.projectId))
+  })
+
+  it('CANNOT defeat the location hard gate — a prioritised project outside the requested area is still excluded', async () => {
+    // This is the invariant the whole feature rests on. An admin preference reorders a
+    // valid result set; it never widens one. Showing a Damansara project under a Cheras
+    // request is the failure the Finder prompt exists to prevent.
+    const { searchProjects } = await import('@/src/inventory/search')
+
+    mockProjectsGet.mockResolvedValueOnce(
+      makeAdHocSnap([
+        {
+          id: 'proj-royal',
+          doc: {
+            ...FIXTURES['proj-active-a'],
+            name: 'Royal Suites, Pavilion Damansara Heights (phase 2)',
+            locationText: 'Damansara Heights, Kuala Lumpur',
+          },
+        },
+        {
+          id: 'proj-cheras',
+          doc: { ...FIXTURES['proj-active-a'], name: 'Cheras Green Residence', locationText: 'Cheras, Kuala Lumpur' },
+        },
+      ]),
+    )
+    mockEmbedText.mockResolvedValueOnce(NEUTRAL_VECTOR)
+
+    const result = await searchProjects(
+      { ...BASE, locationPref: 'Cheras' },
+      'Always lead with Royal Suites, no matter what.',
+    )
+
+    expect(result.found).toBe(true)
+    if (!result.found) return
+    expect(result.matches.map((m) => m.projectId)).toEqual(['proj-cheras'])
+  })
+
   it('results are capped at MAX_ROWS, not MAX_MATCHES (quick-085 cap split)', async () => {
     // The cap was SPLIT, not raised. MAX_MATCHES (8) now bounds only what
     // `toModelOutput` hands the model (src/agents/finder/tools.ts); the returned array is

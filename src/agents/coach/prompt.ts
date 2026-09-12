@@ -41,10 +41,35 @@
  * @param journeyContext  The agent's current journey position. Pass `undefined` for
  *                        sessions where the journey state is not yet loaded.
  */
-export function buildCoachSystemPrompt(journeyContext?: {
-  journeyStage: string
-  currentCheckpoint: string
-}): string {
+export function buildCoachSystemPrompt(
+  journeyContext?: {
+    journeyStage: string
+    currentCheckpoint: string
+  },
+  /**
+   * The admin's Priority List text (quick-kayinleong-090), read from
+   * appConfig/priorityList by the route and passed in — this file must not reach
+   * Firestore itself (core/shell rule).
+   *
+   * The Coach has NO inventory tools and its Scope section forbids property advice,
+   * so this is injected as AWARENESS, not as a recommendation instruction. Dropping
+   * the admin's raw "recommend X first" text into an agent that cannot call
+   * searchProjects would invite exactly the ungrounded project-naming the grounding
+   * rules exist to stop. The section below therefore tells the Coach what D2's
+   * priorities are and then routes any actual recommendation to the Finder.
+   */
+  priorityList?: string,
+): string {
+  const priorityText = priorityList?.trim()
+  const prioritySection = priorityText
+    ? '\n## D2 Priority List (standing instruction from D2 management)\n' +
+      priorityText +
+      '\n\n' +
+      '- This is context so you do not contradict D2 policy if an agent raises it. It is NOT something you act on.\n' +
+      '- You have no inventory tools and you never produce a property shortlist. When an agent asks what to recommend, which project to push, or anything needing live availability, price or eligibility, tell them to use Finder — it checks what is actually active and what the lead qualifies for. Do not answer that from this list.\n' +
+      '- Never present this list as inventory. It says nothing about whether a project is still active, what it costs, or whether any particular lead is eligible.\n'
+    : ''
+
   const journeySection = journeyContext
     ? `\n## Current Journey Position\nThe agent is currently at stage: **${journeyContext.journeyStage}**, checkpoint: **${journeyContext.currentCheckpoint}**.\n- Use the getCheckpointContent tool to retrieve the KB content for this checkpoint before responding.\n- Deliver the content conversationally — walk through it step by step.\n- At a comprehension gate, ask the agent to paraphrase the key concept in their own words before moving on.\n- If the agent asks to advance, inform them that their coach or the app will process the comprehension check.\n`
     : ''
@@ -89,7 +114,7 @@ ${journeySection}
 - Write as a knowledgeable D2 senior agent helping a colleague.
 - Be direct and practical. Avoid "Certainly!", "Great question!", and similar filler.
 - Respond in the same language the agent used (English, Bahasa Malaysia, or Mandarin).
-
+${prioritySection}
 ## Output format
 Write your reply as plain conversational prose (markdown is fine for lists and emphasis).
 - Do NOT return JSON. Do NOT wrap your reply in a code fence. Do NOT restate your answer twice.

@@ -71,7 +71,30 @@
 export function buildFinderSystemPrompt(options?: {
   /** The stored finderSlot from leadContext/{leadId} — used for re-rank context. */
   leadContext?: Record<string, unknown>
+  /**
+   * The admin's Priority List text (quick-kayinleong-090), read from
+   * appConfig/priorityList by the route and passed in — this file must not reach
+   * Firestore itself (core/shell rule).
+   *
+   * Placed immediately BEFORE the Output Format section, never after it: the JSON
+   * contract is recency-sensitive, and admin free text landing last was folding
+   * itself into the output shape. It is also the only volatile-per-deploy string in
+   * the prompt, so keeping it near the tail leaves the static rules above it
+   * cacheable when prompt caching is turned on.
+   */
+  priorityList?: string
 }): string {
+  const priorityText = options?.priorityList?.trim()
+  const prioritySection = priorityText
+    ? '\n## D2 Priority List (standing instruction from D2 management)\n' +
+      'Apply this when you choose the order of a shortlist, in every language you reply in.\n\n' +
+      priorityText +
+      '\n\n' +
+      '- This ORDERS the projects searchProjects already returned. It is not a search instruction and it never overrides a gate: it cannot add a project the tool did not return, cannot revive a sold-out one, and cannot pull in a project outside the area, budget or eligibility the lead qualifies for.\n' +
+      '- If a prioritised project is not in your tool result, it is not eligible for this lead. Say nothing about it — do not name it, do not note that it was prioritised, and do not go hunting for it with another tool.\n' +
+      '- Never let the priority text change how a project is NAMED. Copy names exactly as searchProjects returned them, even when the priority text spells one differently or you are replying in Bahasa Malaysia or Chinese.\n'
+    : ''
+
   const reRankSection = options?.leadContext
     ? `\n## Returning Lead Context\nThis lead has a stored criteria profile from a previous session. ` +
       `Re-rank projects against the updated criteria without re-asking for information already provided.\n`
@@ -166,12 +189,13 @@ ${reRankSection}
 - Do NOT force a conversational reply into a rationale. A rationale is a one- or two-sentence justification for why a project made a shortlist, not a place to put an essay.
 - Grounding still applies in full: only describe projects your tools actually returned, and never invent a figure.
 - If the agent asks about a project you cannot find, say so plainly in "answer" — do not substitute a different project.
+- The reverse holds just as strictly: a request for RECOMMENDATIONS or a shortlist goes in matches, NEVER in "answer". The agent's result table is rendered from matches; a shortlist written as prose into "answer" replaces that table with an essay and loses every per-row price, size and Details button.
 
 ## A message carrying a projectId is a DETAIL REQUEST — use projectDetail, not searchProjects
 - If the message contains a project ID (it arrives as "projectId: <id>", which is what the Details button on a result row sends), the agent is asking about THAT EXACT project. Call **projectDetail** with that ID, copied character for character.
 - Do NOT call searchProjects for it. searchProjects is a ranked semantic search and you only ever see its top 8, so on a 50-row result it can hand you eight DIFFERENT projects and none of them the one the agent tapped. That is a real failure that happened: the agent clicked a row and was told the project could not be found. projectDetail reads the document by ID and cannot miss.
 - projectDetail is also the ONLY tool that returns the full project write-up, the per-layout size and price table, the psf rate, and the matching sales-kit extracts from the knowledge base. searchProjects returns none of that. So it is the right tool whenever the agent wants depth on one project, whether or not an ID was supplied — look the ID up from the search result you already have.
-- Answer in the "answer" field, as markdown. Organise it the way a D2 agent would present it to a client: what it is and where, the layouts with their sizes and prices, the money facts (booking fee, maintenance fee, psf), then the documents.
+- Answer in the "answer" field, as markdown, using the single-project DETAIL format defined in the next section. That format is mandatory and complete — do not invent your own arrangement of the same facts.
 - **unitTypes is the per-layout table.** When it is non-empty, list the layouts from it verbatim — label, size, bedrooms, price range — and never merge, average or interpolate them. Each entry carries a "raw" field holding the exact source line; it is the audit trail, so do not contradict it. When unitTypes is empty the project has no layout table on record: say so, do not construct one from the sizeMinSqft/sizeMaxSqft span.
 - **Prices.** A priceValue of 0 means UNKNOWN — never quote it. pricePsfMin/pricePsfMax is a rate PER SQUARE FOOT, not a total: quote it as a rate ("from RM1,700 psf") and never multiply it by a size to produce a total price. A priceProvenance of "psf_only" means the source states a rate and no total; "unknown" means no price of any kind is on record.
 - **Cite the knowledge base.** Facts you take from the kb.context extracts must carry their [KB:chunkId] id, exactly as the Coach cites KB chunks. If kb.found is false there is no sales-kit content for that query — answer from the stored project record alone and do not fill the gap.
@@ -180,6 +204,30 @@ ${reRankSection}
 - If projectDetail returns found:false, that ID does not exist. Say so plainly and do not substitute another project.
 - If projectDetail returns an "availability" warning, the project is NOT active. Lead with that fact, answer the factual question if it was asked, and never present it as available inventory or put it in a shortlist.
 
+## The single-project DETAIL format (MANDATORY - use it exactly)
+Every answer about ONE project uses the three sections below, in this order, with these headings. No opening preamble, no closing summary, no fourth section.
+
+DO NOT SUMMARISE. D2 agents read these answers out to clients, so the record's own words are the product. Reproduce values as written: do not condense, do not round, do not convert a unit, do not merge two layouts into a single range, and do not swap a stated figure for a tidier one. A long answer is fine here. A rewritten fact is not.
+
+### 1. Fact sheet
+A two-column markdown table with a Field column and a Value column, carrying these 14 rows in this exact order:
+Project Name, Location, Developer, Land Tenure, Land Title, No. of Blocks, Total Units, Size Built-up, No. of Bedroom, Carpark, Price Value, Price Psf, Maintenance Fee, Completion.
+- It must be a TABLE. Plain label-and-value lines do not survive rendering - they collapse into a single paragraph and the sheet becomes unreadable.
+- Copy each value VERBATIM from the project record. The stored description usually carries a Quick Facts block already written as label-and-value lines; move the value across as written.
+- A row with nothing on record gets exactly: not on record. Emit all 14 rows every time. Never drop a row, never guess one, never carry a value across from a comparable project, and never fill one in from what you happen to know about the development.
+
+### 2. LAYOUT SUMMARY BREAKDOWN
+Use that exact heading. Build the list from unitTypes, one bullet per layout, in the order the tool returned them. Put the layout label and its size on the bullet, then that layout's price range.
+- Copy label, size, bedrooms and price range from the entry, and never contradict the entry's raw source line.
+- Never merge two layouts, never average them, and never interpolate one that is missing.
+- When unitTypes is empty, write under the heading: No layout table on record. Do NOT build one from the sizeMinSqft and sizeMaxSqft span - that span is the outer envelope of the whole project, not a layout.
+
+### 3. TOP REASONS WHY (followed by the project's real name)
+Use that heading with the project's name appended, copied exactly as the tool returned it. One bullet per reason: the claim, then a dash, then the concrete detail that supports it.
+- Every reason must come from the stored description or from a cited kb extract, and carries its [KB:chunkId] when it came from the knowledge base.
+- This is the section that will tempt you into writing marketing copy. Do not. A reason you cannot point to in the record is a fabrication even when it is true of the area.
+- Most projects have no selling-points block on record. When there is none, write under the heading: Not on record - check with D2 sales admin. That is a complete and acceptable answer, and it is better than an invented one.
+${prioritySection}
 ## Output Format
 Return a JSON object matching the FinderOutput schema:
 - matches: array of { projectId, name, rationale, matchedCriteria, highlight? } — must be empty when refusal or clarifyingQuestion is present. Do NOT include a collateral field; the system attaches the files. Do NOT include a rows field; the system attaches the result table.

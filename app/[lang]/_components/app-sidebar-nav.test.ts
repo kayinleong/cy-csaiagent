@@ -216,6 +216,45 @@ describe('Phase-7 nav — 8 net-new items, placement + read-only blindness (NAV-
   })
 })
 
+// ─── quick-090 NAV: the admin Priority List entry ─────────────────────────────
+//
+// The Priority List publishes appConfig/priorityList — a free-text ordering prompt
+// injected into the Coach/Finder system prompts. It steers agent output, so it is
+// admin-ONLY: senior-coach and read-only must not even see the link (nav-hiding is
+// UX, the server gate is the boundary — but the two must agree).
+//
+// Section placement: System & Compliance, alongside model-config (the other
+// appConfig singleton publisher).
+
+describe('quick-090 nav — Priority List is admin-only and lives under System & Compliance', () => {
+  it('admin sees priorityList under the system section', async () => {
+    const { visibleSectionsForRole } = await loadNav()
+    const map = itemSectionMap(visibleSectionsForRole!('admin', LANG))
+    expect(map['priorityList']).toBe('system')
+  })
+
+  it('the priorityList href is the locale-prefixed /priority-list route', async () => {
+    const { buildSections } = await loadNav()
+    const item = buildSections!(LANG)
+      .flatMap((s) => s.items)
+      .find((i) => i.key === 'priorityList')
+    expect(item?.href).toBe(`/${LANG}/priority-list`)
+    expect(item?.roles).toEqual(['admin'])
+  })
+
+  it('senior-coach does NOT see priorityList', async () => {
+    const { visibleSectionsForRole } = await loadNav()
+    const keys = visibleItemKeys(visibleSectionsForRole!('senior-coach', LANG))
+    expect(keys).not.toContain('priorityList')
+  })
+
+  it('read-only does NOT see priorityList (D-24 — least-privilege LOCKED)', async () => {
+    const { visibleSectionsForRole } = await loadNav()
+    const keys = visibleItemKeys(visibleSectionsForRole!('read-only' as unknown as Role, LANG))
+    expect(keys).not.toContain('priorityList')
+  })
+})
+
 // ─── isNavItemActive (quick-033 — Home no longer highlighted everywhere) ──────
 
 describe('isNavItemActive — locale-root href matches exactly (quick-033)', () => {
