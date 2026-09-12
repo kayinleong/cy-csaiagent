@@ -85,8 +85,11 @@ export const coachAgent = {
    * Build a journey-context-aware system prompt.
    * Call this at invocation time with the agent's current journey position.
    */
-  buildSystemPrompt(journeyContext?: { journeyStage: string; currentCheckpoint: string }): string {
-    return buildCoachSystemPrompt(journeyContext)
+  buildSystemPrompt(
+    journeyContext?: { journeyStage: string; currentCheckpoint: string },
+    priorityList?: string,
+  ): string {
+    return buildCoachSystemPrompt(journeyContext, priorityList)
   },
 
   /** Output schema — used for Zod validation of the model's structured response. */

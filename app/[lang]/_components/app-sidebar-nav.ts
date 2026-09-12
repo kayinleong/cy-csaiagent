@@ -42,6 +42,7 @@ import {
   SlidersHorizontal,
   ShieldAlert,
   MessageSquareText,
+  ListOrdered,
 } from 'lucide-react'
 import type { Role } from '@/src/firebase/auth'
 
@@ -68,6 +69,10 @@ export type NavItemKey =
   | 'flags'
   | 'auditLog'
   | 'modelConfig'
+  // ── quick-090: the admin Priority List — a free-text ordering prompt that
+  // re-ranks projects the Finder tools ALREADY returned (never a retrieval
+  // filter). Admin-only, System & Compliance.
+  | 'priorityList'
   | 'pdpaSettings'
   // ── quick-046: the admin lead registry (the missing producer for the Reply
   // pillar — Reply requires a leadId and nothing created `leads/{id}` before).
@@ -188,6 +193,9 @@ export function buildSections(lang: string): Section[] {
         // admin-only (D-24: read-only excluded).
         { key: 'auditLog', href: `/${lang}/audit-log`, icon: ScrollText, roles: ['admin'] },
         { key: 'modelConfig', href: `/${lang}/model-config`, icon: SlidersHorizontal, roles: ['admin'] },
+        // ── quick-090: Priority List (admin-only ordering prompt). Sits next to
+        // model-config — both publish an appConfig singleton that steers the agents.
+        { key: 'priorityList', href: `/${lang}/priority-list`, icon: ListOrdered, roles: ['admin'] },
         { key: 'pdpaSettings', href: `/${lang}/pdpa-settings`, icon: ShieldAlert, roles: ['admin'] },
       ],
     },

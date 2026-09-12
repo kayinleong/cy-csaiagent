@@ -43,6 +43,7 @@ Planning artifacts (read these before non-trivial work):
 - **No WhatsApp Business API in v1.** Paste-and-draft only.
 - **No auto-send, ever.** Reply Assistant = copy-to-clipboard; the agent sends from their own phone.
 - **Model-agnostic.** Never hard-code a model ID; resolve from Firestore (`appConfig/modelConfig`).
+- **Admin-authored runtime config lives in `appConfig/*` and is read through `src/config/`.** One module per doc, each fail-soft to a neutral default the way `modelFor` does — a config read must never fail a chat turn. Prompt builders in `src/agents/*/prompt.ts` RECEIVE such config as an argument; they never fetch it (core/shell rule). Current docs: `appConfig/modelConfig` (per-pillar model IDs), `appConfig/priorityList` (admin recommendation ordering).
 - **PDPA / data residency.** Pseudonymize PII at the Claude boundary; audit log on every client-related conversation; never log PII.
 - **Multilingual is not a late add-on.** It affects retrieval, routing, and UI copy.
 
@@ -57,7 +58,7 @@ Planning artifacts (read these before non-trivial work):
 <!-- GSD:conventions-start source:TSD.md -->
 ## Conventions
 
-- **Core/shell split:** `app/` may import from `src/`; `src/` must **never** import from `app/`. The application core (`src/agents`, `router`, `llm`, `memory`, `rag`, `kb`, `escalation`, `audit`, `ratelimit`, `i18n`, `firebase`) is portable and unit-testable without Next.
+- **Core/shell split:** `app/` may import from `src/`; `src/` must **never** import from `app/`. The application core (`src/agents`, `router`, `llm`, `memory`, `rag`, `kb`, `escalation`, `audit`, `ratelimit`, `i18n`, `firebase`, `config`) is portable and unit-testable without Next.
 - **Every Firestore doc carries `tenantId`** (single-tenant `"d2"` now; don't paint into a corner).
 - **Messages live in a subcollection** (`conversations/{cid}/messages`), never an inline array (1 MB doc-size trap).
 - **Agent tools are read-only** and authenticate **as the user** — never as admin from a user-facing path.

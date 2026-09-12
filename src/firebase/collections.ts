@@ -29,7 +29,9 @@
  *   20. erasureRequests/{reqId} ← Phase-5 PDPA erasure ledger (QUAL-09/D-02; server/Admin-SDK writes)
  *   21. cohorts/{cohortId}    ← Phase-7 cohort registry (COH-01/D-01; admin-write, coach/admin-read)
  *   22. conversationFlags/{flagId} ← Phase-7 flagged-conversation queue (FLAG-01/D-09; Admin-SDK writes only, content-free reference)
- *   23. appConfig/{configId} ← model-config source of truth (MODEL-01/02; singleton doc appConfig/modelConfig; server/Admin-SDK writes only, client-denied)
+ *   23. appConfig/{configId} ← app-config singletons (server/Admin-SDK writes only, client-denied):
+ *         appConfig/modelConfig  ← model-config source of truth (MODEL-01/02)
+ *         appConfig/priorityList ← admin recommendation-ordering prompt (quick-kayinleong-090)
  *
  * Import pattern (always use the @/ alias):
  *   import { usersRef, rateBudgetsRef } from '@/src/firebase/collections'
@@ -950,6 +952,32 @@ export interface ModelConfigDoc {
   updatedAt: Date | FieldValue
 }
 
+/**
+ * Second singleton under `appConfig` — the admin-authored "Priority List"
+ * (quick-kayinleong-090). Free text, written by an admin in the Priority List
+ * console and injected into the Coach/Finder system prompts as a RANKING
+ * preference over projects `searchProjects` already returned.
+ *
+ * It is a tie-breaker, never a retrieval filter and never a source of fact: it
+ * cannot surface a project the tools did not return, and it cannot override the
+ * `status:'active'` guarantee. See src/agents/finder/prompt.ts.
+ *
+ * Same access posture as ModelConfigDoc — Admin SDK only, client-denied by
+ * firestore.rules (`match /appConfig/{configId} { allow read, write: if false }`).
+ */
+export interface PriorityListDoc {
+  tenantId: TenantId
+  /**
+   * The admin's ordering prompt, verbatim. Empty string = feature off; the
+   * prompt builders omit the section entirely rather than emit an empty header.
+   */
+  text: string
+  /** UID of the admin who last published a change (audit trail). */
+  updatedBy: string
+  /** Server timestamp of the last publish. */
+  updatedAt: Date | FieldValue
+}
+
 // ─── Converter factory ───────────────────────────────────────────────────────
 
 /**
@@ -1003,6 +1031,7 @@ export const erasureRequestConverter = makeConverter<ErasureRequestDoc>()
 export const cohortConverter = makeConverter<CohortDoc>()
 export const conversationFlagConverter = makeConverter<ConversationFlagDoc>()
 export const modelConfigConverter = makeConverter<ModelConfigDoc>()
+export const priorityListConverter = makeConverter<PriorityListDoc>()
 
 // ─── Ref factories ───────────────────────────────────────────────────────────
 // Export one named factory per collection.
@@ -1237,4 +1266,25 @@ export const MODEL_CONFIG_DOC_ID = 'modelConfig' as const
  */
 export function appConfigRef(): CollectionReference<ModelConfigDoc> {
   return adminDb.collection('appConfig').withConverter(modelConfigConverter)
+}
+
+/**
+ * The singleton document id under `appConfig` holding the Priority List prompt.
+ * Callers use `priorityListRef().doc(PRIORITY_LIST_DOC_ID)` — never a literal.
+ */
+export const PRIORITY_LIST_DOC_ID = 'priorityList' as const
+
+/**
+ * Collection 23 (second doc shape): appConfig/priorityList.
+ *
+ * `appConfig` holds two singletons with different shapes, so it gets one typed
+ * accessor per shape rather than a widened union — the file's existing
+ * one-converter-per-doc-shape precedent. Use this for the Priority List;
+ * use `appConfigRef()` for the model-config map.
+ *
+ * Server / Admin-SDK writes & reads ONLY — client access denied in
+ * firestore.rules by the same `/appConfig/{configId}` wildcard.
+ */
+export function priorityListRef(): CollectionReference<PriorityListDoc> {
+  return adminDb.collection('appConfig').withConverter(priorityListConverter)
 }

@@ -77,6 +77,7 @@ import type { FinderSlot, ReplySlot } from '@/src/memory'
 import type { ParsedCriteria } from '@/src/inventory/search'
 import { recordUsageEvent } from '@/src/usage/record'
 import { dayKey } from '@/src/usage/types'
+import { readPriorityList } from '@/src/config/priority-list'
 
 // ─── Runtime configuration ────────────────────────────────────────────────────
 
@@ -799,6 +800,14 @@ export async function POST(req: Request): Promise<Response> {
     return writeChain
   }
 
+  // ── Admin Priority List (quick-kayinleong-090) ──────────────────────────────
+  // Read ONCE per turn, above the dispatch, because both the system prompt and the
+  // searchProjects tool need it and a second read would add a second serial Firestore
+  // hop to the hot path. readPriorityList never throws — an outage yields '' and the
+  // prompt builders omit the section entirely, so an unreachable config doc degrades
+  // to today's behaviour rather than failing the turn.
+  const priorityList = await readPriorityList()
+
   // ── Dispatch: build agent system prompt + tools based on pillar ──────────────
   // Phase 3 adds the Finder branch alongside the existing Coach branch.
   // Phase 4 (Plan 04-06) adds the Reply branch as a third dispatch arm.
@@ -836,8 +845,13 @@ export async function POST(req: Request): Promise<Response> {
       // Cast FinderSlot to Record<string, unknown> for the system prompt builder
       // (the builder only reads it for context injection; no structural mutation)
       leadContext: storedFinderSlot ? (storedFinderSlot as unknown as Record<string, unknown>) : undefined,
+      priorityList,
     })
-    agentTools = finderAgent.makeTools(userLang, uid, leadId, finderRowSink)
+    // The same text goes to BOTH halves on purpose: the tool applies it as a ranking
+    // boost so a prioritised project can reach the model's top-8 window at all, and the
+    // prompt applies it as presentation order within what the model then sees. Prompt
+    // alone would silently no-op whenever the project ranked 9th or lower.
+    agentTools = finderAgent.makeTools(userLang, uid, leadId, finderRowSink, priorityList)
   } else if (pillar === 'reply') {
     // Reply branch (Plan 04-06) — mirrors the Finder branch shape.
     // leadId is GUARANTEED present here (the required-leadId fail-closed gate above
@@ -865,7 +879,7 @@ export async function POST(req: Request): Promise<Response> {
     agentTools = replyAgent.makeTools(userLang, uid, leadId)
   } else {
     // Coach branch — unchanged from Phase 1/2
-    agentSystemPrompt = coachAgent.buildSystemPrompt()
+    agentSystemPrompt = coachAgent.buildSystemPrompt(undefined, priorityList)
     agentTools = coachAgent.makeTools(userLang)
   }
 

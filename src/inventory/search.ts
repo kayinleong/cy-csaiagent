@@ -85,6 +85,7 @@
 import { projectsRef } from '@/src/firebase/collections'
 import type { PriceBand, ProjectDoc, UnitTypeEntry } from '@/src/firebase/collections'
 import { embedText } from '@/src/rag/embed'
+import { applyPriorityBoost } from './priority'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -664,10 +665,17 @@ export function readEmbedding(raw: unknown): number[] {
  * STAGE A: deterministic Firestore filter (never skipped).
  * STAGE B: in-memory dot-product re-rank within eligible+affordable set.
  *
- * @param criteria ParsedCriteria from the Finder agent's criteria parser.
- * @returns        SearchResult — found:true with matches, or found:false with a reason signal.
+ * @param criteria     ParsedCriteria from the Finder agent's criteria parser.
+ * @param priorityText The admin's Priority List text (quick-kayinleong-090). Reorders the
+ *                     FINAL ranked set only — it runs after every hard gate and the
+ *                     relevance floor, so it can never surface a project the gates
+ *                     rejected. Omit or pass '' to disable.
+ * @returns            SearchResult — found:true with matches, or found:false with a reason signal.
  */
-export async function searchProjects(criteria: ParsedCriteria): Promise<SearchResult> {
+export async function searchProjects(
+  criteria: ParsedCriteria,
+  priorityText?: string,
+): Promise<SearchResult> {
   // ── STAGE A: Deterministic eligibility/availability gate (NEVER skipped) ────
   //
   // Start unconditionally with status:'active' — the most critical gate.
@@ -834,7 +842,14 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   // quick-kayinleong-085 SPLIT the cap: this slice is now MAX_ROWS (the client table's
   // ceiling) and MAX_MATCHES bounds only what `toModelOutput` hands the model. Slicing
   // here at MAX_MATCHES was capping the TABLE at 8 rows for a query with 50 real answers.
-  const reranked = applySegmentWeights(relevant, criteria.segment).slice(0, MAX_ROWS)
+  // ── ADMIN PRIORITY BOOST (quick-kayinleong-090) ──────────────────────────
+  // LAST reorder in the pipeline, and deliberately so: every candidate here has
+  // already cleared status:'active', the location and price hard filters, the
+  // eligibility gates and the MIN_RELEVANCE floor. The boost partitions that valid
+  // set — it cannot add to it. An admin cannot push a sold-out project, and cannot
+  // push a project into an area the lead did not ask for.
+  const weighted = applySegmentWeights(relevant, criteria.segment)
+  const reranked = applyPriorityBoost(weighted, priorityText).slice(0, MAX_ROWS)
 
   // ── Map to ProjectMatch ──────────────────────────────────────────────────
   const matches: ProjectMatch[] = reranked.map(({ id, doc, score }) => ({

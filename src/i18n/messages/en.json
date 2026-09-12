@@ -257,6 +257,7 @@
     "flags": "Flagged",
     "auditLog": "Audit log",
     "modelConfig": "Model config",
+    "priorityList": "Priority list",
     "pdpaSettings": "PDPA settings",
     "daysToFirstClose": "Days to first close",
     "leads": "Leads"
@@ -677,6 +678,23 @@
     "reloadCta": "Reload",
     "cancelCta": "Cancel",
     "genericError": "Something went wrong. Your change wasn't saved — please try again."
+  },
+  "adminPriorityList": {
+    "pageTitle": "Priority list",
+    "pageSubtitle": "Tell the assistant which projects to put first when it recommends matches.",
+    "fieldLabel": "Ordering prompt",
+    "fieldPlaceholder": "e.g. Put Residensi Alam first. After that, prefer Cyberjaya projects that still have bumiputera quota open. Mention completed projects before ones still under construction.",
+    "helpText": "This prompt sets which projects to put first. It only re-orders projects that already match the buyer's area, budget and eligibility — it can never surface a sold-out project, or one outside the area the agent asked about. Leave the box empty to turn the priority list off.",
+    "publishButton": "Publish priority list",
+    "confirmTitle": "Publish this priority list?",
+    "confirmBody": "New recommendations will use this ordering. It only re-orders projects that already match the buyer — it never adds a sold-out project or one outside the area asked about. You can change or clear it at any time.",
+    "confirmAction": "Publish",
+    "cancel": "Cancel",
+    "publishedToast": "Published. New recommendations will use this ordering shortly.",
+    "conflictError": "This priority list changed since you opened it. Reload to see the latest version, then publish again.",
+    "tooLongError": "That priority list is too long. Keep it to 4,000 characters or fewer.",
+    "genericError": "Something went wrong. Your priority list wasn't saved — please try again.",
+    "reloadCta": "Reload"
   },
   "adminAuditLog": {
     "pageTitle": "Audit log",

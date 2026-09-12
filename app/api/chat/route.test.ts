@@ -48,6 +48,8 @@ const mocks = vi.hoisted(() => {
   const mockFinderBuildSystemPrompt = vi.fn(() => 'You are a D2 Property Finder.')
   const mockFinderMakeTools = vi.fn(() => ({ searchProjects: {}, queryInventory: {}, fetchCollateral: {} }))
   const mockReadFinderSlot = vi.fn(async () => null)
+  // quick-090: the admin Priority List read. Defaults to '' (no list configured).
+  const mockReadPriorityList = vi.fn(async () => '')
   const mockMergeFinderCriteria = vi.fn((stored: unknown) => stored)
   const mockMergeDiscussed = vi.fn((prev: string[], next: string[]) => [...prev, ...next])
   const mockWriteLeadSlot = vi.fn(async () => {})
@@ -81,6 +83,7 @@ const mocks = vi.hoisted(() => {
     mockFinderBuildSystemPrompt,
     mockFinderMakeTools,
     mockReadFinderSlot,
+    mockReadPriorityList,
     mockMergeFinderCriteria,
     mockMergeDiscussed,
     mockWriteLeadSlot,
@@ -149,6 +152,10 @@ vi.mock('@/src/memory', () => ({
   writeLeadSlot: mocks.mockWriteLeadSlot,
   // 04-01 Wave 0: reply slot reader (route consumes once Plan 04-06 wires reply dispatch)
   readReplySlot: mocks.mockReadReplySlot,
+}))
+
+vi.mock('@/src/config/priority-list', () => ({
+  readPriorityList: mocks.mockReadPriorityList,
 }))
 
 vi.mock('@/src/agents/finder', () => ({
@@ -589,11 +596,15 @@ describe('Test 12 (03-07): finder dispatch — routeAsync→finder routes to fin
     // userLang depends on detectLang mock; assert uid + leadId positional args 1+2.
     // Arg 4 is the request-scoped Finder row sink (quick-085) — asserted by shape rather
     // than identity, since the route owns the object.
+    // Arg 5 is the admin Priority List text (quick-090); '' here because the mocked
+    // read returns no configured list. Asserted positionally so a future signature
+    // change cannot silently drop the boost on the floor.
     expect(mocks.mockFinderMakeTools).toHaveBeenCalledWith(
       expect.any(String),
       'uid-001',
       undefined,
       { rows: [] },
+      '',
     )
     expect(mocks.mockModelFor).toHaveBeenCalledWith('finder')
   })
@@ -612,6 +623,50 @@ describe('Test 12 (03-07): finder dispatch — routeAsync→finder routes to fin
     expect(mocks.mockModelFor).toHaveBeenCalledWith('coach')
   })
 
+  // ── quick-kayinleong-090: admin Priority List reaches BOTH halves ──────────
+  // The prompt alone is not enough. searchProjects only ever hands the model its top 8
+  // matches, so a prioritised project ranked 9th is invisible to the prompt no matter
+  // what it says. The tool needs the text to boost that project INTO the window; the
+  // prompt needs it to order what the model then sees. Both, or the feature no-ops.
+  it('threads a configured Priority List into the Finder system prompt AND makeTools', async () => {
+    const PRIORITY = 'Always lead with Royal Suites in Damansara Heights.'
+    mocks.mockReadPriorityList.mockResolvedValueOnce(PRIORITY)
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'finder', reason: 'heuristic-finder:criteria' })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'Find me a property in Damansara Heights' }],
+      cid: 'conv-001',
+    })
+
+    await POST(req)
+
+    expect(mocks.mockFinderBuildSystemPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({ priorityList: PRIORITY }),
+    )
+    expect(mocks.mockFinderMakeTools).toHaveBeenCalledWith(
+      expect.any(String),
+      'uid-001',
+      undefined,
+      { rows: [] },
+      PRIORITY,
+    )
+  })
+
+  it('reads the Priority List exactly once per turn', async () => {
+    // Both consumers share one read; a second would add a serial Firestore hop to the
+    // hot path, right where the turn is already close to its time budget.
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'finder', reason: 'heuristic-finder:criteria' })
+
+    const req = buildRequest({
+      messages: [{ role: 'user', content: 'Find me a property' }],
+      cid: 'conv-001',
+    })
+
+    await POST(req)
+
+    expect(mocks.mockReadPriorityList).toHaveBeenCalledTimes(1)
+  })
+
   it('passes leadId to finderAgent.makeTools when provided', async () => {
     mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'finder', reason: 'heuristic-finder:criteria' })
 
@@ -628,6 +683,7 @@ describe('Test 12 (03-07): finder dispatch — routeAsync→finder routes to fin
       'uid-001',
       'lead-001',
       { rows: [] },
+      '',
     )
   })
 })

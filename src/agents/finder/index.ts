@@ -96,7 +96,11 @@ export const finderAgent = {
    *
    * @param options  Optional runtime context (leadContext from finderSlot).
    */
-  buildSystemPrompt(options?: { leadContext?: Record<string, unknown> }): string {
+  buildSystemPrompt(options?: {
+    leadContext?: Record<string, unknown>
+    /** Admin Priority List text (quick-kayinleong-090) — ordering preference only. */
+    priorityList?: string
+  }): string {
     return buildFinderSystemPrompt(options)
   },
 
@@ -120,13 +124,17 @@ export const finderAgent = {
     agentUid?: string,
     leadId?: string,
     rowSink?: FinderRowSink,
+    priorityText?: string,
   ) {
     // agentUid and leadId are available for future tool needs
     void agentUid
     void leadId
 
     return {
-      searchProjects: makeSearchProjectsTool(userLang, rowSink),
+      // priorityText (quick-kayinleong-090): the admin's ordering preference, applied
+      // as the LAST reorder inside searchProjects — after every hard gate, so it can
+      // only change the order of projects the search already returned.
+      searchProjects: makeSearchProjectsTool(userLang, rowSink, priorityText),
       queryInventory: makeQueryInventoryTool(userLang),
       fetchCollateral: makeFetchCollateralTool(userLang),
       // The by-id lookup (quick-kayinleong-088). Registered as a fourth key rather than
