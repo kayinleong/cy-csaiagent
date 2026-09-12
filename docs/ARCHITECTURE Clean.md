@@ -1,15 +1,5 @@
 # Architecture — D2 Customer Service AI Agent Platform (`cy-csaiagent`)
 
-> **How this platform actually works.** This is the developer-facing companion to
-> [`.planning/TSD.md`](../.planning/TSD.md) (the spec-of-record). Where the TSD describes intent,
-> this doc describes the **as-built** system, traced from source. Diagrams are Mermaid (render on GitHub).
->
-> **Status: code-complete, pre-deploy.** STATE.md is `v1.0-code-complete-gaps-closed` — the code below
-> exists and is wired; it has not yet been deployed to a live Firebase stack. Read these diagrams as
-> _as-coded architecture_, not _live-running infrastructure_.
-
----
-
 ## TL;DR
 
 A **single Next.js 16 monolith on Firebase App Hosting**. Firestore is simultaneously the system of
@@ -296,39 +286,3 @@ flowchart TD
     BODY --> HB["write jobHeartbeats doc<br/>(UI watchdog)"]
     HB --> NEXT
 ```
-
-The six registered jobs (`src/jobs/runDueJobs.ts` — the TSD named only four):
-
-| Job             | Window | What it does                                                            |
-| --------------- | ------ | ----------------------------------------------------------------------- |
-| `stall-detect`  | 24h    | find agents stalled ≥ 2d → escalation row + cadence-capped in-app nudge |
-| `escalate`      | 24h    | working-hours-gated 48h escalation surfacing                            |
-| `eval-nightly`  | 24h    | nightly Promptfoo eval (Opus judge)                                     |
-| `usage-rollup`  | 24h    | idempotent daily usage rollup                                           |
-| `erasure-sweep` | **1h** | chunked PDPA erasure delete (the only sub-daily window)                 |
-
-> **Zero Cloud Functions, zero external scheduler** — verified by grep. The only references to QStash/cron
-> are comments explaining what this design _replaces_.
-
----
-
-## Plan vs reality — material deltas from the TSD
-
-The TSD is the intent; the code moved on in a few places. If you read the TSD, correct for these:
-
-| TSD says                            | Reality                                                                   |
-| ----------------------------------- | ------------------------------------------------------------------------- |
-| 14 Firestore collections            | **20 typed + 2 operational** (`src/firebase/collections.ts`)              |
-| LLM classifier "activates Phase 3"  | **Active now** — real `generateObject` ternary classifier                 |
-| 4 lazy-cron jobs                    | **6 jobs** (+ `usage-rollup`, + `erasure-sweep` @ 1h)                     |
-| stream via `toDataStreamResponse()` | code uses `toUIMessageStreamResponse()` (AI SDK v5)                       |
-| inventory uses `findNearest`        | project search uses **in-memory dot-product**; only KB uses `findNearest` |
-
----
-
-## Where to go deeper
-
-- **The spec-of-record:** [`.planning/TSD.md`](../.planning/TSD.md) §3–§4 (component map, data-flow, 14→20 data model).
-- **Project context & requirements:** [`.planning/PROJECT.md`](../.planning/PROJECT.md), [`.planning/REQUIREMENTS.md`](../.planning/REQUIREMENTS.md).
-- **As-built trace with file:line citations:** [`.planning/quick/quick-kayinleong-006/quick-kayinleong-006-RESEARCH.md`](../.planning/quick/quick-kayinleong-006/quick-kayinleong-006-RESEARCH.md).
-- **The integration spine in code:** `app/api/chat/route.ts` (read this first), then `src/router/`, `src/memory/leadContext.ts`, `src/jobs/runDueJobs.ts`.

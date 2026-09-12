@@ -45,6 +45,7 @@ async function main() {
   const system = finderAgent.buildSystemPrompt({})
   const prompt = process.argv[2] ?? 'show me > 1.5mils house within klang valley'
 
+  const __t0 = Date.now()
   const res = await generateText({
     model: anthropic(modelId), system, tools,
     // Must MIRROR the route's budget or this diagnostic stops reflecting production
@@ -53,6 +54,8 @@ async function main() {
     messages: [{ role: 'user', content: prompt }],
   })
 
+  const __ms = Date.now() - __t0
+  console.log(`WALL TIME: ${(__ms/1000).toFixed(1)}s   <-- Netlify kills the function at 30.0s\n`)
   console.log(`PROMPT: ${prompt}\n`)
   let i = 0
   for (const step of res.steps) {
