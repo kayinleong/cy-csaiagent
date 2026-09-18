@@ -100,6 +100,30 @@ generator is standalone (`uv run --with openpyxl`) and adds no project dependenc
 is not in `package.json` and nothing in the app imports it. Secret scan over the new files:
 clean. The upstream `DATA-COMPLETENESS.md` was read, never rewritten.
 
+### Follow-up: real values instead of presence markers
+
+Derek asked to see the actual value in each cell, not "on file". The values are not in the
+repo, so this needed a live read:
+
+- `scripts/export-projects-for-workbook.ts` — read-only dump of `projects` (+ per-project
+  collateral counts) to a gitignored `projects.export.json`. Drops `embedding`. Added to
+  `.gitignore` because full `description` prose can carry agent contact details — the same
+  exposure that gitignored `/projects.json` and `/projects.inventory.json`.
+- The generator now auto-detects that export. With it: real values, blanks only where the
+  value is genuinely missing, plus two new sheets — **Layouts (data)** (one row per unit type)
+  and **Descriptions** (the full write-up, where every unmodelled attribute still lives).
+  Without it: the previous presence-marker behaviour, and the Read Me says which mode it is in.
+
+Presence is recomputed from the exported values rather than trusted from the 088 report, so
+the sheet is self-consistent with whatever the export actually contains.
+
+**Value path was tested before shipping.** `PROJECTS_EXPORT` / `WORKBOOK_OUT` env overrides
+let the generator run against a fixture; a synthetic 87-row export built from the hand-verified
+spot-checks in `src/inventory/size-extract.test.ts` and `unit-types.test.ts` produced correct
+scalars (`785,000`), formatted ranges (`802 – 2,125`, `1,700 – 2,300`), `Yes`/`No` booleans,
+4 layout rows and 87 description rows. The literal-`"Unknown"` tenure trap fires: it renders
+yellow and italic rather than counting as a known value.
+
 ### Known limitation (stated, not hidden)
 
 Coverage is a **snapshot as of quick-089 (2026-09-07)**, not a live read. If inventory has

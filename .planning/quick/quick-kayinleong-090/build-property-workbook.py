@@ -31,7 +31,7 @@ from openpyxl.utils import get_column_letter
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 SRC  = os.path.join(REPO, ".planning/quick/quick-kayinleong-088/DATA-COMPLETENESS.md")
-OUT  = os.path.join(HERE, "D2-Property-Data-Gaps.xlsx")
+OUT  = os.environ.get("WORKBOOK_OUT") or os.path.join(HERE, "D2-Property-Data-Gaps.xlsx")
 
 # ── palette ─────────────────────────────────────────────────────────────────
 HDR_FILL  = PatternFill("solid", fgColor="1F3864")
@@ -91,9 +91,67 @@ def load_rows(path):
     out.sort(key=lambda r: r["name"].lower())
     return out
 
-rows = load_rows(SRC)
-if len(rows) != 87:
-    sys.exit(f"ERROR: expected 87 projects, parsed {len(rows)} from {SRC}")
+def _num(v):
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+def _pos(v):
+    n = _num(v)
+    return n if n is not None and n > 0 else None
+
+def load_export(path):
+    """Live Firestore export → the same row shape as load_rows, but carrying VALUES.
+
+    Presence is recomputed from the actual values rather than trusted from the report,
+    so the sheet is self-consistent with whatever the export contains.
+    """
+    import json
+    with open(path, encoding="utf-8") as fh:
+        payload = json.load(fh)
+    out = []
+    for d in payload["records"]:
+        units = d.get("unitTypes") or []
+        present = {
+            "priceValue":   _pos(d.get("priceValue")) is not None,
+            "pricePsf":     _pos(d.get("pricePsfMin")) is not None,
+            "bedrooms":     _pos(d.get("bedrooms")) is not None,
+            "size":         _pos(d.get("sizeMinSqft")) is not None or _pos(d.get("sizeMaxSqft")) is not None,
+            "tenure":       bool((d.get("tenure") or "").strip()),
+            "locationText": bool((d.get("locationText") or "").strip()),
+            "vpDate":       d.get("vpDate") is not None,
+            "unitTypes":    len(units) > 0,
+            "description":  bool((d.get("description") or "").strip()),
+            "collateral":   (d.get("collateralTotal") or 0) >= 1,
+        }
+        out.append({
+            "name": d.get("name") or "(unnamed)", "status": d.get("status") or "",
+            "present": present, "missing": sum(1 for v in present.values() if not v),
+            "descChars": len(d.get("description") or ""),
+            "collateralCount": d.get("collateralTotal") or 0,
+            "kb": 0, "kbNote": "",
+            "val": d, "units": units,
+        })
+    out.sort(key=lambda r: r["name"].lower())
+    return out, payload
+
+# Override with PROJECTS_EXPORT=/path/to/export.json (used to test the value path).
+EXPORT_PATH = os.environ.get("PROJECTS_EXPORT") or os.path.join(REPO, "projects.export.json")
+HAVE_VALUES = os.path.exists(EXPORT_PATH)
+export_meta = None
+
+if HAVE_VALUES:
+    rows, export_meta = load_export(EXPORT_PATH)
+    print(f"[build] using LIVE VALUES from {EXPORT_PATH} ({len(rows)} projects, exported {export_meta.get('exportedAt')})")
+    # Carry the KB-chunk diagnostics across from the committed report, keyed by name.
+    kb_by_name = {r["name"]: (r["kb"], r["kbNote"]) for r in load_rows(SRC)}
+    for r in rows:
+        r["kb"], r["kbNote"] = kb_by_name.get(r["name"], (0, ""))
+else:
+    rows = load_rows(SRC)
+    print(f"[build] no {EXPORT_PATH} — falling back to presence markers from the committed report.")
+    print("[build] To show real values, run:")
+    print("[build]   node_modules/.bin/tsx --env-file=.env.local scripts/export-projects-for-workbook.ts")
+    if len(rows) != 87:
+        sys.exit(f"ERROR: expected 87 projects, parsed {len(rows)} from {SRC}")
 
 # The 5 Firestore rows that are NOT part of D2's Skool project roster.
 # `Property 1` is a test doc; the 4 hidden ones are WhatsApp-import placeholders.
@@ -126,6 +184,12 @@ README = [
  ("Number provenance", "Two conflicting sets of price-gap figures exist in .planning/. The ones used here come from "
             "DATA-COMPLETENESS.md, last regenerated 2026-09-07 (commit 1f4586e) AFTER quick-089 recovered prices "
             "from WhatsApp. The older figures in quick-088/CLAIM.md (2026-09-06) are pre-recovery — do not use them."),
+ ("Values or markers?", ("LIVE VALUES — every cell below shows the actual stored value; a blank yellow cell means "
+            "the value is genuinely missing. Exported " + str((export_meta or {}).get("exportedAt","?"))[:19].replace("T"," ") + " UTC.")
+            if HAVE_VALUES else
+            ("PRESENCE MARKERS ONLY — cells read 'on file' rather than showing the value, because no "
+             "projects.export.json was present when this was built. To show real values, run "
+             "scripts/export-projects-for-workbook.ts and rebuild.")),
  ("Caveat — read this", "Field VALUES are not reproduced here. The upstream report records presence/absence only "
             "(deliberately: no PII, no values), so a green cell means 'a value exists', not 'the value is correct'. "
             "Coverage is a snapshot as of quick-088; quick-089 has since changed some prices. Re-run "
@@ -155,6 +219,39 @@ for i, (k, v) in enumerate(README, start=2):
     ws.cell(row=i, column=1, value=k).font = BOLD
     ws.cell(row=i, column=2, value=v).alignment = WRAP
 widths(ws, [24, 118])
+
+def _rng(a, b, fmt="{:,.0f}"):
+    """Render a min/max pair as a value, a range, or None."""
+    lo, hi = _pos(a), _pos(b)
+    if lo is None and hi is None: return None
+    if lo is not None and hi is not None and lo != hi:
+        return f"{fmt.format(lo)} – {fmt.format(hi)}"
+    v = lo if lo is not None else hi
+    return fmt.format(v)
+
+def value_for(rec, key):
+    """The real stored value for a coverage column, or None when it is missing."""
+    d = rec.get("val")
+    if d is None: return None
+    if key == "priceValue":   return _pos(d.get("priceValue"))
+    if key == "pricePsf":     return _rng(d.get("pricePsfMin"), d.get("pricePsfMax"))
+    if key == "bedrooms":     return _pos(d.get("bedrooms"))
+    if key == "size":         return _rng(d.get("sizeMinSqft"), d.get("sizeMaxSqft"))
+    if key == "tenure":       return (d.get("tenure") or "").strip() or None
+    if key == "locationText": return (d.get("locationText") or "").strip() or None
+    if key == "vpDate":       return d.get("vpDate")
+    if key == "unitTypes":
+        n = len(rec.get("units") or [])
+        return f"{n} layout{'s' if n != 1 else ''}" if n else None
+    if key == "description":
+        n = rec["descChars"]
+        return f"{n:,} chars" if n else None
+    if key == "collateral":
+        n = rec["collateralCount"]
+        return n if n else None
+    return None
+
+BOOL_FIELD = {14: "vpStatus", 15: "bumiQuota", 16: "foreignEligible"}  # offsets into confirm cols
 
 # ═══ 2. Property Details ════════════════════════════════════════════════════
 ws = wb.create_sheet("Property Details")
@@ -199,18 +296,38 @@ for r_i, rec in enumerate(rows, start=2):
         rc.comment = None
     ws.cell(row=r_i, column=4, value=rec["missing"]).alignment = CTR
 
+    confirm_seen = 0
     for c_i, (key, kind) in IDX.items():
         cell = ws.cell(row=r_i, column=c_i)
         if kind == "cover":
             if rec["present"][key]:
-                cell.value = "on file"; cell.fill = HAVE; cell.font = Font(size=9, color="375623")
-            elif not skip:
-                cell.fill = FILL_ME
+                v = value_for(rec, key) if HAVE_VALUES else None
+                cell.value = v if v is not None else "on file"
+                cell.fill = HAVE
+                if not HAVE_VALUES:
+                    cell.font = Font(size=9, color="375623")
+                if key == "priceValue" and isinstance(v, (int, float)):
+                    cell.number_format = "#,##0"
+                if key in ("locationText", "tenure"):
+                    cell.alignment = Alignment(wrap_text=True, vertical="center")
+                else:
+                    cell.alignment = CTR
+                # A tenure of the literal "Unknown" is the importer's default, not a fact.
+                if key == "tenure" and isinstance(v, str) and v.strip().lower() == "unknown":
+                    cell.fill = FILL_ME; cell.font = Font(italic=True, color="9C5700")
             else:
-                cell.fill = NA_FILL
-            cell.alignment = CTR
+                cell.fill = NA_FILL if skip else FILL_ME
+                cell.alignment = CTR
         elif kind == "confirm":
-            cell.fill = NA_FILL if skip else CONFIRM
+            if skip:
+                cell.fill = NA_FILL
+            else:
+                cell.fill = CONFIRM
+                if HAVE_VALUES and rec.get("val"):
+                    b = rec["val"].get(("vpStatus", "bumiQuota", "foreignEligible")[confirm_seen])
+                    cell.value = "Yes" if b is True else ("No" if b is False else None)
+            cell.alignment = CTR
+            confirm_seen += 1
         if kind in ("cover", "confirm"):
             cell.border = BOX
 
@@ -470,6 +587,48 @@ hdr(ws); widths(ws,[4,40,66,62]); box_all(ws)
 for r in range(2, ws.max_row + 1):
     ws.cell(row=r, column=2).font = BOLD
 
+# ═══ 9 & 10. Value-detail sheets — only when a live export is present ═══════
+if HAVE_VALUES:
+    # ── Layouts: one row per unit type, across every project ────────────────
+    ws = wb.create_sheet("Layouts (data)")
+    ws.append(["Project","Layout label","Size (sqft)","Bedrooms","Price from (RM)",
+               "Price to (RM)","Verbatim source line"])
+    n_layouts = 0
+    for rec in rows:
+        for u in (rec.get("units") or []):
+            ws.append([rec["name"], u.get("label"), u.get("sizeSqft"), u.get("bedrooms"),
+                       u.get("priceMinRM"), u.get("priceMaxRM"), u.get("raw")])
+            n_layouts += 1
+    if n_layouts == 0:
+        ws.append(["(no layout tables in the export)", None, None, None, None, None, None])
+    hdr(ws); widths(ws,[38,26,12,11,16,16,80])
+    for r in range(2, ws.max_row + 1):
+        for c in range(1, 8):
+            x = ws.cell(row=r, column=c); x.border = BOX
+            x.alignment = WRAP if c == 7 else Alignment(vertical="top", wrap_text=True)
+            if c in (5, 6) and isinstance(x.value, (int, float)): x.number_format = "#,##0"
+            if x.value is None and c in (3, 4, 5, 6): x.fill = FILL_ME
+    ws.auto_filter.ref = f"A1:G{ws.max_row}"
+    ws.freeze_panes = "B2"
+
+    # ── Descriptions: the full write-up, where every unmodelled fact still lives ──
+    ws = wb.create_sheet("Descriptions")
+    ws.append(["Project","Status","Chars","Full description (the source write-up)"])
+    for rec in rows:
+        ws.append([rec["name"], rec["status"], rec["descChars"],
+                   (rec.get("val") or {}).get("description") or None])
+    hdr(ws); widths(ws,[38,10,9,160])
+    for r in range(2, ws.max_row + 1):
+        for c in range(1, 5):
+            x = ws.cell(row=r, column=c); x.border = BOX
+            x.alignment = WRAP if c == 4 else Alignment(vertical="top")
+        if ws.cell(row=r, column=4).value is None: ws.cell(row=r, column=4).fill = FILL_ME
+        ws.row_dimensions[r].height = 42
+    ws.auto_filter.ref = f"A1:D{ws.max_row}"
+    ws.freeze_panes = "B2"
+
+
 wb.save(OUT)
 print(f"WROTE {OUT}")
+print(f"  mode: {'LIVE VALUES' if HAVE_VALUES else 'presence markers'}")
 print(f"  projects: {len(rows)}   sheets: {', '.join(wb.sheetnames)}")

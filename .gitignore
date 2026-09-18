@@ -79,3 +79,7 @@ firebase-adminsdk-*.json
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# quick-kayinleong-090: workbook value export. Same contact-info exposure as the
+# dumps above (full description prose), and regenerable from Firestore on demand.
+/projects.export.json
