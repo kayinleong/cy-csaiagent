@@ -4,7 +4,7 @@
 - branch: quick-kayinleong-090
 - started: 2026-09-18
 - summary: produce a client-facing Excel workbook enumerating every property/project attribute in the D2 inventory model, one row per project, blanks where data is missing, so Derek can fill the gaps
-- status: claimed
+- status: done
 
 ## What will change
 
@@ -27,8 +27,85 @@ No application code changes. This is a documentation/deliverable artifact only.
 
 ## What has changed
 
-(in progress)
+Two new files, both under this claim directory. **No application code was touched.**
+
+- `build-property-workbook.py` — the committed generator. Reads the schema (transcribed from
+  `src/firebase/collections.ts`) and the per-project coverage matrix from
+  `.planning/quick/quick-kayinleong-088/DATA-COMPLETENESS.md`, and emits the workbook. Committed
+  so the artifact is reproducible rather than a one-off binary:
+  `uv run --with openpyxl python .planning/quick/quick-kayinleong-090/build-property-workbook.py`
+
+- `D2-Property-Data-Gaps.xlsx` — 8 sheets:
+  1. **Read Me** — purpose, provenance, caveats, legend.
+  2. **Property Details** — the fill-in matrix. 87 rows; the 5 non-Skool records are marked
+     `SKIP` so the client roster reads as 82. 225 blanks to fill + 246 booleans to confirm.
+  3. **Data Dictionary** — all 22 `ProjectDoc` fields: type, required, allowed values, meaning,
+     client-supplied vs system-derived, traps.
+  4. **Gap Summary** — per-field missing counts, prioritised.
+  5. **Unit Types** / 6. **Collateral** — the two sub-records.
+  7. **Not Yet Captured** — 33 attributes D2 talks about that have no field at all, with how
+     often each appears in the 82 write-ups.
+  8. **Data Traps** — the 9 conventions that corrupt the data if misread.
+
+### Decisions
+
+- **Presence, not values.** The workbook marks "on file" / blank rather than printing values.
+  The populated records live only in Firestore; `/projects.inventory.json` is gitignored
+  (`.gitignore:59`) and absent from a clean clone. The upstream report records presence only,
+  by design (no PII, no values). Printing values would require a live read.
+- **Client roster is 82, not 87.** `Property 1` is a test record; `Aetas Damansara`, `Stonor 3`,
+  `Tribeca Bukit Bintang` and `Papyrus North Kiara` are hidden WhatsApp-import placeholders.
+  Their cells are greyed so Derek is not asked to fill them.
+- **Added confirm-columns for `vpStatus` / `bumiQuota` / `foreignEligible`.** These three are
+  required booleans that the completeness report never measured — a boolean is always "present".
+  A wrong Bumi or foreign-eligibility flag is an eligibility error with legal weight, so they are
+  surfaced for confirmation rather than silently treated as complete.
 
 ## Verification
 
-(pending)
+### Number provenance — a conflict resolved, not averaged
+
+Two incompatible price-gap figures exist in `.planning/`:
+
+| Source | `priceValue` missing | "no price signal at all" |
+|---|---|---|
+| `quick-088/CLAIM.md` | 57 | 37 |
+| `quick-088/DATA-COMPLETENESS.md` | 27 | 7 |
+
+Resolved by git, not by preference: `DATA-COMPLETENESS.md` was last regenerated **2026-09-07**
+by `1f4586e` (quick-089's WhatsApp price recovery), while `088/CLAIM.md` was last written
+**2026-09-06**. The CLAIM's figures are pre-recovery. **The workbook uses the
+DATA-COMPLETENESS.md numbers**, and the Read Me states this so the client is not handed two
+contradictory stories.
+
+### What was tested
+
+- Parser round-trip: exactly **87** rows parsed; the script `sys.exit`s if not. Status split
+  83 active / 4 hidden matches the report header.
+- Coverage cell conservation: 257 blank + 613 "on file" = **870 = 87 x 10** — every project x
+  every measured field accounted for, none dropped or double-counted.
+- Roster split: **82** rows marked `yes`, **5** marked `SKIP`, and the 5 are exactly the
+  documented non-Skool records.
+- Fill-target isolation: **225** yellow cells and **246** peach cells (= 82 x 3) fall on roster
+  rows; **0** of either fall on skipped rows.
+- Type hygiene: the KB-chunks column is integer throughout (min 0, max 2,550); the `(+N?)`
+  fuzzy-match annotations were split into their own column rather than left to poison the type.
+- Workbook re-opens cleanly in openpyxl; 8 sheets, dimensions as expected.
+
+### Regression surface — nil, and checked
+
+`git status` shows only the two new files under `.planning/quick/quick-kayinleong-090/`. No
+source file, test, config, rule or script was modified, so no runtime behaviour can change. The
+generator is standalone (`uv run --with openpyxl`) and adds no project dependency — `openpyxl`
+is not in `package.json` and nothing in the app imports it. Secret scan over the new files:
+clean. The upstream `DATA-COMPLETENESS.md` was read, never rewritten.
+
+### Known limitation (stated, not hidden)
+
+Coverage is a **snapshot as of quick-089 (2026-09-07)**, not a live read. If inventory has
+changed since, regenerate before sending to the client:
+
+```
+node_modules/.bin/tsx --env-file=.env.local scripts/data-completeness-report.ts
+uv run --with openpyxl python .planning/quick/quick-kayinleong-090/build-property-workbook.py
+```
