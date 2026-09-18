@@ -83,3 +83,7 @@ next-env.d.ts
 # quick-kayinleong-090: workbook value export. Same contact-info exposure as the
 # dumps above (full description prose), and regenerable from Firestore on demand.
 /projects.export.json
+
+# quick-kayinleong-090: the LIVE build of the client workbook. Holds real values and
+# description prose (24 of 87 carry agent contact details). Regenerable; never commit.
+/.planning/quick/quick-kayinleong-090/D2-Property-Data-Gaps-LIVE.xlsx

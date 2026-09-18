@@ -124,6 +124,52 @@ scalars (`785,000`), formatted ranges (`802 – 2,125`, `1,700 – 2,300`), `Yes
 4 layout rows and 87 description rows. The literal-`"Unknown"` tenure trap fires: it renders
 yellow and italic rather than counting as a known value.
 
+### Live run — executed 2026-09-18
+
+Exported against live Firestore and rebuilt: **87 projects, 12,020 collateral docs counted**,
+**613 populated cells, 225 genuine blanks**.
+
+The live read settles the number dispute independently. All ten gap counts computed from live
+data match `DATA-COMPLETENESS.md` exactly (`priceValue` 27, `pricePsf` 67, `bedrooms` 33,
+`size` 20, `tenure` 4, `locationText` 4, `vpDate` 64, `unitTypes` 37, `description` 0,
+`collateral` 1) — not the pre-recovery figures in `088/CLAIM.md`. Column alignment was verified
+by diffing one project's rendered row against its raw export record field by field.
+
+### Finding: half the prices are chat-derived
+
+`priceProvenance` across all 87 is **stated 60 · psf_only 20 · unknown 7** — but **30 of those
+60 totals carry `priceSource: 'whatsapp-kb'`**, recovered from a chat transcript rather than the
+project's own sales material. Chat is weaker evidence: the agent may have quoted one unit, a
+completed transaction, or a competitor. Several figures are implausibly precise for an asking
+price — `RM3,734,674` (The Oval), `RM1,493,172` (The Manor KLCC), `RM1,431,980` (Core Residence
+@ TRX), `RM2,852,547.90` (Aetas Seputeh, the only non-integer price in the collection).
+
+A **Price evidence** column flags every row: `stated in write-up` (30) /
+`from WhatsApp chat — VERIFY` (30) / `psf rate only` (20) / `no price on record` (7). This is
+precisely what quick-089 added `priceSource` for.
+
+### PII: the live build is not committable, and is redacted
+
+Measured, not assumed: **24 of 87 `description` fields contain agent contact data** — 5 local
+phone numbers, 13 international, 4 emails, 1 wa.me link. That is the same exposure that
+gitignored `/projects.json`.
+
+Two mitigations:
+
+1. **Split outputs.** The presence-only build stays at `D2-Property-Data-Gaps.xlsx` and remains
+   committed. The live build writes to `D2-Property-Data-Gaps-LIVE.xlsx`, gitignored
+   (`.gitignore:89`). A workbook carrying live values and write-up prose never enters git.
+2. **Redaction.** The Descriptions sheet masks phones, emails and WhatsApp links —
+   **31 redactions across 24 projects**. Verified by re-scanning all 10 sheets of the generated
+   file: **0 residual contact matches**. Firestore itself is untouched.
+
+### Handling of credentials
+
+The user supplied `.env` contents directly. Written with `umask 077` / mode `600`, confirmed
+covered by `.gitignore:44` (`.env*`) *before* writing, and verified absent from `git status`.
+`projects.export.json` is gitignored (`.gitignore:85`) and uncommitted. **The user has been
+advised the pasted service-account key and API keys are exposed and should be rotated.**
+
 ### Known limitation (stated, not hidden)
 
 Coverage is a **snapshot as of quick-089 (2026-09-07)**, not a live read. If inventory has

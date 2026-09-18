@@ -31,7 +31,10 @@ from openpyxl.utils import get_column_letter
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 SRC  = os.path.join(REPO, ".planning/quick/quick-kayinleong-088/DATA-COMPLETENESS.md")
-OUT  = os.environ.get("WORKBOOK_OUT") or os.path.join(HERE, "D2-Property-Data-Gaps.xlsx")
+# The presence-only build is safe to commit. The live build is NOT — 24 of 87 descriptions
+# carry agent phone numbers / emails, so it goes to a gitignored filename instead.
+OUT_SAFE = os.path.join(HERE, "D2-Property-Data-Gaps.xlsx")
+OUT_LIVE = os.path.join(HERE, "D2-Property-Data-Gaps-LIVE.xlsx")
 
 # ── palette ─────────────────────────────────────────────────────────────────
 HDR_FILL  = PatternFill("solid", fgColor="1F3864")
@@ -134,6 +137,7 @@ def load_export(path):
     return out, payload
 
 # Override with PROJECTS_EXPORT=/path/to/export.json (used to test the value path).
+OUT = None  # resolved once HAVE_VALUES is known
 EXPORT_PATH = os.environ.get("PROJECTS_EXPORT") or os.path.join(REPO, "projects.export.json")
 HAVE_VALUES = os.path.exists(EXPORT_PATH)
 export_meta = None
@@ -163,6 +167,30 @@ NON_ROSTER = {
     "Tribeca Bukit Bintang": "WhatsApp-import placeholder",
     "Papyrus North Kiara":   "WhatsApp-import placeholder",
 }
+
+OUT = os.environ.get("WORKBOOK_OUT") or (OUT_LIVE if HAVE_VALUES else OUT_SAFE)
+
+# ── contact-data redaction for the Descriptions sheet ───────────────────────
+# 24 of 87 write-ups carry an agent phone number, email or wa.me link. This workbook goes to a
+# client, so those are masked. The underlying Firestore data is untouched.
+_REDACT = [
+    (re.compile(r"\+?60\s?1[0-9][-\s]?\d{3,4}[-\s]?\d{4}"), "[phone redacted]"),
+    (re.compile(r"\b01[0-9][-\s]?\d{3,4}[-\s]?\d{4}\b"),      "[phone redacted]"),
+    (re.compile(r"[\w.\-]+@[\w\-]+\.[a-z]{2,}", re.I),         "[email redacted]"),
+    (re.compile(r"(?:https?://)?(?:wa\.me|api\.whatsapp\.com)\S*", re.I), "[whatsapp link redacted]"),
+]
+
+def redact(text):
+    """Mask agent contact details. Returns (clean_text, n_redactions)."""
+    if not text:
+        return text, 0
+    n = 0
+    for pat, repl in _REDACT:
+        text, k = pat.subn(repl, text)
+        n += k
+    return text, n
+
+REDACTION_COUNT = 0
 
 wb = Workbook()
 
@@ -209,6 +237,9 @@ README = [
             "fee, facilities, car parks and more. Decide per row whether to add a field or drop the attribute."),
  ("  8. Data Traps", "Conventions that will corrupt the data if misread. Read before filling anything in."),
  ("", ""),
+ ("Price evidence column", "Shows where each price came from. 'stated in write-up' is the project's own sales "
+            "material. 'from WhatsApp chat — VERIFY' means it was recovered from a chat transcript — 30 of the 60 "
+            "prices — and should be confirmed before quoting. 'psf rate only' means no total exists, only a rate."),
  ("Legend", ""),
  ("  Green 'on file'", "A value is stored. Nothing needed."),
  ("  Yellow (blank)", "MISSING — please supply the value."),
@@ -263,6 +294,7 @@ COLS = [
  ("Missing\nfields",             None,            8, "id"),
  ("Price — total (RM)",          "priceValue",   17, "cover"),
  ("Price — per sqft\n(RM/sqft)", "pricePsf",     16, "cover"),
+ ("Price evidence",              None,           20, "flag"),
  ("Bedrooms",                    "bedrooms",     10, "cover"),
  ("Built-up size\n(sqft)",       "size",         14, "cover"),
  ("Tenure",                      "tenure",       12, "cover"),
@@ -318,6 +350,20 @@ for r_i, rec in enumerate(rows, start=2):
             else:
                 cell.fill = NA_FILL if skip else FILL_ME
                 cell.alignment = CTR
+        elif kind == "flag":
+            d = rec.get("val") or {}
+            prov, psrc = d.get("priceProvenance"), d.get("priceSource")
+            if psrc == "whatsapp-kb":
+                cell.value = "from WhatsApp chat — VERIFY"
+                cell.fill = CONFIRM; cell.font = Font(size=9, color="843C0C")
+            elif prov == "stated":
+                cell.value = "stated in write-up"; cell.fill = HAVE; cell.font = Font(size=9, color="375623")
+            elif prov == "psf_only":
+                cell.value = "psf rate only"; cell.fill = FILL_ME; cell.font = Font(size=9, color="9C5700")
+            elif prov == "unknown":
+                cell.value = "no price on record"; cell.fill = FILL_ME; cell.font = Font(size=9, color="9C5700")
+            cell.alignment = Alignment(wrap_text=True, horizontal="center", vertical="center")
+            cell.border = BOX
         elif kind == "confirm":
             if skip:
                 cell.fill = NA_FILL
@@ -577,6 +623,12 @@ for i, row in enumerate([
  ("A green cell means 'a value exists', not 'it is correct'",
   "The upstream report measures presence only — it never reads the value.",
   "Spot-check the fields that matter most: price, bedrooms, tenure, eligibility."),
+ ("Half the prices came from chat, not the write-up",
+  "30 of the 60 stored prices carry priceSource:'whatsapp-kb' — recovered from an ingested WhatsApp "
+  "transcript rather than the project's own sales material. Chat is weaker evidence: the agent may have "
+  "quoted one specific unit, a completed transaction, or a competitor. Several figures are oddly precise "
+  "(RM3,734,674 / RM1,493,172 / RM2,852,547.90), which reads like a transacted unit price, not an asking price.",
+  "The 'Price evidence' column flags every one. Treat those as provisional until Derek confirms them."),
  ("`status: 'sold_out'` is never written",
   "No code path sets it; projects are only `active` or `hidden`. Sold-out stock is therefore "
   "indistinguishable from available stock.",
@@ -615,8 +667,9 @@ if HAVE_VALUES:
     ws = wb.create_sheet("Descriptions")
     ws.append(["Project","Status","Chars","Full description (the source write-up)"])
     for rec in rows:
-        ws.append([rec["name"], rec["status"], rec["descChars"],
-                   (rec.get("val") or {}).get("description") or None])
+        clean, n = redact((rec.get("val") or {}).get("description"))
+        REDACTION_COUNT += n
+        ws.append([rec["name"], rec["status"], rec["descChars"], clean or None])
     hdr(ws); widths(ws,[38,10,9,160])
     for r in range(2, ws.max_row + 1):
         for c in range(1, 5):
@@ -632,3 +685,6 @@ wb.save(OUT)
 print(f"WROTE {OUT}")
 print(f"  mode: {'LIVE VALUES' if HAVE_VALUES else 'presence markers'}")
 print(f"  projects: {len(rows)}   sheets: {', '.join(wb.sheetnames)}")
+if HAVE_VALUES:
+    print(f"  contact details redacted from Descriptions: {REDACTION_COUNT}")
+    print(f"  NOTE: this build holds live values and is gitignored — do not commit it.")
