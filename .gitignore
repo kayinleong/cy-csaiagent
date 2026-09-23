@@ -87,3 +87,9 @@ next-env.d.ts
 # quick-kayinleong-090: the LIVE build of the client workbook. Holds real values and
 # description prose (24 of 87 carry agent contact details). Regenerable; never commit.
 /.planning/quick/quick-kayinleong-090/D2-Property-Data-Gaps-LIVE.xlsx
+
+# quick-kayinleong-091: the raw Skool dump. Every write-up verbatim, including the
+# PIC / project-leader contact details the client asked to keep unredacted.
+# Regenerable from the committed scripts + a fresh scrape; never commit.
+/.planning/quick/quick-kayinleong-091/D2-Property-Raw-Data.xlsx
+/.planning/quick/quick-kayinleong-091/__pycache__/
