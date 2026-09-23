@@ -98,3 +98,8 @@ next-env.d.ts
 # from the KB. 2.4 MB, carries the same unredacted contact details. Regenerable.
 /.planning/quick/quick-kayinleong-092/D2-Property-Raw-Data.xlsx
 /.planning/quick/quick-kayinleong-092/__pycache__/
+
+# quick-kayinleong-093: the merged sheet (Skool fields + values read out of the Drive
+# docs, doc columns dropped). Same unredacted contact details. Regenerable.
+/.planning/quick/quick-kayinleong-093/D2-Property-Raw-Data.xlsx
+/.planning/quick/quick-kayinleong-093/__pycache__/

@@ -1,0 +1,502 @@
+{
+ "written": [
+  {
+   "project": "Alstonia Hilltop Homes",
+   "field": "Price",
+   "value": "Min RM676,800 - Max RM1,238,640, Villa: Min RM1,761,800 - Max RM3,020,940",
+   "evidence": "Min RM676,800 - Max RM1,238,640, Villa: Min RM1,761,800 - Max RM3,020,940. Bumiputera Discount: 7%",
+   "doc": "Alstonia-ebrochure-201908.pdf",
+   "written_to": "Price"
+  },
+  {
+   "project": "Alstonia Hilltop Homes",
+   "field": "Bumi Quota",
+   "value": "Bumiputera Discount: 7%",
+   "evidence": "Min RM676,800 - Max RM1,238,640, Villa: Min RM1,761,800 - Max RM3,020,940. Bumiputera Discount: 7%",
+   "doc": "Alstonia-ebrochure-201908.pdf",
+   "written_to": "Bumi Quota"
+  },
+  {
+   "project": "Golden Crown Residence",
+   "field": "Units Per Floor",
+   "value": "10-11",
+   "evidence": "6,How many units per floor? \u6bcf\u5c42\u6237\u6570,10-11,,,",
+   "doc": "Golden Crown Residence - FAQ List .xlsx",
+   "written_to": "Units Per Floor"
+  },
+  {
+   "project": "Golden Crown Residence",
+   "field": "Price psf",
+   "value": "From RM1850psf - RM2300 psf onwards",
+   "evidence": "\u9884\u8ba1\u552e\u4ef7: \",\"From RM1850psf - RM2300 psf onwards",
+   "doc": "Golden Crown Residence - FAQ List .xlsx",
+   "written_to": "Price psf"
+  },
+  {
+   "project": "Golden Crown Residence",
+   "field": "Ceiling Height",
+   "value": "Living & Rooms - 3000mm; Kitchen - 2500mm; Walkway & Bathroom - 2350mm",
+   "evidence": "10 , 11 , 12 ? 10\u300111\u300112 \u5c42\u662f\u4ec0\u4e48?\",\"Hotel ballroom, restaurant n hotel admin office etc \u9152\u5e97\u5bb4\u4f1a\u5385\u3001\u9910\u5385\u53ca\u9152\u5e97\u884c\u653f\u529e\u516c\u5ba4\u7b49\u3002\",,, 30,\"What is the clear ceiling height? \u5355\u4f4d\u7684\u51c0\u5c42\u9ad8\u662f\u591a\u5c11\uff1f\",\"Living & Rooms - 3000mm; Kitchen - 2500mm; Walkway & Bathroom - 2350mm",
+   "doc": "Golden Crown Residence - FAQ List .xlsx",
+   "written_to": "Ceiling Height"
+  },
+  {
+   "project": "Golden Crown Residence",
+   "field": "Bumi Quota",
+   "value": "30%",
+   "evidence": "7,\"What is the percentage allocation for Bumi unit? \u571f\u8457\uff08Bumiputera\uff09\u5355\u4f4d\u7684\u914d\u989d\u6bd4\u4f8b\u662f\u591a\u5c11\uff1f\",30%,,,",
+   "doc": "Golden Crown Residence - FAQ List .xlsx",
+   "written_to": "Bumi Quota"
+  },
+  {
+   "project": "Golden Crown Residence",
+   "field": "Furnishing",
+   "value": "Partial Furnished",
+   "evidence": "2,\"Are the units fully furnished / partially furnished ? \u5355\u4f4d\u4ea4\u4ed8\u6807\u51c6\",\"Partial Furnished",
+   "doc": "Golden Crown Residence - FAQ List .xlsx",
+   "written_to": "Furnishing"
+  },
+  {
+   "project": "Golden Crown Residence",
+   "field": "Facilities",
+   "value": "Infinity Swimming Pool, Wading Pool, Terrace/Pool Deck, BBQ Terrace, Children Playground , F/M Changing Room, Gym Room, Library, Multipurpose Room, Prayer Room, Games/Video Room.",
+   "evidence": "room \u2022 Level 58 - 59 : Infinity Swimming Pool, Wading Pool, Terrace/Pool Deck, BBQ Terrace, Children Playground , F/M Changing Room, Gym Room, Library, Multipurpose Room, Prayer Room, Games/Video Room.",
+   "doc": "Golden Crown Sales Kit (English) - V1.pdf",
+   "written_to": "Facilities"
+  },
+  {
+   "project": "PDH: Imperial Residences RA",
+   "field": "Tenure",
+   "value": "freehold",
+   "evidence": "16-acre freehold masterplan that merges an affluent",
+   "doc": "RA Imperial Residences Typical e-Brochure.pdf",
+   "written_to": "Tenure"
+  },
+  {
+   "project": "PDH: Imperial Residences RA",
+   "field": "Total Units",
+   "value": "154",
+   "evidence": "Encumbrances: CIMB Investment Bank Berhad Type of Property: Serviced Apartments Development Name: Pavilion Damansara Heights Phase 2 Car Park: 550 Built-up: 3,380 - 7,459 sq. ft. Total Units: 154. Selling",
+   "doc": "RA Imperial Residences Typical e-Brochure.pdf",
+   "written_to": "Total Units"
+  },
+  {
+   "project": "PDH: Imperial Residences RA",
+   "field": "Built-up",
+   "value": "3,380 - 7,459 sq. ft.",
+   "evidence": "Encumbrances: CIMB Investment Bank Berhad Type of Property: Serviced Apartments Development Name: Pavilion Damansara Heights Phase 2 Car Park: 550 Built-up: 3,380 - 7,459 sq. ft. Total Units: 154. Selling",
+   "doc": "RA Imperial Residences Typical e-Brochure.pdf",
+   "written_to": "Main Unit Layouts"
+  },
+  {
+   "project": "PDH: Imperial Residences RA",
+   "field": "Price",
+   "value": "RM5,429,000.00 (Min) - RM19,812,000.00 (Max)",
+   "evidence": "Price: RM5,429,000.00 (Min) - RM19,812,000.00 (Max) Bumiputera Discount: 5%",
+   "doc": "RA Imperial Residences Typical e-Brochure.pdf",
+   "written_to": "Price"
+  },
+  {
+   "project": "PDH: Imperial Residences RA",
+   "field": "Car Parks",
+   "value": "550",
+   "evidence": "Encumbrances: CIMB Investment Bank Berhad Type of Property: Serviced Apartments Development Name: Pavilion Damansara Heights Phase 2 Car Park: 550 Built-up: 3,380 - 7,459 sq. ft. Total Units: 154. Selling",
+   "doc": "RA Imperial Residences Typical e-Brochure.pdf",
+   "written_to": "Car Parks"
+  },
+  {
+   "project": "PDH: Imperial Residences RA",
+   "field": "Bumi Quota",
+   "value": "Bumiputera Discount: 5%",
+   "evidence": "Price: RM5,429,000.00 (Min) - RM19,812,000.00 (Max) Bumiputera Discount: 5%",
+   "doc": "RA Imperial Residences Typical e-Brochure.pdf",
+   "written_to": "Bumi Quota"
+  },
+  {
+   "project": "Royal Lexis KL",
+   "field": "Ceiling Height",
+   "value": "up to 10 ft / 3.2 m",
+   "evidence": "6 m (L) x 1.9 m (W) x 1.2 m (D) 19.7 ft (L) x 6.2 ft (W) x 3.9 ft (D) * Ceiling height up to 10 ft / 3.2 m",
+   "doc": "Royal Lexis Pool size.pdf",
+   "written_to": "Ceiling Height"
+  },
+  {
+   "project": "Tangen Residences",
+   "field": "Built-up",
+   "value": "Type A: 147 square meters, Type B: 119 square meters, Type C: 96 square meters, Type D: 144 square meters",
+   "evidence": "2027 Type of Property: Condominium Selling Price: RM659,000 (Min) - RM1,135,000 (Max) Total Unit: 413 \u2022 Built-Up Area: Type A: 147 square meters, Type B: 119 square meters, Type C: 96 square meters, Type D: 144 square meters \u2022 Approving Authority: Dewan Bandaraya",
+   "doc": "EH_Tangen_8P Brochure_FAOL_230802_e-Brochure.pdf",
+   "written_to": "Main Unit Layouts"
+  },
+  {
+   "project": "Tangen Residences",
+   "field": "Price",
+   "value": "RM659,000 (Min) - RM1,135,000 (Max)",
+   "evidence": "2027 Type of Property: Condominium Selling Price: RM659,000 (Min) - RM1,135,000 (Max) Total Unit: 413 \u2022 Built-Up Area: Type A: 147 square meters, Type B: 119 square meters, Type C: 96 square meters, Type D: 144 square meters \u2022 Approving Authority: Dewan Bandaraya",
+   "doc": "EH_Tangen_8P Brochure_FAOL_230802_e-Brochure.pdf",
+   "written_to": "Price"
+  },
+  {
+   "project": "Tangen Residences",
+   "field": "Bumi Quota",
+   "value": "Discount for Bumiputra: 5%",
+   "evidence": "Kuala Lumpur Building Plan Approval No.: BP T1 OSC 2022 1897 (17) Discount for Bumiputra: 5%",
+   "doc": "EH_Tangen_8P Brochure_FAOL_230802_e-Brochure.pdf",
+   "written_to": "Bumi Quota"
+  },
+  {
+   "project": "Aetas Seputeh",
+   "field": "Developer",
+   "value": "Ardent Residence Sdn. Bhd.",
+   "evidence": "T: +6011 1722 6988 W: www.avaland.com.my E: customerservice@avaland.com.my \u2022 Developer: Ardent Residence Sdn. Bhd. (200601021941) Address: Lot C-02, Level 2, SkyPark @ One City, Jalan USJ 25/1, 47650 Subang Jaya, Selangor Darul Ehsan \u2022 Developer's License No.:",
+   "doc": "Aetas Seputeh Master Brochure (June 2024).pdf",
+   "written_to": "Developer"
+  },
+  {
+   "project": "Aetas Seputeh",
+   "field": "Target Completion",
+   "value": "2028",
+   "evidence": "Completion Date: 2028 \u2022 Type of Property: Condominium \u2022 Total No. of Units: 126 units \u2022 Built-up Area: 3,531-14,869 sq.ft. Block A - 70 units, Selling Price: From RM4,152,800 (Min) - RM16,667,800",
+   "doc": "Aetas Seputeh Master Brochure (June 2024).pdf",
+   "written_to": "Target Completion"
+  },
+  {
+   "project": "Aetas Seputeh",
+   "field": "Built-up",
+   "value": "3,531-14,869 sq.ft.",
+   "evidence": "Completion Date: 2028 \u2022 Type of Property: Condominium \u2022 Total No. of Units: 126 units \u2022 Built-up Area: 3,531-14,869 sq.ft. Block A - 70 units, Selling Price: From RM4,152,800 (Min) - RM16,667,800",
+   "doc": "Aetas Seputeh Master Brochure (June 2024).pdf",
+   "written_to": "Main Unit Layouts"
+  },
+  {
+   "project": "Aetas Seputeh",
+   "field": "Price",
+   "value": "Block A - 70 units, Selling Price: From RM4,152,800 (Min) - RM16,667,800",
+   "evidence": "Completion Date: 2028 \u2022 Type of Property: Condominium \u2022 Total No. of Units: 126 units \u2022 Built-up Area: 3,531-14,869 sq.ft. Block A - 70 units, Selling Price: From RM4,152,800 (Min) - RM16,667,800",
+   "doc": "Aetas Seputeh Master Brochure (June 2024).pdf",
+   "written_to": "Price"
+  },
+  {
+   "project": "Aetas Seputeh",
+   "field": "Booking Fee",
+   "value": "30,000.00",
+   "evidence": "BOOKING FEE,,RM,\" 30,000.00 \",",
+   "doc": "Aetas Seputeh Calculation Sheet.xlsx",
+   "written_to": "Booking Fee"
+  },
+  {
+   "project": "Aetas Seputeh",
+   "field": "Bumi Quota",
+   "value": "Bumiputra 5% discount",
+   "evidence": "(Max) \u2022 Block B - 56 units, Selling Price: From RM3,919,800 (Min) - RM8,267,800 (Max) \u2022 Bumiputra 5% discount. The information contained in this advertisement is subject to change and cannot form",
+   "doc": "Aetas Seputeh Master Brochure (June 2024).pdf",
+   "written_to": "Bumi Quota"
+  },
+  {
+   "project": "Star Residences KLCC",
+   "field": "Total Storeys",
+   "value": "58 storeys",
+   "evidence": "experience with such eminence and prestige beyond compare. \u2022 58 storeys with 471 luxuriously-furnished units",
+   "doc": "ASCOTT STAR Brochure (English).pdf",
+   "written_to": "Total Storeys"
+  },
+  {
+   "project": "Star Residences KLCC",
+   "field": "Target Completion",
+   "value": "Sept 2020",
+   "evidence": "\u2022 Approval Authority: Dewan Bandaraya Kuala Lumpur Building Plan No.: BP T3 OSC 2017 0108 \u2022 Land Tenure: Freehold \u2022 Land Encumbrances: OCBC Bank (Malaysia) Berhad \u2022 Expected Date of Completion: Sept 2020 \u2022 Total No. of",
+   "doc": "ASCOTT STAR Brochure (English).pdf",
+   "written_to": "Target Completion"
+  },
+  {
+   "project": "Star Residences KLCC",
+   "field": "Built-up",
+   "value": "65sq.m.-276sq.m.",
+   "evidence": "Units: 472 \u2022 Built-up Size: 65sq.m.-276sq.m. \u2022 Minimum Price: RM1,840,000 \u2022 Maximum Price: RM8,381,000 \u2022 5% Bumiputra Discount \u2022 All pictures and illustrations contained are artist's impressions only. All statements and",
+   "doc": "ASCOTT STAR Brochure (English).pdf",
+   "written_to": "Main Unit Layouts"
+  },
+  {
+   "project": "Star Residences KLCC",
+   "field": "Price",
+   "value": "Minimum Price: RM1,840,000 \u2022 Maximum Price: RM8,381,000",
+   "evidence": "Units: 472 \u2022 Built-up Size: 65sq.m.-276sq.m. \u2022 Minimum Price: RM1,840,000 \u2022 Maximum Price: RM8,381,000 \u2022 5% Bumiputra Discount \u2022 All pictures and illustrations contained are artist's impressions only. All statements and",
+   "doc": "ASCOTT STAR Brochure (English).pdf",
+   "written_to": "Price"
+  },
+  {
+   "project": "Star Residences KLCC",
+   "field": "Bumi Quota",
+   "value": "5% Bumiputra Discount",
+   "evidence": "Units: 472 \u2022 Built-up Size: 65sq.m.-276sq.m. \u2022 Minimum Price: RM1,840,000 \u2022 Maximum Price: RM8,381,000 \u2022 5% Bumiputra Discount \u2022 All pictures and illustrations contained are artist's impressions only. All statements and",
+   "doc": "ASCOTT STAR Brochure (English).pdf",
+   "written_to": "Bumi Quota"
+  },
+  {
+   "project": "The MET, Corporate Tower",
+   "field": "Maintenance Fee",
+   "value": "RM 0.66/sf including sinking fund",
+   "evidence": "for maintenance charges (RM 0.66/sf including sinking fund)",
+   "doc": "THE MET Presentation Script (Watermarked).pdf",
+   "written_to": "Maintenance Fee"
+  },
+  {
+   "project": "Enlace Suites @ Pantai Sentral Park",
+   "field": "Target Completion",
+   "value": "September 2029",
+   "evidence": "- 2; Type E (Garden) - 2; Type F - 2 to 3; Type G (Garden) - 2; Type H (Garden) - 3 \u2022 Expected Date of Completion: September 2029 \u2022 Selling Price: RM783,600 (min.) - RM2,321,800 (max.) \u2022 Bumiputera Discount: 5% THIS ADVERTISEMENT HAS BEEN APPROVED BY THE NATIONAL HOUSING DEPARTMENT.",
+   "doc": "Enlace Suite 1 eLeaflet.pdf",
+   "written_to": "Target Completion"
+  },
+  {
+   "project": "Enlace Suites @ Pantai Sentral Park",
+   "field": "Price",
+   "value": "RM783,600 (min.) - RM2,321,800 (max.)",
+   "evidence": "- 2; Type E (Garden) - 2; Type F - 2 to 3; Type G (Garden) - 2; Type H (Garden) - 3 \u2022 Expected Date of Completion: September 2029 \u2022 Selling Price: RM783,600 (min.) - RM2,321,800 (max.) \u2022 Bumiputera Discount: 5% THIS ADVERTISEMENT HAS BEEN APPROVED BY THE NATIONAL HOUSING DEPARTMENT.",
+   "doc": "Enlace Suite 1 eLeaflet.pdf",
+   "written_to": "Price"
+  },
+  {
+   "project": "Enlace Suites @ Pantai Sentral Park",
+   "field": "Bumi Quota",
+   "value": "Bumiputera Discount: 5%",
+   "evidence": "- 2; Type E (Garden) - 2; Type F - 2 to 3; Type G (Garden) - 2; Type H (Garden) - 3 \u2022 Expected Date of Completion: September 2029 \u2022 Selling Price: RM783,600 (min.) - RM2,321,800 (max.) \u2022 Bumiputera Discount: 5% THIS ADVERTISEMENT HAS BEEN APPROVED BY THE NATIONAL HOUSING DEPARTMENT.",
+   "doc": "Enlace Suite 1 eLeaflet.pdf",
+   "written_to": "Bumi Quota"
+  },
+  {
+   "project": "d'Brightton titiwangsa",
+   "field": "Built-up",
+   "value": "Type A - 1,324 sf; Type A1 - 1,313 sf; Type B - 1,194 sf; Type C & C1 - 1,076 sf; Type D - 1,044 sf; Penthouse A - 2,755 sf - 2,766 sf;",
+   "evidence": "No.: BP U2 OSC 2020 0213 OSC (B) U2 160531-004. Type of Property: Condominium Total No. of Units: 720 Built-up Area: Type A - 1,324 sf; Type A1 - 1,313 sf; Type B - 1,194 sf; Type C & C1 - 1,076 sf; Type D - 1,044 sf; Penthouse A - 2,755 sf - 2,766 sf;",
+   "doc": "CondoBrochure.pdf",
+   "written_to": "Main Unit Layouts"
+  },
+  {
+   "project": "d'Brightton titiwangsa",
+   "field": "Price",
+   "value": "RM763,200.00 (min.) - RM1,791,600.00 (max.)",
+   "evidence": "Penthouse A1 - 2,766 sf - 2,798 sf; Penthouse C - 2,561 sf - 2,593 sf Price: RM763,200.00 (min.) - RM1,791,600.00 (max.). Bumiputera Discount: 5%",
+   "doc": "CondoBrochure.pdf",
+   "written_to": "Price"
+  },
+  {
+   "project": "d'Brightton titiwangsa",
+   "field": "Bumi Quota",
+   "value": "Bumiputera Discount: 5%",
+   "evidence": "Penthouse A1 - 2,766 sf - 2,798 sf; Penthouse C - 2,561 sf - 2,593 sf Price: RM763,200.00 (min.) - RM1,791,600.00 (max.). Bumiputera Discount: 5%",
+   "doc": "CondoBrochure.pdf",
+   "written_to": "Bumi Quota"
+  },
+  {
+   "project": "Setia Sky Seputeh",
+   "field": "Price",
+   "value": "Type D: 2,863 sf Selling Price: RM3,439,650.00 (min) - RM4,141,150.00 (max)",
+   "evidence": "Type D: 2,863 sf Selling Price: RM3,439,650.00 (min) - RM4,141,150.00 (max) TOWER B: Developer's Licence No.: 14487-2/11-2022/03404(L) Validity: 30/11/202129/11/2022 Sales & Advertising Permit No.: 14487-2/11-2022/03404(P) Validity: 30/11/2021 -",
+   "doc": "CHI-EBrochure (9.12.2021).pdf",
+   "written_to": "Price"
+  },
+  {
+   "project": "Setia Sky Seputeh",
+   "field": "Bumi Quota",
+   "value": "Bumiputra Discount: 5%",
+   "evidence": "\u2022 Building Plans Ref. No.: BP S1 OSC 2015 3095 Expected 15 3095 Expected Date of Completion: December 2022 Land Tenure: Freehold Land Encumbrances: Nil Type of Property: Condominium Bumiputra Discount: 5% Restriction in Interest: N/A. *DISCLAIMER: All information",
+   "doc": "CHI-EBrochure (9.12.2021).pdf",
+   "written_to": "Bumi Quota"
+  },
+  {
+   "project": "Bangsar Hill Park",
+   "field": "Total Units",
+   "value": "2,078",
+   "evidence": "8) Total units Total : 2,078",
+   "doc": "FAQ - Tower B, C.pdf",
+   "written_to": "Total Units"
+  },
+  {
+   "project": "Core Residence @ TRX",
+   "field": "Bumi Quota",
+   "value": "Bumiputera Discount: 5%",
+   "evidence": "RM1,516,816 (Min) - RM2,534,302 (Max) Block 2-293 units, Price: RM1,502,626 (Min) - RM2, 264,057 (Max) Bumiputera Discount: 5%. IKLAN INI TELAH DILULUSKAN OLEH JABATAN PERUMAHAN NEGARA The information",
+   "doc": "CORE Residence@TRX English Brochure.pdf",
+   "written_to": "Bumi Quota"
+  },
+  {
+   "project": "Senja The Jewel Collection",
+   "field": "Total Storeys",
+   "value": "3-STOREY",
+   "evidence": "3-STOREY ZEROLOT BUNGALOW HOUSE",
+   "doc": "ZL-A.pdf",
+   "written_to": "Total Storeys"
+  },
+  {
+   "project": "Senja The Jewel Collection",
+   "field": "Bumi Quota",
+   "value": "7% Discount for Bumiputera",
+   "evidence": "to RM4,086,850 (Max) 7% Discount for Bumiputera Restriction in Interest: The land shall not be transferred, leased or charged without prior approval",
+   "doc": "Senja Bungalow Brochure.pdf",
+   "written_to": "Bumi Quota"
+  },
+  {
+   "project": "Vila Setara Happy Garden",
+   "field": "Total Storeys",
+   "value": "3-STOREY",
+   "evidence": "3-STOREY SUPER LINK HOUSE",
+   "doc": "Setara Simplified_070524_Eng_for viewing (4).pdf",
+   "written_to": "Total Storeys"
+  },
+  {
+   "project": "Vila Setara Happy Garden",
+   "field": "Booking Fee",
+   "value": "RM10,000.00",
+   "evidence": "obtain at least 2 Rejection letters from banker. Please refund my booking fee of RM10,000.00 with as soon as possible. Subject to an",
+   "doc": "Setara booking form .pdf",
+   "written_to": "Booking Fee"
+  },
+  {
+   "project": "Armani Hallson @ Jalan Ampang",
+   "field": "Target Completion",
+   "value": "2029",
+   "evidence": "6 \u4e2a\u8bbf\u5ba2\u505c\u8f66\u4f4d\u3002 14. \u9884\u8ba1\u5b8c\u5de5\u65e5\u671f\u662f\u4ec0\u4e48\u65f6\u5019\uff1f \u7b54\uff1a \u9884\u8ba1\u5b8c\u5de5\u65e5\u671f\u4e3a 2029 \u5e74\u3002 15. \u7ba1\u7406\u8d39\u662f\u591a\u5c11\uff1f \u7b54\uff1a \u6bcf\u5e73\u65b9\u82f1\u5c3a RM 0.95 \uff0c\u5305\u62ec sinking fund \u3002 16. \u662f\u5426\u6709\u7535\u52a8\u8f66\u5145\u7535\u6869\uff1f \u7b54\uff1a \u6709 20 \u4e2a\u505c\u8f66\u4f4d\u914d\u5907\u7535\u52a8\u8f66\u5145\u7535\u6869\u3002",
+   "doc": "Armani Hallson \u5e38\u89c1\u95ee\u9898\u89e3\u7b54.pdf",
+   "written_to": "Target Completion"
+  },
+  {
+   "project": "Padang Residences",
+   "field": "Price",
+   "value": "RM610,800.00 (min.) - RM1,453,800.00(max.)",
+   "evidence": ": RM300,000.00(min.) - RM1,592,800.00 (max.) I Total units - Block D:303 units I Selling Price: RM610,800.00 (min.) - RM1,453,800.00(max.)",
+   "doc": "Padang Residences Simplified Brochure.pdf",
+   "written_to": "Price"
+  },
+  {
+   "project": "Padang Residences",
+   "field": "Facilities",
+   "value": "Co-Working Space Infinitity Swimming Pool",
+   "evidence": "Type C D2&CO Type D1 D2&CO Type D2 D2&CO Signature Units D2&CO SU1 D2&CO SU2 D2&CO SU3 D2&CO SU4 D2&CO SU5 D2&CO SU6 D2&CO SU7 D2&CO Facilities D2&CO Co-Working Space Infinitity Swimming Pool Facade Perspective D2&CO Thank You D2&CO",
+   "doc": "Padang,Semarak Presentation.pdf",
+   "written_to": "Facilities"
+  },
+  {
+   "project": "Puncak Wangsamas Phase 2",
+   "field": "Total Storeys",
+   "value": "3-STOREY",
+   "evidence": "3-STOREY SEMI-DETACHED",
+   "doc": "P'Wangsamas Full brochure.pdf",
+   "written_to": "Total Storeys"
+  },
+  {
+   "project": "Puncak Wangsamas Phase 2",
+   "field": "Built-up",
+   "value": "3,899sf to 4,769sf",
+   "evidence": "spacious built-up areas ranging from 3,899sf to 4,769sf,",
+   "doc": "P'Wangsamas Full brochure.pdf",
+   "written_to": "Main Unit Layouts"
+  },
+  {
+   "project": "Puncak Wangsamas Phase 2",
+   "field": "Price",
+   "value": "RM3,177,000.00 (min)",
+   "evidence": "Dewan Bandaraya Kuala Lumpur Land Encumbrances: Hong Leong Bank Berhad Type of Development: Semi-Detached Selling Price: RM3,177,000.00 (min) to",
+   "doc": "P'Wangsamas Full brochure.pdf",
+   "written_to": "Price"
+  },
+  {
+   "project": "Puncak Wangsamas Phase 2",
+   "field": "Bumi Quota",
+   "value": "Bumiputera Discount: 5%",
+   "evidence": "RM7,778,000.00 (max) Bumiputera Discount: 5%",
+   "doc": "P'Wangsamas Full brochure.pdf",
+   "written_to": "Bumi Quota"
+  },
+  {
+   "project": "Sentral Suites @ KL Sentral",
+   "field": "Built-up",
+   "value": "Type C (1,138 sq ft) Type Corner C (1,025 sq ft) Type Corner D (1,166 sq ft) Type A (650 sq ft) Type B (826 sq ft) Type B1 (858 sq ft) Type Corner A (724 sq ft)",
+   "evidence": "1-43-B B 826 1-43-C B 826 1-43-D B 826 1-43-E B 826 1-43-M Corner D 1,166 1-43-N Corner A 724 1-43-G Corner A 724 Type C (1,138 sq ft) Type Corner C (1,025 sq ft) Type Corner D (1,166 sq ft) Type A (650 sq ft) Type B (826 sq ft) Type B1 (858 sq ft) Type Corner A (724 sq ft)",
+   "doc": "Sentral Suites - MRCB Sales Kit (All Towers).pdf",
+   "written_to": "Main Unit Layouts"
+  },
+  {
+   "project": "Sentral Suites @ KL Sentral",
+   "field": "Price",
+   "value": "Tower 1: 458 units, Price: (Min) RM 728,800.00 (Max) RM 1,299,800.00 Tower 2: 455 units, Price: (Min) RM 841,800.00 (Max) RM 1,572,800.00",
+   "evidence": "in Interest: Nil Total Units: Tower 1: 458 units, Price: (Min) RM 728,800.00 (Max) RM 1,299,800.00 Tower 2: 455 units, Price: (Min) RM 841,800.00 (Max) RM 1,572,800.00 Tower 3: 518 units, Price:",
+   "doc": "Share (outline) Brochure front 16(cs5)02 Chinese .pdf",
+   "written_to": "Price"
+  },
+  {
+   "project": "Sentral Suites @ KL Sentral",
+   "field": "Bumi Quota",
+   "value": "5% Bumiputera Discount",
+   "evidence": "Type B: 826 sf (1/2), Type B1: 868 sf (1/2), Type B2: 812 sf (1/2), Type C: 1,138 sf (2), Type Corner C: 1,025 sf (2), Type Corner D: 1,166 sf (2) 5% Bumiputera Discount",
+   "doc": "Share (outline) Brochure front 16(cs5)02 Chinese .pdf",
+   "written_to": "Bumi Quota"
+  },
+  {
+   "project": "The Cedar Damansara Heights",
+   "field": "Target Completion",
+   "value": "March 2024",
+   "evidence": "4,448,427.00 (max) RM 18,836,823.00 \u2022 Expected Date of Completion: March 2024 5% Bumiputra Discount THIS ADVERTISEMENT HAS BEEN APPROVED BY NATIONAL HOUSING DEPARTMENT. The images in this advertisement are for artistic/graphic illustration purposes only Designed by Wordsearch.sg T H E C E D A R 9 4",
+   "doc": "The Cedar_Brochure.pdf",
+   "written_to": "Target Completion"
+  },
+  {
+   "project": "The Cedar Damansara Heights",
+   "field": "Bumi Quota",
+   "value": "5% Bumiputra Discount",
+   "evidence": "4,448,427.00 (max) RM 18,836,823.00 \u2022 Expected Date of Completion: March 2024 5% Bumiputra Discount THIS ADVERTISEMENT HAS BEEN APPROVED BY NATIONAL HOUSING DEPARTMENT. The images in this advertisement are for artistic/graphic illustration purposes only Designed by Wordsearch.sg T H E C E D A R 9 4",
+   "doc": "The Cedar_Brochure.pdf",
+   "written_to": "Bumi Quota"
+  },
+  {
+   "project": "Orion Residence",
+   "field": "Built-up",
+   "value": "491-4,471 sqft",
+   "evidence": "Built Up: 491-4,471 sqft; Price: RM 693,000 (min) RM 6,259,400 (max)",
+   "doc": "2.2 Orion Residence Sales Kit \u697c\u4e66-\u7e41\u4f53 24.11.2023.pdf",
+   "written_to": "Main Unit Layouts"
+  },
+  {
+   "project": "Orion Residence",
+   "field": "Maintenance Fee",
+   "value": "Approx. RM1.50 per sqft +0.15 Sinking Fund",
+   "evidence": "Assessment,Pay once in every six month,(Est. annual rental income x 5%) / 2 Fire Insurance,Pay once in every year,0.1% of house value Maintenance Fees + Sinking Fund,Pay every month,Approx. RM1.50 per sqft +0.15 Sinking Fund",
+   "doc": "12. Progressive Payment Schedule_Sample \u5de5\u7a0b\u6b3e\u8868.xlsx",
+   "written_to": "Maintenance Fee"
+  },
+  {
+   "project": "Orion Residence",
+   "field": "Booking Fee",
+   "value": "RM5,000.00",
+   "evidence": "Size,,746 SQFT / 69 SQM,,,,Booking Fee,,\" RM5,000.00 \",,,,",
+   "doc": "12. Progressive Payment Schedule_Sample \u5de5\u7a0b\u6b3e\u8868.xlsx",
+   "written_to": "Booking Fee"
+  },
+  {
+   "project": "Aetas Taman Desa",
+   "field": "Car Parks",
+   "value": "3 to 4 car park bays per standard unit",
+   "evidence": "\u2022 3 to 4 car park bays per standard unit",
+   "doc": "-AETAS TAMAN DESA \u2014 VALUE PROPOSITIONS-",
+   "written_to": "Car Parks"
+  },
+  {
+   "project": "Aetas Taman Desa",
+   "field": "Facilities",
+   "value": "heated saltwater pool, function hall, playground, gymnasium",
+   "evidence": "19 Facilities include heated saltwater pool, function hall, playground, gymnasium 20 Additional features include e-hailing waiting lounge, parcel room, common EV fast charging bays, speed ramps for car park podium 21 GreenRE Platinum rating 22 Mobility-friendly common area Work from home house with solid fill HOME",
+   "doc": "20260619 ATD Sales Kit V2.pdf",
+   "written_to": "Facilities"
+  },
+  {
+   "project": "One Eleven Menerung @ Bangsar",
+   "field": "Bumi Quota",
+   "value": "5% Bumiputera Diskaun",
+   "evidence": "(Maks.) \u2022 5% Bumiputera Diskaun \u2022 Tarikh Dijangka Siap: Q1 2027 \u2022 IKLAN INI TELAH DILULUSKAN OLEH JABATAN PERUMAHAN NEGARA.",
+   "doc": "111 Menerung Info Kit - internal use_ International.pdf",
+   "written_to": "Bumi Quota"
+  }
+ ],
+ "rejected_failed_evidence": [],
+ "skipped_column_already_populated": []
+}
