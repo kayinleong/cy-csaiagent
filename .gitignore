@@ -93,3 +93,8 @@ next-env.d.ts
 # Regenerable from the committed scripts + a fresh scrape; never commit.
 /.planning/quick/quick-kayinleong-091/D2-Property-Raw-Data.xlsx
 /.planning/quick/quick-kayinleong-091/__pycache__/
+
+# quick-kayinleong-092: quick-091's workbook plus the Drive document text read back
+# from the KB. 2.4 MB, carries the same unredacted contact details. Regenerable.
+/.planning/quick/quick-kayinleong-092/D2-Property-Raw-Data.xlsx
+/.planning/quick/quick-kayinleong-092/__pycache__/
