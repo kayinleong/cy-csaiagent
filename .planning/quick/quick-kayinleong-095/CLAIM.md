@@ -201,3 +201,67 @@ The executor also tried five extra mutations, and each one was rejected:
 
 None. No application code, no shared scripts, no Firestore, no earlier claim's files.
 The only files outside this directory are the two new files in `docs/`.
+
+## Amendment (2026-10-19): tester-only workbook
+
+kayinleong trimmed `docs/UAT-Output-Test-Cases.xlsx` so testers see only what they test.
+That edit was committed as-is in 423c755.
+
+**What the trimmed workbook contains**
+
+- **One tab, `Test Cases`**, holding sections F, R and C (63 cases).
+- **Removed:** the Instructions, Rubric, Run Log and Sign-off tabs, and the X and E sections.
+
+The user then asked to align everything with it (f1307cb).
+
+**Builder** (`build-uat-workbook.py`)
+
+- It now builds only `meta.tester_sections` = F, R and C.
+- The JSON keeps all 77 cases. X is retained for a later round.
+- The golden check against the user's file matched every cell for value, fill, font,
+  alignment and border. It also matched the merges, the validation and the column widths.
+- Freeze panes were reset from A19 to A2 (header row), which the user approved.
+- Two builds give byte-identical output.
+
+**Case text**
+
+- Every Steps cell now ends "Then paste the full answer into the Actual / Comments
+  column." It used to point at the removed Run Log.
+- In the EC3 JSON text, "Cross-cutting" was dropped.
+
+**Gate** (`verify-uat-workbook.py`)
+
+- **38 PASS, 0 FAIL.**
+- `--self-test` passes a clean control and catches all 9 injected defects. That includes
+  three new ones: an extra sheet, a plan that names a removed tab, and moved freeze panes.
+
+**Plan doc**
+
+- §1–§3 say this round covers Finder, Reply and Coach. Routing, privacy, injection, session
+  and exploratory are "not in this round".
+- §5: 149 planned runs, about 3–4 runs per tester per day.
+- §6 and §9: testers record results in Result and Actual / Comments, and send screenshots
+  to the coordinator.
+- §7 now carries the H1–H7 and U PASS/FAIL anchors itself.
+- §10 gives the exact numbers needed to pass:
+
+  | Measure | Needed |
+  | --- | --- |
+  | Finder | 24 / 28 |
+  | Reply | 17 / 20 |
+  | Coach | 13 / 15 |
+  | EN | 25 / 31 |
+  | BM | 13 / 16 |
+  | 中文 | 13 / 16 |
+  | Adversarial | 21 / 23 |
+  | Double-rated agreement | 12 / 14 |
+
+- §11 moves the issues that only X cases touched into "Not tested this round". These are
+  phone/IC redaction, the language chip, sticky routing, and journey/stall.
+- §13 appendix: 63 cases, 149 runs, 14 double-rated.
+
+**To confirm with Derek**
+
+- The second-rater process proposed in the plan: each rater keeps their own copy, and the
+  coordinator lines the two up.
+- The tester load of about 3–4 runs per day.
