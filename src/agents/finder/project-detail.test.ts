@@ -565,3 +565,72 @@ describe('the Finder exposes projectDetail as a tool', () => {
     expect(description).toContain('projectId')
   })
 })
+
+// ─── 6. Sold-out layouts (quick-kayinleong-096) ───────────────────────────────
+
+describe('a sold-out layout reaches the model and is governed by an explicit rule', () => {
+  const SOLD_ID = 'proj-sold-out-layout'
+  const SOLD_ENTRY = {
+    label: 'Type E1',
+    sizeSqft: 2_072,
+    bedrooms: 3,
+    priceMinRM: null,
+    priceMaxRM: null,
+    raw: 'Type E1: Sold out',
+    soldOut: true,
+  }
+  const OPEN_ENTRY = {
+    label: 'Type S1',
+    sizeSqft: 904,
+    bedrooms: 1,
+    priceMinRM: 1_200_000,
+    priceMaxRM: 1_350_000,
+    raw: 'Type S1: 904 Sqft | 1 Bedroom | Nett: RM1.2mil-RM1.35mil',
+  }
+
+  beforeEach(() => {
+    // Serve one extra project through the file's existing by-id mock, leaving the
+    // 50-project fixture set (and every count that depends on it) untouched.
+    const doc: ProjectDoc = {
+      ...makeProject(1),
+      name: 'Sold-out layout project',
+      unitTypes: [OPEN_ENTRY, SOLD_ENTRY],
+    }
+    mocks.mockDocGet.mockImplementation(async (id: string) =>
+      id === SOLD_ID
+        ? { exists: true, data: () => doc }
+        : { exists: id in PROJECTS, data: () => PROJECTS[id] },
+    )
+  })
+
+  it('getProjectDetail returns the entry with soldOut true, whole and unchanged', async () => {
+    const { getProjectDetail } = await import('@/src/inventory/search')
+    const detail = await getProjectDetail(SOLD_ID)
+    expect(detail.found).toBe(true)
+    if (!detail.found) return
+    const sold = detail.project.unitTypes.find((e) => e.label === 'Type E1')
+    expect(sold).toEqual(SOLD_ENTRY)
+    expect(sold?.soldOut).toBe(true)
+    // An entry that is not sold out carries no soldOut key at all.
+    const open = detail.project.unitTypes.find((e) => e.label === 'Type S1')
+    expect(open).not.toHaveProperty('soldOut')
+  })
+
+  it('the projectDetail tool payload carries the flag to the model', async () => {
+    const { makeProjectDetailTool } = await import('./tools')
+    const t = makeProjectDetailTool('en')
+    const execute = t.execute as NonNullable<typeof t.execute>
+    const out = (await execute({ projectId: SOLD_ID, question: null }, {} as never)) as {
+      found: true
+      project: { unitTypes: Array<{ label: string; soldOut?: boolean }> }
+    }
+    expect(out.project.unitTypes.filter((e) => e.soldOut === true).map((e) => e.label)).toEqual(['Type E1'])
+  })
+
+  it('FINDER_SYSTEM_PROMPT states the sold-out rule', async () => {
+    const { FINDER_SYSTEM_PROMPT } = await import('./prompt')
+    expect(FINDER_SYSTEM_PROMPT).toContain('"soldOut": true')
+    expect(FINDER_SYSTEM_PROMPT).toContain('never offer it as available')
+    expect(FINDER_SYSTEM_PROMPT).toContain('never quote a price for it')
+  })
+})

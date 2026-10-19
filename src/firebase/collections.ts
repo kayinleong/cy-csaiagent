@@ -351,8 +351,12 @@ export interface ProjectDoc {
    *
    * Absent means the price came from the normal inventory path. The distinction exists so
    * Derek can review exactly the chat-derived rows instead of re-checking all 87.
+   *
+   * `'client-workbook'` means the figure is the lowest non-sold-out nett price stated in the
+   * client's project info sheet (quick-kayinleong-096, D2). It is the strongest evidence we
+   * hold, so the backfill and price-repair scripts must not overwrite it.
    */
-  priceSource?: 'whatsapp-kb'
+  priceSource?: 'whatsapp-kb' | 'client-workbook'
   /**
    * The `kbChunks/{id}` the price was quoted from — the audit trail (quick-kayinleong-089).
    *
@@ -378,9 +382,41 @@ export interface ProjectDoc {
    * Render nothing rather than guessing.
    */
   unitTypes?: UnitTypeEntry[]
+  /**
+   * The fields whose current value came from the client project info sheet
+   * (quick-kayinleong-096, D4). The sheet is the field-by-field authority, so every
+   * script that re-derives one of these fields from prose must skip a doc that lists it.
+   *
+   * ONE list rather than per-field `*Source` props (D4 choice): it has to cover sizes,
+   * bedrooms, tenure and vp, which a single `unitTypesSource` flag cannot. Each guard
+   * checks exactly the field it would write, and the restore path knows what to undo.
+   * `priceSource` stays beside it because D2 requires it for the price group.
+   */
+  clientWorkbookFields?: ClientWorkbookField[]
+  /** When the client sheet was last applied to this project. Absent = never. */
+  clientWorkbookImportedAt?: Date | FieldValue
   /** 1024-d normalized vector (Gemini gemini-embedding-001) */
   embedding: number[]
 }
+
+/**
+ * The `ProjectDoc` fields the client project info sheet can set (quick-kayinleong-096).
+ * Recorded in `ProjectDoc.clientWorkbookFields` so re-run scripts leave them alone.
+ */
+export type ClientWorkbookField =
+  | 'unitTypes'
+  | 'sizeMinSqft'
+  | 'sizeMaxSqft'
+  | 'bedrooms'
+  | 'priceValue'
+  | 'priceBand'
+  | 'priceProvenance'
+  | 'priceSource'
+  | 'pricePsfMin'
+  | 'pricePsfMax'
+  | 'tenure'
+  | 'vpStatus'
+  | 'vpDate'
 
 /**
  * One layout a project offers (quick-kayinleong-088).
@@ -405,6 +441,13 @@ export interface UnitTypeEntry {
   priceMaxRM: number | null
   /** Verbatim source line this entry was parsed from — the audit trail for grounding. */
   raw: string
+  /**
+   * True only when the client project info sheet says this layout is sold out
+   * (quick-kayinleong-096, D3). Absent means "not stated sold out", never "available".
+   * Sold-out entries carry null prices, never count toward `priceValue` or the size
+   * range, and the Finder must label them sold out and never offer them.
+   */
+  soldOut?: boolean
 }
 
 export interface CollateralDoc {
