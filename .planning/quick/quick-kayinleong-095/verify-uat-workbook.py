@@ -1,18 +1,23 @@
-"""Gate for the client UAT pack: JSON, project facts, hygiene, workbook, plan doc.
+"""Gate for the tester UAT pack: JSON, project facts, hygiene, workbook, plan doc.
+
+The JSON is the full catalogue (all sections). The workbook is the tester view:
+one `Test Cases` sheet with the sections in meta.tester_sections.
 
 Checks (each prints PASS or FAIL, then a total line "N PASS, M FAIL"):
   A  JSON integrity           B  project facts against the project export
   C  client-deliverable hygiene   D  workbook structure   E  plan document
+A line starting NOTE is information only and is not counted.
 
 The project export holds PIC names and phone numbers in its description field.
 The loader reduces every record to five fields at once and never prints one.
+The export date the facts were taken from is meta.snapshot_exported_at in the JSON;
+refreshing the snapshot means editing that value on purpose.
 
 Usage:
   python3 verify-uat-workbook.py [--cases P] [--workbook P] [--plan P] [--export P]
   python3 verify-uat-workbook.py --self-test    (proves the gate bites)
 """
 import argparse
-import copy
 import json
 import re
 import shutil
@@ -39,37 +44,29 @@ LANGS = ["EN", "BM", "中文"]
 TYPES = ["Golden", "Rubric", "Adversarial"]
 EXPORT_KEYS = ("name", "status", "priceValue", "foreignEligible", "bumiQuota")
 
-SHEETS = ["Instructions", "Rubric", "Test Cases", "Run Log", "Sign-off"]
+SHEETS = ["Test Cases"]
 TC_HEADERS = ["ID", "Area", "Test Case", "Priority", "Preconditions", "Steps", "Expected Result", "Result",
               "Actual / Comments", "Known Status", "Lang", "Type", "Runs", "Run by", "Double-rate"]
 TC_WIDTHS = [7, 16, 26, 9, 24, 40, 44, 12, 30, 34, 8, 13, 7, 15, 11]
-RL_HEADERS = ["Case ID", "Run", "Tester", "Test account", "Device & browser", "App language", "Prompt language",
-              "Date & time", "Assistant that answered", "Full answer text", "Screenshot file", "Version stamp",
-              "H1 Correct", "H2 Grounded", "H3 D2-specific", "H4 Language", "H5 D2 voice", "H6 Safe",
-              "H7 Job done", "U Usefulness", "Run verdict", "Severity", "What's wrong",
-              "What correct looks like (+ SOP / doc)", "After a fix or KB change?", "2nd rater verdict",
-              "Root cause", "Triage notes"]
-RL_VALIDATIONS = [
-    ("B", '"1,2,3"'), ("F", '"EN,BM,中文"'), ("G", '"EN,BM,中文"'),
-    ("I", '"Coach,Finder,Reply,Error / none"'),
-    ("M", '"PASS,FAIL,N/A"'), ("N", '"PASS,FAIL,N/A"'), ("O", '"PASS,FAIL,N/A"'), ("P", '"PASS,FAIL,N/A"'),
-    ("Q", '"PASS,FAIL,N/A"'), ("R", '"PASS,FAIL,N/A"'), ("S", '"PASS,FAIL,N/A"'),
-    ("T", '"Use as-is,Use after small edits,Not usable"'), ("U", '"Pass,Fail"'), ("V", '"S1,S2,S3,S4"'),
-    ("Y", '"Yes,No"'), ("Z", '"Pass,Fail"'),
-    ("AA", '"Model / prompt,KB gap,Test-case defect,UI bug,Environment"'),
-]
 RESULT_LIST = '"Pass,Fail,Blocked,Not Run"'
-EXPLORATORY_PRECONDITIONS = "Use only made-up names and the placeholder numbers in the Instructions tab."
-EXPLORATORY_KNOWN = "Write the answer you expect in Expected Result before you ask."
 
 PLAN_HEADINGS = ["## 1. Purpose and scope", "## 2. What is being tested", "## 3. Roles",
                  "## 4. Before we start: readiness checklist", "## 5. Schedule",
                  "## 6. How to run a case on your phone", "## 7. How to judge an answer",
                  "## 8. How serious is it? (severity)", "## 9. What to record", "## 10. Exit criteria",
                  "## 11. Known issues", "## 12. Open questions for Derek", "## 13. Appendix: case counts"]
-PROBES = [["RM"], ["phone"], ["notified"], ["Reply in"], ["journey"],
-          ["previous conversation", "across conversations"], ["brochures"], ["English"], ["cut off"],
-          ["Cold prospect"], ["<LEAD_ID"]]
+# Known-status key -> words that must appear in plan section 11 when a tester case carries the key.
+KEY_PROBES = {
+    "KS-RM": ["RM"], "KS-TOAST": ["notified"], "KS-TABLE": ["brochures"], "KS-SEGMENT": ["Highlight"],
+    "KS-UI-EN": ["English"], "KS-CUTOFF": ["cut off"], "KS-BADGE": ["Cold prospect"], "KS-TOKENS": ["<LEAD_ID"],
+    "KS-CJK": ["Chinese place names"], "KS-BUMI": ["bumi"], "KS-SOLDOUT": ["sold out"],
+    "KS-PROPERTY1": ["Property 1"], "KS-MIXED-DATA": ["Mixed write-ups"], "KS-ADS": ["Paid ads"],
+    "KS-PLACEHOLDER": ["example SOP"],
+}
+EXTRA_PROBES = [["previous conversation", "across conversations"]]
+# Issues that only the removed sections touch: they belong in the "Not tested this round" note.
+NOT_TESTED_PROBES = [["phone numbers"], ["Reply in"], ["journey"]]
+REMOVED_TAB_RE = re.compile(r"Run Log|Sign-off|Rubric tab|Instructions tab|Cross-cutting|\bX\d+\b|\bE\d+\b|E1.E50")
 
 ALLOW = {"012-000 0000", "0120000000", "+60 12-000 0000", "900101-14-0000", "900101140000", "siti@example.com"}
 ALLOW_NAMES = {"Encik Ali", "Cik Tan", "Ms Tan", "Mr Lim", "Madam Wong", "Puan Wong", "Mr Tanaka", "Mr Lee",
@@ -82,7 +79,6 @@ NAME_RE = re.compile(r"\b(?:Encik|Cik|Puan|Ms|Mr|Mrs|Madam) [A-Z][a-z]+")
 SECRET_RE = re.compile(r"sk-ant-[A-Za-z0-9_-]{10,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----")
 FORBIDDEN_RE = re.compile(r"\b(?:src|app|scripts|evals|tests)/[\w\[.-]|\.(?:tsx?|py|json|yaml)\b|RESEARCH-|"
                           r"quick-kayinleong|projects\.export|gitignore")
-SIGNOFF_RE = re.compile(r"^=COUNTIF\(.+\)(\+COUNTIF\(.+\))*$")
 ID_RE = re.compile(r"^[FRCX][1-9]\d*$")
 
 FAILURES = []
@@ -151,6 +147,85 @@ def load_export(path):
 
 def cell_text(v):
     return None if v is None else str(v)
+
+
+def note(msg):
+    print("NOTE " + msg)
+
+
+def tester_letters(data):
+    return list(data["meta"].get("tester_sections", []))
+
+
+def tester_sections(data):
+    letters = tester_letters(data)
+    return [s for s in data["sections"] if s["letter"] in letters]
+
+
+def tester_cases(data):
+    letters = tester_letters(data)
+    return [c for c in data["cases"] if c["section"] in letters]
+
+
+def count_rows(data):
+    """Rows of the plan's appendix table, as lists of strings, from the tester cases."""
+    cases = tester_cases(data)
+    rows = [["Section", "Language", "Golden", "Rubric", "Adversarial", "Total"]]
+    for s in tester_sections(data):
+        for lang in LANGS:
+            sub = [c for c in cases if c["section"] == s["letter"] and c["lang"] == lang]
+            cnt = Counter(c["type"] for c in sub)
+            rows.append([s["pillar"], lang] + [str(cnt.get(t, 0)) for t in TYPES] + [str(len(sub))])
+    cnt = Counter(c["type"] for c in cases)
+    rows.append(["All sections", "All"] + [str(cnt.get(t, 0)) for t in TYPES] + [str(len(cases))])
+    return rows
+
+
+def needed_rows(data):
+    """Rows of the exact-numbers table in plan section 10 (EC3, EC4, EC5, EC6)."""
+    cases = tester_cases(data)
+    rows = [["Gate", "Cases", "Needed to pass"]]
+    for s in tester_sections(data):
+        n = sum(1 for c in cases if c["section"] == s["letter"])
+        rows.append(["EC3 {}".format(s["pillar"]), str(n), str(ceil_pct(n, 85))])
+    for lang in LANGS:
+        n = sum(1 for c in cases if c["lang"] == lang)
+        rows.append(["EC4 {} (all pillars)".format(lang), str(n), str(ceil_pct(n, 80))])
+    for s in tester_sections(data):
+        for lang in LANGS:
+            n = sum(1 for c in cases if c["section"] == s["letter"] and c["lang"] == lang)
+            if n >= 10:
+                rows.append(["EC4 {}, {} only (cell of 10 or more)".format(s["pillar"], lang), str(n),
+                             str(ceil_pct(n, 80))])
+    adv = sum(1 for c in cases if c["type"] == "Adversarial")
+    rows.append(["EC5 Adversarial cases", str(adv), str(ceil_pct(adv, 90))])
+    dr = sum(1 for c in cases if c["double_rate"])
+    rows.append(["EC6 Double-rated cases (raters agree on)", str(dr), str(ceil_pct(dr, 80))])
+    return rows
+
+
+def md_tables(text):
+    """Every markdown table in text, each as a list of rows of stripped cells (rule rows dropped)."""
+    tables, cur = [], []
+    for line in text.splitlines():
+        if line.startswith("|"):
+            cells = [x.strip() for x in line.strip().strip("|").split("|")]
+            if not all(re.match(r"^:?-+:?$", x) for x in cells):
+                cur.append(cells)
+        elif cur:
+            tables.append(cur)
+            cur = []
+    if cur:
+        tables.append(cur)
+    return tables
+
+
+def section_of(plan_text, start_heading, end_heading=None):
+    a = plan_text.find(start_heading)
+    if a < 0:
+        return ""
+    b = plan_text.find(end_heading, a) if end_heading else -1
+    return plan_text[a:b] if b >= 0 else plan_text[a:]
 
 
 # ------------------------------------------------------------------ A: JSON
@@ -265,7 +340,9 @@ def run_a(data):
     check(not a8, "A8 known-status rules hold ({})".format(short(a8) or "ok"))
 
     dr = sum(1 for c in cases if c["double_rate"])
-    check(12 <= dr <= 18, "A9 double-rated cases within 12-18 (got {})".format(dr))
+    dr_t = sum(1 for c in tester_cases(data) if c["double_rate"])
+    check(12 <= dr <= 18 and 12 <= dr_t <= 18,
+          "A9 double-rated cases within 12-18 (catalogue {}, tester view {})".format(dr, dr_t))
 
     a10 = []
     if [r["code"] for r in data["rubric"]] != ["H1", "H2", "H3", "H4", "H5", "H6", "H7", "U"]:
@@ -283,6 +360,17 @@ def run_a(data):
     check(not a10, "A10 rubric, severity, root causes and exit criteria are complete ({})".format(
         short(a10) or "ok"))
 
+    letters = tester_letters(data)
+    known = [s["letter"] for s in data["sections"]]
+    a11 = []
+    if letters != ["F", "R", "C"]:
+        a11.append("tester_sections is {}".format(letters))
+    if any(x not in known for x in letters) or letters != [x for x in known if x in letters]:
+        a11.append("tester_sections is not a subset of the sections, in workbook order")
+    if len(tester_cases(data)) != 63:
+        a11.append("{} tester cases".format(len(tester_cases(data))))
+    check(not a11, "A11 meta.tester_sections is F, R, C and covers 63 cases ({})".format(short(a11) or "ok"))
+
 
 # ------------------------------------------------------------------ B: project facts
 def run_b(data, export_path):
@@ -291,8 +379,10 @@ def run_b(data, export_path):
     except Exception as exc:  # message only, never content
         check(False, "B1 export loads ({})".format(type(exc).__name__))
         return
-    check(exported_at == data["meta"]["snapshot_exported_at"] and len(recs) > 0,
-          "B1 export loads ({} records reduced to 5 fields) and exportedAt matches the snapshot".format(len(recs)))
+    snap = data["meta"].get("snapshot_exported_at")
+    check(bool(snap) and exported_at == snap and len(recs) > 0,
+          "B1 export loads ({} records reduced to 5 fields) and exportedAt matches meta.snapshot_exported_at "
+          "(refresh the snapshot by editing that value)".format(len(recs)))
     by_name = {}
     for r in recs:
         by_name.setdefault(r["name"], []).append(r)
@@ -415,31 +505,32 @@ def font_color(cell):
 
 
 def analyse_test_cases(ws):
-    """Derive blocks from the sheet itself (independent of the builder)."""
+    """Derive the ID rows from the sheet itself (independent of the builder)."""
     rows = {}
     for r in range(2, ws.max_row + 1):
         a = ws.cell(row=r, column=1).value
-        if isinstance(a, str) and re.match(r"^[FRCXE][1-9]\d*$", a):
+        if isinstance(a, str) and re.match(r"^[A-Z][1-9]\d*$", a):
             rows[a] = r
     return rows
 
 
 def run_d(data, wb):
-    cases = data["cases"]
+    cases = tester_cases(data)
+    sections = tester_sections(data)
     phrases = data["known_status_phrases"]
 
-    check(wb.sheetnames == SHEETS, "D1 sheet names and order are {} (got {})".format(SHEETS, wb.sheetnames))
+    check(wb.sheetnames == SHEETS, "D1 the workbook has one sheet, {} (got {})".format(SHEETS, wb.sheetnames))
     if wb.sheetnames != SHEETS:
         return
-    tc, rl, so, rb = wb["Test Cases"], wb["Run Log"], wb["Sign-off"], wb["Rubric"]
+    tc = wb["Test Cases"]
+    size = (tc.max_row, tc.max_column)  # read first: ws.cell() on an empty cell grows the sheet
 
     heads = [tc.cell(row=1, column=c).value for c in range(1, 16)]
     check(heads == TC_HEADERS and tc.cell(row=1, column=16).value is None,
           "D2 Test Cases headers A-O are exact (got {})".format(heads))
 
-    # row map
     id_rows = analyse_test_cases(tc)
-    band_texts = [s["band"] for s in data["sections"]] + [data["exploratory_band"]]
+    band_texts = [s["band"] for s in sections]
     band_rows = {}
     for r in range(2, tc.max_row + 1):
         a = tc.cell(row=r, column=1).value
@@ -451,11 +542,11 @@ def run_d(data, wb):
         h = tc.cell(row=1, column=c)
         if fill_of(h) != "1F2937" or font_color(h) != "FFFFFF" or not h.font.b:
             d3.append("header col {}".format(c))
-    if len(band_rows) != 5:
-        d3.append("expected 5 bands, found {}".format(len(band_rows)))
+    if len(band_rows) != len(sections):
+        d3.append("expected {} bands, found {}".format(len(sections), len(band_rows)))
+    if merged != {"A{r}:O{r}".format(r=r) for r in band_rows.values()}:
+        d3.append("merged ranges are {}".format(sorted(merged)))
     for text, r in band_rows.items():
-        if "A{r}:O{r}".format(r=r) not in merged:
-            d3.append("band row {} not merged A:O".format(r))
         cell = tc.cell(row=r, column=1)
         if fill_of(cell) != "D9F99D" or not cell.font.b:
             d3.append("band row {} style".format(r))
@@ -465,10 +556,6 @@ def run_d(data, wb):
                 d3.append("{} col {} not yellow".format(ident, col))
         if font_color(tc.cell(row=r, column=10)) != "6B7280":
             d3.append("{} Known Status colour".format(ident))
-        if ident[0] == "E":
-            for col in (3, 6, 7, 11):
-                if fill_of(tc.cell(row=r, column=col)) != "FFF9C4":
-                    d3.append("{} col {} not yellow".format(ident, col))
     if tc.freeze_panes != "A2":
         d3.append("freeze panes {}".format(tc.freeze_panes))
     for i, w in enumerate(TC_WIDTHS, start=1):
@@ -478,10 +565,11 @@ def run_d(data, wb):
     fonts = {c.font.name for _, c in workbook_cells(wb)}
     if fonts != {"Arial"}:
         d3.append("fonts {}".format(sorted(fonts)))
-    check(not d3, "D3 header and band fills, merges, yellow cells, grey J, freeze, widths, Arial ({})".format(
+    if size != (len(sections) + len(cases) + 1, 15):
+        d3.append("sheet is {} rows by {} columns".format(*size))
+    check(not d3, "D3 header and band fills, merges, yellow cells, grey J, freeze A2, widths, Arial, size ({})".format(
         short(d3) or "ok"))
 
-    # D4
     dvs = dv_cells(tc)
     covered = dvs.get(RESULT_LIST, set())
     want = {(r, 8) for r in id_rows.values()}
@@ -489,23 +577,22 @@ def run_d(data, wb):
     if covered != want:
         d4.append("covered {} cells, wanted {} (missing {}, extra {})".format(
             len(covered), len(want), len(want - covered), len(covered - want)))
+    if set(dvs) - {RESULT_LIST}:
+        d4.append("other validations present")
     if any((r, 8) in covered for r in band_rows.values()):
         d4.append("a band row is covered")
     notrun = [i for i, r in id_rows.items() if tc.cell(row=r, column=8).value != "Not Run"]
     if notrun:
         d4.append("H not 'Not Run': {}".format(short(notrun)))
-    if len(id_rows) != 77 + 50:
-        d4.append("{} ID rows".format(len(id_rows)))
-    check(not d4, "D4 Result validation is exactly {} on every case and E row, no band row, all Not Run ({})".format(
+    if len(id_rows) != len(cases):
+        d4.append("{} ID rows, wanted {}".format(len(id_rows), len(cases)))
+    check(not d4, "D4 Result validation is exactly {} on every case row, no band row, all Not Run ({})".format(
         RESULT_LIST, short(d4) or "ok"))
 
-    # D5: order and values
     seq = []
-    for s in data["sections"]:
+    for s in sections:
         seq.append(s["band"])
         seq.extend(c["id"] for c in cases if c["section"] == s["letter"])
-    seq.append(data["exploratory_band"])
-    seq.extend("E{}".format(n) for n in range(1, 51))
     got_seq = [tc.cell(row=r, column=1).value for r in range(2, tc.max_row + 1)]
     d5 = []
     if got_seq != seq:
@@ -523,300 +610,140 @@ def run_d(data, wb):
         for k, (g, e) in enumerate(zip(got, exp), start=1):
             if g != e:
                 d5.append("{} {} differs".format(c["id"], get_column_letter(k)))
-    check(not d5, "D5 every case row equals the JSON-composed values ({})".format(short(d5) or "77 rows ok"))
+    check(not d5, "D5 band and case rows in JSON order, every case row equals the JSON-composed values ({})".format(
+        short(d5) or "{} rows ok".format(len(cases))))
 
-    # D6: exploratory rows
     d6 = []
-    per = data["meta"]["exploratory_slots_per_tester"]
-    for n in range(1, data["meta"]["testers"] * per + 1):
-        r = id_rows.get("E{}".format(n))
-        if r is None:
-            d6.append("E{} missing".format(n))
-            continue
-        k = (n - 1) // per + 1
-        exp = ["E{}".format(n), "Exploratory", "Your own question (Tester {})".format(k), None,
-               EXPLORATORY_PRECONDITIONS, None, None, "Not Run", None, EXPLORATORY_KNOWN, None, "Exploratory", 1,
-               "Tester {}".format(k), None]
-        got = [tc.cell(row=r, column=j).value for j in range(1, 16)]
-        if got != exp:
-            d6.append("E{}".format(n))
-    check(not d6, "D6 E1-E50 rows match the exploratory spec ({})".format(short(d6) or "50 rows ok"))
-
-    # D7: Run Log
-    d7 = []
-    heads = [rl.cell(row=1, column=c).value for c in range(1, 29)]
-    if heads != RL_HEADERS or rl.cell(row=1, column=29).value is not None:
-        d7.append("headers")
-    expect_rows = []
-    for s in data["sections"]:
-        for c in cases:
-            if c["section"] == s["letter"]:
-                for run in range(1, c["runs"] + 1):
-                    expect_rows.append((c["id"], run))
-    n_scripted = len(expect_rows)
-    for n in range(1, 51):
-        expect_rows.append(("E{}".format(n), 1))
-    for _ in range(40):
-        expect_rows.append((None, None))
-    if n_scripted != 181:
-        d7.append("{} scripted runs in JSON".format(n_scripted))
-    if rl.max_row != len(expect_rows) + 1:
-        d7.append("{} rows, wanted {}".format(rl.max_row - 1, len(expect_rows)))
-    bad_rows = 0
-    for i, (cid, run) in enumerate(expect_rows):
-        r = i + 2
-        if rl.cell(row=r, column=1).value != cid or rl.cell(row=r, column=2).value != run:
-            bad_rows += 1
-        for c in range(3, 29):
-            cell = rl.cell(row=r, column=c)
-            if cell.value is not None or fill_of(cell) != "FFF9C4":
-                bad_rows += 1
-                break
-    if bad_rows:
-        d7.append("{} Run Log rows wrong".format(bad_rows))
-    if rl.freeze_panes != "C2":
-        d7.append("freeze {}".format(rl.freeze_panes))
-    rl_dvs = dv_cells(rl)
-    last = len(expect_rows) + 1
-    for col, formula in RL_VALIDATIONS:
-        cidx = range_boundaries(col + "1")[0]
-        want_cells = {(r, cidx) for r in range(2, last + 1)}
-        if not want_cells <= rl_dvs.get(formula, set()):
-            d7.append("validation {} {}".format(col, formula))
-    check(not d7, "D7 Run Log: exact headers, 181 + 50 + 40 rows, dropdowns, freeze ({})".format(short(d7) or "ok"))
-
-    # D8: Rubric sheet equals JSON
-    d8 = []
-    grid = {}
-    for r in range(1, rb.max_row + 1):
-        a = rb.cell(row=r, column=1).value
-        if a is not None:
-            grid.setdefault(a, []).append(r)
-    if rb["A1"].value != "How to judge an answer":
-        d8.append("title")
-    rub_head = ["Code", "Dimension", "Ask yourself", "PASS looks like", "FAIL looks like", "Applies to"]
-    if not any([rb.cell(row=r, column=c).value for c in range(1, 7)] == rub_head for r in grid.get("Code", [])):
-        d8.append("rubric header row")
-    sev_head = ["Level", "Name", "What it means", "D2 examples"]
-    if not any([rb.cell(row=r, column=c).value for c in range(1, 5)] == sev_head for r in grid.get("Level", [])):
-        d8.append("severity header row")
-    rc_head = ["Root cause (set at triage)", "Meaning"]
-    if not any([rb.cell(row=r, column=c).value for c in range(1, 3)] == rc_head
-               for r in grid.get("Root cause (set at triage)", [])):
-        d8.append("root cause header row")
-    for item in data["rubric"]:
-        want_row = [item["code"], item["name"], item["question"], item["pass"], item["fail"], item["applies_to"]]
-        ok = any([rb.cell(row=r, column=c).value for c in range(1, 7)] == want_row for r in grid.get(item["code"], []))
-        if not ok:
-            d8.append("rubric {}".format(item["code"]))
-    all_cells = {str(c.value) for t, c in workbook_cells(wb) if t == "Rubric"}
-    for rule in data["pass_rules"]:
-        if rule not in all_cells:
-            d8.append("pass rule {}".format(rule[:12]))
-    for item in data["severity"]:
-        want_row = [item["level"], item["name"], item["meaning"], item["examples"]]
-        if not any([rb.cell(row=r, column=c).value for c in range(1, 5)] == want_row
-                   for r in grid.get(item["level"], [])):
-            d8.append("severity {}".format(item["level"]))
-    for item in data["root_causes"]:
-        want_row = [item["tag"], item["meaning"]]
-        if not any([rb.cell(row=r, column=c).value for c in range(1, 3)] == want_row
-                   for r in grid.get(item["tag"], [])):
-            d8.append("root cause {}".format(item["tag"]))
-    check(not d8, "D8 Rubric sheet text equals the JSON ({})".format(short(d8) or "ok"))
-
-    # D9: formulas
-    d9 = []
-    for ws in wb.worksheets:
-        if ws.title == "Sign-off":
-            continue
-        for row in ws.iter_rows():
-            for c in row:
-                if c.data_type == "f" or (isinstance(c.value, str) and c.value.startswith("=")):
-                    d9.append("{}!{}".format(ws.title, c.coordinate))
-    formulas = {}
-    for row in so.iter_rows():
+    for row in tc.iter_rows():
         for c in row:
             if c.data_type == "f" or (isinstance(c.value, str) and c.value.startswith("=")):
-                formulas[c.coordinate] = str(c.value)
-                if not SIGNOFF_RE.match(str(c.value)):
-                    d9.append("Sign-off!{} not COUNTIF-only".format(c.coordinate))
+                d6.append(c.coordinate)
+    left_out = [i for i in id_rows if i[0] not in tester_letters(data)]
+    if left_out:
+        d6.append("rows from sections not in the tester view: {}".format(short(left_out)))
+    check(not d6, "D6 no formulas and no cross-cutting or exploratory rows ({})".format(short(d6) or "ok"))
 
-    def block(letter, lang=None):
-        rs = [id_rows[c["id"]] for c in cases if c["section"] == letter and (lang is None or c["lang"] == lang)]
-        return (min(rs), max(rs)) if rs else None
-
-    def rng(b):
-        return "'Test Cases'!$H${}:$H${}".format(b[0], b[1])
-
-    def cif(b, crit):
-        return 'COUNTIF({},"{}")'.format(rng(b), crit)
-
-    letters = [s["letter"] for s in data["sections"]]
-    pillar_of = {s["letter"]: s["pillar"] for s in data["sections"]}
-    scripted = (id_rows[cases[0]["id"]], id_rows[cases[-1]["id"]])
-    sign_rows = {}  # band text -> row
-    for r in range(1, so.max_row + 1):
-        a = so.cell(row=r, column=1).value
-        if isinstance(a, str):
-            sign_rows.setdefault(a, r)
-    expected_formulas = []  # (coordinate, formula)
-
-    def need(label):
-        if label not in sign_rows:
-            d9.append("Sign-off missing section {!r}".format(label))
-            return None
-        return sign_rows[label]
-
-    r0 = need("Result summary (auto — from the Test Cases tab)")
-    if r0:
-        for off, crit in enumerate(["Pass", "Fail", "Blocked", "Not Run"], start=2):
-            expected_formulas.append(("B{}".format(r0 + off), "=" + cif(scripted, crit)))
-    r1 = need("By pillar (auto)")
-    if r1:
-        for i, letter in enumerate(letters):
-            b = block(letter)
-            expected_formulas.append(("C{}".format(r1 + 2 + i), "=" + cif(b, "Pass")))
-            expected_formulas.append(("D{}".format(r1 + 2 + i), "=" + cif(b, "Fail")))
-    r2 = need("By language (auto)")
-    if r2:
-        for i, lang in enumerate(LANGS):
-            blocks = [block(letter, lang) for letter in letters]
-            expected_formulas.append(("C{}".format(r2 + 2 + i), "=" + "+".join(cif(b, "Pass") for b in blocks)))
-            expected_formulas.append(("D{}".format(r2 + 2 + i), "=" + "+".join(cif(b, "Fail") for b in blocks)))
-    r3 = need("Pillar × language")
-    if r3:
-        i = 0
-        for letter in letters:
-            for lang in LANGS:
-                expected_formulas.append(("D{}".format(r3 + 2 + i), "=" + cif(block(letter, lang), "Pass")))
-                i += 1
-    r4 = need("Defects logged (auto)")
-    if r4:
-        e_first, e_last = n_scripted + 2, n_scripted + 51
-        expected_formulas.append(("B{}".format(r4 + 1), '=COUNTIF(\'Run Log\'!$V$2:$V${},"S1")'.format(last)))
-        expected_formulas.append(("B{}".format(r4 + 2), '=COUNTIF(\'Run Log\'!$V$2:$V${},"S2")'.format(last)))
-        expected_formulas.append(("B{}".format(r4 + 3),
-                                  '=COUNTIF(\'Run Log\'!$U${}:$U${},"?*")'.format(e_first, e_last)))
-    for coord, f in expected_formulas:
-        if formulas.get(coord) != f:
-            d9.append("Sign-off!{} is {!r}, wanted {!r}".format(coord, formulas.get(coord), f))
-    if len(formulas) != len(expected_formulas):
-        d9.append("{} formulas found, {} expected".format(len(formulas), len(expected_formulas)))
-    check(not d9, "D9 no formula outside Sign-off; Sign-off is COUNTIF-only on the real block ranges ({} formulas) "
-          "({})".format(len(formulas), short(d9) or "ok"))
-
-    # D10: Sign-off structure and static numbers
-    d10 = []
-    so_dvs = dv_cells(so)
-    verdict_row = sign_rows.get("Overall verdict (GO / NO-GO)")
-    if not verdict_row or (verdict_row, 2) not in so_dvs.get('"GO,NO-GO"', set()):
-        d10.append("GO/NO-GO validation")
-    for label in ("Signed by", "Role", "Date", "Summary / blockers"):
-        if label not in sign_rows or fill_of(so.cell(row=sign_rows[label], column=2)) != "FFF9C4":
-            d10.append("yellow cell for {}".format(label))
-    ec_title = "Exit criteria (Proposed — Derek to confirm)"
-    re_ = sign_rows.get(ec_title)
-    if not re_:
-        d10.append("exit criteria title with Proposed — Derek to confirm")
-    else:
-        adversarial = sum(1 for c in cases if c["type"] == "Adversarial")
-        for i, item in enumerate(data["exit_criteria"]):
-            rr = re_ + 2 + i
-            a = so.cell(row=rr, column=1).value
-            if a != "{} — {}".format(item["id"], item["text"]):
-                d10.append("{} text".format(item["id"]))
-            if (rr, 2) not in so_dvs.get('"Pass,Fail,Partial,Not Tested"', set()):
-                d10.append("{} validation".format(item["id"]))
-            if item["id"] == "EC5":
-                note = so.cell(row=rr, column=3).value or ""
-                if "Needed: {} of {}".format(ceil_pct(adversarial, 90), adversarial) not in note:
-                    d10.append("EC5 needed count")
-    if r0 and so.cell(row=r0 + 1, column=2).value != len(cases):
-        d10.append("Scripted cases count")
-    if r1:
-        for i, letter in enumerate(letters):
-            n = sum(1 for c in cases if c["section"] == letter)
-            row = [so.cell(row=r1 + 2 + i, column=k).value for k in (1, 2, 5)]
-            if row != [pillar_of[letter], n, ceil_pct(n, 85)]:
-                d10.append("pillar row {}".format(letter))
-    if r2:
-        for i, lang in enumerate(LANGS):
-            n = sum(1 for c in cases if c["lang"] == lang)
-            row = [so.cell(row=r2 + 2 + i, column=k).value for k in (1, 2, 5)]
-            if row != [lang, n, ceil_pct(n, 80)]:
-                d10.append("language row {}".format(lang))
-    if r3:
-        i = 0
-        for letter in letters:
-            for lang in LANGS:
-                n = sum(1 for c in cases if c["section"] == letter and c["lang"] == lang)
-                row = [so.cell(row=r3 + 2 + i, column=k).value for k in (1, 2, 3, 5)]
-                if row != [pillar_of[letter], lang, n, "80% gate" if n >= 10 else "Report only"]:
-                    d10.append("pillar x language row {} {}".format(letter, lang))
-                i += 1
-    check(not d10, "D10 Sign-off: GO/NO-GO, EC1-EC7, Proposed label, static Cases and Needed numbers ({})".format(
-        short(d10) or "ok"))
+    run_log = sum(1 for _, c in workbook_cells(wb) if "Run Log" in str(c.value))
+    if run_log:
+        note("{} workbook cells (the Steps of each case) still say 'copy the full answer into the Run Log'; "
+             "that tab is gone. The case text comes from the JSON and is not changed here.".format(run_log))
 
 
 # ------------------------------------------------------------------ E: plan doc
 def run_e(data, plan_text):
-    cases = data["cases"]
+    cases = tester_cases(data)
     pos = [plan_text.find(h) for h in PLAN_HEADINGS]
     check(all(p >= 0 for p in pos) and pos == sorted(pos),
           "E1 the 13 plan headings are present in order (positions {})".format(pos))
 
-    # E2
-    start = plan_text.find("## 13. Appendix: case counts")
-    appendix = plan_text[start:] if start >= 0 else ""
-    table = []
-    for line in appendix.splitlines():
-        if line.startswith("|"):
-            cells = [x.strip() for x in line.strip().strip("|").split("|")]
-            if not all(re.match(r"^:?-+:?$", x) for x in cells):
-                table.append(cells)
-    letters = [s["letter"] for s in data["sections"]]
-    want = [["Section", "Language", "Golden", "Rubric", "Adversarial", "Total"]]
-    for s in data["sections"]:
-        for lang in LANGS:
-            sub = [c for c in cases if c["section"] == s["letter"] and c["lang"] == lang]
-            cnt = Counter(c["type"] for c in sub)
-            want.append([s["pillar"], lang] + [str(cnt.get(t, 0)) for t in TYPES] + [str(len(sub))])
-    cnt = Counter(c["type"] for c in cases)
-    want.append(["All sections", "All"] + [str(cnt.get(t, 0)) for t in TYPES] + [str(len(cases))])
+    # E2: appendix
+    appendix = section_of(plan_text, "## 13. Appendix: case counts")
+    tables = md_tables(appendix)
+    table = tables[0] if tables else []
+    want = count_rows(data)
     e2 = []
     if table != want:
         bad = [i for i in range(max(len(table), len(want)))
                if i >= len(table) or i >= len(want) or table[i] != want[i]]
         e2.append("table rows differ at {}".format(bad[:6]))
     runs = sum(c["runs"] for c in cases)
-    slots = data["meta"]["testers"] * data["meta"]["exploratory_slots_per_tester"]
     dr = sum(1 for c in cases if c["double_rate"])
     lines = [
-        "Exploratory: {} slots ({} per tester × {} testers), not counted above.".format(
-            slots, data["meta"]["exploratory_slots_per_tester"], data["meta"]["testers"]),
-        "Planned scripted runs: {} (2 per Golden or Rubric case, 3 per Adversarial case).".format(runs),
+        "Planned runs: {} (2 per Golden or Rubric case, 3 per Adversarial case).".format(runs),
         "Double-rated cases: {}.".format(dr),
     ]
     for ln in lines:
         if ln not in appendix:
             e2.append("summary line missing: {}".format(ln[:30]))
-    check(not e2, "E2 appendix table and the three summary lines equal the JSON counts ({})".format(
-        short(e2) or "13 table rows ok"))
+    if re.search(r"[Ee]xploratory", appendix):
+        e2.append("appendix still mentions exploratory slots")
+    check(not e2, "E2 appendix table (Finder, Reply, Coach only) and the two summary lines equal the JSON counts "
+          "({})".format(short(e2) or "{} table rows ok".format(len(want))))
 
-    # E3
-    s10 = plan_text[plan_text.find("## 10. Exit criteria"):plan_text.find("## 11. Known issues")]
-    check("Proposed — Derek to confirm" in s10, "E3 'Proposed — Derek to confirm' appears in section 10")
+    # E3: section 10
+    s10 = section_of(plan_text, "## 10. Exit criteria", "## 11. Known issues")
+    e3 = []
+    if "Proposed — Derek to confirm" not in s10:
+        e3.append("Proposed label missing")
+    if "Cross-cutting" in s10:
+        e3.append("Cross-cutting still in section 10")
+    got = next((t for t in md_tables(s10) if t and t[0] == ["Gate", "Cases", "Needed to pass"]), None)
+    exp = needed_rows(data)
+    if got != exp:
+        bad = [i for i in range(max(len(got or []), len(exp)))
+               if got is None or i >= len(got) or i >= len(exp) or got[i] != exp[i]]
+        e3.append("exact-numbers table differs at {}".format(bad[:6]))
+    check(not e3, "E3 section 10 keeps 'Proposed — Derek to confirm' and its exact-numbers table equals the JSON "
+          "counts ({})".format(short(e3) or "{} rows ok".format(len(exp) - 1)))
 
-    # E4
-    s11 = plan_text[plan_text.find("## 11. Known issues"):plan_text.find("## 12.")].lower()
-    miss = [" / ".join(p) for p in PROBES if not any(w.lower() in s11 for w in p)]
-    check(not miss, "E4 section 11 mentions every known issue (missing: {})".format(short(miss) or "none"))
+    # E4: known issues
+    s11 = section_of(plan_text, "## 11. Known issues", "## 12.")
+    low = s11.lower()
+    present = {k for c in cases for k in c["known_status_keys"]}
+    probes = [(k, KEY_PROBES[k]) for k in sorted(present) if k in KEY_PROBES]
+    probes += [("extra", p) for p in EXTRA_PROBES]
+    miss = [k + ":" + " / ".join(p) for k, p in probes if not any(w.lower() in low for w in p)]
+    unknown = sorted(k for k in present if k not in KEY_PROBES and k != "KS-OK")
+    if unknown:
+        miss.append("no probe defined for {}".format(unknown))
+    m = re.search(r"\*\*Not tested this round\.?\*\*", s11)
+    tail = low[m.start():] if m else ""
+    if not m:
+        miss.append("'Not tested this round' note missing")
+    else:
+        for p in NOT_TESTED_PROBES:
+            if not any(w.lower() in tail for w in p):
+                miss.append("not-tested note lacks " + " / ".join(p))
+        head = low[:m.start()]
+        for p in NOT_TESTED_PROBES:
+            if any(w.lower() in head for w in p):
+                miss.append("{} is still listed as a tested known issue".format(" / ".join(p)))
+    check(not miss, "E4 section 11 covers every known issue on the Finder, Reply and Coach cases, and moves the rest "
+          "to 'Not tested this round' (problems: {})".format(short(miss) or "none"))
 
-    # E5
+    # E5: plain English
     m = FORBIDDEN_RE.search(plan_text)
     check(m is None, "E5 plan doc is plain English, no paths or internal labels ({})".format(
         m.group(0) if m else "ok"))
+
+    # E6: removed tabs and sections
+    m = REMOVED_TAB_RE.search(plan_text)
+    check(m is None, "E6 plan doc names no removed tab, cross-cutting case or exploratory slot ({})".format(
+        repr(m.group(0)) if m else "ok"))
+
+    # E7: rubric anchors in section 7
+    s7 = section_of(plan_text, "## 7. How to judge an answer", "## 8.")
+    rows = [r for t in md_tables(s7) for r in t]
+    e7 = []
+    for item in data["rubric"]:
+        want_row = [item["code"], item["name"], item["question"], item["pass"], item["fail"], item["applies_to"]]
+        if want_row not in rows:
+            e7.append(item["code"])
+    hdr = ["Code", "Name", "Ask yourself", "PASS looks like", "FAIL looks like", "Applies to"]
+    if hdr not in rows:
+        e7.append("header")
+    for rule in data["pass_rules"]:
+        label = rule.partition(":")[0]
+        if label not in s7:
+            e7.append("pass rule " + label)
+    check(not e7, "E7 section 7 holds the H1-H7 and U anchors, PASS and FAIL for each, equal to the JSON ({})".format(
+        short(e7) or "8 rows ok"))
+
+    # E8: schedule and recording
+    s5 = section_of(plan_text, "## 5. Schedule", "## 6.")
+    s6 = section_of(plan_text, "## 6. How to run", "## 7.")
+    s9 = section_of(plan_text, "## 9. What to record", "## 10.")
+    e8 = []
+    if "{} runs".format(runs) not in s5 or "{} cases".format(len(cases)) not in s5:
+        e8.append("section 5 load line lacks {} runs / {} cases".format(runs, len(cases)))
+    for name, sec in (("6", s6), ("9", s9)):
+        for w in ("Result", "Actual / Comments", "screenshot", "UAT coordinator"):
+            if w.lower() not in sec.lower():
+                e8.append("section {} lacks {!r}".format(name, w))
+    s3 = section_of(plan_text, "## 3. Roles", "## 4.")
+    if re.search(r"Exploratory|E1", s3):
+        e8.append("section 3 still has exploratory rows")
+    check(not e8, "E8 sections 3, 5, 6 and 9 match the tester view ({})".format(short(e8) or "ok"))
 
 
 # ------------------------------------------------------------------ main
@@ -883,8 +810,8 @@ def self_test(args):
                                              "bumiQuota": False}})
 
         def m3(d):
-            c = case(d, "X7")
-            c["steps"] = c["steps"].replace("012-000 0000", "012-345 6789")
+            c = case(d, "R2")
+            c["steps"] += " Call 012-345 6789."
 
         def m4(d):
             case(d, "C3")["expected"]["must_not"] = ""
@@ -900,15 +827,37 @@ def self_test(args):
         wb["Test Cases"]["J1"] = "Status"
         wb.save(str(wx))
         defects.append(("changed header", (cj, wx, pl), "FAIL D2"))
+
         cj, wx, pl = stage("d6")
+        d = json.loads(cj.read_text(encoding="utf-8"))
+        rows = count_rows(d)
+        total = rows[-1]
+        needle = "| " + " | ".join(total) + " |"
+        bumped = total[:-1] + [str(int(total[-1]) + 1)]
         text = pl.read_text(encoding="utf-8")
-        needle = "| All sections | All | 35 | 15 | 27 | 77 |"
         if needle in text:
-            pl.write_text(text.replace(needle, "| All sections | All | 35 | 15 | 27 | 78 |"), encoding="utf-8")
+            pl.write_text(text.replace(needle, "| " + " | ".join(bumped) + " |"), encoding="utf-8")
         else:
             print("FAIL appendix total row not found in the plan copy")
             ok_all = False
         defects.append(("changed appendix total", (cj, wx, pl), "FAIL E2"))
+
+        cj, wx, pl = stage("d7")
+        wb = load_workbook(str(wx))
+        wb.create_sheet("Run Log")
+        wb.save(str(wx))
+        defects.append(("extra sheet in the workbook", (cj, wx, pl), "FAIL D1"))
+
+        cj, wx, pl = stage("d8")
+        pl.write_text(pl.read_text(encoding="utf-8") + "\nSee the Run Log tab for each answer.\n", encoding="utf-8")
+        defects.append(("plan names a removed tab", (cj, wx, pl), "FAIL E6"))
+
+        cj, wx, pl = stage("d9")
+        wb = load_workbook(str(wx))
+        ws = wb["Test Cases"]
+        ws.freeze_panes = "A19"
+        wb.save(str(wx))
+        defects.append(("freeze panes moved", (cj, wx, pl), "FAIL D3"))
 
         for name, paths, expect in defects:
             rc, out = run(*paths)
@@ -925,7 +874,7 @@ def main(argv=None):
     ap.add_argument("--cases", default=str(DEF_CASES))
     ap.add_argument("--workbook", default=str(DEF_WORKBOOK))
     ap.add_argument("--plan", default=str(DEF_PLAN))
-    ap.add_argument("--export", default=str(DEF_EXPORT))
+    ap.add_argument("--export", default=str(DEF_EXPORT), help="project export JSON (default: projects.export.json)")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args(argv)
     if args.self_test:
