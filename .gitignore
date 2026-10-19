@@ -103,3 +103,10 @@ next-env.d.ts
 # docs, doc columns dropped). Same unredacted contact details. Regenerable.
 /.planning/quick/quick-kayinleong-093/D2-Property-Raw-Data.xlsx
 /.planning/quick/quick-kayinleong-093/__pycache__/
+
+# quick-kayinleong-096: pre-write backups of the project records. Each backup holds the FULL
+# document (minus the embedding), including description prose with PIC contact details, so it
+# must never reach git (D13). The workbook itself and Python's bytecode cache are ignored too.
+/.planning/quick/quick-kayinleong-096/backups/
+/.planning/quick/quick-kayinleong-096/__pycache__/
+/.planning/quick/quick-kayinleong-096/*.xlsx
