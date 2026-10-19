@@ -1,0 +1,761 @@
+{
+  "meta": {
+    "schema": "project-mapping/1",
+    "export_exported_at": "2026-09-18T06:31:24.701Z",
+    "workbook_sha256": "d432ea47c2677afa1dfa00b42db315c8ec15e3f02b9da8f33ce9589f4fe0a95f"
+  },
+  "entries": [
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Damansara City Residency (DC Residensi)",
+      "docId": "UI9V4ibcLUMuYQkd5lQK",
+      "inventoryName": "Damansara City Residency (DC Residensi)",
+      "matchedBy": "exact",
+      "unitMode": "merge",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "PDH: Imperial Residences RA",
+      "docId": "WsCKdwpNCvFwHy5cHTH6",
+      "inventoryName": "PDH: Imperial Residences RA",
+      "matchedBy": "exact",
+      "unitMode": "merge",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Bangsar Hill Park",
+      "docId": "NCrw4BbrKLOTyWhb4M5O",
+      "inventoryName": "Bangsar Hill Park",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "ViiA Residences",
+      "docId": "vrCj5QcxVPPXoH0wojLb",
+      "inventoryName": "ViiA Residences",
+      "matchedBy": "exact",
+      "unitMode": "merge",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Enlace Suites @ Pantai Sentral Park",
+      "docId": "322ca02408V4reUtNJj5",
+      "inventoryName": "Enlace Suites @ Pantai Sentral Park",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "The Lantern Bangsar",
+      "docId": "jjz7hgG3QG0mY3moUj1V",
+      "inventoryName": "The Lantern Bangsar",
+      "matchedBy": "exact",
+      "unitMode": "merge",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "One Eleven Menerung @ Bangsar",
+      "docId": "LS3WGSiybvG85aMdGoVT",
+      "inventoryName": "One Eleven Menerung @ Bangsar",
+      "matchedBy": "exact",
+      "unitMode": "merge",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Pavilion Damansara Heights",
+      "docId": "hAAy2kb4t5Aigzmv7MPO",
+      "inventoryName": "Pavilion Damansara Heights",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "PDH: Royal Suites(RC)",
+      "docId": "ggTnQ5DGqxlNBpYZwvhj",
+      "inventoryName": "Pavilion Damansara Heights: Royal Suites(RC)",
+      "matchedBy": "variant",
+      "unitMode": "merge",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Pinnacle Bangsar Residence",
+      "docId": "oPwVkDEEesqTZwhsiE9U",
+      "inventoryName": "Pinnacle Bangsar Residence",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Parkside Residences",
+      "docId": "bWOuyI6cNAna1nweLHkC",
+      "inventoryName": "Parkside Residences",
+      "matchedBy": "exact",
+      "unitMode": "merge",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Rhombus",
+      "docId": "eGsxriHHrJTsyX9nCHNc",
+      "inventoryName": "Rhombus",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Riana Trees Residences",
+      "docId": "DxbnSBKiLX5934ds64PR",
+      "inventoryName": "Riana Trees Residences",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Residensi 38 Bangsar",
+      "docId": "QiQthTM3nC4SqWnST1Q6",
+      "inventoryName": "Residensi 38 Bangsar",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Lunar Seputeh",
+      "docId": "Xrm5QtWcVldu3ZqTG3rG",
+      "inventoryName": "Lunar Seputeh",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Sentral Suites @ KL Sentral",
+      "docId": "We6ILvoHELnvwivtZ0kh",
+      "inventoryName": "Sentral Suites @ KL Sentral",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "The Cedar Damansara Heights",
+      "docId": "tnWxI6GSEzsMM7uXaZT6",
+      "inventoryName": "The Cedar Damansara Heights",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Tria Seputeh",
+      "docId": "jteTdbwfGjCtZiwAJDa5",
+      "inventoryName": "Tria Seputeh",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "d'Brightton titiwangsa",
+      "docId": "y28FP6lqDrEuGEbz9u3u",
+      "inventoryName": "d'Brightton titiwangsa",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "IJM Sierra Hijauan",
+      "docId": "ejqnuGroAIARB2czRshR",
+      "inventoryName": "IJM Sierra Hijauan",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Puncak Wangsamas Phase 2",
+      "docId": "eZlYoYQ0Y8Mhk48IwCw7",
+      "inventoryName": "Puncak Wangsamas Phase 2",
+      "matchedBy": "exact",
+      "unitMode": "merge",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "The Reya",
+      "docId": "sfIZzzQIiZUnKGG6ZfCa",
+      "inventoryName": "The Reya",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Padang Residences",
+      "docId": "hVUWwBE2CRaMWYOuwWyp",
+      "inventoryName": "Padang Residences",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Tangen Residences",
+      "docId": "QZL9WpMOxZ07JHxSl54P",
+      "inventoryName": "Tangen Residences",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Miranda Hill @ north kiara by BRDB",
+      "docId": "02F5tLppdnsZhpipbowa",
+      "inventoryName": "Miranda Hill @ north kiara by BRDB",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Alstonia Hilltop Homes",
+      "docId": "ZAtRBLvFIfa04tuOnDcr",
+      "inventoryName": "Alstonia Hilltop Homes",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Eden BRDB, Taman Duta",
+      "docId": "Y9e0jUxw51oDWzLg5vWR",
+      "inventoryName": "Eden BRDB, Taman Duta",
+      "matchedBy": "exact",
+      "unitMode": "merge",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Majestic @ Kiara Reserve",
+      "docId": "ua17QmBD8hAzIEEiSzlk",
+      "inventoryName": "Majestic @ Kiara Reserve",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "St. Regis Residences Kuala Lumpur",
+      "docId": "8UKNRsEYVyFqZFp0wt5Q",
+      "inventoryName": "St. Regis Residences Kuala Lumpur",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Aster Hill Sri Petaling",
+      "docId": "5GQD7WaNNz6Dlzb13Ho1",
+      "inventoryName": "Aster Hill Sri Petaling",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Exsim Project",
+      "docId": "gmyjno668zbpf7wEoefH",
+      "inventoryName": "Exsim Project",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Kensho @ Taman Desa",
+      "docId": "GnoAYH9KP5JL2e9hwaxl",
+      "inventoryName": "Kensho @ Taman Desa",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Aetas Taman Desa",
+      "docId": "vo8AyKLc2F9xo0T51c9I",
+      "inventoryName": "Aetas Taman Desa",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Southpoint Residences (IGB )",
+      "docId": "bOYv3JimSfL6gYyPiWaS",
+      "inventoryName": "Southpoint Residences (IGB )",
+      "matchedBy": "exact",
+      "unitMode": "merge",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Park Green at Pavilion Bukit Jalil",
+      "docId": "B5lsfXAhC31EOj7Bh1f9",
+      "inventoryName": "Park Green at Pavilion Bukit Jalil",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "OAKA Residences, Bukit Jalil",
+      "docId": "vTsTFUTt5BYDltcvqEs2",
+      "inventoryName": "OAKA Residences, Bukit Jalil",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Senja The Jewel Collection",
+      "docId": "fB42TF3RMB3MkgthiAB7",
+      "inventoryName": "Senja The Jewel Collection",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "18 Madge Uthant",
+      "docId": "lHfAYryEGRDmv9ZV2r6w",
+      "inventoryName": "18 Madge Uthant",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Aria Luxury Residence @ KLCC",
+      "docId": "3mxxrORFeZBV2RSUMu98",
+      "inventoryName": "Aria Luxury Residence @ KLCC",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "AT6 Residensi @ Ampang Tengah",
+      "docId": "nsls9Gq69qXQFzPia0MX",
+      "inventoryName": "AT6 Residensi @ Ampang Tengah",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Clouthaus KLCC",
+      "docId": "oWzA0mi4GKdPIsZ4ioYJ",
+      "inventoryName": "Clouthaus KLCC",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Conlay by E&O",
+      "docId": "SXDhvwmzeIxKlj4tQ7N7",
+      "inventoryName": "Conlay by E&O",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Core Residence @ TRX",
+      "docId": "CSNSOM3sg4JsxS4Nfcxn",
+      "inventoryName": "Core Residence @ TRX",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Dawn KLCC",
+      "docId": "2XuDf0Kw7ebp92Z4CMaP",
+      "inventoryName": "Dawn KLCC",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Eaton Residences by Sutera @ KLCC",
+      "docId": "A7h6tCOPvghxPHW1l5JA",
+      "inventoryName": "Eaton Residences by Sutera @ KLCC",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Platinum Face Suite 2 KLCC",
+      "docId": "mkhvGpzdLqmO1Y6o6M1F",
+      "inventoryName": "Platinum Face Suite 2 KLCC",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Armani Hallson @ Jalan Ampang",
+      "docId": "VDyQvCJ7iGd9xihKmj5v",
+      "inventoryName": "Armani Hallson @ Jalan Ampang",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Orion Residence",
+      "docId": "un96QODcMT41aS81jAje",
+      "inventoryName": "Orion Residence",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "PSQ Pavilion Square",
+      "docId": "sMPvO88kDSUNcJlujNK3",
+      "inventoryName": "PSQ Pavilion Square",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Katana 2 Residence",
+      "docId": "Tmo9EmmnZDS8lie97BzS",
+      "inventoryName": "Katana 2 Residence",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "The Centrix",
+      "docId": "cPm26piH01BLSP7QLZkx",
+      "inventoryName": "The Centrix",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Quill Residences KLCC",
+      "docId": "6Vl2Py196ogTG3seI28U",
+      "inventoryName": "Quill Residences KLCC",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Royal Lexis KL",
+      "docId": "dGkfWDGumOb0NDoazfZ3",
+      "inventoryName": "Royal Lexis KL",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "SO Sofitel Residences KLCC",
+      "docId": "LFQ1wAO6pY3cjZRfBrFd",
+      "inventoryName": "SO Sofitel Residences KLCC",
+      "matchedBy": "exact",
+      "unitMode": "merge",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Le Nouvel KLCC",
+      "docId": "LNn2YqmcN0DChCS6W7Cf",
+      "inventoryName": "Le Nouvel KLCC",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Star Residences KLCC",
+      "docId": "Vy42PE5qZxJzLIBe2fvW",
+      "inventoryName": "Star Residences KLCC",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Jewel by Oxley KLCC",
+      "docId": "8hQluB9sj4dNRiEpF6tF",
+      "inventoryName": "Jewel by Oxley KLCC",
+      "matchedBy": "exact",
+      "unitMode": "merge",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Golden Crown Residence",
+      "docId": "VvxOkdBbwLdPU2nJwuHJ",
+      "inventoryName": "Golden Crown Residence",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "SWNK Houze @ BBCC (Bukit Bintang City Centre)",
+      "docId": "LOFXx95YiYK0Buf0s0Lh",
+      "inventoryName": "SWNK Houze @ BBCC (Bukit Bintang City Centre)",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Times Square 2 Residences Kuala Lumpur",
+      "docId": "Ohnp2lpwtHES0OL0qu5E",
+      "inventoryName": "Times Square 2 Residences Kuala Lumpur",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "The Manor KLCC",
+      "docId": "incefTUSycrB4BWTssgn",
+      "inventoryName": "The Manor KLCC",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "TRX Residences",
+      "docId": "DFZ9QGqJWkwcAfktHGBK",
+      "inventoryName": "TRX Residences",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "The Oval Kuala Lumpur",
+      "docId": "GVRKC920qO8x7jNeemif",
+      "inventoryName": "The Oval Kuala Lumpur",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "The Ritz- Carlton Residences",
+      "docId": "gBKQrpT6Gl5MVVateO4O",
+      "inventoryName": "The Ritz- Carlton Residences",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "The Stride Office @ BBCC",
+      "docId": "8vxV90uXgjCKUvmJKQT7",
+      "inventoryName": "The Stride Office @ BBCC",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Rimbun Saujana Residency",
+      "docId": "gxA6UXHk7dRuQToxKwP4",
+      "inventoryName": "Rimbun Saujana Residency",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Luminar Residence Subang by BRDB",
+      "docId": "D1YbEPT7QI5kLZvfrnPW",
+      "inventoryName": "Luminar Residence Subang by BRDB",
+      "matchedBy": "exact",
+      "unitMode": "merge",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Accent PJ",
+      "docId": "Tg0VA12fHdK8vdZXPv6s",
+      "inventoryName": "Accent PJ",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "26 Araville PJ",
+      "docId": "ujblMkAxtdMg5tIRLP4w",
+      "inventoryName": "26 Araville PJ",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "The Atera, PJ by Paramount Property",
+      "docId": "4g4sxyf8GAVWkmXhOca9",
+      "inventoryName": "The Atera, PJ by Paramount Property",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Anyara Hills",
+      "docId": "ypsQ16qbU1J6OvRjOUj1",
+      "inventoryName": "Anyara Hills",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Yanu Hills @ Bon Estates",
+      "docId": "2KRPpmMy4CoTiajiVRDY",
+      "inventoryName": "Yanu Hills @ Bon Estates",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Rafflesia @ Hill 4",
+      "docId": "t384yiOBBy3lwLl3m28w",
+      "inventoryName": "Rafflesia @ Hill 2, 3 & 4",
+      "matchedBy": "variant",
+      "unitMode": "partial",
+      "labelPrefix": "Hill 4 · "
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "DAYA Residence",
+      "docId": "uIYSO5uCU40WD5kKEMi1",
+      "inventoryName": "DAYA Residence",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Vila Setara Happy Garden",
+      "docId": "FbLU7sHDjDA00nBXMYBr",
+      "inventoryName": "Vila Setara Happy Garden",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "E&O – City of Elmina (Laman Embun Commercial)",
+      "docId": "Dqv8WfbY7tRC9plczVtZ",
+      "inventoryName": "E&O – City of Elmina (Laman Embun Commercial)",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Aspire office @ KL ecocity",
+      "docId": "UyAt3rBJpmkv1GXZg73E",
+      "inventoryName": "Aspire office @ KL ecocity",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "The MET, Corporate Tower",
+      "docId": "pSgeXCmr9VEVl1ha6uvG",
+      "inventoryName": "The MET, Corporate Tower",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Sierra Hijau (Landed)",
+      "docId": "at9ch36p3DlkFc0oydiE",
+      "inventoryName": "Sierra Hijau (Landed)",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Raw Data",
+      "sheetName": "Melbourne Square",
+      "docId": "Dc3dIGjnTP3BcWCsJisl",
+      "inventoryName": "Melbourne Square",
+      "matchedBy": "exact",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Sheet1",
+      "sheetName": "Southpoint Residences (IGB)",
+      "docId": "bOYv3JimSfL6gYyPiWaS",
+      "inventoryName": "Southpoint Residences (IGB )",
+      "matchedBy": "sheet1-alias",
+      "unitMode": "merge",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Sheet1",
+      "sheetName": "AETAS TAMAN DESA",
+      "docId": "vo8AyKLc2F9xo0T51c9I",
+      "inventoryName": "Aetas Taman Desa",
+      "matchedBy": "sheet1-alias",
+      "unitMode": "none",
+      "labelPrefix": ""
+    },
+    {
+      "sheet": "Sheet1",
+      "sheetName": "AETAS SEPUTEH",
+      "docId": "0l9kNIDgoi0ZKcM8Ighd",
+      "inventoryName": "Aetas Seputeh",
+      "matchedBy": "sheet1-alias",
+      "unitMode": "none",
+      "labelPrefix": ""
+    }
+  ],
+  "skippedNew": [
+    "Binastra Cochrane",
+    "Lagenda Tunku (Villa Gemilang)",
+    "Ashbourne"
+  ]
+}

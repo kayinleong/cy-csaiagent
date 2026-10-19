@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "schema": "pii-vectors/1",
+    "note": "Synthetic strings only. Every hit must produce at least one scanner class; every miss must produce none. Python scan_contact_details and TS scanForContactDetails share these vectors."
+  },
+  "hit": [
+    "Call 012-000 0000",
+    "+60 12-000 0000",
+    "Tel 03-0000 0000",
+    "(03) 0000 0000",
+    "someone@example.com",
+    "https://example.com/brochure",
+    "www.example.com",
+    "visit example.com.my",
+    "wa.me/60120000000",
+    "000000-00-0000"
+  ],
+  "miss": [
+    "RM1,243,856–RM1,784,150",
+    "Type A1 BU 3899sqft  LA 4101-8181 sqft",
+    "H1: 3,380 sq.ft.",
+    "Leasehold till 10 March 2118 (94 years as of 2024)",
+    "Completion Date: 2019/2020",
+    "1,434 units",
+    "Q4 2024/Q1 2025",
+    "St. Regis Residences Kuala Lumpur",
+    "E&O – City of Elmina",
+    "RM0.65 psf (inclusive of sinking fund)",
+    "d432ea47c2677afa1dfa00b42db315c8ec15e3f02b9da8f33ce9589f4fe0a95f",
+    "Rm4.77mil – Rm6,59mil"
+  ]
+}
