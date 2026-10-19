@@ -91,7 +91,7 @@ These projects are in the sheet but not in our inventory. They were left out; ad
 
 ## Duplicate row
 
-- Park Green at Pavilion Bukit Jalil appears a second time (row 112) with no details. The second entry was ignored.
+- Park Green at Pavilion Bukit Jalil appears a second time (row 112), with only a different Developer entry. The second entry was ignored; please confirm which developer is correct.
 
 ## Projects with no facts
 

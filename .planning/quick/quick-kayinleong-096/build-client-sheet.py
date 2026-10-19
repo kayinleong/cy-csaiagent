@@ -540,7 +540,7 @@ def render_held_back(ctx):
     L.append("")
     if ctx["ignored"]:
         for ig in ctx["ignored"]:
-            L.append("- %s appears a second time (row %d) with no details. The second entry was ignored."
+            L.append("- %s appears a second time (row %d), with only a different Developer entry. The second entry was ignored; please confirm which developer is correct."
                      % (ig["name"], ig["row"]))
     else:
         L.append("None.")
