@@ -28,6 +28,7 @@
 
 import { adminDb } from '@/src/firebase/admin'
 import { extractSizeRange } from '@/src/inventory/size-extract'
+import { isClientWorkbookField } from '@/src/inventory/client-workbook-safety'
 
 const args = process.argv.slice(2)
 const APPLY = args.includes('--apply')
@@ -53,6 +54,7 @@ async function main() {
   let nulls = 0
   let toUpdate = 0
   let unchanged = 0
+  let workbookSkipped = 0
 
   const writer = APPLY ? adminDb.bulkWriter() : null
 
@@ -60,6 +62,14 @@ async function main() {
     const data = doc.data() as Record<string, unknown>
     const name = typeof data.name === 'string' ? data.name : doc.id
     const description = typeof data.description === 'string' ? data.description : ''
+
+    // D4 re-run guard (quick-kayinleong-096): a size the client sheet set is not re-derived
+    // from the description.
+    if (isClientWorkbookField(data, 'sizeMinSqft') || isClientWorkbookField(data, 'sizeMaxSqft')) {
+      workbookSkipped++
+      console.log(`  · skip (client workbook) ${name}`)
+      continue
+    }
 
     const range = extractSizeRange(description)
     const nextMin = range ? range.minSqft : null
@@ -90,6 +100,7 @@ async function main() {
   console.log()
   console.log(`  total: ${snap.size}   parsed: ${parsed}   null: ${nulls}`)
   console.log(`  ${APPLY ? 'updated' : 'to update'}: ${toUpdate}   unchanged: ${unchanged}`)
+  console.log(`  skipped (client workbook): ${workbookSkipped}`)
   if (!APPLY && toUpdate > 0) console.log('\n  Dry run. Re-run with --apply to write.')
   console.log()
   console.log('═══ done ═══')

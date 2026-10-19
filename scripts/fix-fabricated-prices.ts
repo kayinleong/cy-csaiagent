@@ -49,6 +49,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { adminDb } from '@/src/firebase/admin'
 import { priceBandFor, type PriceBand } from '@/src/firebase/collections'
+import { isClientWorkbookField } from '@/src/inventory/client-workbook-safety'
 
 const args = process.argv.slice(2)
 const APPLY = args.includes('--apply')
@@ -364,6 +365,7 @@ async function main() {
   let usedLive = 0
   let usedFallback = 0
   let noSource = 0
+  let workbookSkipped = 0
   let priceCleared = 0
   let bandChanged = 0
   let psfWritten = 0
@@ -384,6 +386,15 @@ async function main() {
   for (const doc of snap.docs) {
     const data = doc.data() as Record<string, unknown>
     const name = typeof data.name === 'string' ? data.name : doc.id
+
+    // D4 re-run guard (quick-kayinleong-096): a price the client sheet set (priceSource
+    // 'client-workbook', or a marked price field) is never re-derived from the description.
+    // Skipped before any classification so these docs stay out of the provenance counts.
+    if (isClientWorkbookField(data, 'priceValue') || isClientWorkbookField(data, 'pricePsfMin')) {
+      workbookSkipped++
+      console.log(`  · skip (client workbook) ${name}`)
+      continue
+    }
 
     // Source of truth: the live `description`, because that is what the app serves and
     // what the embedding was built from. The scrape artifact is only a fallback.
@@ -476,6 +487,7 @@ async function main() {
   console.log(`  psf_only (only a per-sqft asking rate)      : ${counts.psf_only}`)
   console.log(`  unknown  (no price of any kind)             : ${counts.unknown}`)
   console.log(`  total docs                                  : ${snap.size}`)
+  console.log(`  skipped (client workbook)                   : ${workbookSkipped}`)
   console.log()
   console.log('  ── source used ──')
   console.log(`  live Firestore \`description\` : ${usedLive}`)

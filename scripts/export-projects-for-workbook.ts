@@ -73,6 +73,8 @@ async function main() {
       priceProvenance: d.priceProvenance ?? null,
       priceSource: d.priceSource ?? null,
       priceSourceChunkId: d.priceSourceChunkId ?? null,
+      clientWorkbookFields: d.clientWorkbookFields ?? [],
+      clientWorkbookImportedAt: toISODate(d.clientWorkbookImportedAt),
       tenure: d.tenure ?? null,
       vpStatus: d.vpStatus ?? null,
       vpDate: toISODate(d.vpDate),

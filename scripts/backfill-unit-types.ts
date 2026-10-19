@@ -33,6 +33,7 @@
 
 import { adminDb } from '@/src/firebase/admin'
 import { extractUnitTypes } from '@/src/inventory/unit-types'
+import { isClientWorkbookField } from '@/src/inventory/client-workbook-safety'
 import type { UnitTypeEntry } from '@/src/firebase/collections'
 
 const args = process.argv.slice(2)
@@ -88,6 +89,7 @@ async function main() {
   let toUpdate = 0
   let unchanged = 0
   let empty = 0
+  let workbookSkipped = 0
   let entriesWithPrice = 0
   let entriesWithBedrooms = 0
   let lastId = AFTER ?? '(none)'
@@ -107,6 +109,14 @@ async function main() {
         const data = doc.data() as Record<string, unknown>
         const name = typeof data.name === 'string' ? data.name : doc.id
         const description = typeof data.description === 'string' ? data.description : ''
+
+        // D4 re-run guard (quick-kayinleong-096): the client sheet owns this table, so the
+        // description parse must not overwrite it.
+        if (isClientWorkbookField(data, 'unitTypes')) {
+          workbookSkipped++
+          console.log(`  · skip (client workbook) ${name}`)
+          continue
+        }
 
         const next = extractUnitTypes(description)
         const stored = storedTable(data.unitTypes)
@@ -154,6 +164,7 @@ async function main() {
   console.log(`    ... of which state a price    : ${entriesWithPrice}`)
   console.log(`    ... of which state bedrooms   : ${entriesWithBedrooms}`)
   console.log(`  ${APPLY ? 'updated' : 'to update'}: ${toUpdate}   unchanged: ${unchanged}`)
+  console.log(`  skipped (client workbook): ${workbookSkipped}`)
   console.log()
   console.log(
     '  NOT re-embedded, by design: the layout text is already inside the embedded\n' +
