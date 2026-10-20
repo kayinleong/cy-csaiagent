@@ -99,7 +99,7 @@ All of this is done on Day 0, before any tester runs a case.
 | 9 | Plan for the 100-messages-per-day limit per account: raise it for UAT, or reset it on request. | Derek decides, product lead resets | |
 | 10 | Deploy the outstanding Firestore rules and indexes, which the Flags and filtered Audit log pages need. | AI lead | |
 | 11 | Tag the UAT accounts so their Reply thumbs-down presses and usage do not count in the live quality numbers. | AI lead, with Derek confirming the approach | |
-| 12 | Re-export the project list and re-check every Finder expected result against live data on Day 0. The expected results in the workbook come from the export of 18 September 2026, so they must be checked again before testing starts. | AI lead | |
+| 12 | Re-export the project list and re-check every Finder expected result against live data on Day 0. The expected results in the workbook were last checked against the export of 20 October 2026 (after the client project sheet was loaded), so they must be checked again before testing starts. | AI lead | |
 | 13 | Capture 8–10 sample answers (good, borderline, bad) for the Day 1 calibration round. | Product lead | |
 | 14 | Confirm the BM and 中文 native-speaker testers. | Derek | |
 
@@ -274,7 +274,7 @@ These are problems we already expect, based on how the app is built. We have not
 - **Property 1.** This is an internal test record in the project list. It must be hidden before UAT (checklist item 5), or the cases that touch it will fail.
 - **d'Brightton titiwangsa.** D2's notes mark several layouts as sold out, but the project is listed as available. If Derek marks it sold out on Day 0, the correct answer becomes "NOT AVAILABLE".
 - **Bumi-quota projects.** Projects with a bumiputera quota are hidden completely from non-bumi buyers. Derek needs to confirm this is the intended rule before a tester marks it as a Fail (question 12).
-- **DC Residensi sizes.** The stored sizes come from a write-up that differs from the brochure. They may need correcting before UAT (question 14).
+- **DC Residensi layouts.** The client's project sheet has now been loaded: every layout is listed with its own size, and 14 of the 18 layouts are marked sold out. Type E1's size is still waiting for the client to confirm, and four layouts (Type B4, Type B6, Type B7 and Type E2) show different room counts from the brochure (question 14).
 - **Mixed write-ups.** Some D2 write-ups filed under one project describe other developments. Check that no other project's figures appear in an answer.
 - **Paid ads.** The Coach says paid ads are not part of the D2 playbook. That conflicts with the original goal of a first Meta ad walkthrough (question 3).
 - **Placeholder Coach answers.** Coach cases marked PLACEHOLDER are answered from example SOPs written by engineering (section 1). If Derek replaces them, those cases are re-pointed to the real SOPs.
@@ -298,7 +298,7 @@ These are problems we already expect, based on how the app is built. We have not
 11. Do you accept the proposed thresholds (zero S1; 85% per pillar; 80% per language; 90% adversarial; rater agreement 80% / kappa 0.6)?
 12. Is it intended that projects with a bumiputera quota are hidden completely from non-bumi buyers, even where the write-up mentions a bumi discount (which suggests non-bumi units exist)?
 13. Should d'Brightton titiwangsa be marked sold out? Its notes list several layouts as sold out.
-14. The stored DC Residensi sizes come from a write-up that differs from the brochure. Should they be corrected before UAT?
+14. DC Residensi: please confirm Type E1's built-up size (the sheet says 2,072 sq ft but 251 sq m, which is about 2,702 sq ft), and whether Type B4, Type B6, Type B7 and Type E2 have the room counts in the client sheet or in the brochure.
 
 ---
 

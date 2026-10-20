@@ -66,7 +66,7 @@ KEY_PROBES = {
 EXTRA_PROBES = [["previous conversation", "across conversations"]]
 # Issues that only the removed sections touch: they belong in the "Not tested this round" note.
 NOT_TESTED_PROBES = [["phone numbers"], ["Reply in"], ["journey"]]
-REMOVED_TAB_RE = re.compile(r"Run Log|Sign-off|Rubric tab|Instructions tab|Cross-cutting|\bX\d+\b|\bE\d+\b|E1.E50")
+REMOVED_TAB_RE = re.compile(r"Run Log|Sign-off|Rubric tab|Instructions tab|Cross-cutting|\bX\d+\b|(?<!Type )\bE\d+\b|E1.E50")  # "Type E1" is a layout name, not a slot
 
 ALLOW = {"012-000 0000", "0120000000", "+60 12-000 0000", "900101-14-0000", "900101140000", "siti@example.com"}
 ALLOW_NAMES = {"Encik Ali", "Cik Tan", "Ms Tan", "Mr Lim", "Madam Wong", "Puan Wong", "Mr Tanaka", "Mr Lee",

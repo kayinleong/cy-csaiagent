@@ -2,7 +2,7 @@
   "meta": {
     "title": "D2 Agent Assistant — AI Output UAT (Coach · Finder · Reply)",
     "version": "1.0",
-    "snapshot_exported_at": "2026-09-18T06:31:24.701Z",
+    "snapshot_exported_at": "2026-10-20T02:53:14.196Z",
     "tester_sections": [
       "F",
       "R",
@@ -946,9 +946,9 @@
       "preconditions": "Signed in with your tester account. Chip: Finder. New chat for every run.",
       "steps": "1. Tap New chat and set the chip to Finder.\n2. Send exactly: \"What's the price and completion date of Damansara City Residency (DC Residensi)?\"\nThen paste the full answer into the Actual / Comments column.",
       "expected": {
-        "must": "Says Damansara City Residency (DC Residensi) was completed in 2017. Says no price is on record, or offers to confirm.",
-        "must_not": "Quote OAKA Residences, Bukit Jalil figures (RM750,000, completion Q1 2028) or any other project's price or date.",
-        "also_acceptable": "Mentions that it is freehold."
+        "must": "Says Damansara City Residency (DC Residensi) was completed in 2017. Gives the nett price from RM1.2 million (Type S1 and Type S2, 904 sq ft), or a price range that starts there.",
+        "must_not": "Quote OAKA Residences, Bukit Jalil figures (RM750,000, completion Q1 2028) or any other project's price or date. Offer a sold-out layout (for example Type B2 or Type C1) as available.",
+        "also_acceptable": "Mentions that it is freehold, or that most layouts are sold out."
       },
       "known_status_keys": [
         "KS-MIXED-DATA"
@@ -963,7 +963,7 @@
           "clause": "must",
           "expect": {
             "status": "active",
-            "priceValue": 0,
+            "priceValue": 1200000,
             "foreignEligible": true,
             "bumiQuota": false
           }
@@ -979,7 +979,7 @@
           }
         }
       ],
-      "source": "RESEARCH-data §5 G6"
+      "source": "RESEARCH-data §5 G6; refreshed after quick-kayinleong-096 import (client sheet: from RM1.2mil nett, 14 of 18 layouts sold out)"
     },
     {
       "id": "F15",
@@ -1473,7 +1473,7 @@
       "expected": {
         "must": "Answers in 中文 for Pavilion Damansara Heights: Royal Suites(RC): booking fee RM50,000; maintenance about RM0.99 psf including the sinking fund; layouts J3 (743 sq ft), M1 (1,119 sq ft) and M2 (1,550 sq ft).",
         "must_not": "Use figures from another project. List layouts that are not on record.",
-        "also_acceptable": "Also mentions the price from RM652,284."
+        "also_acceptable": "Also mentions the price from RM652,284, or the other Royal Suites layouts on record (S1, S2, J1, J2, J4, DK1 and DK2)."
       },
       "known_status_keys": [
         "KS-CUTOFF"
@@ -1494,7 +1494,7 @@
           }
         }
       ],
-      "source": "RESEARCH-data §4 Royal Suites"
+      "source": "RESEARCH-data §4 Royal Suites; refreshed after quick-kayinleong-096 import (10 layouts on record)"
     },
     {
       "id": "F25",
