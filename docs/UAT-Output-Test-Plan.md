@@ -1,7 +1,8 @@
 # D2 Agent Assistant: AI Output UAT Plan (Coach, Finder, Reply)
 
 - Derek's team tests the quality of the AI answers itself, on the build exactly as it stands today.
-- This round covers the answers of the Property Finder, the Reply Assistant and the Onboarding Coach: 63 scripted cases, in English, Bahasa Malaysia (BM) and 中文, over a ten-day window.
+- This round covers the answers of the Property Finder, the Reply Assistant and the Onboarding Coach: 77 scripted cases, in English, Bahasa Malaysia (BM) and 中文, over a ten-day window.
+- The project data was refreshed from the client's project sheet on 20 October 2026. A new section of 14 cases (N1 to N14) checks that the app uses it.
 - Derek signs off at the end. The thresholds in section 10 are proposals for Derek to confirm.
 
 ---
@@ -11,7 +12,8 @@
 **Purpose.** Derek's team checks whether the three assistants give answers that a D2 agent can trust and use. The three assistants are the Onboarding Coach, the Property Finder and the Reply Assistant. We test the answers, not the look of the screens.
 
 **In scope**
-- Finder, Reply and Coach answers in English, BM and 中文. That is 63 scripted cases: 28 for the Finder, 20 for Reply and 15 for the Coach.
+- Finder, Reply and Coach answers in English, BM and 中文. That is 77 scripted cases: 42 for the Finder (28 general Finder cases and 14 new-project-data cases), 20 for Reply and 15 for the Coach.
+- The new project data: the client's project sheet was loaded into the project list on 20 October 2026. Section N checks that the Finder uses the new prices, sold-out layouts and fact sheets.
 
 **Not in this round** (kept for a later round)
 - Routing: does the right assistant pick up the question when the chip is on Auto?
@@ -59,6 +61,24 @@
 
 **What a good answer looks like.** A short, warm draft in the buyer's language. No interest rates, no approval promises, no invented discounts, no foreign price thresholds, no hard selling. It never says a message was sent.
 
+### New project data (cases N1–N14)
+
+**What it checks.** On 20 October 2026 the project data was refreshed from the client's project sheet. These 14 cases are Property Finder cases, run like the others. They only pass if the app uses what was loaded:
+- New from-prices in budget searches (N1, N2, N9, N13).
+- Sold-out layouts that are flagged and never offered (N3, N4, N12, N14).
+- Nett and gross prices, with the nett price first (N5).
+- Facts that now come from the new project fact sheets, such as developer, number of units, completion and maintenance fee (N6, N10).
+- D2's 2026 focus lists (N7).
+- Honest "not confirmed" answers for values that are still with the client (N8, N11).
+
+**What a good answer looks like.**
+- It uses the new figures written in the expected result, not older ones.
+- It gives the nett price first. A gross price is fine when it is labelled as gross.
+- It says a sold-out layout is sold out, and gives no price for it.
+- For a value that was held back, it says the value is not confirmed yet and offers to confirm with D2. It does not guess a number, and it does not borrow the figure of a similar layout.
+- Facts about a project come from that project's own fact sheet, never from another project.
+- "Price not on record" is fine for a project that has no price on record, as long as the answer does not call it within budget.
+
 ---
 
 ## 3. Roles
@@ -75,7 +95,7 @@ The "Run by" column on every case says who runs it.
 
 | Cases | Run by |
 |---|---|
-| English cases in Finder | New agent |
+| English cases in Finder (sections F and N) | New agent |
 | English cases in Reply and Coach | Senior coach |
 | BM cases | BM speaker |
 | 中文 cases | 中文 speaker |
@@ -115,7 +135,7 @@ All of this is done on Day 0, before any tester runs a case.
 | Day 5 | 30-minute re-calibration on the double-rated cases. |
 | Day 10 | Re-run every fixed and FLAKY case. Then the exit review and the GO / NO-GO sign-off. |
 
-**Load:** 149 runs in total across 63 cases (2 runs per Golden or Rubric case, 3 per Adversarial case).
+**Load:** 180 runs in total across 77 cases (2 runs per Golden or Rubric case, 3 per Adversarial case).
 
 ---
 
@@ -229,20 +249,22 @@ These are the conditions for a GO on the pilot. Every one is **Proposed — Dere
 
 **Information only (not a gate):** agreement between the testers and the automated judge on the same cases, reported for the calibration sign-off.
 
-**Exact numbers.** These are the counts needed for the 63 cases of this round. Cells under 10 cases (the other pillar and language cells) are reported, not gated. For EC6, the last row shows how many of the double-rated cases need matching verdicts.
+**Exact numbers.** These are the counts needed for the 77 cases of this round. The Finder rows count the 28 general Finder cases and the 14 new-project-data cases together (42). Cells under 10 cases (the other pillar and language cells) are reported, not gated. For EC6, the last row shows how many of the double-rated cases need matching verdicts.
 
 | Gate | Cases | Needed to pass |
 |---|---:|---:|
-| EC3 Property Finder | 28 | 24 |
+| EC3 Property Finder | 42 | 36 |
 | EC3 Reply Assistant | 20 | 17 |
 | EC3 Onboarding Coach | 15 | 13 |
-| EC4 EN (all pillars) | 31 | 25 |
-| EC4 BM (all pillars) | 16 | 13 |
-| EC4 中文 (all pillars) | 16 | 13 |
-| EC4 Property Finder, EN only (cell of 10 or more) | 14 | 12 |
+| EC4 EN (all pillars) | 39 | 32 |
+| EC4 BM (all pillars) | 19 | 16 |
+| EC4 中文 (all pillars) | 19 | 16 |
+| EC4 Property Finder, EN only (cell of 10 or more) | 22 | 18 |
+| EC4 Property Finder, BM only (cell of 10 or more) | 10 | 8 |
+| EC4 Property Finder, 中文 only (cell of 10 or more) | 10 | 8 |
 | EC4 Reply Assistant, EN only (cell of 10 or more) | 10 | 8 |
-| EC5 Adversarial cases | 23 | 21 |
-| EC6 Double-rated cases (raters agree on) | 14 | 12 |
+| EC5 Adversarial cases | 26 | 24 |
+| EC6 Double-rated cases (raters agree on) | 16 | 13 |
 
 **Why EC4 was adjusted.** The first idea was "80% in every pillar and language cell". Most cells hold only 4 to 7 cases, so one failure can swing a cell by 15 to 25 points. That would make the result depend on luck. So the 80% rule is now applied per language across all pillars, and to a single cell only when it has 10 or more cases.
 
@@ -275,6 +297,7 @@ These are problems we already expect, based on how the app is built. We have not
 - **d'Brightton titiwangsa.** D2's notes mark several layouts as sold out, but the project is listed as available. If Derek marks it sold out on Day 0, the correct answer becomes "NOT AVAILABLE".
 - **Bumi-quota projects.** Projects with a bumiputera quota are hidden completely from non-bumi buyers. Derek needs to confirm this is the intended rule before a tester marks it as a Fail (question 12).
 - **DC Residensi layouts.** The client's project sheet has now been loaded: every layout is listed with its own size, and 14 of the 18 layouts are marked sold out. Type E1's size is still waiting for the client to confirm, and four layouts (Type B4, Type B6, Type B7 and Type E2) show different room counts from the brochure (question 14).
+- **New project data (cases N1–N14).** The client's project sheet was loaded on 20 October 2026. Answers that use the new fact sheets may cite them, so a Sources row may name a fact sheet. That is fine. If an answer still shows older figures, copy exactly what it says. A few values were held back because they need confirming with the client, for example the size of DC Residensi Type E1 and the nett price of Imperial Residences Type H1a. For those, an honest "not confirmed" is a pass.
 - **Mixed write-ups.** Some D2 write-ups filed under one project describe other developments. Check that no other project's figures appear in an answer.
 - **Paid ads.** The Coach says paid ads are not part of the D2 playbook. That conflicts with the original goal of a first Meta ad walkthrough (question 3).
 - **Placeholder Coach answers.** Coach cases marked PLACEHOLDER are answered from example SOPs written by engineering (section 1). If Derek replaces them, those cases are re-pointed to the real SOPs.
@@ -309,13 +332,16 @@ These are problems we already expect, based on how the app is built. We have not
 | Property Finder | EN | 8 | 2 | 4 | 14 |
 | Property Finder | BM | 3 | 1 | 3 | 7 |
 | Property Finder | 中文 | 3 | 1 | 3 | 7 |
+| New project data (N) | EN | 6 | 1 | 1 | 8 |
+| New project data (N) | BM | 2 | 0 | 1 | 3 |
+| New project data (N) | 中文 | 2 | 0 | 1 | 3 |
 | Reply Assistant | EN | 3 | 3 | 4 | 10 |
 | Reply Assistant | BM | 2 | 1 | 2 | 5 |
 | Reply Assistant | 中文 | 1 | 2 | 2 | 5 |
 | Onboarding Coach | EN | 5 | 1 | 1 | 7 |
 | Onboarding Coach | BM | 1 | 1 | 2 | 4 |
 | Onboarding Coach | 中文 | 2 | 0 | 2 | 4 |
-| All sections | All | 28 | 12 | 23 | 63 |
+| All sections | All | 38 | 13 | 26 | 77 |
 
-Planned runs: 149 (2 per Golden or Rubric case, 3 per Adversarial case).
-Double-rated cases: 14.
+Planned runs: 180 (2 per Golden or Rubric case, 3 per Adversarial case).
+Double-rated cases: 16.

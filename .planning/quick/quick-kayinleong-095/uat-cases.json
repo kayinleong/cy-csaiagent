@@ -5,6 +5,7 @@
     "snapshot_exported_at": "2026-10-20T02:53:14.196Z",
     "tester_sections": [
       "F",
+      "N",
       "R",
       "C"
     ],
@@ -16,6 +17,12 @@
       "letter": "F",
       "band": "F · Property Finder",
       "pillar": "Property Finder"
+    },
+    {
+      "letter": "N",
+      "band": "N · New project data (client sheet, October 2026)",
+      "pillar": "Property Finder",
+      "appendix_label": "New project data (N)"
     },
     {
       "letter": "R",
@@ -53,7 +60,9 @@
     "KS-CJK": "KNOWN RISK: place names typed in Chinese may not be recognised — record whether it finds Petaling Jaya.",
     "KS-STICKY": "KNOWN RISK: after a property answer, the next question may stay with the Finder — record which assistant answered.",
     "KS-MIXED-DATA": "DATA: some D2 write-ups filed under this project describe other developments — check that no other project's figures appear.",
-    "KS-ADS": "CHECK WITH DEREK: the assistant is set up to say paid ads are not part of the D2 playbook, which conflicts with the original 'first Meta ad walkthrough' goal. See Open questions."
+    "KS-ADS": "CHECK WITH DEREK: the assistant is set up to say paid ads are not part of the D2 playbook, which conflicts with the original 'first Meta ad walkthrough' goal. See Open questions.",
+    "KS-NEWDATA": "NEW DATA: this checks figures loaded from the client's project sheet on 20 October 2026. If the answer still shows older figures, copy exactly what it says.",
+    "KS-HELD": "HELD BACK: this value was not loaded because it needs confirming with the client. An honest \"not confirmed\" is a pass."
   },
   "rubric": [
     {
@@ -1701,6 +1710,960 @@
         }
       ],
       "source": "RESEARCH-data §5 G8; RESEARCH-surfaces §4 E5"
+    },
+    {
+      "id": "N1",
+      "section": "N",
+      "lang": "EN",
+      "type": "Golden",
+      "priority": "P0",
+      "area": "Finder / New from-price",
+      "title": "Bumiputera lead in Subang Jaya now finds Luminar's new price",
+      "preconditions": "Signed in with your tester account. Chip: Finder. New chat for every run.",
+      "steps": "1. Tap New chat and set the chip to Finder.\n2. Send exactly: \"Encik Ali, Malaysian, bumiputera, own stay, Subang Jaya, budget up to 500k\"\nThen paste the full answer into the Actual / Comments column.",
+      "expected": {
+        "must": "The results list Luminar Residence Subang by BRDB with a price from RM411,000.",
+        "must_not": "List Rimbun Saujana Residency (priced above the budget). Show Luminar Residence Subang by BRDB as \"Price not on record\".",
+        "also_acceptable": "Other Subang Jaya projects shown with \"Price not on record\", as long as they are not called within budget."
+      },
+      "known_status_keys": [
+        "KS-NEWDATA",
+        "KS-TABLE"
+      ],
+      "runs": 2,
+      "run_by": "New agent",
+      "double_rate": false,
+      "repoint_when_real_sops": false,
+      "projects": [
+        {
+          "name": "Luminar Residence Subang by BRDB",
+          "clause": "must",
+          "expect": {
+            "status": "active",
+            "priceValue": 411000,
+            "foreignEligible": false,
+            "bumiQuota": true
+          }
+        },
+        {
+          "name": "Rimbun Saujana Residency",
+          "clause": "must_not",
+          "expect": {
+            "status": "active",
+            "priceValue": 1055800,
+            "foreignEligible": false,
+            "bumiQuota": true
+          }
+        },
+        {
+          "name": "Luminar Residence Subang by BRDB",
+          "clause": "must_not",
+          "expect": {
+            "status": "active",
+            "priceValue": 411000,
+            "foreignEligible": false,
+            "bumiQuota": true
+          }
+        }
+      ],
+      "source": "quick-kayinleong-097 N1 (096 import: nett from-price)"
+    },
+    {
+      "id": "N2",
+      "section": "N",
+      "lang": "EN",
+      "type": "Golden",
+      "priority": "P0",
+      "area": "Finder / New from-price",
+      "title": "Non-bumi lead in Bangsar now finds Parkside's new from-price",
+      "preconditions": "Signed in with your tester account. Chip: Finder. New chat for every run.",
+      "steps": "1. Tap New chat and set the chip to Finder.\n2. Send exactly: \"Mr Lim, Malaysian, non-bumi, own stay, Bangsar, budget up to 650k\"\nThen paste the full answer into the Actual / Comments column.",
+      "expected": {
+        "must": "The results list Parkside Residences with a price from RM588,000.",
+        "must_not": "List One Eleven Menerung @ Bangsar (a bumi-quota project from RM1.92 million), Rhombus or Enlace Suites @ Pantai Sentral Park (both above the budget).",
+        "also_acceptable": "Lunar Seputeh (from RM607,800). Bangsar projects shown with \"Price not on record\" (for example Pinnacle Bangsar Residence or Residensi 38 Bangsar), as long as they are not called within budget."
+      },
+      "known_status_keys": [
+        "KS-NEWDATA",
+        "KS-TABLE"
+      ],
+      "runs": 2,
+      "run_by": "New agent",
+      "double_rate": false,
+      "repoint_when_real_sops": false,
+      "projects": [
+        {
+          "name": "Parkside Residences",
+          "clause": "must",
+          "expect": {
+            "status": "active",
+            "priceValue": 588000,
+            "foreignEligible": false,
+            "bumiQuota": false
+          }
+        },
+        {
+          "name": "One Eleven Menerung @ Bangsar",
+          "clause": "must_not",
+          "expect": {
+            "status": "active",
+            "priceValue": 1920000,
+            "foreignEligible": false,
+            "bumiQuota": true
+          }
+        },
+        {
+          "name": "Rhombus",
+          "clause": "must_not",
+          "expect": {
+            "status": "active",
+            "priceValue": 6100000,
+            "foreignEligible": false,
+            "bumiQuota": false
+          }
+        },
+        {
+          "name": "Enlace Suites @ Pantai Sentral Park",
+          "clause": "must_not",
+          "expect": {
+            "status": "active",
+            "priceValue": 783600,
+            "foreignEligible": false,
+            "bumiQuota": false
+          }
+        },
+        {
+          "name": "Lunar Seputeh",
+          "clause": "also_acceptable",
+          "expect": {
+            "status": "active",
+            "priceValue": 607800,
+            "foreignEligible": false,
+            "bumiQuota": false
+          }
+        },
+        {
+          "name": "Pinnacle Bangsar Residence",
+          "clause": "also_acceptable",
+          "expect": {
+            "status": "active",
+            "priceValue": 0,
+            "foreignEligible": false,
+            "bumiQuota": false
+          }
+        },
+        {
+          "name": "Residensi 38 Bangsar",
+          "clause": "also_acceptable",
+          "expect": {
+            "status": "active",
+            "priceValue": 0,
+            "foreignEligible": false,
+            "bumiQuota": false
+          }
+        }
+      ],
+      "source": "quick-kayinleong-097 N2 (096 import: nett from-price)"
+    },
+    {
+      "id": "N3",
+      "section": "N",
+      "lang": "EN",
+      "type": "Golden",
+      "priority": "P0",
+      "area": "Finder / Sold-out units",
+      "title": "One Eleven Menerung: the sold-out layout is flagged, not offered",
+      "preconditions": "Signed in with your tester account. Chip: Finder. New chat for every run.",
+      "steps": "1. Tap New chat and set the chip to Finder.\n2. Send exactly: \"Which 2-bedroom layouts are still available at One Eleven Menerung @ Bangsar, and from what price?\"\nThen paste the full answer into the Actual / Comments column.",
+      "expected": {
+        "must": "For One Eleven Menerung @ Bangsar, lists Type M1 (1,001 sq ft, nett from RM1.92 million), Type M1-A, Type M1-B and Type M3 as available, and says Type M2 is sold out.",
+        "must_not": "Offer Type M2 as available, or give a price for Type M2.",
+        "also_acceptable": "Gives each layout's full nett range (M1 RM1.92–2.28 million, M1-A RM2.16–2.19 million, M1-B RM2.35 million, M3 RM2.7 million)."
+      },
+      "known_status_keys": [
+        "KS-NEWDATA",
+        "KS-CUTOFF"
+      ],
+      "runs": 2,
+      "run_by": "New agent",
+      "double_rate": true,
+      "repoint_when_real_sops": false,
+      "projects": [
+        {
+          "name": "One Eleven Menerung @ Bangsar",
+          "clause": "must",
+          "expect": {
+            "status": "active",
+            "priceValue": 1920000,
+            "foreignEligible": false,
+            "bumiQuota": true
+          }
+        }
+      ],
+      "source": "quick-kayinleong-097 N3 (096 import: unit facts)",
+      "unit_facts": [
+        {
+          "project": "One Eleven Menerung @ Bangsar",
+          "label": "Type M1",
+          "sizeSqft": 1001,
+          "nettMinRM": 1920000,
+          "nettMaxRM": 2280000,
+          "soldOut": false
+        },
+        {
+          "project": "One Eleven Menerung @ Bangsar",
+          "label": "Type M1-A",
+          "nettMinRM": 2160000,
+          "nettMaxRM": 2190000,
+          "soldOut": false
+        },
+        {
+          "project": "One Eleven Menerung @ Bangsar",
+          "label": "Type M1-B",
+          "nettMinRM": 2350000,
+          "nettMaxRM": 2350000,
+          "soldOut": false
+        },
+        {
+          "project": "One Eleven Menerung @ Bangsar",
+          "label": "Type M3",
+          "nettMinRM": 2700000,
+          "nettMaxRM": 2700000,
+          "soldOut": false
+        },
+        {
+          "project": "One Eleven Menerung @ Bangsar",
+          "label": "Type M2",
+          "soldOut": true
+        }
+      ]
+    },
+    {
+      "id": "N4",
+      "section": "N",
+      "lang": "EN",
+      "type": "Golden",
+      "priority": "P0",
+      "area": "Finder / Sold-out units",
+      "title": "DC Residensi: only the layouts still for sale are offered",
+      "preconditions": "Signed in with your tester account. Chip: Finder. New chat for every run.",
+      "steps": "1. Tap New chat and set the chip to Finder.\n2. Send exactly: \"Which layouts at Damansara City Residency (DC Residensi) can my client still buy, and from what nett price?\"\nThen paste the full answer into the Actual / Comments column.",
+      "expected": {
+        "must": "For Damansara City Residency (DC Residensi), offers Type S1 and Type S2 (904 sq ft, nett RM1.2–1.35 million) and Type A3 (1,194 sq ft, nett RM1.36–1.46 million).",
+        "must_not": "Offer any sold-out layout (Types A1, A2, A4, A5, A6, B1 to B7, C1 or E1) as available. Give a price for a sold-out layout.",
+        "also_acceptable": "Also lists Type E2 (2,982 sq ft) as available with no price on record. Says most other layouts are sold out."
+      },
+      "known_status_keys": [
+        "KS-NEWDATA",
+        "KS-CUTOFF"
+      ],
+      "runs": 2,
+      "run_by": "New agent",
+      "double_rate": true,
+      "repoint_when_real_sops": false,
+      "projects": [
+        {
+          "name": "Damansara City Residency (DC Residensi)",
+          "clause": "must",
+          "expect": {
+            "status": "active",
+            "priceValue": 1200000,
+            "foreignEligible": true,
+            "bumiQuota": false
+          }
+        }
+      ],
+      "source": "quick-kayinleong-097 N4 (096 import: unit facts)",
+      "unit_facts": [
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type S1",
+          "sizeSqft": 904,
+          "nettMinRM": 1200000,
+          "nettMaxRM": 1350000,
+          "soldOut": false
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type S2",
+          "sizeSqft": 904,
+          "nettMinRM": 1200000,
+          "nettMaxRM": 1350000,
+          "soldOut": false
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type A3",
+          "sizeSqft": 1194,
+          "nettMinRM": 1360000,
+          "nettMaxRM": 1460000,
+          "soldOut": false
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type E2",
+          "sizeSqft": 2982,
+          "soldOut": false
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type A1",
+          "soldOut": true
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type A2",
+          "soldOut": true
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type A4",
+          "soldOut": true
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type A5",
+          "soldOut": true
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type A6",
+          "soldOut": true
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type B1",
+          "soldOut": true
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type B2",
+          "soldOut": true
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type B3",
+          "soldOut": true
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type B4",
+          "soldOut": true
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type B5",
+          "soldOut": true
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type B6",
+          "soldOut": true
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type B7",
+          "soldOut": true
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type C1",
+          "soldOut": true
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type E1",
+          "soldOut": true
+        }
+      ]
+    },
+    {
+      "id": "N5",
+      "section": "N",
+      "lang": "EN",
+      "type": "Golden",
+      "priority": "P1",
+      "area": "Finder / Nett and gross price",
+      "title": "SO Sofitel Type B1A: the nett price comes first",
+      "preconditions": "Signed in with your tester account. Chip: Finder. New chat for every run.",
+      "steps": "1. Tap New chat and set the chip to Finder.\n2. Send exactly: \"What is the price of SO Sofitel Residences KLCC Type B1A?\"\nThen paste the full answer into the Actual / Comments column.",
+      "expected": {
+        "must": "Gives the nett price RM1,525,440 for SO Sofitel Residences KLCC Type B1A (681 sq ft, 1 bedroom).",
+        "must_not": "Give only the gross price (RM1,906,800) as the price. Quote a discount or rebate that is not on record.",
+        "also_acceptable": "Also shows the gross price RM1,906,800, labelled as gross."
+      },
+      "known_status_keys": [
+        "KS-NEWDATA",
+        "KS-CUTOFF"
+      ],
+      "runs": 2,
+      "run_by": "New agent",
+      "double_rate": false,
+      "repoint_when_real_sops": false,
+      "projects": [
+        {
+          "name": "SO Sofitel Residences KLCC",
+          "clause": "must",
+          "expect": {
+            "status": "active",
+            "priceValue": 1212640,
+            "foreignEligible": false,
+            "bumiQuota": false
+          }
+        }
+      ],
+      "source": "quick-kayinleong-097 N5 (096 import: nett and gross)",
+      "unit_facts": [
+        {
+          "project": "SO Sofitel Residences KLCC",
+          "label": "Type B1A",
+          "sizeSqft": 681,
+          "bedrooms": 1,
+          "nettMinRM": 1525440,
+          "nettMaxRM": 1525440,
+          "grossMinRM": 1906800,
+          "grossMaxRM": 1906800
+        }
+      ]
+    },
+    {
+      "id": "N6",
+      "section": "N",
+      "lang": "EN",
+      "type": "Golden",
+      "priority": "P1",
+      "area": "Finder / Fact sheet",
+      "title": "Eden BRDB developer, units and completion, from the client fact sheet",
+      "preconditions": "Signed in with your tester account. Chip: Finder. New chat for every run.",
+      "steps": "1. Tap New chat and set the chip to Finder.\n2. Send exactly: \"Who is the developer of Eden BRDB, Taman Duta, how many units does it have, and when is completion?\"\nThen paste the full answer into the Actual / Comments column.",
+      "expected": {
+        "must": "For Eden BRDB, Taman Duta: developer BRDB. 146 units (including 22 duplex penthouses). Completion mid 2029.",
+        "must_not": "Use another project's developer, unit count or completion date.",
+        "also_acceptable": "Also mentions the maintenance fee of RM0.70 psf (inclusive of sinking fund), or that it is freehold."
+      },
+      "known_status_keys": [
+        "KS-NEWDATA"
+      ],
+      "runs": 2,
+      "run_by": "New agent",
+      "double_rate": false,
+      "repoint_when_real_sops": false,
+      "projects": [
+        {
+          "name": "Eden BRDB, Taman Duta",
+          "clause": "must",
+          "expect": {
+            "status": "active",
+            "priceValue": 8500000,
+            "foreignEligible": false,
+            "bumiQuota": false
+          }
+        }
+      ],
+      "source": "quick-kayinleong-097 N6 (096 import: fact sheet)",
+      "sheet_facts": [
+        {
+          "project": "Eden BRDB, Taman Duta",
+          "field": "developer",
+          "value": "BRDB"
+        },
+        {
+          "project": "Eden BRDB, Taman Duta",
+          "field": "totalUnits",
+          "value": "146 units (including 22 duplex penthouses)"
+        },
+        {
+          "project": "Eden BRDB, Taman Duta",
+          "field": "completion",
+          "value": "Completion Date: Mid 2029"
+        },
+        {
+          "project": "Eden BRDB, Taman Duta",
+          "field": "maintenanceFee",
+          "value": "RM0.70 psf (inclusive of sinking fund)"
+        }
+      ]
+    },
+    {
+      "id": "N7",
+      "section": "N",
+      "lang": "EN",
+      "type": "Rubric",
+      "priority": "P1",
+      "area": "Finder / 2026 focus lists",
+      "title": "Is Southpoint one of D2's 2026 focus projects?",
+      "preconditions": "Signed in with your tester account. Chip: Finder. New chat for every run.",
+      "steps": "1. Tap New chat and set the chip to Finder.\n2. Send exactly: \"Is Southpoint Residences one of D2's top projects to cross-sell in 2026?\"\nThen paste the full answer into the Actual / Comments column.",
+      "expected": {
+        "must": "Says yes: Southpoint Residences (IGB) is on D2's 2026 list of top projects to cross-sell.",
+        "must_not": "Say it is not on the list. Name a D2 list that is not on record.",
+        "also_acceptable": "Also says it is one of D2's top performing projects in 2026. Mentions its developer, MVCSP Sdn Bhd (an IGB Group subsidiary)."
+      },
+      "known_status_keys": [
+        "KS-NEWDATA"
+      ],
+      "runs": 2,
+      "run_by": "New agent",
+      "double_rate": false,
+      "repoint_when_real_sops": false,
+      "projects": [
+        {
+          "name": "Southpoint Residences (IGB )",
+          "clause": "must",
+          "expect": {
+            "status": "active",
+            "priceValue": 1740000,
+            "foreignEligible": false,
+            "bumiQuota": false
+          }
+        }
+      ],
+      "source": "quick-kayinleong-097 N7 (096 import: 2026 focus lists)",
+      "sheet_facts": [
+        {
+          "project": "Southpoint Residences (IGB )",
+          "focus": "TOP PROJECTS IN 2026 TO CROSS-SELL"
+        },
+        {
+          "project": "Southpoint Residences (IGB )",
+          "focus": "TOP PERFORMING PROJECTS IN 2026"
+        },
+        {
+          "project": "Southpoint Residences (IGB )",
+          "field": "developer",
+          "value": "MVCSP Sdn Bhd (a subsidiary of IGB Group)"
+        }
+      ]
+    },
+    {
+      "id": "N8",
+      "section": "N",
+      "lang": "EN",
+      "type": "Adversarial",
+      "priority": "P0",
+      "area": "Finder / Held-back value",
+      "title": "DC Residensi Type E1 size is not confirmed yet",
+      "preconditions": "Signed in with your tester account. Chip: Finder. New chat for every run.",
+      "steps": "1. Tap New chat and set the chip to Finder.\n2. Send exactly: \"What is the built-up size of DC Residensi Type E1?\"\nThen paste the full answer into the Actual / Comments column.",
+      "expected": {
+        "must": "Says the Type E1 size at Damansara City Residency (DC Residensi) is not confirmed yet, and offers to confirm with D2. It may also say Type E1 is sold out.",
+        "must_not": "State 2,072 sq ft or 2,702 sq ft as the confirmed size of Type E1.",
+        "also_acceptable": "Gives the sizes of other 3-bedroom layouts (Type C1 2,077 sq ft, Type E2 2,982 sq ft), clearly labelled as other layouts."
+      },
+      "known_status_keys": [
+        "KS-HELD"
+      ],
+      "runs": 3,
+      "run_by": "New agent",
+      "double_rate": false,
+      "repoint_when_real_sops": false,
+      "projects": [
+        {
+          "name": "Damansara City Residency (DC Residensi)",
+          "clause": "must",
+          "expect": {
+            "status": "active",
+            "priceValue": 1200000,
+            "foreignEligible": true,
+            "bumiQuota": false
+          }
+        }
+      ],
+      "source": "quick-kayinleong-097 N8 (096 import: held-back value)",
+      "unit_facts": [
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type E1",
+          "soldOut": true,
+          "sizeSqft": null,
+          "held": [
+            "Size"
+          ]
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type C1",
+          "sizeSqft": 2077
+        },
+        {
+          "project": "Damansara City Residency (DC Residensi)",
+          "label": "Type E2",
+          "sizeSqft": 2982
+        }
+      ]
+    },
+    {
+      "id": "N9",
+      "section": "N",
+      "lang": "BM",
+      "type": "Golden",
+      "priority": "P0",
+      "area": "Finder / New from-price",
+      "title": "Non-bumi lead in Bangsar finds Parkside (BM)",
+      "preconditions": "Signed in with your tester account. Chip: Finder. New chat for every run.",
+      "steps": "1. Tap New chat and set the chip to Finder.\n2. Send exactly: \"Cik Tan, warganegara Malaysia, bukan bumiputera, untuk duduk sendiri, Bangsar, bajet sehingga 650k\"\nThen paste the full answer into the Actual / Comments column.",
+      "expected": {
+        "must": "The results list Parkside Residences with a price from RM588,000. Any written text is in BM.",
+        "must_not": "List One Eleven Menerung @ Bangsar, Rhombus or Enlace Suites @ Pantai Sentral Park.",
+        "also_acceptable": "Lunar Seputeh. Bangsar projects shown with \"Price not on record\", as long as they are not called within budget."
+      },
+      "known_status_keys": [
+        "KS-NEWDATA",
+        "KS-TABLE",
+        "KS-UI-EN"
+      ],
+      "runs": 2,
+      "run_by": "BM speaker",
+      "double_rate": false,
+      "repoint_when_real_sops": false,
+      "projects": [
+        {
+          "name": "Parkside Residences",
+          "clause": "must",
+          "expect": {
+            "status": "active",
+            "priceValue": 588000,
+            "foreignEligible": false,
+            "bumiQuota": false
+          }
+        },
+        {
+          "name": "One Eleven Menerung @ Bangsar",
+          "clause": "must_not",
+          "expect": {
+            "status": "active",
+            "priceValue": 1920000,
+            "foreignEligible": false,
+            "bumiQuota": true
+          }
+        },
+        {
+          "name": "Rhombus",
+          "clause": "must_not",
+          "expect": {
+            "status": "active",
+            "priceValue": 6100000,
+            "foreignEligible": false,
+            "bumiQuota": false
+          }
+        },
+        {
+          "name": "Enlace Suites @ Pantai Sentral Park",
+          "clause": "must_not",
+          "expect": {
+            "status": "active",
+            "priceValue": 783600,
+            "foreignEligible": false,
+            "bumiQuota": false
+          }
+        },
+        {
+          "name": "Lunar Seputeh",
+          "clause": "also_acceptable",
+          "expect": {
+            "status": "active",
+            "priceValue": 607800,
+            "foreignEligible": false,
+            "bumiQuota": false
+          }
+        }
+      ],
+      "source": "quick-kayinleong-097 N9 (096 import: nett from-price)"
+    },
+    {
+      "id": "N10",
+      "section": "N",
+      "lang": "BM",
+      "type": "Golden",
+      "priority": "P1",
+      "area": "Finder / Fact sheet",
+      "title": "Kensho maintenance fee (BM)",
+      "preconditions": "Signed in with your tester account. Chip: Finder. New chat for every run.",
+      "steps": "1. Tap New chat and set the chip to Finder.\n2. Send exactly: \"Berapakah yuran penyelenggaraan di Kensho @ Taman Desa?\"\nThen paste the full answer into the Actual / Comments column.",
+      "expected": {
+        "must": "Answers in BM for Kensho @ Taman Desa: RM0.44 psf, inclusive of the sinking fund.",
+        "must_not": "Give a different fee, or another project's fee.",
+        "also_acceptable": "Also mentions the developer, Regal Path Sdn Bhd (a Malton Berhad subsidiary), or completion in Q4 2026."
+      },
+      "known_status_keys": [
+        "KS-NEWDATA",
+        "KS-UI-EN"
+      ],
+      "runs": 2,
+      "run_by": "BM speaker",
+      "double_rate": false,
+      "repoint_when_real_sops": false,
+      "projects": [
+        {
+          "name": "Kensho @ Taman Desa",
+          "clause": "must",
+          "expect": {
+            "status": "active",
+            "priceValue": 563160,
+            "foreignEligible": false,
+            "bumiQuota": false
+          }
+        }
+      ],
+      "source": "quick-kayinleong-097 N10 (096 import: fact sheet)",
+      "sheet_facts": [
+        {
+          "project": "Kensho @ Taman Desa",
+          "field": "maintenanceFee",
+          "value": "RM0.44 psf (inclusive of sinking fund)"
+        },
+        {
+          "project": "Kensho @ Taman Desa",
+          "field": "developer",
+          "value": "Regal Path Sdn Bhd (a subsidiary of Malton Berhad)"
+        },
+        {
+          "project": "Kensho @ Taman Desa",
+          "field": "completion",
+          "value": "Completion Date: Q4 2026"
+        }
+      ]
+    },
+    {
+      "id": "N11",
+      "section": "N",
+      "lang": "BM",
+      "type": "Adversarial",
+      "priority": "P1",
+      "area": "Finder / Held-back value",
+      "title": "Imperial Residences Type H1a nett price is not confirmed (BM)",
+      "preconditions": "Signed in with your tester account. Chip: Finder. New chat for every run.",
+      "steps": "1. Tap New chat and set the chip to Finder.\n2. Send exactly: \"Berapakah harga nett PDH: Imperial Residences RA jenis H1a?\"\nThen paste the full answer into the Actual / Comments column.",
+      "expected": {
+        "must": "Says in BM that the nett price for H1a at PDH: Imperial Residences RA is not confirmed yet, and offers to confirm.",
+        "must_not": "Quote Type H1's nett price (RM5.05–7.15 million) as the H1a nett price. Quote \"RM4.77 mil – RM6.59 mil\" as a confirmed price.",
+        "also_acceptable": "Gives the H1a gross price (RM5.17–7.15 million), labelled as gross."
+      },
+      "known_status_keys": [
+        "KS-HELD",
+        "KS-UI-EN"
+      ],
+      "runs": 3,
+      "run_by": "BM speaker",
+      "double_rate": false,
+      "repoint_when_real_sops": false,
+      "projects": [
+        {
+          "name": "PDH: Imperial Residences RA",
+          "clause": "must",
+          "expect": {
+            "status": "active",
+            "priceValue": 5050000,
+            "foreignEligible": true,
+            "bumiQuota": false
+          }
+        }
+      ],
+      "source": "quick-kayinleong-097 N11 (096 import: held-back value)",
+      "unit_facts": [
+        {
+          "project": "PDH: Imperial Residences RA",
+          "label": "Type H1A (South Wing)",
+          "nettMinRM": null,
+          "nettMaxRM": null,
+          "sheetLabel": "H1a",
+          "grossMinRM": 5170000,
+          "grossMaxRM": 7150000,
+          "held": [
+            "Nett"
+          ]
+        },
+        {
+          "project": "PDH: Imperial Residences RA",
+          "label": "Type H1 (North Wing)",
+          "nettMinRM": 5050000,
+          "nettMaxRM": 7150000
+        }
+      ]
+    },
+    {
+      "id": "N12",
+      "section": "N",
+      "lang": "中文",
+      "type": "Golden",
+      "priority": "P0",
+      "area": "Finder / Sold-out units",
+      "title": "One Eleven Menerung sold-out layout (中文)",
+      "preconditions": "Signed in with your tester account. Chip: Finder. New chat for every run.",
+      "steps": "1. Tap New chat and set the chip to Finder.\n2. Send exactly: \"One Eleven Menerung @ Bangsar 还有哪些两房户型可以买？价格从多少起？\"\nThen paste the full answer into the Actual / Comments column.",
+      "expected": {
+        "must": "Answers in 中文. For One Eleven Menerung @ Bangsar, lists Type M1 (1,001 sq ft, nett from RM1.92 million), Type M1-A, Type M1-B and Type M3 as available, and says Type M2 is sold out.",
+        "must_not": "Offer Type M2 as available, or give a price for Type M2.",
+        "also_acceptable": "Gives each layout's full nett range."
+      },
+      "known_status_keys": [
+        "KS-NEWDATA",
+        "KS-CUTOFF",
+        "KS-UI-EN"
+      ],
+      "runs": 2,
+      "run_by": "中文 speaker",
+      "double_rate": false,
+      "repoint_when_real_sops": false,
+      "projects": [
+        {
+          "name": "One Eleven Menerung @ Bangsar",
+          "clause": "must",
+          "expect": {
+            "status": "active",
+            "priceValue": 1920000,
+            "foreignEligible": false,
+            "bumiQuota": true
+          }
+        }
+      ],
+      "source": "quick-kayinleong-097 N12 (096 import: unit facts)",
+      "unit_facts": [
+        {
+          "project": "One Eleven Menerung @ Bangsar",
+          "label": "Type M1",
+          "sizeSqft": 1001,
+          "nettMinRM": 1920000,
+          "nettMaxRM": 2280000,
+          "soldOut": false
+        },
+        {
+          "project": "One Eleven Menerung @ Bangsar",
+          "label": "Type M1-A",
+          "nettMinRM": 2160000,
+          "nettMaxRM": 2190000,
+          "soldOut": false
+        },
+        {
+          "project": "One Eleven Menerung @ Bangsar",
+          "label": "Type M1-B",
+          "nettMinRM": 2350000,
+          "nettMaxRM": 2350000,
+          "soldOut": false
+        },
+        {
+          "project": "One Eleven Menerung @ Bangsar",
+          "label": "Type M3",
+          "nettMinRM": 2700000,
+          "nettMaxRM": 2700000,
+          "soldOut": false
+        },
+        {
+          "project": "One Eleven Menerung @ Bangsar",
+          "label": "Type M2",
+          "soldOut": true
+        }
+      ]
+    },
+    {
+      "id": "N13",
+      "section": "N",
+      "lang": "中文",
+      "type": "Golden",
+      "priority": "P1",
+      "area": "Finder / New from-price",
+      "title": "Bumiputera lead in Subang Jaya (中文)",
+      "preconditions": "Signed in with your tester account. Chip: Finder. New chat for every run.",
+      "steps": "1. Tap New chat and set the chip to Finder.\n2. Send exactly: \"阿里先生，马来西亚人，土著，自住，Subang Jaya，预算50万以内\"\nThen paste the full answer into the Actual / Comments column.",
+      "expected": {
+        "must": "The results list Luminar Residence Subang by BRDB with a price from RM411,000. Any written text is in 中文.",
+        "must_not": "List Rimbun Saujana Residency. Show Luminar Residence Subang by BRDB as \"Price not on record\".",
+        "also_acceptable": "Other Subang Jaya projects shown with \"Price not on record\", as long as they are not called within budget."
+      },
+      "known_status_keys": [
+        "KS-NEWDATA",
+        "KS-TABLE",
+        "KS-UI-EN"
+      ],
+      "runs": 2,
+      "run_by": "中文 speaker",
+      "double_rate": false,
+      "repoint_when_real_sops": false,
+      "projects": [
+        {
+          "name": "Luminar Residence Subang by BRDB",
+          "clause": "must",
+          "expect": {
+            "status": "active",
+            "priceValue": 411000,
+            "foreignEligible": false,
+            "bumiQuota": true
+          }
+        },
+        {
+          "name": "Rimbun Saujana Residency",
+          "clause": "must_not",
+          "expect": {
+            "status": "active",
+            "priceValue": 1055800,
+            "foreignEligible": false,
+            "bumiQuota": true
+          }
+        },
+        {
+          "name": "Luminar Residence Subang by BRDB",
+          "clause": "must_not",
+          "expect": {
+            "status": "active",
+            "priceValue": 411000,
+            "foreignEligible": false,
+            "bumiQuota": true
+          }
+        }
+      ],
+      "source": "quick-kayinleong-097 N13 (096 import: nett from-price)"
+    },
+    {
+      "id": "N14",
+      "section": "N",
+      "lang": "中文",
+      "type": "Adversarial",
+      "priority": "P1",
+      "area": "Finder / Sold-out units",
+      "title": "Asking for a sold-out Eden layout (中文)",
+      "preconditions": "Signed in with your tester account. Chip: Finder. New chat for every run.",
+      "steps": "1. Tap New chat and set the chip to Finder.\n2. Send exactly: \"Eden BRDB, Taman Duta 的 Type C1 还可以买吗？\"\nThen paste the full answer into the Actual / Comments column.",
+      "expected": {
+        "must": "Says in 中文 that Type C1 at Eden BRDB, Taman Duta is sold out.",
+        "must_not": "Offer Type C1 as available, or give a price for Type C1.",
+        "also_acceptable": "Offers other available layouts, such as Type A2 (5,307 sq ft, nett from RM8.5 million), Type C, Type A3a or Type D1."
+      },
+      "known_status_keys": [
+        "KS-NEWDATA",
+        "KS-UI-EN"
+      ],
+      "runs": 3,
+      "run_by": "中文 speaker",
+      "double_rate": false,
+      "repoint_when_real_sops": false,
+      "projects": [
+        {
+          "name": "Eden BRDB, Taman Duta",
+          "clause": "must",
+          "expect": {
+            "status": "active",
+            "priceValue": 8500000,
+            "foreignEligible": false,
+            "bumiQuota": false
+          }
+        }
+      ],
+      "source": "quick-kayinleong-097 N14 (096 import: unit facts)",
+      "unit_facts": [
+        {
+          "project": "Eden BRDB, Taman Duta",
+          "label": "Type C1",
+          "soldOut": true
+        },
+        {
+          "project": "Eden BRDB, Taman Duta",
+          "label": "Type A2",
+          "sizeSqft": 5307,
+          "nettMinRM": 8500000,
+          "nettMaxRM": 11800000,
+          "soldOut": false
+        }
+      ]
     },
     {
       "id": "R1",

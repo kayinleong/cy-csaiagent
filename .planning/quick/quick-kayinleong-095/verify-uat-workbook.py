@@ -4,7 +4,8 @@ The JSON is the full catalogue (all sections). The workbook is the tester view:
 one `Test Cases` sheet with the sections in meta.tester_sections.
 
 Checks (each prints PASS or FAIL, then a total line "N PASS, M FAIL"):
-  A  JSON integrity           B  project facts against the project export
+  A  JSON integrity           B  project facts against the project export (B7-B9: the unit,
+     sheet and MUST-number facts of the new-data cases)
   C  client-deliverable hygiene   D  workbook structure   E  plan document
 A line starting NOTE is information only and is not counted.
 
@@ -12,9 +13,11 @@ The project export holds PIC names and phone numbers in its description field.
 The loader reduces every record to five fields at once and never prints one.
 The export date the facts were taken from is meta.snapshot_exported_at in the JSON;
 refreshing the snapshot means editing that value on purpose.
+The normalised client sheet (quick-kayinleong-096) is read for gross figures, held-back
+columns, fact-sheet facts and focus lists; only those fields are kept.
 
 Usage:
-  python3 verify-uat-workbook.py [--cases P] [--workbook P] [--plan P] [--export P]
+  python3 verify-uat-workbook.py [--cases P] [--workbook P] [--plan P] [--export P] [--sheet P]
   python3 verify-uat-workbook.py --self-test    (proves the gate bites)
 """
 import argparse
@@ -39,10 +42,12 @@ DEF_CASES = HERE / "uat-cases.json"
 DEF_WORKBOOK = ROOT / "docs" / "UAT-Output-Test-Cases.xlsx"
 DEF_PLAN = ROOT / "docs" / "UAT-Output-Test-Plan.md"
 DEF_EXPORT = ROOT / "projects.export.json"
+DEF_SHEET = ROOT / ".planning" / "quick" / "quick-kayinleong-096" / "client-sheet.normalized.json"
 
 LANGS = ["EN", "BM", "中文"]
 TYPES = ["Golden", "Rubric", "Adversarial"]
 EXPORT_KEYS = ("name", "status", "priceValue", "foreignEligible", "bumiQuota")
+EXPORT_UNIT_KEYS = ("label", "sizeSqft", "bedrooms", "priceMinRM", "priceMaxRM", "soldOut")  # never "raw"
 
 SHEETS = ["Test Cases"]
 TC_HEADERS = ["ID", "Area", "Test Case", "Priority", "Preconditions", "Steps", "Expected Result", "Result",
@@ -61,7 +66,7 @@ KEY_PROBES = {
     "KS-UI-EN": ["English"], "KS-CUTOFF": ["cut off"], "KS-BADGE": ["Cold prospect"], "KS-TOKENS": ["<LEAD_ID"],
     "KS-CJK": ["Chinese place names"], "KS-BUMI": ["bumi"], "KS-SOLDOUT": ["sold out"],
     "KS-PROPERTY1": ["Property 1"], "KS-MIXED-DATA": ["Mixed write-ups"], "KS-ADS": ["Paid ads"],
-    "KS-PLACEHOLDER": ["example SOP"],
+    "KS-PLACEHOLDER": ["example SOP"], "KS-NEWDATA": ["project sheet"], "KS-HELD": ["not confirmed"],
 }
 EXTRA_PROBES = [["previous conversation", "across conversations"]]
 # Issues that only the removed sections touch: they belong in the "Not tested this round" note.
@@ -79,7 +84,7 @@ NAME_RE = re.compile(r"\b(?:Encik|Cik|Puan|Ms|Mr|Mrs|Madam) [A-Z][a-z]+")
 SECRET_RE = re.compile(r"sk-ant-[A-Za-z0-9_-]{10,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----")
 FORBIDDEN_RE = re.compile(r"\b(?:src|app|scripts|evals|tests)/[\w\[.-]|\.(?:tsx?|py|json|yaml)\b|RESEARCH-|"
                           r"quick-kayinleong|projects\.export|gitignore")
-ID_RE = re.compile(r"^[FRCX][1-9]\d*$")
+ID_RE = re.compile(r"^[FNRCX][1-9]\d*$")
 
 FAILURES = []
 PASSES = []
@@ -138,11 +143,33 @@ def load_export(path):
     exported_at = raw.get("exportedAt")
     reduced = []
     for rec in raw.get("records", []):
-        reduced.append({k: rec.get(k) for k in EXPORT_KEYS})
+        row = {k: rec.get(k) for k in EXPORT_KEYS}
+        row["unitTypes"] = [{k: u.get(k) for k in EXPORT_UNIT_KEYS} for u in (rec.get("unitTypes") or [])]
+        reduced.append(row)
     del raw
     for rec in reduced:
-        assert set(rec.keys()) == set(EXPORT_KEYS)
+        assert set(rec.keys()) == set(EXPORT_KEYS) | {"unitTypes"}
     return exported_at, reduced
+
+
+def load_sheet(path):
+    """Reduce the normalised client sheet to the fields the N cases check, keyed by inventory name."""
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    out = {}
+    for p in raw.get("projects", []):
+        units = {}
+        for u in p.get("units") or []:
+            units[u.get("label")] = {k: u.get(k) for k in ("grossMinRM", "grossMaxRM", "held")}
+        out[p.get("inventoryName")] = {"facts": dict(p.get("facts") or {}),
+                                       "focusLists": list(p.get("focusLists") or []), "units": units}
+    del raw
+    return out
+
+
+def tidy(text):
+    """Close a stray space before a bracket, so the export name "Southpoint Residences (IGB )" can be written
+    "Southpoint Residences (IGB)" in tester text."""
+    return re.sub(r"\s+\)", ")", text)
 
 
 def cell_text(v):
@@ -175,7 +202,8 @@ def count_rows(data):
         for lang in LANGS:
             sub = [c for c in cases if c["section"] == s["letter"] and c["lang"] == lang]
             cnt = Counter(c["type"] for c in sub)
-            rows.append([s["pillar"], lang] + [str(cnt.get(t, 0)) for t in TYPES] + [str(len(sub))])
+            rows.append([s.get("appendix_label", s["pillar"]), lang] + [str(cnt.get(t, 0)) for t in TYPES]
+                        + [str(len(sub))])
     cnt = Counter(c["type"] for c in cases)
     rows.append(["All sections", "All"] + [str(cnt.get(t, 0)) for t in TYPES] + [str(len(cases))])
     return rows
@@ -185,17 +213,23 @@ def needed_rows(data):
     """Rows of the exact-numbers table in plan section 10 (EC3, EC4, EC5, EC6)."""
     cases = tester_cases(data)
     rows = [["Gate", "Cases", "Needed to pass"]]
+    # A pillar can span several sections (Finder is F plus N), so EC3 and the EC4 cells group by pillar.
+    pillars = []
     for s in tester_sections(data):
-        n = sum(1 for c in cases if c["section"] == s["letter"])
-        rows.append(["EC3 {}".format(s["pillar"]), str(n), str(ceil_pct(n, 85))])
+        if s["pillar"] not in pillars:
+            pillars.append(s["pillar"])
+    letters_of = {pl: [s["letter"] for s in tester_sections(data) if s["pillar"] == pl] for pl in pillars}
+    for pl in pillars:
+        n = sum(1 for c in cases if c["section"] in letters_of[pl])
+        rows.append(["EC3 {}".format(pl), str(n), str(ceil_pct(n, 85))])
     for lang in LANGS:
         n = sum(1 for c in cases if c["lang"] == lang)
         rows.append(["EC4 {} (all pillars)".format(lang), str(n), str(ceil_pct(n, 80))])
-    for s in tester_sections(data):
+    for pl in pillars:
         for lang in LANGS:
-            n = sum(1 for c in cases if c["section"] == s["letter"] and c["lang"] == lang)
+            n = sum(1 for c in cases if c["section"] in letters_of[pl] and c["lang"] == lang)
             if n >= 10:
-                rows.append(["EC4 {}, {} only (cell of 10 or more)".format(s["pillar"], lang), str(n),
+                rows.append(["EC4 {}, {} only (cell of 10 or more)".format(pl, lang), str(n),
                              str(ceil_pct(n, 80))])
     adv = sum(1 for c in cases if c["type"] == "Adversarial")
     rows.append(["EC5 Adversarial cases", str(adv), str(ceil_pct(adv, 90))])
@@ -232,7 +266,9 @@ def section_of(plan_text, start_heading, end_heading=None):
 def run_a(data):
     cases = data["cases"]
     n = len(cases)
-    check(n == 77 and 60 <= n <= 80, "A1 scripted case count is 77 and within 60-80 (got {})".format(n))
+    nt = len(tester_cases(data))
+    check(n == 91 and nt == 77 and 60 <= nt <= 80,
+          "A1 catalogue is 91 cases and the tester view is 77, within 60-80 (got {} and {})".format(n, nt))
 
     ids = [c["id"] for c in cases]
     dup = [i for i, k in Counter(ids).items() if k > 1]
@@ -304,7 +340,7 @@ def run_a(data):
             want = "BM speaker"
         elif c.get("lang") == "中文":
             want = "中文 speaker"
-        elif c.get("section") in ("F", "X"):
+        elif c.get("section") in ("F", "N", "X"):
             want = "New agent"
         elif c.get("section") in ("R", "C"):
             want = "Senior coach"
@@ -363,17 +399,162 @@ def run_a(data):
     letters = tester_letters(data)
     known = [s["letter"] for s in data["sections"]]
     a11 = []
-    if letters != ["F", "R", "C"]:
+    if letters != ["F", "N", "R", "C"]:
         a11.append("tester_sections is {}".format(letters))
     if any(x not in known for x in letters) or letters != [x for x in known if x in letters]:
         a11.append("tester_sections is not a subset of the sections, in workbook order")
-    if len(tester_cases(data)) != 63:
+    if len(tester_cases(data)) != 77:
         a11.append("{} tester cases".format(len(tester_cases(data))))
-    check(not a11, "A11 meta.tester_sections is F, R, C and covers 63 cases ({})".format(short(a11) or "ok"))
+    check(not a11, "A11 meta.tester_sections is F, N, R, C and covers 77 cases ({})".format(short(a11) or "ok"))
 
 
 # ------------------------------------------------------------------ B: project facts
-def run_b(data, export_path):
+UNIT_EXPORT_FIELDS = {"sizeSqft": "sizeSqft", "bedrooms": "bedrooms", "nettMinRM": "priceMinRM",
+                      "nettMaxRM": "priceMaxRM"}
+SHEET_UNIT_FIELDS = {"grossMinRM": "grossMinRM", "grossMaxRM": "grossMaxRM"}
+
+
+def same_num(a, b):
+    if a is None or b is None:
+        return a is None and b is None
+    return abs(float(a) - float(b)) <= 0.5
+
+
+NUM = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
+MONEY_RE = re.compile(r"RM\s?(" + NUM + r")(?:\s*(?:[\u2013-]|to)\s*(?:RM\s?)?(" + NUM + r"))?"
+                      r"(?:\s*(million|mil)\b)?(\s*psf\b)?")
+SQFT_RE = re.compile(r"(" + NUM + r")\s*sq\s*ft")
+BED_RE = re.compile(r"(\d+)[- ]bedrooms?\b")
+
+
+def to_num(text):
+    return float(text.replace(",", ""))
+
+
+def claimed_numbers(text):
+    """(sizes, prices, bedrooms, psf_fees) named in a clause. Phrases that do not parse are left out."""
+    sizes = [to_num(m.group(1)) for m in SQFT_RE.finditer(text)]
+    beds = [to_num(m.group(1)) for m in BED_RE.finditer(text)]
+    prices, fees = [], []
+    for m in MONEY_RE.finditer(text):
+        mult = 1000000.0 if m.group(3) else 1.0
+        if m.group(4):
+            fees.append(m.group(0).strip())
+            continue
+        prices.append(to_num(m.group(1)) * mult)
+        if m.group(2):
+            prices.append(to_num(m.group(2)) * mult)
+    return sizes, prices, beds, fees
+
+
+def run_n_facts(data, by_name, sheet_path):
+    """B7 unit facts against the export, B8 sheet facts against the normalised client sheet, B9 MUST numbers."""
+    try:
+        sheet = load_sheet(sheet_path)
+    except Exception as exc:  # message only
+        check(False, "B8 normalised client sheet loads ({})".format(type(exc).__name__))
+        sheet = None
+    b7, b8, b9, skipped = [], [], [], []
+    checked_units = checked_sheet = checked_numbers = 0
+    for c in data["cases"]:
+        declared = {p["name"] for p in c["projects"]}
+        evidence_sizes, evidence_prices, evidence_beds, fee_texts = set(), set(), set(), []
+        for p in c["projects"]:
+            evidence_prices.add(float(p["expect"]["priceValue"]))
+        for f in c.get("unit_facts", []):
+            cid, label = c["id"], f.get("label")
+            if f.get("project") not in declared:
+                b7.append("{} {}: project not declared on the case".format(cid, f.get("project")))
+                continue
+            rows = by_name.get(f["project"], [])
+            units = [u for r in rows for u in r["unitTypes"] if u["label"] == label]
+            if len(units) != 1:
+                b7.append("{} {} / {}: {} units with that label in the export".format(cid, f["project"], label, len(units)))
+                continue
+            u = units[0]
+            checked_units += 1
+            for key, ek in UNIT_EXPORT_FIELDS.items():
+                if key in f and not same_num(f[key], u[ek]):
+                    b7.append("{} {} / {}: {} is {} in the export, case says {}".format(
+                        cid, f["project"], label, key, u[ek], f[key]))
+            if "soldOut" in f and bool(f["soldOut"]) != bool(u["soldOut"]):
+                b7.append("{} {} / {}: soldOut is {} in the export, case says {}".format(
+                    cid, f["project"], label, bool(u["soldOut"]), f["soldOut"]))
+            if sheet is not None and any(k in f for k in list(SHEET_UNIT_FIELDS) + ["held"]):
+                sp = sheet.get(f["project"])
+                su = sp["units"].get(f.get("sheetLabel", label)) if sp else None
+                if su is None:
+                    b8.append("{} {} / {}: no such unit in the client sheet".format(cid, f["project"], label))
+                else:
+                    checked_sheet += 1
+                    for key in SHEET_UNIT_FIELDS:
+                        if key in f and not same_num(f[key], su[key]):
+                            b8.append("{} {} / {}: {} is {} in the client sheet, case says {}".format(
+                                cid, f["project"], label, key, su[key], f[key]))
+                    for h in f.get("held", []):
+                        if h not in (su["held"] or []):
+                            b8.append("{} {} / {}: {!r} is not held back in the client sheet".format(
+                                cid, f["project"], label, h))
+            for key in ("sizeSqft", "nettMinRM", "nettMaxRM", "grossMinRM", "grossMaxRM"):
+                if f.get(key) is not None:
+                    (evidence_sizes if key == "sizeSqft" else evidence_prices).add(float(f[key]))
+            if f.get("bedrooms") is not None:
+                evidence_beds.add(float(f["bedrooms"]))
+        for f in c.get("sheet_facts", []):
+            cid = c["id"]
+            if f.get("project") not in declared:
+                b8.append("{} {}: project not declared on the case".format(cid, f.get("project")))
+                continue
+            sp = sheet.get(f["project"]) if sheet is not None else None
+            if sp is None:
+                b8.append("{} {}: not in the client sheet".format(cid, f["project"]))
+                continue
+            checked_sheet += 1
+            if "focus" in f:
+                if f["focus"] not in sp["focusLists"]:
+                    b8.append("{} {}: focus list {!r} not in the client sheet".format(cid, f["project"], f["focus"]))
+            else:
+                got = sp["facts"].get(f.get("field"))
+                if got != f.get("value"):
+                    b8.append("{} {}: {} is {!r} in the client sheet, case says {!r}".format(
+                        cid, f["project"], f.get("field"), got, f.get("value")))
+                fee_texts.append(str(f.get("value")))
+        if c["section"] == "N":
+            sizes, prices, beds, fees = claimed_numbers(c["expected"]["must"])
+            for x in sizes:
+                checked_numbers += 1
+                if not any(same_num(x, e) for e in evidence_sizes):
+                    b9.append("{} MUST size {:,.0f} sq ft is in no unit fact".format(c["id"], x))
+            for x in prices:
+                checked_numbers += 1
+                if not any(same_num(x, e) for e in evidence_prices):
+                    b9.append("{} MUST price RM{:,.0f} is in no unit fact or project price".format(c["id"], x))
+            for x in beds:
+                checked_numbers += 1
+                if not any(same_num(x, e) for e in evidence_beds):
+                    b9.append("{} MUST bedrooms {:.0f} is in no unit fact".format(c["id"], x))
+            for fee in fees:
+                checked_numbers += 1
+                if not any(fee.lower() in t.lower() for t in fee_texts):
+                    b9.append("{} MUST fee {!r} is in no sheet fact".format(c["id"], fee))
+            # the other clauses are information only: a held-back figure is quoted there on purpose
+            for clause in ("must_not", "also_acceptable"):
+                sz, pr, bd, fe = claimed_numbers(c["expected"][clause])
+                loose = [("RM{:,.0f}".format(x)) for x in pr if not any(same_num(x, e) for e in evidence_prices)]
+                loose += ["{:,.0f} sq ft".format(x) for x in sz if not any(same_num(x, e) for e in evidence_sizes)]
+                if loose:
+                    skipped.append("{} {}: {}".format(c["id"], clause, ", ".join(loose)))
+    check(not b7, "B7 every unit fact (size, beds, nett range, sold out) equals the export, matched by exact label "
+          "({} units checked; {})".format(checked_units, short(b7) or "ok"))
+    check(not b8, "B8 every gross figure, held-back column, fact and focus list equals the normalised client sheet "
+          "({} facts checked; {})".format(checked_sheet, short(b8) or "ok"))
+    check(not b9, "B9 every size, price, bedroom count and fee in an N case MUST clause is backed by its unit facts, "
+          "sheet facts or project price ({} numbers checked; {})".format(checked_numbers, short(b9) or "ok"))
+    if skipped:
+        note("figures in MUST NOT or ALSO ACCEPTABLE that no fact backs (not gated): {}".format(short(skipped, 8)))
+
+
+def run_b(data, export_path, sheet_path):
     try:
         exported_at, recs = load_export(export_path)
     except Exception as exc:  # message only, never content
@@ -381,7 +562,7 @@ def run_b(data, export_path):
         return
     snap = data["meta"].get("snapshot_exported_at")
     check(bool(snap) and exported_at == snap and len(recs) > 0,
-          "B1 export loads ({} records reduced to 5 fields) and exportedAt matches meta.snapshot_exported_at "
+          "B1 export loads ({} records reduced to 5 fields plus unit types) and exportedAt matches meta.snapshot_exported_at "
           "(refresh the snapshot by editing that value)".format(len(recs)))
     by_name = {}
     for r in recs:
@@ -410,7 +591,7 @@ def run_b(data, export_path):
         if p["clause"] == "must" and r["status"] != "active":
             b4.append("{}: {} is {} in the export".format(cid, p["name"], r["status"]))
         case = next(c for c in data["cases"] if c["id"] == cid)
-        if p["name"] not in case["expected"].get(p["clause"], ""):
+        if tidy(p["name"]) not in tidy(case["expected"].get(p["clause"], "")):
             b5.append("{}: {}".format(cid, p["name"]))
     check(not b3, "B3 every expect value equals the export ({})".format(short(b3) or "ok"))
     check(not b4, "B4 projects under MUST are active in the export ({})".format(short(b4) or "ok"))
@@ -430,6 +611,7 @@ def run_b(data, export_path):
                     masked = masked.replace(n, "\0" * len(n))
     check(not b6, "B6 every export project name found in a clause is declared for that clause ({})".format(
         short(b6) or "ok"))
+    run_n_facts(data, by_name, sheet_path)
 
 
 # ------------------------------------------------------------------ workbook cells
@@ -747,13 +929,13 @@ def run_e(data, plan_text):
 
 
 # ------------------------------------------------------------------ main
-def verify(cases_path, workbook_path, plan_path, export_path):
+def verify(cases_path, workbook_path, plan_path, export_path, sheet_path):
     del FAILURES[:]
     del PASSES[:]
     data = json.loads(Path(cases_path).read_text(encoding="utf-8"))
     plan_text = Path(plan_path).read_text(encoding="utf-8")
     run_a(data)
-    run_b(data, export_path)
+    run_b(data, export_path, sheet_path)
     wb = load_workbook(str(workbook_path))
     run_c(data, wb, plan_text)
     run_d(data, wb)
@@ -777,9 +959,10 @@ def self_test(args):
             shutil.copy(args.plan, pl)
             return cj, wx, pl
 
-        def run(cj, wx, pl):
+        def run(cj, wx, pl, export=None):
             p = subprocess.run([sys.executable, script, "--cases", str(cj), "--workbook", str(wx), "--plan",
-                                str(pl), "--export", str(args.export)], capture_output=True, text=True)
+                                str(pl), "--export", str(export or args.export), "--sheet", str(args.sheet)],
+                               capture_output=True, text=True)
             return p.returncode, p.stdout + p.stderr
 
         cj, wx, pl = stage("control")
@@ -859,6 +1042,31 @@ def self_test(args):
         wb.save(str(wx))
         defects.append(("freeze panes moved", (cj, wx, pl), "FAIL D3"))
 
+        def m5(d):  # a unit size that the export does not have
+            unit = next(u for u in case(d, "N3")["unit_facts"] if u["label"] == "Type M1")
+            unit["sizeSqft"] = 1010
+
+        defects.append(("N3 Type M1 size changed to 1010", edit_json("d10", m5), "FAIL B7"))
+
+        # a temp copy of the export where One Eleven Type M2 is for sale again (never printed, never kept)
+        cj, wx, pl = stage("d11")
+        raw = json.loads(Path(args.export).read_text(encoding="utf-8"))
+        for rec in raw["records"]:
+            if rec.get("name") == "One Eleven Menerung @ Bangsar":
+                for u in rec.get("unitTypes") or []:
+                    if u.get("label") == "Type M2":
+                        u["soldOut"] = False
+        export_copy = tmp / "d11" / "projects.export.json"
+        export_copy.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
+        del raw
+        defects.append(("export copy: One Eleven Type M2 marked available", (cj, wx, pl, export_copy), "FAIL B7"))
+
+        def m6(d):  # a fact-sheet value that the client sheet does not have
+            fact = next(f for f in case(d, "N6")["sheet_facts"] if f.get("field") == "totalUnits")
+            fact["value"] = "150 units (including 22 duplex penthouses)"
+
+        defects.append(("N6 Eden totalUnits changed", edit_json("d12", m6), "FAIL B8"))
+
         for name, paths, expect in defects:
             rc, out = run(*paths)
             bites = rc != 0 and expect in out
@@ -875,11 +1083,12 @@ def main(argv=None):
     ap.add_argument("--workbook", default=str(DEF_WORKBOOK))
     ap.add_argument("--plan", default=str(DEF_PLAN))
     ap.add_argument("--export", default=str(DEF_EXPORT), help="project export JSON (default: projects.export.json)")
+    ap.add_argument("--sheet", default=str(DEF_SHEET), help="normalised client sheet (quick-kayinleong-096)")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args(argv)
     if args.self_test:
         return self_test(args)
-    return verify(args.cases, args.workbook, args.plan, args.export)
+    return verify(args.cases, args.workbook, args.plan, args.export, args.sheet)
 
 
 if __name__ == "__main__":

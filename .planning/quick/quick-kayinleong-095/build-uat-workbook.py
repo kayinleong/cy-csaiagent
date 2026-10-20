@@ -1,7 +1,7 @@
 """Build the tester workbook from uat-cases.json.
 
 The workbook has one sheet, `Test Cases`, holding only the sections named in
-`meta.tester_sections` (Finder, Reply and Coach). The JSON stays the full
+`meta.tester_sections` (Finder, new project data, Reply and Coach). The JSON stays the full
 catalogue; the cross-cutting (X) cases and the exploratory slots are kept in it
 for a later round but are not written here. Every cell is derived from the JSON.
 The internal `source` field is never written. There are no formulas. Layout
@@ -14,7 +14,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from zipfile import ZIP_DEFLATED, ZipFile
+from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -40,6 +40,25 @@ BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
 PRIORITY_COLOR = {"P0": "B91C1C", "P1": "92400E", "P2": INK_BODY}
 
 LANGS = ["EN", "BM", "中文"]
+ZIP_STAMP = (2026, 10, 19, 0, 0, 0)  # fixed entry time, so a rebuild is byte-identical
+
+
+class FixedTimeZip(ZipFile):
+    """ZipFile whose entries all carry ZIP_STAMP instead of the time of the build."""
+
+    def writestr(self, zinfo_or_arcname, data, compress_type=None, compresslevel=None):
+        if not isinstance(zinfo_or_arcname, ZipInfo):
+            info = ZipInfo(filename=zinfo_or_arcname, date_time=ZIP_STAMP)
+            info.compress_type = ZIP_DEFLATED
+            info.external_attr = 0o600 << 16
+            zinfo_or_arcname = info
+        else:
+            zinfo_or_arcname.date_time = ZIP_STAMP
+        super().writestr(zinfo_or_arcname, data, compress_type, compresslevel)
+
+    def write(self, filename, arcname=None, compress_type=None, compresslevel=None):
+        # openpyxl writes the worksheet to a temp file and adds it with write(), which would stamp the file's mtime
+        self.writestr(arcname or str(filename), Path(filename).read_bytes())
 
 TC_HEADERS = ["ID", "Area", "Test Case", "Priority", "Preconditions", "Steps", "Expected Result", "Result",
               "Actual / Comments", "Known Status", "Lang", "Type", "Runs", "Run by", "Double-rate"]
@@ -161,7 +180,7 @@ def build(cases_path, out_path):
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     # wb.save() stamps `modified` with the current time, which would change the file on every rebuild.
     # ExcelWriter writes the fixed stamp above instead, so the same JSON gives the same workbook.
-    with ZipFile(str(out_path), "w", ZIP_DEFLATED, allowZip64=True) as archive:
+    with FixedTimeZip(str(out_path), "w", ZIP_DEFLATED, allowZip64=True) as archive:
         ExcelWriter(wb, archive).save()
     return data, tc
 
