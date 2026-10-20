@@ -3,7 +3,7 @@
 - session: claude-code
 - branch: quick-kayinleong-091
 - started: 2026-10-19
-- status: in-progress (built and tested; live dry run pending)
+- status: done
 - summary: ingest the client's updated "_D2 Project Info.xlsx" (per-unit-type sizes, nett/gross prices, sold-out units, project facts, 2026 cross-sell list) into the existing project records
 
 ## What will change
@@ -91,9 +91,116 @@ Nothing has been written to live Firestore.
 **Process note:** the T3 agent deleted its own temporary seed file at the repo root with
 `rm -f`. The global rules ask for confirmation before that. Nothing else was affected.
 
-## Pending (orchestrator, needs the user)
+## Live run (2026-10-20, user-approved)
 
-- **CP-A, live read-only dry runs.** The session's auto-mode classifier blocked live
-  Firestore access, so the user runs these, or grants permission for them.
-- **CP-B, apply after approval.** Followed by T6, refreshing the claim-095 UAT facts against
-  the new snapshot.
+The live dry runs and the apply were run by kayinleong in their own terminal, using
+`tsx --env-file=.env`. This session's auto-mode classifier blocked the first live read,
+so the user ran them. The user then asked the orchestrator to run the two read-only
+re-checks and the re-export.
+
+**Import** (fingerprint `e276716d…053c`, approved as shown)
+
+| Measure | Count |
+| --- | --- |
+| Projects changed | 37 of 81 |
+| Field changes | 112 |
+| Written | 37 |
+| Re-read and asserted | 37 |
+| Audit rows | 37 |
+| Re-embedded | 10 (0 failed) |
+
+- **Backup:** `backups/2026-10-20T02-50-24-090Z/projects-backup.json` (170 KB). It is
+  gitignored, as confirmed with `git check-ignore`. This is the undo path:
+  `--restore <backup>`.
+- **Idempotency:** the next dry run showed `projects changed: 0`.
+- **Report:** `IMPORT-APPLY.md` holds the full before → after record.
+
+**Fact sheets** (fingerprint `00f4a188…52a3`)
+
+- 80 created and 113 chunks published, with 80 of 80 audit rows.
+- The next dry run showed `unchanged 80`.
+
+**Snapshot re-exported** (2026-10-20T02:53Z), with spot-checks against plan:
+
+| Project | Price | Units |
+| --- | --- | --- |
+| DC Residensi | RM1,200,000 | 18 (14 sold out) |
+| Southpoint | RM1,740,000 | 11, prices kept |
+| Rafflesia | RM2,900,000 | 9 |
+| Parkside | RM588,000 | 10 |
+
+**T6 (UAT refresh, `d6335ad`)**
+
+- **F14** now expects DC Residensi's nett price from RM1.2m, and must not offer a
+  sold-out layout.
+- **F24** now accepts the 10 Royal Suites layouts.
+- The 095 snapshot date is now 2026-10-20, and the plan doc's DC Residensi note and Q14
+  are updated.
+- The 095 gate passes 38 checks and its self-test passes. E6 had a false positive on
+  "Type E1"; the pattern now ignores layout names.
+
+## Verification
+
+### What was tested
+
+- **TS:**
+  - 131 core tests, 198 runner and contract tests (emulator suite 32/32), 9 guard tests,
+    44 fact-sheet tests and 3 projectDetail tests.
+  - Typecheck is clean.
+  - Full suite: 1,562 tests passed, and 1 suite failed: `tests/finder-corpus-gates`. That
+    suite loads the gitignored `projects.inventory.json`, which is absent on this
+    machine, so it errors on load. It is unrelated to this claim.
+- **Python stage 1:** 12 checks, 0 FAIL. The self-test catches 8 of 8 injected defects.
+- **Gates bite:**
+  - T1: 5 rule mutations each fail the tests.
+  - T4: with the guards disabled, 8 of 9 tests fail.
+  - T3: a wrong `--expect-plan` refuses before writing.
+- **Live:** apply, re-read asserts, audit counts, a re-run showing 0 changes, and fact
+  sheets showing unchanged 80.
+
+### What was ruled out and why
+
+- **Invented prices (the quick-088 failure):**
+  - psf is never multiplied by a size;
+  - the "from" price is the lowest stated nett figure across available units (approved by
+    the user);
+  - doubtful values were held back: 23 values in `HELD-BACK.md`.
+- **Clobbering:**
+  - a blank cell never clears a value, and units merge by label, so Southpoint kept its 7
+    prices and Rafflesia kept RM2.9m;
+  - the three backfill scripts now skip fields the workbook owns.
+- **PII:**
+  - the phone number and URL in the Developer cell (Raw Data!G21) were scrubbed;
+  - every fact sheet and report passed the contact scanner, and an independent grep
+    found nothing;
+  - the backup, which holds descriptions, is gitignored.
+- **Search breakage:**
+  - Area was not written to `locationText`;
+  - 10 projects were re-embedded as plain arrays (see the `ac7cd28` incident), and the
+    write is checked by reading it back.
+
+### Regression surface
+
+- **Finder:** search, the results table and `projectDetail` (`soldOut` passes through,
+  plus a prompt rule).
+- **Scripts:**
+  - the 3 backfill scripts are guarded;
+  - the export carries the new markers;
+  - the inventory admin form is unchanged;
+  - `reembed-projects` is unchanged.
+- **KB:** the ingest path is reused, and nothing in it was modified.
+- **UAT 095:** the gate is green.
+
+## Open items for the client and Derek
+
+- **Held-back values:** the 23 entries in `HELD-BACK.md`, including the DC E1 size, the
+  Imperial H1a and H2 prices, Puncak's gross column, the Sentral Suites column shift and
+  5 ambiguous completion dates.
+- **New projects:** Binastra Cochrane, Lagenda Tunku and Ashbourne. Adding them is a
+  separate step.
+- **Location text:** for 26 projects, the sheet's Area isn't in the stored location text
+  (e.g. "Bukit Bintang"), so Finder location searches may miss them. Deciding whether to
+  append the Area to `locationText` is a separate decision; doing so would trigger a
+  re-embed.
+- **Near-duplicate layouts:** Lantern "Type A" vs "Type A1", Parkside "Type C" vs "C1",
+  and Southpoint "Type A3 & B3" alongside A3 and B3.
