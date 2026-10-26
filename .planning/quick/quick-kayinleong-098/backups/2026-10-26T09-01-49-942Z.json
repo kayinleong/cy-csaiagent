@@ -1,0 +1,70 @@
+{
+  "kind": "patch",
+  "fingerprint": "bfe09eaee925651226d3211964dcc190ed304ee130c2a8624aede2e9fcba3882",
+  "changes": [
+    {
+      "docId": "ZAtRBLvFIfa04tuOnDcr",
+      "name": "Alstonia Hilltop Homes",
+      "field": "locationText",
+      "before": "Bukit Rahman Putra, Sungai Buloh, KL North (Mont Kiara/Dutamas region)",
+      "after": "Bukit Rahman Putra (BRP), Sungai Buloh, Selangor",
+      "why": "Sungai Buloh is not in the Mont Kiara/Dutamas region (UAT F5). Text is the client sheet Area."
+    },
+    {
+      "docId": "8UKNRsEYVyFqZFp0wt5Q",
+      "name": "St. Regis Residences Kuala Lumpur",
+      "field": "locationText",
+      "before": "KL Sentral, Kuala Lumpur (Mont Kiara/Dutamas area, KL North)",
+      "after": "KL Sentral, Kuala Lumpur",
+      "why": "A KL Sentral project tagged as Mont Kiara/Dutamas passes a North Kiara search."
+    },
+    {
+      "docId": "gxA6UXHk7dRuQToxKwP4",
+      "name": "Rimbun Saujana Residency",
+      "field": "locationText",
+      "before": "Shah Alam, KL West/PJ/Subang region",
+      "after": "Shah Alam, Selangor",
+      "why": "A Shah Alam project tagged \"PJ/Subang region\" passes a Subang search. Text is the client sheet Area."
+    },
+    {
+      "docId": "y28FP6lqDrEuGEbz9u3u",
+      "name": "d'Brightton titiwangsa",
+      "field": "locationText",
+      "before": "Jalan Tiara Titiwangsa, KL East; near Taman Tasik Titiwangsa, KLCC",
+      "after": "Jalan Tiara Titiwangsa, KL East; near Taman Tasik Titiwangsa and KLCC",
+      "why": "The trailing \", KLCC\" read as a KLCC address (UAT F9). KLCC stays, as a landmark."
+    },
+    {
+      "docId": "UyAt3rBJpmkv1GXZg73E",
+      "name": "Aspire office @ KL ecocity",
+      "field": "propertyType",
+      "before": null,
+      "after": "commercial",
+      "why": "Office development (UAT N2)."
+    },
+    {
+      "docId": "8vxV90uXgjCKUvmJKQT7",
+      "name": "The Stride Office @ BBCC",
+      "field": "propertyType",
+      "before": null,
+      "after": "commercial",
+      "why": "Office development."
+    },
+    {
+      "docId": "Dqv8WfbY7tRC9plczVtZ",
+      "name": "E&O – City of Elmina (Laman Embun Commercial)",
+      "field": "propertyType",
+      "before": null,
+      "after": "commercial",
+      "why": "2–3 storey commercial shops on commercial land."
+    },
+    {
+      "docId": "pSgeXCmr9VEVl1ha6uvG",
+      "name": "The MET, Corporate Tower",
+      "field": "propertyType",
+      "before": null,
+      "after": "commercial",
+      "why": "Grade A office tower."
+    }
+  ]
+}
