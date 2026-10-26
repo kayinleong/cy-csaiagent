@@ -3,7 +3,7 @@
 - session: claude-code
 - branch: quick-kayinleong-098
 - started: 2026-10-26
-- status: claimed
+- status: in-progress
 - summary: fix the Finder causes behind the 24 Oct UAT project failures — location 'near' scope, directional words, required no-match next step, property-type filter — plus the matching data corrections (dry-run first; live apply only on approval)
 
 ## What will change
