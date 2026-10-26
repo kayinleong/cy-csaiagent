@@ -97,6 +97,14 @@
       "priceUnknown": "Price not on record",
       "rowCount": "{count} matching projects",
       "notOnRecord": "Not on record"
+    },
+    "refusal": {
+      "nextStepsTitle": "Next steps",
+      "fallbackOtherArea": "Ask whether the lead would consider another area.",
+      "fallbackBudget": "Ask whether the lead's budget can stretch.",
+      "fallbackPriorities": "Ask what matters most to the lead, so the search can be widened on that.",
+      "fallbackConfirmEligibility": "Confirm the lead's nationality, bumiputera status and income with them.",
+      "fallbackSalesAdmin": "Check eligibility and financing options with D2 sales admin."
     }
   },
   "handoff": {

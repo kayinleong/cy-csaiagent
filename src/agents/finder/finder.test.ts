@@ -303,6 +303,57 @@ describe('Test 3: refusal-no_match — searchProjects no_match → grounded refu
     // No project ID sneaked in
     expect(result.output.matches.map((m) => m.projectId)).toHaveLength(0)
   })
+
+  it('quick-098 UAT F11: a location miss says "no project in that area" and always offers next steps', async () => {
+    const result = await finderAgent.run({
+      messages: [{ role: 'user', content: 'Lead wants a 3-bedroom in Cheras, around 650k, Malaysian, own stay' }],
+      userLang: 'en',
+      agentUid: 'uid-test-098',
+      parsedCriteria: {
+        segment: 'own_stay',
+        priceMin: null,
+        priceMax: 650_000,
+        monthlyIncome: null,
+        nationality: 'malaysian',
+        bumiputera: null,
+        locationPref: 'Cheras',
+        bedrooms: 3,
+        freeText: '3-bedroom in Cheras, around 650k',
+      },
+      injectedSearchResult: { found: false, reason: 'no_match', gate: 'location' },
+    })
+
+    const refusal = result.output.refusal
+    expect(refusal?.explanation).toContain('no active project in Cheras')
+    // A location miss is not qualified by budget or bedrooms. That qualification is what
+    // implied some Cheras stock existed.
+    expect(refusal?.explanation).not.toMatch(/bed|budget|650/i)
+    expect(refusal?.nextSteps?.length).toBeGreaterThan(0)
+    expect(refusal?.nextSteps?.join(' ')).not.toMatch(/Cheras/)
+  })
+
+  it('quick-098: every offline refusal carries next steps, whatever the gate', async () => {
+    for (const gate of ['location', 'property_type', 'price', 'eligibility', 'relevance', 'inventory', undefined] as const) {
+      const result = await finderAgent.run({
+        messages: [{ role: 'user', content: 'Find a property' }],
+        userLang: 'en',
+        agentUid: 'uid-test-098b',
+        parsedCriteria: {
+          segment: 'own_stay',
+          priceMin: null,
+          priceMax: null,
+          monthlyIncome: null,
+          nationality: 'malaysian',
+          bumiputera: null,
+          locationPref: null,
+          bedrooms: null,
+          freeText: 'Find a property',
+        },
+        injectedSearchResult: { found: false, reason: 'no_match', gate },
+      })
+      expect(result.output.refusal?.nextSteps?.length, `gate ${gate}`).toBeGreaterThan(0)
+    }
+  })
 })
 
 // ─── Test 4: refusal-ineligible ───────────────────────────────────────────────

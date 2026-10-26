@@ -99,6 +99,14 @@
       "priceUnknown": "价格尚未记录",
       "rowCount": "{count} 个符合条件的项目",
       "notOnRecord": "无记录"
+    },
+    "refusal": {
+      "nextStepsTitle": "下一步",
+      "fallbackOtherArea": "询问客户是否愿意考虑其他地区。",
+      "fallbackBudget": "询问客户的预算能否提高。",
+      "fallbackPriorities": "询问客户最看重什么，以便据此放宽搜索条件。",
+      "fallbackConfirmEligibility": "向客户确认其国籍、土著身份和收入。",
+      "fallbackSalesAdmin": "向 D2 销售行政确认资格与融资方案。"
     }
   },
   "handoff": {

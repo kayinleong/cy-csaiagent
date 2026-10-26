@@ -100,6 +100,13 @@ export const CriteriaSchema = z.object({
   bedrooms: z.number().nullable(),
 
   /**
+   * Property type (quick-kayinleong-098). Omitted means 'residential' (searchProjects applies
+   * the default): an office only belongs in a shortlist when the lead asks for commercial
+   * space. 'any' skips the gate.
+   */
+  propertyType: z.enum(['residential', 'commercial', 'any']).optional(),
+
+  /**
    * The raw pasted free-text criteria — feeds the Stage-B query vector.
    * Always present (this is the input; even if structured fields parse to unknown/null,
    * the raw text is preserved for semantic re-rank).
@@ -280,6 +287,21 @@ export const FinderRefusalSchema = z.object({
    * For 'no_match': explains that no active projects matched the criteria.
    */
   explanation: z.string().min(1),
+
+  /**
+   * 1–3 concrete actions the agent can take next (quick-kayinleong-098).
+   *
+   * The prompt REQUIRES this on every refusal. UAT F11 run 3 shows why: the next step lived
+   * only in the prose, and an identical prompt came back with none.
+   *
+   * `.optional()` is still deliberate. This schema is the decode gate
+   * (`decodeFinderOutput`), not a generation constraint, and quick-056/071 are the record
+   * of a required field deleting a real answer. An older persisted turn, or a model that
+   * omits the field, must still decode. The refusal card shows translated default steps
+   * when this is absent, so the agent never gets a dead end. `normalizeFinderShape` coerces a
+   * bare string and caps the list at 3 before validation.
+   */
+  nextSteps: z.array(z.string().min(1)).optional(),
 })
 
 /**

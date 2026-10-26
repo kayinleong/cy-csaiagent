@@ -23,6 +23,7 @@
  * References: FIND-01, FIND-04, D-04, D-09, C2, 03-07-PLAN.md.
  */
 
+import { useTranslations } from 'next-intl'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -100,19 +101,7 @@ export function MatchList({ output, onAsk, className }: MatchListProps) {
         data-state="refusal"
         className={cn('flex flex-col gap-3', className)}
       >
-        <Card
-          data-slot="refusal-card"
-          className="rounded-xl ring-1 ring-foreground/10 shadow-sm"
-        >
-          <CardHeader className="pb-2 pt-4 px-4">
-            <span className="text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
-              {refusal.reason === 'ineligible' ? 'Eligibility issue' : 'No match found'}
-            </span>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 text-sm leading-relaxed">
-            {refusal.explanation}
-          </CardContent>
-        </Card>
+        <RefusalCard refusal={refusal} />
       </div>
     )
   }
@@ -179,6 +168,52 @@ export function MatchList({ output, onAsk, className }: MatchListProps) {
         No results returned. Please try rephrasing your criteria.
       </p>
     </div>
+  )
+}
+
+// ─── RefusalCard ──────────────────────────────────────────────────────────────
+
+/**
+ * The grounded refusal card, which always ends with next steps (quick-kayinleong-098).
+ *
+ * The model is told to write 1–3 `nextSteps`. When it does not (an older persisted turn, or
+ * the UAT F11 run 3 case where an identical prompt came back with none), the card shows
+ * translated default steps for the refusal reason. An agent should never be left at a dead
+ * end. The defaults name no project and claim no stock.
+ */
+function RefusalCard({ refusal }: { refusal: NonNullable<FinderOutput['refusal']> }) {
+  const t = useTranslations('chat.refusal')
+  const steps =
+    refusal.nextSteps && refusal.nextSteps.length > 0
+      ? refusal.nextSteps
+      : refusal.reason === 'ineligible'
+        ? [t('fallbackConfirmEligibility'), t('fallbackSalesAdmin')]
+        : [t('fallbackOtherArea'), t('fallbackBudget'), t('fallbackPriorities')]
+
+  return (
+    <Card
+      data-slot="refusal-card"
+      className="rounded-xl ring-1 ring-foreground/10 shadow-sm"
+    >
+      <CardHeader className="pb-2 pt-4 px-4">
+        <span className="text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
+          {refusal.reason === 'ineligible' ? 'Eligibility issue' : 'No match found'}
+        </span>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3 px-4 pb-4 text-sm leading-relaxed">
+        <p>{refusal.explanation}</p>
+        <div data-slot="refusal-next-steps" className="flex flex-col gap-1">
+          <span className="text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
+            {t('nextStepsTitle')}
+          </span>
+          <ul className="list-disc space-y-1 pl-5">
+            {steps.map((step, i) => (
+              <li key={i}>{step}</li>
+            ))}
+          </ul>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

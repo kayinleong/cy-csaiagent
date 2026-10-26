@@ -311,6 +311,17 @@ export interface ProjectDoc {
   sizeMinSqft?: number | null
   sizeMaxSqft?: number | null
   /**
+   * What the units are for (quick-kayinleong-098): 'residential' for homes (including
+   * serviced residences and SoHo units bought to live in or rent out) and 'commercial' for
+   * offices and shops.
+   *
+   * searchProjects excludes commercial projects unless the lead asks for one (UAT N2 put an
+   * office tower in a family's own-stay shortlist). Absent means "not tagged", and the gate
+   * then falls back to the name heuristic in `propertyTypeOf` (src/inventory/search.ts).
+   * Not an embedding field.
+   */
+  propertyType?: 'residential' | 'commercial'
+  /**
    * Stated **asking** price per square foot, in RM (quick-kayinleong-088).
    *
    * Many D2 write-ups quote ONLY a psf rate and never a total — "Gross Price: RM720 psf",

@@ -109,6 +109,12 @@ export interface ParsedCriteria {
   bumiputera: boolean | null
   locationPref: string | null
   bedrooms: number | null
+  /**
+   * Property-type gate (quick-kayinleong-098). Absent means 'residential': D2's leads buy
+   * homes, and an office only belongs in a shortlist when the lead asks for one. 'any'
+   * skips the gate.
+   */
+  propertyType?: 'residential' | 'commercial' | 'any'
   /** Raw free-text criteria → feeds the Stage-B query vector */
   freeText: string
   /** FIND-06 returning-client: only surface projects created/activated after this date. */
@@ -147,9 +153,28 @@ export interface ProjectMatch {
   }
 }
 
+/**
+ * Which filter emptied a no_match result (quick-kayinleong-098).
+ *
+ * The Finder phrases its refusal and next steps from this. UAT F11 is the case it exists
+ * for: "3-bedroom in Cheras, around 650k" was emptied by the LOCATION gate (D2 has no Cheras
+ * project at all), yet the answer was qualified by bedrooms and budget and suggested that
+ * "some 2-bedroom units in Cheras may fall within the range". Units that do not exist.
+ *
+ *   - eligibility:   the Stage-A nationality / bumiputera filters left nothing
+ *   - location:      nothing active sits in the requested area, at any price
+ *   - property_type: the area has stock, but none of the requested type (residential vs commercial)
+ *   - price:         the area/type has stock, but none within the stated budget
+ *   - relevance:     candidates existed, but none cleared MIN_RELEVANCE
+ *   - inventory:     nothing was left to filter (no active projects, or the since filter)
+ */
+export type NoMatchGate = 'eligibility' | 'location' | 'property_type' | 'price' | 'relevance' | 'inventory'
+
 export type SearchResult =
   | { found: true; matches: ProjectMatch[] }
-  | { found: false; reason: 'no_match' }
+  // `gate` is optional only so hand-built results (tests, the offline path) stay valid;
+  // searchProjects always sets it.
+  | { found: false; reason: 'no_match'; gate?: NoMatchGate }
   | { found: false; reason: 'ineligible'; why: 'financing' }
 
 /** Filters accepted by queryInventory (FIND-07). All fields optional. */
@@ -326,6 +351,22 @@ const PLACE_TYPE_TOKENS = new Set([
 ])
 
 /**
+ * Compass words, English and Malay (quick-kayinleong-098).
+ *
+ * Like PLACE_TYPE_TOKENS, these are excluded from the SINGLE-TOKEN fallback tier only. On its
+ * own a compass word is not discriminating, and the stored location prose is full of region
+ * tags ("KL North", "KL South"). Measured on the live corpus: with "north" as a free token,
+ * "North Kiara" matched "Bukit Rahman Putra, Sungai Buloh, KL North (Mont Kiara/Dutamas
+ * region)", because "north" came from "KL North" and "kiara" from "Mont Kiara". That was the
+ * UAT F5 failure, and St. Regis (KL Sentral) passed the same gate. A preference that carries a
+ * compass word must now match as an exact phrase, so "North Kiara" still finds "Miranda Hill
+ * @ north kiara" and "Segambut / North Kiara".
+ */
+const COMPASS_TOKENS = new Set([
+  'north', 'south', 'east', 'west', 'utara', 'selatan', 'timur', 'barat',
+])
+
+/**
  * Case-, punctuation- and diacritic-insensitive normalization.
  *
  * `\p{L}\p{N}` (not `[a-z0-9]`) so CJK location names survive normalization instead of
@@ -360,9 +401,27 @@ const PROXIMITY_CLAUSE =
   /\b(?:near|nearby|close\s+to|next\s+to|beside|opposite|adjacent|adjoining|facing|overlooking|walking\s+distance|walk\s+to|steps?\s+to|access\s+to|direct\s+link|link\s+bridge|linked\s+to|connected\s+to|integrated\s+with|surrounded\s+by|minutes?\s+to|mins?\s+to|stops?\s+from|views?)\b|\d+[\s-]*(?:m|km|mins?|minutes?|stops?)\b/i
 
 /**
+ * A comma clause that asserts an address or an area, and so ENDS a proximity run
+ * (quick-kayinleong-098).
+ *
+ * It either opens with a street or place-type word ("Jalan Yap Kwan Seng", "Off Jalan Klang
+ * Lama", "Bukit Jalil") or names an area outright ("KLCC district", "KLCC/Bukit Bintang area").
+ * A bare name that follows a "near …" phrase ("KLCC", "Mid Valley", "Petaling Jaya") does
+ * neither, so it is read as the next item in the landmark list.
+ */
+const ADDRESS_CLAUSE =
+  /^\s*\(?\s*(?:jalan|jln|lorong|persiaran|lebuh|lingkaran|off|taman|bukit|kampung|kg|sungai|batu|seksyen|section|desa|sri|seri|bandar|pusat|tanjung|lembah|mont|no\.?\s*\d)\b|\b(?:area|district|region)\b/i
+
+/** A clause made only of city/state qualifiers and compass words — "KL North", "Centre of KL". */
+function isRegionOnlyClause(clause: string): boolean {
+  const tokens = normalizeLocationText(clause).split(' ').filter((t) => t.length > 0)
+  return tokens.length > 0 && tokens.every((t) => LOCATION_QUALIFIER_TOKENS.has(t) || COMPASS_TOKENS.has(t))
+}
+
+/**
  * Build the space-padded haystack a location needle is tested against.
  *
- * Haystack is `name` + the NON-proximity clauses of `locationText`:
+ * Haystack is `name` + the clauses of `locationText` that say where the project IS:
  *   - `name` is included whole because D2 project names commonly carry the area
  *     ("Pinnacle Bangsar Residence", "Aria Luxury Residence @ KLCC"). This also rescues
  *     projects whose only in-clause area mention sits inside a "near X" phrase.
@@ -370,16 +429,49 @@ const PROXIMITY_CLAUSE =
  *     (~97% of the embedded text) that mentions every landmark within driving distance;
  *     including it would make the gate a no-op.
  *
- * If every clause looks like a proximity clause we fall back to the full text — a false
- * positive is preferable to dropping the project entirely.
+ * A PROXIMITY RUN SPANS COMMAS (quick-kayinleong-098). The text is split into sentences on
+ * `; . | – —` and each sentence into comma clauses. A proximity clause drops itself AND the
+ * comma clauses that follow it, until the sentence ends or a clause asserts an address
+ * (ADDRESS_CLAUSE). Until 098 each comma clause was judged alone, so
+ *   "Jalan Tiara Titiwangsa, KL East; near Taman Tasik Titiwangsa, KLCC"
+ * dropped "near Taman Tasik Titiwangsa" and kept "KLCC" as if it were the address. A KLCC
+ * search then returned a Titiwangsa project (UAT F9). Measured over the 83 active projects,
+ * the run drops only landmark lists. The changed searches are KLCC (d'Brightton leaves),
+ * Mid Valley (Lunar Seputeh and Parkside leave), Petaling Jaya (Enlace leaves) and KL Sentral
+ * (Lunar Seputeh leaves). Region-only clauses ("KL North", "Centre of KL") are kept but do
+ * not end the run, so "near Bangsar, KL City Centre, Petaling Jaya" still drops "Petaling
+ * Jaya".
+ *
+ * If every clause is dropped we fall back to the full text — a false positive is preferable
+ * to dropping the project entirely.
  */
 function locationHaystack(doc: ProjectDoc): string {
   const raw = doc.locationText ?? ''
-  // Split on clause separators. ASCII hyphen is NOT a separator (it appears inside
-  // names and in "3-min"); en/em dashes are.
-  const clauses = raw.split(/[,;.|–—]/).filter((c) => c.trim().length > 0)
-  const addressClauses = clauses.filter((c) => !PROXIMITY_CLAUSE.test(c))
-  const areaText = (addressClauses.length > 0 ? addressClauses : clauses).join(' , ')
+  const allClauses: string[] = []
+  const addressClauses: string[] = []
+  // Sentence separators. ASCII hyphen is NOT one (it appears inside names and in "3-min");
+  // en/em dashes are.
+  for (const sentence of raw.split(/[;.|–—]/)) {
+    let inProximityRun = false
+    for (const clause of sentence.split(',')) {
+      if (clause.trim().length === 0) continue
+      allClauses.push(clause)
+      if (PROXIMITY_CLAUSE.test(clause)) {
+        inProximityRun = true
+        continue
+      }
+      if (inProximityRun) {
+        if (isRegionOnlyClause(clause)) {
+          addressClauses.push(clause)
+          continue
+        }
+        if (!ADDRESS_CLAUSE.test(clause)) continue
+        inProximityRun = false
+      }
+      addressClauses.push(clause)
+    }
+  }
+  const areaText = (addressClauses.length > 0 ? addressClauses : allClauses).join(' , ')
   return ` ${normalizeLocationText(`${doc.name ?? ''} , ${areaText}`)} `
 }
 
@@ -424,9 +516,10 @@ export interface LocationNeedleGroup {
  *        - ALL, not ANY. With ANY, "Petaling Jaya" matched "Aster Hill Sri Petaling" and
  *          "Luminar Residence Subang [Jaya]" — different areas that merely share a word.
  *        - The tier is DISABLED entirely when the segment leans on a generic place-type
- *          prefix (PLACE_TYPE_TOKENS) or 1–2 char ASCII noise, because the remainder is
- *          not discriminating on its own: "Sri Petaling" would reduce to "petaling" and
- *          match Petaling Jaya. Such a segment must match its exact phrase.
+ *          prefix (PLACE_TYPE_TOKENS), a compass word (COMPASS_TOKENS, quick-098) or 1–2
+ *          char ASCII noise, because the remainder is not discriminating on its own: "Sri
+ *          Petaling" would reduce to "petaling" and match Petaling Jaya, and "North Kiara"
+ *          would match "KL North (Mont Kiara …)". Such a segment must match its exact phrase.
  *
  * Returns `null` when nothing discriminating survives — the caller then SKIPS the gate
  * rather than filtering to zero.
@@ -462,6 +555,7 @@ export function locationNeedles(pref: string): LocationNeedleGroup[] | null {
     const tokens = meaningful.filter(
       (t) =>
         !PLACE_TYPE_TOKENS.has(t) &&
+        !COMPASS_TOKENS.has(t) &&
         // Drop 1–2 char ASCII fragments (noise); keep short CJK, where 2 chars is a word.
         !(t.length < 3 && /^[ -~]+$/.test(t)),
     )
@@ -531,6 +625,35 @@ export function projectMatchesPrice(doc: ProjectDoc, priceMin: number | null, pr
   if (priceMax !== null && price > priceMax) return false
   if (priceMin !== null && price < priceMin) return false
   return true
+}
+
+// ─── Property type (quick-kayinleong-098) ────────────────────────────────────
+
+/**
+ * Project names that mark a non-residential development.
+ *
+ * NAME ONLY, deliberately. The descriptions are useless for this: residential towers
+ * routinely mention their "commercial title", "retail podium" or "office tower next door",
+ * so a description match would tag Dawn KLCC, Parkside and most of KLCC as commercial.
+ * Measured on the live corpus, this pattern matches exactly the four non-residential
+ * projects: Aspire office @ KL ecocity, The Stride Office @ BBCC, E&O – City of Elmina
+ * (Laman Embun Commercial) and The MET, Corporate Tower.
+ */
+const COMMERCIAL_NAME = /\b(?:offices?|commercial|corporate\s+towers?|retail|shop\s?lots?|shop-?offices?)\b/i
+
+/**
+ * The property type the gate uses: the stored `propertyType` when it is set, otherwise the
+ * name heuristic, otherwise residential.
+ *
+ * The fallback matters because `createProject` and the Skool importer do not set the field.
+ * A newly imported "X Office Tower" is still kept out of a home buyer's shortlist before an
+ * admin tags it.
+ *
+ * Exported so the data patch script and tests share the exact rule the gate applies.
+ */
+export function propertyTypeOf(doc: Pick<ProjectDoc, 'name' | 'propertyType'>): 'residential' | 'commercial' {
+  if (doc.propertyType === 'residential' || doc.propertyType === 'commercial') return doc.propertyType
+  return COMMERCIAL_NAME.test(doc.name ?? '') ? 'commercial' : 'residential'
 }
 
 // ─── Affordability helper ────────────────────────────────────────────────────
@@ -696,7 +819,8 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   const eligibleSnap = await q.get()
 
   if (eligibleSnap.empty) {
-    return { found: false, reason: 'no_match' }
+    const eligibilityFiltered = criteria.nationality === 'foreign' || criteria.bumiputera === false
+    return { found: false, reason: 'no_match', gate: eligibilityFiltered ? 'eligibility' : 'inventory' }
   }
 
   // Collect eligible docs with their IDs
@@ -749,11 +873,28 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   const needles = criteria.locationPref !== null ? locationNeedles(criteria.locationPref) : null
   const locationApplied = needles !== null
   if (needles !== null) {
+    // Attribute the miss to the location gate only when it actually removed something.
+    // An already-empty set (the since filter) is an 'inventory' miss, not "nothing in Cheras".
+    const gate: NoMatchGate = candidates.length > 0 ? 'location' : 'inventory'
     candidates = candidates.filter(({ doc }) => projectMatchesLocation(doc, needles))
     if (candidates.length === 0) {
       // Honest refusal: D2 has no active inventory in the requested area. The Finder
       // must NOT substitute projects from a different area (the reported defect).
-      return { found: false, reason: 'no_match' }
+      return { found: false, reason: 'no_match', gate }
+    }
+  }
+
+  // ── PROPERTY-TYPE gate (quick-kayinleong-098) ────────────────────────────
+  // HARD filter: there was no property type, so an office tower came back in a residential
+  // own-stay shortlist (UAT N2, Aspire office @ KL ecocity). Its unknown price is admitted by
+  // the price gate below, so nothing else could exclude it. Runs after location so that a
+  // 'location' miss still means "nothing in that area at all".
+  const wantedType = criteria.propertyType ?? 'residential'
+  if (wantedType !== 'any') {
+    const gate: NoMatchGate = candidates.length > 0 ? 'property_type' : 'inventory'
+    candidates = candidates.filter(({ doc }) => propertyTypeOf(doc) === wantedType)
+    if (candidates.length === 0) {
+      return { found: false, reason: 'no_match', gate }
     }
   }
 
@@ -761,13 +902,14 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   // HARD filter: priceMin/priceMax were never applied, so "budget 800k" did nothing.
   const priceApplied = criteria.priceMin !== null || criteria.priceMax !== null
   if (priceApplied) {
+    const gate: NoMatchGate = candidates.length > 0 ? 'price' : 'inventory'
     candidates = candidates.filter(({ doc }) =>
       projectMatchesPrice(doc, criteria.priceMin, criteria.priceMax),
     )
     if (candidates.length === 0) {
       // No active project in range. This is a budget miss, NOT a financing refusal —
       // 'ineligible'/'financing' is reserved for the income-derived ceiling below.
-      return { found: false, reason: 'no_match' }
+      return { found: false, reason: 'no_match', gate }
     }
   }
 
@@ -786,7 +928,7 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
       return { found: false, reason: 'ineligible', why: 'financing' }
     }
     // No income specified but since-filter or other in-memory filter eliminated all candidates
-    return { found: false, reason: 'no_match' }
+    return { found: false, reason: 'no_match', gate: 'inventory' }
   }
 
   // ── STAGE B: Vector re-rank WITHIN the eligible+affordable set ─────────
@@ -820,7 +962,7 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   // no equivalent, so a project scoring 0.05 was returned identically to one at 0.8.
   const relevant = scored.filter(({ score }) => score >= MIN_RELEVANCE)
   if (relevant.length === 0) {
-    return { found: false, reason: 'no_match' }
+    return { found: false, reason: 'no_match', gate: 'relevance' }
   }
 
   // Sort by score descending (highest dot product = most similar)

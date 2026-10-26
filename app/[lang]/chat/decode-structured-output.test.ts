@@ -119,6 +119,40 @@ describe('decodeFinderOutput', () => {
   it('returns null for a degenerate empty-matches object', () => {
     expect(decodeFinderOutput(JSON.stringify({ matches: [] }))).toBeNull()
   })
+
+  // quick-kayinleong-098: refusal.nextSteps. The schema is the decode gate, not a generation
+  // constraint, so a malformed list must never cost the agent the whole refusal.
+  const refusalWith = (nextSteps: unknown) =>
+    JSON.stringify({
+      matches: [],
+      refusal: { reason: 'no_match', explanation: 'D2 has no active project in Cheras.', nextSteps },
+    })
+
+  it('098: keeps a well-formed nextSteps list', () => {
+    const out = decodeFinderOutput(refusalWith(['Ask whether the lead would consider another area.']))
+    expect(out?.refusal?.nextSteps).toEqual(['Ask whether the lead would consider another area.'])
+  })
+
+  it('098: still decodes a refusal with no nextSteps (older turns, UAT F11 run 3)', () => {
+    const out = decodeFinderOutput(finderRefusalJson)
+    expect(out?.refusal?.reason).toBe('no_match')
+    expect(out?.refusal?.nextSteps).toBeUndefined()
+  })
+
+  it('098: coerces a bare string, drops blanks and non-strings, and caps at 3', () => {
+    expect(decodeFinderOutput(refusalWith('Ask about another area.'))?.refusal?.nextSteps).toEqual([
+      'Ask about another area.',
+    ])
+    expect(
+      decodeFinderOutput(refusalWith(['  one ', '', 42, null, 'two', 'three', 'four']))?.refusal?.nextSteps,
+    ).toEqual(['one', 'two', 'three'])
+  })
+
+  it('098: an unusable nextSteps value is dropped, not fatal', () => {
+    const out = decodeFinderOutput(refusalWith({ step: 'object, not a list' }))
+    expect(out?.refusal?.explanation).toMatch(/Cheras/)
+    expect(out?.refusal?.nextSteps).toBeUndefined()
+  })
 })
 
 // ─── quick-kayinleong-051: salvage a broken envelope ──────────────────────────

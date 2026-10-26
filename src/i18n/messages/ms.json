@@ -99,6 +99,14 @@
       "priceUnknown": "Harga belum direkodkan",
       "rowCount": "{count} projek yang sepadan",
       "notOnRecord": "Tiada dalam rekod"
+    },
+    "refusal": {
+      "nextStepsTitle": "Langkah seterusnya",
+      "fallbackOtherArea": "Tanya sama ada prospek sanggup mempertimbangkan kawasan lain.",
+      "fallbackBudget": "Tanya sama ada bajet prospek boleh dinaikkan.",
+      "fallbackPriorities": "Tanya perkara yang paling penting bagi prospek, supaya carian boleh diluaskan berdasarkannya.",
+      "fallbackConfirmEligibility": "Sahkan kewarganegaraan, status bumiputera dan pendapatan prospek dengan mereka.",
+      "fallbackSalesAdmin": "Semak kelayakan dan pilihan pembiayaan dengan pentadbir jualan D2."
     }
   },
   "handoff": {

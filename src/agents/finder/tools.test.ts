@@ -158,6 +158,21 @@ describe('searchProjects tool: the client gets every row', () => {
     expect(sink.rows).toEqual([])
   })
 
+  it('quick-098: propertyType reaches searchProjects, and the no_match gate reaches the model', async () => {
+    mocks.mockSearchProjects.mockResolvedValue({ found: false, reason: 'no_match', gate: 'location' })
+    const t = makeSearchProjectsTool('en')
+    const execute = t.execute as NonNullable<typeof t.execute>
+
+    const output = await execute({ ...INPUT, propertyType: 'commercial' }, {} as never)
+    expect(mocks.mockSearchProjects).toHaveBeenLastCalledWith(expect.objectContaining({ propertyType: 'commercial' }))
+    // The gate is the payload the model phrases its refusal from, so it must pass through.
+    expect(output).toEqual({ found: false, reason: 'no_match', gate: 'location' })
+
+    // Omitted means residential: undefined is passed and searchProjects applies the default.
+    await execute(INPUT, {} as never)
+    expect(mocks.mockSearchProjects).toHaveBeenLastCalledWith(expect.objectContaining({ propertyType: undefined }))
+  })
+
   it('a row carries the stored size fields and NOT priceBand/description/embedding', async () => {
     const sink: FinderRowSink = { rows: [] }
     await runTool(BIG_RESULT, sink)

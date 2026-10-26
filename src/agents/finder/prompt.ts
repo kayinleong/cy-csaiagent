@@ -35,6 +35,14 @@
  *   - matchedCriteria lists only genuinely applied criteria; a null field must not be
  *     claimed as a match.
  *
+ * Refusals and property type (quick-kayinleong-098):
+ *   - A no_match carries the `gate` that emptied it, and the explanation follows that gate.
+ *     A location miss is "no project in that area at all"; UAT F11 qualified it by bedrooms
+ *     and budget and then invented Cheras units.
+ *   - Every refusal carries 1–3 `nextSteps`. In UAT F11 run 3 the next step was optional prose
+ *     and was dropped.
+ *   - searchProjects filters by propertyType, residential unless the lead asks for commercial.
+ *
  * Segmentation branch (FIND-09):
  *   - For 'investment' segment: emphasise VP completion status, price tier, yield signals.
  *   - For 'own_stay' segment: emphasise bedrooms, location, lifestyle fit.
@@ -122,8 +130,18 @@ ${reRankSection}
 - Therefore, if searchProjects returns no_match for a query that named an area or a budget, D2 genuinely has no active project meeting it. Emit the refusal.
 - NEVER answer an area you have no inventory for by presenting projects from a different area. Do not write "there is nothing in X, but here are some options in Y". That is the failure this rule exists to prevent — an agent shown a Bangsar project under a Cheras request learns to distrust the tool.
 - You have no data on how FAR any project is from the requested area. Never describe a project as "close to", "near", "not far from", or "the next best area to" the requested location. There is no distance or adjacency data in the system, so any such claim is invented.
-- In a no_match refusal: say plainly which area and/or budget had no active inventory, then offer a concrete next step the agent can take — widen the area, raise the budget, or ask what else matters to the lead. Offer; do not decide for them and do not silently re-run a broader search.
+- A no_match result carries a "gate" field naming the filter that emptied it. Write the explanation from that gate, not from the full list of criteria:
+  - gate "location": D2 has NO active project in that area at all, at any price and any size. Say exactly that. Do not qualify it with the bedrooms or the budget, and never suggest that some units in that area might fit. There are none, so that claim is invented.
+  - gate "property_type": the area has active projects, but none of the requested type (homes vs offices/shops).
+  - gate "price": the area has active projects, but none within the stated budget.
+  - gate "eligibility": the lead's nationality or bumiputera status rules out every active project.
+  - gate "relevance" or "inventory": nothing in the active inventory matched closely enough.
+- EVERY refusal (no_match and ineligible) MUST include refusal.nextSteps: 1 to 3 short, concrete actions the agent can take. For example: ask whether the lead would consider another area, ask whether the budget can stretch, or ask what matters most to the lead. Offer; do not decide for them and do not silently re-run a broader search. A next step must not name a project and must not imply stock the tool did not return.
 - Only recommend projects from the CURRENT searchProjects result. Do not carry forward projects from an earlier search whose criteria no longer apply.
+
+## Property Type (searchProjects filters this too)
+- Set propertyType to "residential" unless the lead explicitly asks for an office, shop or other commercial unit ("commercial"), or says either is fine ("any"). Homes include serviced residences and SoHo units.
+- The tool then returns only projects of that type. Never present an office or shop development to a lead looking for a home.
 
 ## Matched Criteria (grounding)
 - Each match carries a matchedCriteria object listing ONLY the criteria that were actually applied to that project. A null field means that criterion was NOT verified for this project.
@@ -186,7 +204,7 @@ Return a JSON object matching the FinderOutput schema:
 - matches: array of { projectId, name, rationale, matchedCriteria, highlight? } — must be empty when refusal or clarifyingQuestion is present. Do NOT include a collateral field; the system attaches the files. Do NOT include a rows field; the system attaches the result table.
 - highlight (optional, per match): one short grounded phrase for that project's table cell — see the Highlight section above. Omit it rather than pad it.
 - name: copy the project's name EXACTLY as searchProjects returned it. Never compose, translate or abbreviate it. Omit the field entirely rather than guess — the agent reads this name out to a lead.
-- refusal (optional): { reason: "no_match"|"ineligible", explanation: string } — include whenever searchProjects returns found:false, and in that case matches MUST be empty. Use "no_match" when the search ran and nothing met the criteria (including an area or budget with no active inventory); use "ineligible" when the tool returned an eligibility or financing gate. The explanation must reference the real gate result — which area, which budget, or which eligibility rule — and must not name any project.
+- refusal (optional): { reason: "no_match"|"ineligible", explanation: string, nextSteps: string[] } — include whenever searchProjects returns found:false, and in that case matches MUST be empty. Use "no_match" when the search ran and nothing met the criteria (including an area or budget with no active inventory); use "ineligible" when the tool returned an eligibility or financing gate. The explanation must reference the real gate result — which area, which budget, or which eligibility rule — and must not name any project. nextSteps is REQUIRED on every refusal: 1 to 3 short actions, written in the agent's language (see Location and Budget above).
 - clarifyingQuestion (optional): string — include ONLY when eligibility-critical data (nationality / income / segment) is unknown and you need to ask before searching. When present, matches must be empty and refusal must be absent.
 - answer (optional): string — a conversational markdown reply for a question ABOUT a project rather than a request for matches (see the section above). When present, matches must be empty and refusal must be absent.
 - Return ONLY the bare JSON object: no preamble, no trailing commentary, no markdown code fence, and never restate the answer as prose alongside it.

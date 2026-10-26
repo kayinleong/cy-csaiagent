@@ -43,7 +43,7 @@ import {
 import type { FinderRowSink } from './tools'
 import { FinderOutputSchema } from './schema'
 import type { FinderOutput } from './schema'
-import type { SearchResult } from '@/src/inventory/search'
+import type { SearchResult, NoMatchGate } from '@/src/inventory/search'
 import type { ParsedCriteria } from '@/src/inventory/search'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -252,21 +252,24 @@ function buildOutputFromSearchResult(
         refusal: {
           reason: 'ineligible',
           explanation,
+          nextSteps: [
+            'Confirm the lead\'s income and financing arrangement with them.',
+            'Check financing options and eligibility with D2 sales admin.',
+          ],
         },
       }
     }
 
-    // no_match
+    // no_match: phrased from the gate that emptied the result (quick-kayinleong-098).
+    const gate = searchResult.reason === 'no_match' ? searchResult.gate : undefined
+    const area = parsedCriteria?.locationPref
     return {
       matches: [],
       rows: [],
       refusal: {
         reason: 'no_match',
-        explanation:
-          'No active D2 projects currently match the lead\'s criteria. ' +
-          'This may be due to eligibility requirements (bumiQuota / foreignEligible), ' +
-          'price range, or no available inventory in the preferred area. ' +
-          'Criteria can be adjusted or the lead can be revisited when new projects are launched.',
+        explanation: noMatchExplanation(gate, area),
+        nextSteps: noMatchNextSteps(gate),
       },
     }
   }
@@ -291,6 +294,56 @@ function buildOutputFromSearchResult(
 
   // `rows` is attached by the route from the tool result — not composed here.
   return { matches, rows: [] }
+}
+
+// ─── No-match wording (quick-kayinleong-098) ──────────────────────────────────
+
+/**
+ * Offline-path explanation for a no_match, keyed on the gate that emptied the result.
+ *
+ * A location miss says "no project in that area" and nothing about budget or bedrooms. UAT
+ * F11 qualified a location miss by bedrooms and budget, which implied that some stock in the
+ * area existed.
+ */
+function noMatchExplanation(gate: NoMatchGate | undefined, area: string | null | undefined): string {
+  const where = area ? ` in ${area}` : ' in the requested area'
+  switch (gate) {
+    case 'location':
+      return `D2 has no active project${where} right now, at any price.`
+    case 'property_type':
+      return `D2 has active projects${where}, but none of the requested property type.`
+    case 'price':
+      return `D2 has active projects${where}, but none within the stated budget.`
+    case 'eligibility':
+      return 'None of D2\'s active projects is open to this lead\'s nationality or bumiputera status.'
+    default:
+      return 'No active D2 project matches the lead\'s criteria right now.'
+  }
+}
+
+/** Offline-path next steps for a no_match, keyed on the same gate. Never names a project. */
+function noMatchNextSteps(gate: NoMatchGate | undefined): string[] {
+  switch (gate) {
+    case 'location':
+      return [
+        'Ask whether the lead would consider another area.',
+        'Ask what matters most to the lead, so the search can be widened on that.',
+      ]
+    case 'property_type':
+      return ['Confirm with the lead which property type they want.']
+    case 'price':
+      return [
+        'Ask whether the lead\'s budget can stretch.',
+        'Ask whether the lead would consider another area.',
+      ]
+    case 'eligibility':
+      return ['Confirm the lead\'s nationality and bumiputera status with them.']
+    default:
+      return [
+        'Ask what matters most to the lead, so the search can be widened on that.',
+        'Revisit the lead when new projects launch.',
+      ]
+  }
 }
 
 // ─── Rationale builder ────────────────────────────────────────────────────────

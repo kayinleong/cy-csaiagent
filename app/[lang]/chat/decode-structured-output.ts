@@ -302,6 +302,26 @@ export function normalizeFinderShape(raw: unknown): unknown {
     })
   }
 
+  // refusal.nextSteps (quick-kayinleong-098): a bare string becomes a one-item list, blanks
+  // and non-strings are dropped, and the list is capped at 3. Anything unusable removes the
+  // key, so one malformed field cannot fail the whole refusal.
+  if (obj.refusal && typeof obj.refusal === 'object' && !Array.isArray(obj.refusal)) {
+    const refusal = { ...(obj.refusal as Record<string, unknown>) }
+    if ('nextSteps' in refusal) {
+      const raw = typeof refusal.nextSteps === 'string' ? [refusal.nextSteps] : refusal.nextSteps
+      const steps = Array.isArray(raw)
+        ? raw
+            .filter((s): s is string => typeof s === 'string')
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0)
+            .slice(0, 3)
+        : []
+      if (steps.length > 0) refusal.nextSteps = steps
+      else delete refusal.nextSteps
+    }
+    obj.refusal = refusal
+  }
+
   return obj
 }
 

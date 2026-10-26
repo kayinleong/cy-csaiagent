@@ -242,6 +242,16 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: Find
       locationPref: z.string().nullable().describe('Location preference (e.g. "Cheras, KL"). null if not stated.'),
       tenurePref: z.string().nullable().describe('Preferred tenure (e.g. "freehold"). null if not stated.'),
       bedrooms: z.number().nullable().describe('Preferred number of bedrooms. null if not stated.'),
+      // Optional, not .default(): omitted means residential inside searchProjects, and a
+      // default would make the field required in execute()'s input type for every caller.
+      propertyType: z
+        .enum(['residential', 'commercial', 'any'])
+        .optional()
+        .describe(
+          'Property type. Use "residential" (homes, including serviced residences) unless the lead ' +
+            'explicitly asks for an office, shop or other commercial unit ("commercial"), or says ' +
+            'either is fine ("any"). Omitted means "residential".',
+        ),
       freeText: z.string().describe('Raw pasted criteria text — feeds the semantic re-rank vector.'),
     }),
     execute: async (input): Promise<SearchResult | ToolFailure> =>
@@ -258,6 +268,7 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: Find
           bumiputera: input.bumiputera,
           locationPref: input.locationPref,
           bedrooms: input.bedrooms,
+          propertyType: input.propertyType,
           freeText: input.freeText,
         })
 

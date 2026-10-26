@@ -114,7 +114,11 @@ describe('D4: a region name is not a location filter', () => {
     expect(locationNeedles('Cheras')).not.toBeNull()
     expect(locationSurvivors('Cheras')).toBe(0) // D2 holds no active Cheras inventory
     expect(locationSurvivors('Bangsar')).toBe(8)
-    expect(locationSurvivors('Petaling Jaya')).toBe(4)
+    // Was 4. quick-kayinleong-098 made a proximity run span commas, so Enlace Suites
+    // ("…near Bangsar, KL City Centre, Petaling Jaya") no longer counts as a PJ address.
+    // Verified against projects.export.json (2026-10-20), because projects.inventory.json is
+    // not on the machine that made the change.
+    expect(locationSurvivors('Petaling Jaya')).toBe(3)
   })
 
   it('a region combined with a real area still filters on the area', () => {

@@ -783,6 +783,70 @@ describe('quick-kayinleong-050: locationPref is a hard filter', () => {
     const petalingJaya = { ...FIXTURES['proj-active-c'], locationText: 'Petaling Jaya, Selangor' }
     expect(projectMatchesLocation(petalingJaya, sriPetaling)).toBe(false)
   })
+
+  // ── quick-kayinleong-098: UAT F9 / F5 ──────────────────────────────────────
+  // The location strings below are the live records the 24 Oct UAT run failed on, copied
+  // verbatim from projects.export.json (2026-10-20). Names are neutralised so the test
+  // exercises locationText alone.
+
+  const at = (locationText: string) => ({ ...FIXTURES['proj-active-c'], name: 'Test Project', locationText })
+
+  it('quick-098 F9: a proximity run spans commas, so "near X, KLCC" is not a KLCC address', async () => {
+    const { locationNeedles, projectMatchesLocation } = await import('@/src/inventory/search')
+    // d'Brightton titiwangsa. Pre-098 the comma split left "KLCC" as its own clause, the
+    // proximity filter judged it alone, and a KLCC search returned a Titiwangsa project.
+    const dBrightton = at('Jalan Tiara Titiwangsa, KL East; near Taman Tasik Titiwangsa, KLCC')
+
+    expect(projectMatchesLocation(dBrightton, locationNeedles('KLCC')!)).toBe(false)
+    expect(projectMatchesLocation(dBrightton, locationNeedles('Titiwangsa')!)).toBe(true)
+  })
+
+  it('quick-098: the run drops landmark lists but stops at an address clause', async () => {
+    const { locationNeedles, projectMatchesLocation } = await import('@/src/inventory/search')
+
+    // Lunar Seputeh: every item after "near" is a landmark.
+    const lunar = at(
+      'Jalan Telok Datok, Off Jalan Klang Lama, Kuala Lumpur (9 Seputeh mixed development, near Bangsar South, Mid Valley City, KL Sentral)',
+    )
+    expect(projectMatchesLocation(lunar, locationNeedles('Mid Valley')!)).toBe(false)
+    expect(projectMatchesLocation(lunar, locationNeedles('KL Sentral')!)).toBe(false)
+    expect(projectMatchesLocation(lunar, locationNeedles('Seputeh')!)).toBe(true)
+
+    // Enlace Suites: a region-only clause ("KL City Centre") does not end the run, so the
+    // landmark after it ("Petaling Jaya") is still dropped.
+    const enlace = at(
+      'Pantai Sentral Park, Klang Valley Golden Triangle, near Bangsar, KL City Centre, Petaling Jaya; excellent connectivity',
+    )
+    expect(projectMatchesLocation(enlace, locationNeedles('Petaling Jaya')!)).toBe(false)
+
+    // Park Green: "Bukit Jalil" after "next to …" opens with a place-type word, so it is the
+    // project's own area and is KEPT. Without the stop rule it would be dropped.
+    const parkGreen = at('Persiaran Jalil Utama, next to Pavilion Bukit Jalil, Bukit Jalil, KL South')
+    expect(projectMatchesLocation(parkGreen, locationNeedles('Bukit Jalil')!)).toBe(true)
+
+    // Star Residences: the street clause after "Opposite KLCC" ends the run, and the
+    // "KLCC district" clause after it still counts.
+    const star = at('Opposite KLCC, Jalan Yap Kwan Seng, KLCC district, walking distance to shopping & business area')
+    expect(projectMatchesLocation(star, locationNeedles('KLCC')!)).toBe(true)
+  })
+
+  it('quick-098 F5: a compass word is never a free token, so "North Kiara" must match as a phrase', async () => {
+    const { locationNeedles, projectMatchesLocation } = await import('@/src/inventory/search')
+    const northKiara = locationNeedles('North Kiara')!
+    expect(northKiara).toEqual([{ phrase: 'north kiara', tokens: [] }])
+
+    // Pre-098: "north" from "KL North" + "kiara" from "Mont Kiara" passed the token tier.
+    const alstonia = at('Bukit Rahman Putra, Sungai Buloh, KL North (Mont Kiara/Dutamas region)')
+    const stRegis = at('KL Sentral, Kuala Lumpur (Mont Kiara/Dutamas area, KL North)')
+    expect(projectMatchesLocation(alstonia, northKiara)).toBe(false)
+    expect(projectMatchesLocation(stRegis, northKiara)).toBe(false)
+
+    // The two projects UAT F5 requires are still found.
+    const miranda = at('Jalan Dutamas Melati, North Kiara/Mont Kiara, KL (3 streets from Publika Mall, opposite French School)')
+    const tangen = at('Jalan Seri Bintang, Segambut / North Kiara, 5 minutes to Desa ParkCity & Mont Kiara, KL North')
+    expect(projectMatchesLocation(miranda, northKiara)).toBe(true)
+    expect(projectMatchesLocation(tangen, northKiara)).toBe(true)
+  })
 })
 
 describe('quick-kayinleong-050: priceMax/priceMin are hard filters', () => {
@@ -1227,6 +1291,136 @@ describe('quick-kayinleong-050: relevance floor, top-N cap, and segment weightin
     // The very first filter applied must be status == active — the new location/price
     // gates run in memory and must NOT have displaced it.
     expect(mockWhereFn).toHaveBeenCalledWith('status', '==', 'active')
+  })
+})
+
+// ─── quick-kayinleong-098: property type + no-match gate ─────────────────────
+
+describe('quick-kayinleong-098: property-type gate and no-match gate attribution', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    mockEmbedText.mockReset()
+    mockProjectsGet.mockReset()
+    mockWhereFn.mockReset()
+    mockEmbedText.mockImplementation(async () => NEUTRAL_VECTOR)
+    mockWhereFn.mockImplementation((..._args: [string, string, unknown]) => ({
+      where: mockWhereFn,
+      get: mockProjectsGet,
+      orderBy: mockWhereFn,
+    }))
+  })
+
+  const BASE = {
+    segment: 'own_stay' as const,
+    priceMin: null,
+    priceMax: null,
+    monthlyIncome: null,
+    nationality: 'malaysian' as const,
+    bumiputera: null,
+    locationPref: null,
+    bedrooms: null,
+    freeText: 'family home',
+  }
+
+  /** The live UAT N2 record: an office with no price, filed under Bangsar. */
+  const OFFICE = {
+    ...FIXTURES['proj-unpriced'],
+    name: 'Aspire office @ KL ecocity',
+    locationText: 'KL Eco City, Bangsar / Mid Valley fringe CBD; direct link to Abdullah Hukum LRT & KTM stations',
+  }
+  const bangsarSet = () =>
+    makeAdHocSnap([
+      { id: 'office', doc: OFFICE },
+      { id: 'home', doc: { ...FIXTURES['proj-unpriced'] } }, // 'Bangsar, Kuala Lumpur', unpriced
+    ])
+
+  it('propertyTypeOf: the stored field wins, then the name, then residential', async () => {
+    const { propertyTypeOf } = await import('@/src/inventory/search')
+    // The four non-residential projects in the live corpus, by name alone.
+    for (const name of [
+      'Aspire office @ KL ecocity',
+      'The Stride Office @ BBCC',
+      'E&O – City of Elmina (Laman Embun Commercial)',
+      'The MET, Corporate Tower',
+    ]) {
+      expect(propertyTypeOf({ name })).toBe('commercial')
+    }
+    // Residential names that merely sit near commercial words in their write-ups.
+    for (const name of ['Dawn KLCC', 'Parkside Residences', 'Accent PJ', 'Sentral Suites @ KL Sentral']) {
+      expect(propertyTypeOf({ name })).toBe('residential')
+    }
+    // An explicit tag overrides the heuristic in both directions.
+    expect(propertyTypeOf({ name: 'Aspire office @ KL ecocity', propertyType: 'residential' })).toBe('residential')
+    expect(propertyTypeOf({ name: 'Quiet Gardens', propertyType: 'commercial' })).toBe('commercial')
+  })
+
+  it('UAT N2: an office is NOT returned to a residential search by default', async () => {
+    mockProjectsGet.mockResolvedValueOnce(bangsarSet())
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({ ...BASE, locationPref: 'Bangsar', priceMax: 650_000 })
+
+    expect(result.found).toBe(true)
+    if (result.found) expect(result.matches.map((m) => m.projectId)).toEqual(['home'])
+  })
+
+  it('propertyType "commercial" returns only commercial, and "any" skips the gate', async () => {
+    const { searchProjects } = await import('@/src/inventory/search')
+
+    mockProjectsGet.mockResolvedValueOnce(bangsarSet())
+    const commercial = await searchProjects({ ...BASE, locationPref: 'Bangsar', propertyType: 'commercial' })
+    expect(commercial.found && commercial.matches.map((m) => m.projectId)).toEqual(['office'])
+
+    mockProjectsGet.mockResolvedValueOnce(bangsarSet())
+    const any = await searchProjects({ ...BASE, locationPref: 'Bangsar', propertyType: 'any' })
+    expect(any.found && any.matches.map((m) => m.projectId).sort()).toEqual(['home', 'office'])
+  })
+
+  it('gate "property_type": the area has stock, but none of the requested type', async () => {
+    mockProjectsGet.mockResolvedValueOnce(makeAdHocSnap([{ id: 'office', doc: OFFICE }]))
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({ ...BASE, locationPref: 'Bangsar' })
+
+    expect(result).toEqual({ found: false, reason: 'no_match', gate: 'property_type' })
+  })
+
+  it('gate "location": UAT F11, nothing in the area at all, even with a budget and bedrooms', async () => {
+    mockProjectsGet.mockResolvedValueOnce(makeProjectSnap(['proj-active-a', 'proj-active-c']))
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({ ...BASE, locationPref: 'Cheras', priceMax: 650_000, bedrooms: 3 })
+
+    expect(result).toEqual({ found: false, reason: 'no_match', gate: 'location' })
+  })
+
+  it('gate "price": the area has stock, but none within budget', async () => {
+    mockProjectsGet.mockResolvedValueOnce(makeProjectSnap(['proj-active-a'])) // KLCC, RM950k
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({ ...BASE, locationPref: 'KLCC', priceMax: 500_000 })
+
+    expect(result).toEqual({ found: false, reason: 'no_match', gate: 'price' })
+  })
+
+  it('gate "eligibility" vs "inventory": an empty Stage-A set, with and without eligibility filters', async () => {
+    const { searchProjects } = await import('@/src/inventory/search')
+
+    mockProjectsGet.mockResolvedValueOnce(makeProjectSnap([]))
+    expect(await searchProjects({ ...BASE, bumiputera: false })).toEqual({
+      found: false,
+      reason: 'no_match',
+      gate: 'eligibility',
+    })
+
+    mockProjectsGet.mockResolvedValueOnce(makeProjectSnap([]))
+    expect(await searchProjects(BASE)).toEqual({ found: false, reason: 'no_match', gate: 'inventory' })
+  })
+
+  it('gate "relevance": candidates exist but none clears MIN_RELEVANCE', async () => {
+    // Fixtures carry 0.01 in every dimension except their own, so a query on dim 1000
+    // scores 0.01 against each: non-zero (not a data-shape fault), below the floor.
+    mockEmbedText.mockResolvedValueOnce(Array.from({ length: 1024 }, (_, i) => (i === 1000 ? 1.0 : 0.0)))
+    mockProjectsGet.mockResolvedValueOnce(makeProjectSnap(['proj-active-a', 'proj-active-c']))
+    const { searchProjects } = await import('@/src/inventory/search')
+
+    expect(await searchProjects(BASE)).toEqual({ found: false, reason: 'no_match', gate: 'relevance' })
   })
 })
 
