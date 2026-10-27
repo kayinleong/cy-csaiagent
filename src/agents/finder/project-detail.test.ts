@@ -133,6 +133,8 @@ const mocks = vi.hoisted(() => ({
   mockDocGet: vi.fn(),
   mockCollateralGet: vi.fn(),
   mockRetrieve: vi.fn(),
+  /** kbDocs/{id} read — decides which retrieved chunks belong to the project (quick-100). */
+  mockKbDocGet: vi.fn(),
   /** Last doc id passed to projectsRef().doc(...) — proves the read is BY ID. */
   docIds: [] as string[],
 }))
@@ -163,6 +165,7 @@ vi.mock('@/src/firebase/collections', () => {
       }),
     })),
     collateralRef: vi.fn(() => ({ where: vi.fn(() => ({ get: mocks.mockCollateralGet })) })),
+    kbDocsRef: vi.fn(() => ({ doc: vi.fn((id: string) => ({ get: () => mocks.mockKbDocGet(id) })) })),
     TENANT_ID: 'd2',
     PRICE_BANDS: ['price_unknown', 'under_500k', '500k_800k', '800k_1.2m', 'above_1.2m'],
     priceBandFor: vi.fn((p: number) => (p <= 0 ? 'price_unknown' : '800k_1.2m')),
@@ -207,6 +210,12 @@ beforeEach(() => {
   }))
   mocks.mockCollateralGet.mockResolvedValue({ empty: true, docs: [] })
   mocks.mockRetrieve.mockResolvedValue([])
+  // By default every retrieved chunk's parent document is the target project's own sales kit.
+  mocks.mockKbDocGet.mockImplementation(async (id: string) => ({
+    id,
+    exists: true,
+    data: () => ({ title: `${TARGET_NAME} — Sales Kit.pdf`, category: TARGET_NAME }),
+  }))
 })
 
 // ─── 1. The row-37 bug: old behaviour vs new ──────────────────────────────────
@@ -484,8 +493,10 @@ describe('projectDetail retrieves the finder sales-kit KB', () => {
     expect(query).toContain(TARGET_NAME)
     expect(query).toContain('panel bankers and loan margin')
     expect(lang).toBe('ms')
-    // pillar:finder so a project lookup can never cite a Coach SOP as project data.
-    expect(opts).toEqual({ pillar: 'finder' })
+    // pillar:finder so a project lookup can never cite a Coach SOP as project data, and a
+    // wider candidate pool because foreign chunks are dropped afterwards (quick-100).
+    const { KB_CANDIDATES_FOR_DETAIL } = await import('./tools')
+    expect(opts).toEqual({ pillar: 'finder', limit: KB_CANDIDATES_FOR_DETAIL })
   })
 
   it('falls back to the Quick-Facts topics when no question is given', async () => {
@@ -544,6 +555,85 @@ describe('projectDetail retrieves the finder sales-kit KB', () => {
     expect(out.found).toBe(true)
     expect(out.project.name).toBe(TARGET_NAME)
     expect(out.kb.found).toBe(false)
+  })
+})
+
+// ─── quick-kayinleong-100: extracts come from THIS project only ───────────────
+
+describe('projectDetail keeps only the asked-about project\'s KB extracts', () => {
+  async function runDetail() {
+    const { makeProjectDetailTool } = await import('./tools')
+    const t = makeProjectDetailTool('en')
+    const execute = t.execute as NonNullable<typeof t.execute>
+    return (await execute({ projectId: TARGET_ID, question: null }, {} as never)) as {
+      found: true
+      kb: { found: boolean; citations: Array<{ chunkId: string }>; context: string }
+    }
+  }
+  /** Parent documents keyed by the kbChunk fixture's docId (`salekit-<i>`). */
+  function parents(byDoc: Record<string, { title: string; category?: string } | null>) {
+    mocks.mockKbDocGet.mockImplementation(async (id: string) => {
+      const d = byDoc[id]
+      return { id, exists: d !== null && d !== undefined, data: () => d ?? undefined }
+    })
+  }
+
+  it('UAT re-test: a neighbouring project\'s fact sheet is dropped, own chunks keep their order', async () => {
+    mocks.mockRetrieve.mockResolvedValue([
+      kbChunk(0, 'Developer: UOA Development Bhd (Master Developer of Bangsar South)'),
+      kbChunk(1, 'Maintenance fee RM0.88 psf'),
+      kbChunk(2, 'Panel Bankers EF: MBB'),
+    ])
+    parents({
+      'salekit-0': { title: 'St. Regis Residences Kuala Lumpur — D2 project facts (client sheet)' },
+      'salekit-1': { title: `${TARGET_NAME} — D2 project facts (client sheet)` },
+      'salekit-2': { title: `WhatsApp — ${TARGET_NAME}` },
+    })
+    const out = await runDetail()
+    expect(out.kb.citations.map((c) => c.chunkId)).toEqual(['chunk-1', 'chunk-2'])
+    expect(out.kb.context).not.toContain('UOA Development')
+  })
+
+  it('a document whose category is the project name is kept even with a variant title', async () => {
+    mocks.mockRetrieve.mockResolvedValue([kbChunk(0, 'Booking fee RM5,000')])
+    parents({ 'salekit-0': { title: 'WhatsApp — Imperial PDH group', category: TARGET_NAME } })
+    expect((await runDetail()).kb.citations.map((c) => c.chunkId)).toEqual(['chunk-0'])
+  })
+
+  it('when every candidate is foreign, the extract is an honest miss', async () => {
+    mocks.mockRetrieve.mockResolvedValue([kbChunk(0, 'Developer: CCCG joint-venture with WCT')])
+    parents({ 'salekit-0': { title: 'Senja The Jewel Collection — D2 project facts (client sheet)' } })
+    const out = await runDetail()
+    expect(out.kb.found).toBe(false)
+    expect(out.kb.context).toBe('')
+  })
+
+  it('if the parent documents cannot be read, nothing unscoped leaks through', async () => {
+    mocks.mockRetrieve.mockResolvedValue([kbChunk(0, 'Developer: someone else')])
+    mocks.mockKbDocGet.mockRejectedValue(new Error('kbDocs read failed'))
+    const out = await runDetail()
+    expect(out.kb.found).toBe(false)
+    expect(out.kb.context).toBe('')
+  })
+})
+
+describe('kbDocBelongsToProject', () => {
+  it('matches the category or the title subject exactly, ignoring case and punctuation', async () => {
+    const { kbDocBelongsToProject } = await import('./tools')
+    const name = 'Eaton Residences by Sutera @ KLCC'
+    expect(kbDocBelongsToProject({ title: 'Eaton Residences by Sutera @ KLCC — D2 project facts (client sheet)' }, name)).toBe(true)
+    expect(kbDocBelongsToProject({ title: 'WhatsApp — Eaton Residences by Sutera @ KLCC' }, name)).toBe(true)
+    expect(kbDocBelongsToProject({ title: 'eaton residences by sutera klcc — brochure.pdf' }, name)).toBe(true)
+    expect(kbDocBelongsToProject({ title: 'anything', category: 'Eaton Residences by Sutera @ KLCC' }, name)).toBe(true)
+  })
+
+  it('rejects near-misses: a variant name is how another project\'s facts get in', async () => {
+    const { kbDocBelongsToProject } = await import('./tools')
+    const name = 'Eaton Residences by Sutera @ KLCC'
+    expect(kbDocBelongsToProject({ title: 'WhatsApp — Eaton KLCC' }, name)).toBe(false)
+    expect(kbDocBelongsToProject({ title: 'Aria Luxury Residence @ KLCC — D2 project facts (client sheet)' }, name)).toBe(false)
+    expect(kbDocBelongsToProject({ title: '' }, name)).toBe(false)
+    expect(kbDocBelongsToProject({ title: 'Eaton Residences by Sutera @ KLCC — x.pdf' }, '')).toBe(false)
   })
 })
 

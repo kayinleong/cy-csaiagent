@@ -30,7 +30,7 @@ import {
   getProjectDetail,
   MAX_MATCHES,
 } from '@/src/inventory/search'
-import { collateralRef } from '@/src/firebase/collections'
+import { collateralRef, kbDocsRef } from '@/src/firebase/collections'
 import { retrieve, buildCitations, isRetrievalMiss } from '@/src/rag'
 import type {
   SearchResult,
@@ -665,6 +665,64 @@ const DETAIL_TOPICS =
   'maintenance fee booking fee panel bankers margin of finance parking bays facilities ' +
   'furnishing selling points VP target completion'
 
+/**
+ * How many nearest chunks `projectDetail` fetches BEFORE keeping only the asked-about
+ * project's own (quick-kayinleong-100).
+ *
+ * The retrieval is a similarity search over all 25k Finder chunks, and the 80 client fact
+ * sheets are near-identical in shape, so a neighbouring project's fact sheet routinely ranks
+ * inside the top 8. A wider pool leaves room for the project's own documents after the
+ * foreign ones are dropped.
+ */
+export const KB_CANDIDATES_FOR_DETAIL = 40
+
+const kbNorm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+/**
+ * Does this KB document belong to the named project? (quick-kayinleong-100)
+ *
+ * Uses the two deterministic conventions the ingest paths write, the same ones
+ * `scripts/data-completeness-report.ts` uses to count KB coverage per project:
+ *   1. `kbDoc.category === project.name`. The WhatsApp and Drive importers put the inventory
+ *      name there on every Finder document.
+ *   2. The title subject: `"<project name> — <file>"` (Drive and the 096 client fact sheets) or
+ *      `"WhatsApp — <project name>"`.
+ * Exact after normalisation, with no fuzzy fallback. A near-miss name is exactly how one
+ * project's facts end up in another project's answer.
+ */
+export function kbDocBelongsToProject(
+  doc: { title?: string; category?: string },
+  projectName: string,
+): boolean {
+  const key = kbNorm(projectName)
+  if (!key) return false
+  if (typeof doc.category === 'string' && kbNorm(doc.category) === key) return true
+  const subject = kbNorm(String(doc.title ?? '').replace(/^WhatsApp\s*—\s*/i, '').split('—')[0] ?? '')
+  return subject === key
+}
+
+/**
+ * Keep only the retrieved chunks whose parent KB document belongs to `projectName`, in
+ * their original similarity order (quick-kayinleong-100).
+ *
+ * Measured on the 2026-10-27 field-check re-test: with the unscoped search, St. Regis stated
+ * a developer that is not in the St. Regis fact sheet it cited, and Aster Hill stated the
+ * St. Regis fact sheet's developer word for word. If the parent documents cannot be read,
+ * NOTHING is kept. A missing extract makes the agent say "not on record"; a foreign one
+ * makes it state another project's facts.
+ */
+async function ownProjectChunks<T extends { docId: string }>(results: T[], projectName: string): Promise<T[]> {
+  if (results.length === 0) return results
+  const docIds = [...new Set(results.map((r) => r.docId).filter((id) => id.length > 0))]
+  const snaps = await Promise.all(docIds.map((id) => kbDocsRef().doc(id).get()))
+  const owned = new Set(
+    snaps
+      .filter((s) => s.exists && kbDocBelongsToProject(s.data() ?? {}, projectName))
+      .map((s) => s.id),
+  )
+  return results.filter((r) => owned.has(r.docId))
+}
+
 /** What `projectDetail` hands the model. `embedding` is absent by construction. */
 export type ProjectDetailToolResult =
   | {
@@ -782,15 +840,19 @@ export function makeProjectDetailTool(userLang: 'en' | 'ms' | 'zh') {
             return [] as Array<{ type: string; url: string }>
           }),
           // The sales-kit half. Scoped to pillar:'finder' so a project lookup can never
-          // cite a Coach SOP or a Reply template as project data.
+          // cite a Coach SOP or a Reply template as project data, and then to THIS
+          // project's own documents (quick-kayinleong-100) so it can never cite a
+          // neighbouring project's fact sheet either.
           retrieve(
             `${project.name} ${question?.trim() || DETAIL_TOPICS}`,
             userLang,
-            { pillar: 'finder' },
-          ).catch(() => {
-            console.warn(`[projectDetail] kb retrieval failed for ${project.projectId}`)
-            return []
-          }),
+            { pillar: 'finder', limit: KB_CANDIDATES_FOR_DETAIL },
+          )
+            .then((candidates) => ownProjectChunks(candidates, project.name))
+            .catch(() => {
+              console.warn(`[projectDetail] kb retrieval failed for ${project.projectId}`)
+              return []
+            }),
         ])
 
         const kbMiss = isRetrievalMiss(kbResults)

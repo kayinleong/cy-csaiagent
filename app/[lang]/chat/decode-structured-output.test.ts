@@ -148,6 +148,29 @@ describe('decodeFinderOutput', () => {
     ).toEqual(['one', 'two', 'three'])
   })
 
+  it('100: a refusal with NO matches key still decodes (UAT F11 on Gemini)', () => {
+    // The exact shape the re-test saved: reason, explanation, next steps, and no `matches`.
+    const out = decodeFinderOutput(
+      '```json\n' +
+        JSON.stringify({
+          refusal: {
+            reason: 'no_match',
+            explanation: 'D2 currently has no active projects in Cheras at all, at any price or size.',
+            nextSteps: ['Ask the lead if they would consider alternative nearby areas.'],
+          },
+        }) +
+        '\n```',
+    )
+    expect(out?.matches).toEqual([])
+    expect(out?.refusal?.nextSteps).toEqual(['Ask the lead if they would consider alternative nearby areas.'])
+  })
+
+  it('100: an answer with no matches key decodes; an object with nothing populated still does not', () => {
+    expect(decodeFinderOutput(JSON.stringify({ answer: '### OAKA Residences' }))?.answer).toBe('### OAKA Residences')
+    expect(decodeFinderOutput('{}')).toBeNull()
+    expect(decodeFinderOutput(JSON.stringify({ rows: [] }))).toBeNull()
+  })
+
   it('098: an unusable nextSteps value is dropped, not fatal', () => {
     const out = decodeFinderOutput(refusalWith({ step: 'object, not a list' }))
     expect(out?.refusal?.explanation).toMatch(/Cheras/)

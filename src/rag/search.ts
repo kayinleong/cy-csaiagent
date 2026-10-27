@@ -74,6 +74,13 @@ export interface RetrievalResult {
 export interface RetrieveOpts {
   pillar?: 'coach' | 'finder' | 'reply'
   category?: string
+  /**
+   * findNearest top-K override (quick-kayinleong-100). Defaults to FIND_NEAREST_LIMIT.
+   * A caller that narrows the results in memory (projectDetail keeps only the asked-about
+   * project's chunks) needs a wider candidate pool than the 8 it will finally use.
+   * Clamped to 1–100.
+   */
+  limit?: number
 }
 
 /** findNearest limit: top-K results per retrieval query. */
@@ -255,7 +262,7 @@ export async function firestoreRetrieve(
     .findNearest({
       vectorField: 'embedding',
       queryVector: FieldValue.vector(q),
-      limit: FIND_NEAREST_LIMIT,
+      limit: Math.min(100, Math.max(1, Math.floor(opts?.limit ?? FIND_NEAREST_LIMIT))),
       distanceMeasure: 'DOT_PRODUCT',
       // Similarity FLOOR — see MIN_SIMILARITY. Without this, a non-empty pre-filter
       // set always yields FIND_NEAREST_LIMIT rows regardless of relevance, so a real

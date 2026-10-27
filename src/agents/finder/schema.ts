@@ -319,8 +319,14 @@ export const FinderOutputSchema = z.object({
   /**
    * Array of ranked project matches (empty when refusal or clarifyingQuestion is present).
    * Never contains an invented project — all entries come from searchProjects results.
+   *
+   * Defaults to `[]` (quick-kayinleong-100). The prompt asks for an empty array alongside a
+   * refusal, a question or an answer, but a model that simply omits the key (Gemini in the
+   * 2026-10-27 re-test) produced a valid refusal with next steps that failed this schema
+   * outright, so the agent saw a bare sentence instead of the refusal card. `rows` defaults
+   * the same way. `decodeFinderOutput` still requires a populated state, so `{}` is not a card.
    */
-  matches: z.array(FinderMatchSchema),
+  matches: z.array(FinderMatchSchema).default([]),
 
   /**
    * Present ONLY when searchProjects returns no_match or ineligible.

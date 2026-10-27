@@ -161,6 +161,20 @@ describe('retrieve (Firestore adapter)', () => {
     expect(findNearestArg.vectorField).toBe('embedding')
   })
 
+  it('quick-100: opts.limit widens the candidate pool and is clamped to 1–100', async () => {
+    const mockGetFn = vi.fn(async () => ({ docs: [] }))
+    const mockFindNearestFn = vi.fn((_opts: { limit: number }) => ({ get: mockGetFn }))
+    const mockWhereFn: ReturnType<typeof vi.fn> = vi.fn(() => ({ where: mockWhereFn, findNearest: mockFindNearestFn }))
+    vi.doMock('@/src/firebase/admin', () => ({ adminDb: { collection: vi.fn(() => ({ where: mockWhereFn })) } }))
+    vi.doMock('@/src/rag/embed', () => ({ embedText: vi.fn(async () => Array.from({ length: 1024 }, () => 0.001)) }))
+
+    const { firestoreRetrieve } = await import('@/src/rag/search')
+    await firestoreRetrieve('q', 'en', { pillar: 'finder', limit: 40 })
+    await firestoreRetrieve('q', 'en', { limit: 5000 })
+    await firestoreRetrieve('q', 'en', { limit: 0 })
+    expect(mockFindNearestFn.mock.calls.map((c) => c[0].limit)).toEqual([40, 100, 1])
+  })
+
   it('Test 3: for userLang=ms, pre-filter includes ["ms", "en"]', async () => {
     const mockGetFn = vi.fn(async () => ({ docs: [] }))
     const mockFindNearestFn = vi.fn(() => ({ get: mockGetFn }))
