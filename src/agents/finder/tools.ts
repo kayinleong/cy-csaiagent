@@ -28,6 +28,7 @@ import {
   searchProjects,
   queryInventory,
   getProjectDetail,
+  findProjectIdByName,
   MAX_MATCHES,
 } from '@/src/inventory/search'
 import { collateralRef, kbChunksRef, kbDocsRef } from '@/src/firebase/collections'
@@ -785,6 +786,11 @@ export type ProjectDetailToolResult =
        * up (see `getProjectDetail`) without ever being presented as available.
        */
       availability?: string
+      /**
+       * Present ONLY when the project was found by its name because the projectId given
+       * was missing or did not exist (quick-kayinleong-102). Names the real projectId.
+       */
+      resolvedByName?: string
       collateral: Array<{ type: string; url: string }>
       /** Sales-kit prose from `kbChunks` (pillar:'finder') with its citation IDs. */
       kb: {
@@ -821,7 +827,8 @@ export type ProjectDetailToolResult =
  * Imperial Residences" retrieves at 0.8337 similarity. Those chunks come back WITH their
  * chunk IDs so the answer stays citable (grounding is mandatory).
  *
- * READ-ONLY: `projects/{pid}` read + `collateral` read + `kbChunks` findNearest. No writes.
+ * READ-ONLY: `projects/{pid}` read + `collateral` read + `kbChunks` findNearest, plus one
+ * name-field read of `projects` when the ID misses (`findProjectIdByName`). No writes.
  * Authenticates through the same accessors as every other inventory read — as the user's
  * request, never an escalated admin path from a user-facing surface.
  *
@@ -838,18 +845,31 @@ export function makeProjectDetailTool(userLang: 'en' | 'ms' | 'zh') {
       'Details button on a result row). searchProjects is a ranked semantic search: it can ' +
       'return eight DIFFERENT projects and miss the one that was asked about. This tool reads ' +
       'the document directly and cannot. ' +
+      'When the agent only NAMED the project and you have no projectId, pass the name in ' +
+      'projectName and leave projectId out — never build an ID from a name. ' +
       'Cite the kb chunkIds for any fact you take from the knowledge-base extracts. ' +
-      'If it returns found:false the projectId does not exist — say so plainly, never substitute ' +
-      'another project. If it returns an "availability" warning the project is NOT active: lead ' +
-      'with that and do not present it as available inventory.',
+      'If it returns found:false, follow its message: search for the project by name before ' +
+      'saying it is not on record, and never substitute another project. If it returns an ' +
+      '"availability" warning the project is NOT active: lead with that and do not present ' +
+      'it as available inventory.',
     inputSchema: z.object({
       projectId: z
         .string()
-        .min(1)
+        .nullable()
+        .optional()
         .describe(
           'The Firestore projects/{pid} document ID, copied EXACTLY from the search result ' +
             'row, from the agent\'s message, or from an earlier citation. Never invent or ' +
-            'reconstruct one.',
+            'reconstruct one: when you do not have it, omit it and pass projectName.',
+        ),
+      projectName: z
+        .string()
+        .nullable()
+        .optional()
+        .describe(
+          'The project\'s name exactly as the agent wrote it (e.g. "PDH: Imperial Residences ' +
+            'RA"). Pass it whenever the agent named the project; it finds the project when ' +
+            'there is no projectId or the one given does not exist.',
         ),
       question: z
         .string()
@@ -861,20 +881,40 @@ export function makeProjectDetailTool(userLang: 'en' | 'ms' | 'zh') {
             'retrieval. Omit or null for a general overview.',
         ),
     }),
-    execute: async ({ projectId, question }): Promise<ProjectDetailToolResult | ToolFailure> =>
+    execute: async ({ projectId, projectName, question }): Promise<ProjectDetailToolResult | ToolFailure> =>
       // READ-ONLY: three reads, no writes. Infra errors become a grounded
       // inventory_unavailable signal rather than a raw provider error.
       runReadOnly('projectDetail', async () => {
-        const detail = await getProjectDetail(projectId)
+        const givenId = projectId?.trim() ?? ''
+        let detail = givenId ? await getProjectDetail(givenId) : null
 
-        if (!detail.found) {
+        // A missing or unknown ID gets one more try by exact name (quick-kayinleong-102).
+        // The given ID is tried as a name too: what the model invents is a slug of the name.
+        let resolvedByName: string | undefined
+        if (!detail?.found) {
+          const byName = await findProjectIdByName([projectName ?? '', givenId])
+          const named = byName ? await getProjectDetail(byName) : null
+          if (named?.found) {
+            detail = named
+            resolvedByName =
+              `${givenId ? `No project has the ID "${givenId}". ` : ''}` +
+              `This is the project named "${named.project.name}"; its projectId is ` +
+              `"${named.project.projectId}". Use that projectId from now on.`
+          }
+        }
+
+        if (!detail?.found) {
           return {
             found: false as const,
             reason: 'not_found' as const,
-            projectId: detail.projectId,
+            projectId: givenId || (projectName?.trim() ?? ''),
             message:
-              'No project exists with that ID. Do not substitute a different project — ' +
-              'tell the agent the project is not in the D2 inventory record.',
+              'No project has that ID or that exact name. Before telling the agent the ' +
+              'project is not on record, call searchProjects with the project name as ' +
+              'freeText and, if it returns that same project, call projectDetail with the ' +
+              'projectId it gives. Do not substitute a different project — only if the ' +
+              'search does not return it, tell the agent the project is not in the D2 ' +
+              'inventory record.',
           }
         }
 
@@ -936,6 +976,7 @@ export function makeProjectDetailTool(userLang: 'en' | 'ms' | 'zh') {
                   'present it as available inventory and do NOT put it in a shortlist.',
               }
             : {}),
+          ...(resolvedByName ? { resolvedByName } : {}),
           collateral,
           kb: {
             found: !kbMiss,

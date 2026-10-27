@@ -165,6 +165,8 @@ vi.mock('@/src/firebase/collections', () => {
   return {
     projectsRef: vi.fn(() => ({
       where: whereFn,
+      // The by-name lookup's name-field read (quick-kayinleong-102).
+      select: vi.fn(() => ({ get: mocks.mockProjectsGet })),
       doc: vi.fn((id: string) => {
         mocks.docIds.push(id)
         return { get: () => mocks.mockDocGet(id) }
@@ -202,7 +204,11 @@ function projectSnap() {
   const ids = Object.keys(PROJECTS)
   return {
     empty: ids.length === 0,
-    docs: ids.map((id) => ({ id, data: () => PROJECTS[id] })),
+    docs: ids.map((id) => ({
+      id,
+      data: () => PROJECTS[id],
+      get: (field: keyof ProjectDoc) => PROJECTS[id][field],
+    })),
   }
 }
 
@@ -773,6 +779,105 @@ describe('kbDocBelongsToProject', () => {
     expect(kbDocBelongsToProject({ title: 'Aria Luxury Residence @ KLCC — D2 project facts (client sheet)' }, name)).toBe(false)
     expect(kbDocBelongsToProject({ title: '' }, name)).toBe(false)
     expect(kbDocBelongsToProject({ title: 'Eaton Residences by Sutera @ KLCC — x.pdf' }, '')).toBe(false)
+  })
+})
+
+// ─── 4c. A wrong or missing projectId (quick-kayinleong-102) ───────────────────
+
+describe('projectDetail recovers a wrong or missing projectId by exact name', () => {
+  async function runDetail(input: { projectId?: string | null; projectName?: string | null }) {
+    const { makeProjectDetailTool } = await import('./tools')
+    const t = makeProjectDetailTool('en')
+    const execute = t.execute as NonNullable<typeof t.execute>
+    // `as unknown as`: execute()'s declared return includes an AsyncIterable arm. The tool
+    // returns the object form here.
+    return (await execute({ question: null, ...input }, {} as never)) as unknown as Record<string, unknown>
+  }
+
+  it('live run 4 (P02): an ID the model built from the name still finds the project', async () => {
+    // What claude-sonnet-4-6 sent for "Full details for PDH: Imperial Residences RA", in this
+    // fixture's terms: a slug of the name, not a Firestore ID.
+    const slug = 'imperial-residences-pavilion-damansara-heights'
+    const out = (await runDetail({ projectId: slug })) as {
+      found: boolean
+      project: { projectId: string; name: string }
+      resolvedByName: string
+    }
+    expect(out.found).toBe(true)
+    expect(out.project.projectId).toBe(TARGET_ID)
+    expect(out.project.name).toBe(TARGET_NAME)
+    // The model is told the ID was wrong and given the real one.
+    expect(out.resolvedByName).toContain(`"${slug}"`)
+    expect(out.resolvedByName).toContain(`"${TARGET_ID}"`)
+    // The slug was read as an ID first, then the real ID.
+    expect(mocks.docIds).toEqual([slug, TARGET_ID])
+  })
+
+  it('a name with no projectId finds the project, ignoring case and punctuation', async () => {
+    const out = (await runDetail({ projectName: 'imperial residences: PAVILION damansara heights' })) as {
+      found: boolean
+      project: { projectId: string }
+      resolvedByName: string
+    }
+    expect(out.found).toBe(true)
+    expect(out.project.projectId).toBe(TARGET_ID)
+    expect(out.resolvedByName).not.toContain('No project has the ID')
+  })
+
+  it('a correct projectId never reads by name and carries no note', async () => {
+    const out = await runDetail({ projectId: TARGET_ID, projectName: 'something else entirely' })
+    expect(out.found).toBe(true)
+    expect(mocks.mockProjectsGet).not.toHaveBeenCalled()
+    expect('resolvedByName' in out).toBe(false)
+  })
+
+  it('a near name is a miss, never a substitution', async () => {
+    // A prefix of the target's name. A contains match would pick the target; equality must not.
+    const out = (await runDetail({ projectId: 'imperial-residences', projectName: 'Imperial Residences' })) as {
+      found: boolean
+      message: string
+    }
+    expect(out.found).toBe(false)
+    expect(out.message).toContain('Do not substitute a different project')
+  })
+
+  it('two projects with the same name key resolve to neither', async () => {
+    mocks.mockProjectsGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [
+        { id: 'proj-1', get: () => 'Twin Towers' },
+        { id: 'proj-2', get: () => 'Twin-Towers' },
+      ],
+    })
+    const out = await runDetail({ projectName: 'Twin Towers' })
+    expect(out.found).toBe(false)
+  })
+
+  it('a miss tells the model to search by name before saying the project is not on record', async () => {
+    const out = (await runDetail({ projectId: 'pdh-royal-suites-rc', projectName: 'PDH: Royal Suites(RC)' })) as {
+      found: boolean
+      projectId: string
+      message: string
+    }
+    expect(out.found).toBe(false)
+    expect(out.projectId).toBe('pdh-royal-suites-rc')
+    expect(out.message).toContain('call searchProjects with the project name')
+    expect(out.message).toContain('Do not substitute a different project')
+  })
+
+  it('projectNameKey makes a stored name and its slug equal, and keeps nothing else', async () => {
+    const { projectNameKey } = await import('@/src/inventory/search')
+    expect(projectNameKey('PDH: Imperial Residences RA')).toBe(projectNameKey('pdh-imperial-residences-ra'))
+    expect(projectNameKey('PDH: Royal Suites(RC)')).toBe('pdhroyalsuitesrc')
+    // No Latin letters or digits: no key, so no read can match on it.
+    expect(projectNameKey('皇家套房')).toBe('')
+  })
+
+  it('FINDER_SYSTEM_PROMPT says to pass a name, never build an ID, and search before a miss', async () => {
+    const { FINDER_SYSTEM_PROMPT } = await import('./prompt')
+    expect(FINDER_SYSTEM_PROMPT).toContain('call projectDetail with projectName set to the name')
+    expect(FINDER_SYSTEM_PROMPT).toContain('Never build an ID from a name.')
+    expect(FINDER_SYSTEM_PROMPT).toContain('Call searchProjects with the project name as freeText before answering')
   })
 })
 

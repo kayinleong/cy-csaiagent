@@ -1237,3 +1237,39 @@ export async function getProjectDetail(projectId: string): Promise<ProjectDetail
 
   return { found: true, project }
 }
+
+/**
+ * A project name reduced to lowercase letters and digits, so the stored name
+ * "PDH: Imperial Residences RA" and the slug "pdh-imperial-residences-ra" compare equal.
+ * Empty for a string with no Latin letters or digits.
+ */
+export function projectNameKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '')
+}
+
+/**
+ * The projectId of the ONE project whose stored name equals one of `names` once both are
+ * reduced by `projectNameKey`, or null (quick-kayinleong-102).
+ *
+ * Why: asked for "Full details for PDH: Imperial Residences RA" with no search result in
+ * hand, the live model called projectDetail with an ID it built from the name
+ * (`pdh-imperial-residences-ra`), got not_found, and told the agent the project did not
+ * exist. This recovers that case and nothing looser: equality only, never a prefix or a
+ * contains match, so a project that is not on record can never resolve to a neighbour with
+ * a similar name. Two projects with the same key resolve to neither.
+ *
+ * Status is not filtered, for the same reason `getProjectDetail` does not filter it.
+ * READ-ONLY: one `projects` read of the name field. Callers only reach it after a by-ID
+ * miss, and an input with no usable key reads nothing.
+ */
+export async function findProjectIdByName(names: ReadonlyArray<string>): Promise<string | null> {
+  const keys = new Set(names.map(projectNameKey).filter((k) => k.length > 0))
+  if (keys.size === 0) return null
+
+  const snap = await projectsRef().select('name').get()
+  const hits = snap.docs.filter((d) => {
+    const name = d.get('name')
+    return typeof name === 'string' && keys.has(projectNameKey(name))
+  })
+  return hits.length === 1 ? hits[0].id : null
+}
