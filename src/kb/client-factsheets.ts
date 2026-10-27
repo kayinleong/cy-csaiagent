@@ -33,6 +33,15 @@ import {
   scanForContactDetails,
 } from '@/src/inventory/client-workbook-safety'
 
+/**
+ * The exact title every client fact sheet is ingested under. `projectDetail`
+ * (src/agents/finder/tools.ts) looks a project's sheet up by this title, so the two must
+ * never drift apart (quick-kayinleong-101).
+ */
+export function clientFactSheetTitle(inventoryName: string): string {
+  return `${inventoryName} — D2 project facts (client sheet)`
+}
+
 // ─── Contract 3: the manifest ────────────────────────────────────────────────
 
 const Sha256Hex = z.string().regex(/^[0-9a-f]{64}$/)
@@ -139,7 +148,7 @@ export function loadFactSheets(
     if (seenDocIds.has(entry.docId)) reasons.push('duplicate-docId')
     seenDocIds.add(entry.docId)
 
-    if (entry.title !== `${entry.inventoryName} — D2 project facts (client sheet)`) {
+    if (entry.title !== clientFactSheetTitle(entry.inventoryName)) {
       reasons.push('title-mismatch')
     }
     if (entry.category !== entry.inventoryName) reasons.push('category-mismatch')

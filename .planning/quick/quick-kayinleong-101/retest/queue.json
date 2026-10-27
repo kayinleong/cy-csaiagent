@@ -1,0 +1,441 @@
+[
+ {
+  "id": "S-F9",
+  "prompt": "Mr Lee, Malaysian, non-bumi, investment for rental yield, KLCC, up to 1.5 million"
+ },
+ {
+  "id": "S-F5",
+  "prompt": "Madam Wong, Malaysian, non-bumi, own stay, North Kiara, up to 800k"
+ },
+ {
+  "id": "S-F1",
+  "prompt": "Encik Ali, Malaysian, non-bumi, own stay, Bukit Jalil, budget up to 800k"
+ },
+ {
+  "id": "S-N2",
+  "prompt": "Mr Lim, Malaysian, non-bumi, own stay, Bangsar, budget up to 650k"
+ },
+ {
+  "id": "S-F11",
+  "prompt": "Lead wants a 3-bedroom in Cheras, around 650k, Malaysian, own stay"
+ },
+ {
+  "id": "S-F13",
+  "prompt": "How much is Bangsar Hill Park?"
+ },
+ {
+  "id": "P01",
+  "name": "Damansara City Residency (DC Residensi)",
+  "prompt": "Full details for Damansara City Residency (DC Residensi): for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P02",
+  "name": "PDH: Imperial Residences RA",
+  "prompt": "Full details for PDH: Imperial Residences RA: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P03",
+  "name": "Bangsar Hill Park",
+  "prompt": "Full details for Bangsar Hill Park: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P04",
+  "name": "ViiA Residences",
+  "prompt": "Full details for ViiA Residences: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P05",
+  "name": "Enlace Suites @ Pantai Sentral Park",
+  "prompt": "Full details for Enlace Suites @ Pantai Sentral Park: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P06",
+  "name": "The Lantern Bangsar",
+  "prompt": "Full details for The Lantern Bangsar: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P07",
+  "name": "One Eleven Menerung @ Bangsar",
+  "prompt": "Full details for One Eleven Menerung @ Bangsar: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P08",
+  "name": "Pavilion Damansara Heights",
+  "prompt": "Full details for Pavilion Damansara Heights: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P09",
+  "name": "PDH: Royal Suites(RC)",
+  "prompt": "Full details for PDH: Royal Suites(RC): for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P10",
+  "name": "Pinnacle Bangsar Residence",
+  "prompt": "Full details for Pinnacle Bangsar Residence: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P11",
+  "name": "Parkside Residences",
+  "prompt": "Full details for Parkside Residences: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P12",
+  "name": "Rhombus",
+  "prompt": "Full details for Rhombus: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P13",
+  "name": "Riana Trees Residences",
+  "prompt": "Full details for Riana Trees Residences: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P14",
+  "name": "Residensi 38 Bangsar",
+  "prompt": "Full details for Residensi 38 Bangsar: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P15",
+  "name": "Lunar Seputeh",
+  "prompt": "Full details for Lunar Seputeh: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P16",
+  "name": "Sentral Suites @ KL Sentral",
+  "prompt": "Full details for Sentral Suites @ KL Sentral: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P17",
+  "name": "The Cedar Damansara Heights",
+  "prompt": "Full details for The Cedar Damansara Heights: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P18",
+  "name": "Tria Seputeh",
+  "prompt": "Full details for Tria Seputeh: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P19",
+  "name": "d'Brightton titiwangsa",
+  "prompt": "Full details for d'Brightton titiwangsa: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P20",
+  "name": "IJM Sierra Hijauan",
+  "prompt": "Full details for IJM Sierra Hijauan: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P21",
+  "name": "Puncak Wangsamas Phase 2",
+  "prompt": "Full details for Puncak Wangsamas Phase 2: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P22",
+  "name": "The Reya",
+  "prompt": "Full details for The Reya: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P23",
+  "name": "Padang Residences",
+  "prompt": "Full details for Padang Residences: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P24",
+  "name": "Tangen Residences",
+  "prompt": "Full details for Tangen Residences: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P25",
+  "name": "Miranda Hill @ north kiara by BRDB",
+  "prompt": "Full details for Miranda Hill @ north kiara by BRDB: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P26",
+  "name": "Alstonia Hilltop Homes",
+  "prompt": "Full details for Alstonia Hilltop Homes: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P27",
+  "name": "Binastra Cochrane",
+  "prompt": "Full details for Binastra Cochrane: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P28",
+  "name": "Eden BRDB, Taman Duta",
+  "prompt": "Full details for Eden BRDB, Taman Duta: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P29",
+  "name": "Majestic @ Kiara Reserve",
+  "prompt": "Full details for Majestic @ Kiara Reserve: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P30",
+  "name": "St. Regis Residences Kuala Lumpur",
+  "prompt": "Full details for St. Regis Residences Kuala Lumpur: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P31",
+  "name": "Aster Hill Sri Petaling",
+  "prompt": "Full details for Aster Hill Sri Petaling: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P32",
+  "name": "Exsim Project",
+  "prompt": "Full details for Exsim Project: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P33",
+  "name": "Kensho @ Taman Desa",
+  "prompt": "Full details for Kensho @ Taman Desa: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P34",
+  "name": "Aetas Taman Desa",
+  "prompt": "Full details for Aetas Taman Desa: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P35",
+  "name": "Southpoint Residences (IGB )",
+  "prompt": "Full details for Southpoint Residences (IGB ): for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P36",
+  "name": "Park Green at Pavilion Bukit Jalil",
+  "prompt": "Full details for Park Green at Pavilion Bukit Jalil: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P37",
+  "name": "OAKA Residences, Bukit Jalil",
+  "prompt": "Full details for OAKA Residences, Bukit Jalil: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P38",
+  "name": "Senja The Jewel Collection",
+  "prompt": "Full details for Senja The Jewel Collection: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P39",
+  "name": "18 Madge Uthant",
+  "prompt": "Full details for 18 Madge Uthant: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P40",
+  "name": "Aria Luxury Residence @ KLCC",
+  "prompt": "Full details for Aria Luxury Residence @ KLCC: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P41",
+  "name": "AT6 Residensi @ Ampang Tengah",
+  "prompt": "Full details for AT6 Residensi @ Ampang Tengah: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P42",
+  "name": "Clouthaus KLCC",
+  "prompt": "Full details for Clouthaus KLCC: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P43",
+  "name": "Conlay by E&O",
+  "prompt": "Full details for Conlay by E&O: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P44",
+  "name": "Core Residence @ TRX",
+  "prompt": "Full details for Core Residence @ TRX: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P45",
+  "name": "Dawn KLCC",
+  "prompt": "Full details for Dawn KLCC: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P46",
+  "name": "Eaton Residences by Sutera @ KLCC",
+  "prompt": "Full details for Eaton Residences by Sutera @ KLCC: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P47",
+  "name": "Platinum Face Suite 2 KLCC",
+  "prompt": "Full details for Platinum Face Suite 2 KLCC: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P48",
+  "name": "Armani Hallson @ Jalan Ampang",
+  "prompt": "Full details for Armani Hallson @ Jalan Ampang: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P49",
+  "name": "Orion Residence",
+  "prompt": "Full details for Orion Residence: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P50",
+  "name": "PSQ Pavilion Square",
+  "prompt": "Full details for PSQ Pavilion Square: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P51",
+  "name": "Katana 2 Residence",
+  "prompt": "Full details for Katana 2 Residence: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P52",
+  "name": "The Centrix",
+  "prompt": "Full details for The Centrix: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P53",
+  "name": "Quill Residences KLCC",
+  "prompt": "Full details for Quill Residences KLCC: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P54",
+  "name": "Royal Lexis KL",
+  "prompt": "Full details for Royal Lexis KL: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P55",
+  "name": "SO Sofitel Residences KLCC",
+  "prompt": "Full details for SO Sofitel Residences KLCC: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P56",
+  "name": "Le Nouvel KLCC",
+  "prompt": "Full details for Le Nouvel KLCC: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P57",
+  "name": "Star Residences KLCC",
+  "prompt": "Full details for Star Residences KLCC: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P58",
+  "name": "Jewel by Oxley KLCC",
+  "prompt": "Full details for Jewel by Oxley KLCC: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P59",
+  "name": "Golden Crown Residence",
+  "prompt": "Full details for Golden Crown Residence: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P60",
+  "name": "SWNK Houze @ BBCC (Bukit Bintang City Centre)",
+  "prompt": "Full details for SWNK Houze @ BBCC (Bukit Bintang City Centre): for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P61",
+  "name": "Times Square 2 Residences Kuala Lumpur",
+  "prompt": "Full details for Times Square 2 Residences Kuala Lumpur: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P62",
+  "name": "The Manor KLCC",
+  "prompt": "Full details for The Manor KLCC: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P63",
+  "name": "TRX Residences",
+  "prompt": "Full details for TRX Residences: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P64",
+  "name": "The Oval Kuala Lumpur",
+  "prompt": "Full details for The Oval Kuala Lumpur: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P65",
+  "name": "The Ritz- Carlton Residences",
+  "prompt": "Full details for The Ritz- Carlton Residences: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P66",
+  "name": "The Stride Office @ BBCC",
+  "prompt": "Full details for The Stride Office @ BBCC: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P67",
+  "name": "Rimbun Saujana Residency",
+  "prompt": "Full details for Rimbun Saujana Residency: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P68",
+  "name": "Luminar Residence Subang by BRDB",
+  "prompt": "Full details for Luminar Residence Subang by BRDB: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P69",
+  "name": "Accent PJ",
+  "prompt": "Full details for Accent PJ: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P70",
+  "name": "26 Araville PJ",
+  "prompt": "Full details for 26 Araville PJ: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P71",
+  "name": "The Atera, PJ by Paramount Property",
+  "prompt": "Full details for The Atera, PJ by Paramount Property: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P72",
+  "name": "Anyara Hills",
+  "prompt": "Full details for Anyara Hills: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P73",
+  "name": "Yanu Hills @ Bon Estates",
+  "prompt": "Full details for Yanu Hills @ Bon Estates: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P74",
+  "name": "Rafflesia @ Hill 4",
+  "prompt": "Full details for Rafflesia @ Hill 4: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P75",
+  "name": "DAYA Residence",
+  "prompt": "Full details for DAYA Residence: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P76",
+  "name": "Vila Setara Happy Garden",
+  "prompt": "Full details for Vila Setara Happy Garden: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P77",
+  "name": "E&O – City of Elmina (Laman Embun Commercial)",
+  "prompt": "Full details for E&O – City of Elmina (Laman Embun Commercial): for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P78",
+  "name": "Aspire office @ KL ecocity",
+  "prompt": "Full details for Aspire office @ KL ecocity: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P79",
+  "name": "The MET, Corporate Tower",
+  "prompt": "Full details for The MET, Corporate Tower: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P80",
+  "name": "Sierra Hijau (Landed)",
+  "prompt": "Full details for Sierra Hijau (Landed): for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P81",
+  "name": "Melbourne Square",
+  "prompt": "Full details for Melbourne Square: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P82",
+  "name": "Lagenda Tunku (Villa Gemilang)",
+  "prompt": "Full details for Lagenda Tunku (Villa Gemilang): for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ },
+ {
+  "id": "P83",
+  "name": "Ashbourne",
+  "prompt": "Full details for Ashbourne: for every layout give the size, bedrooms, nett price and gross price (say sold out where it is). Also give the area, developer, land title, maintenance fee, tenure, total units, total floors, completion or vacant possession date, top reasons to buy, furnishing and car park allocation. Say \"not on record\" for anything you do not have."
+ }
+]

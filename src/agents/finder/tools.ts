@@ -30,8 +30,10 @@ import {
   getProjectDetail,
   MAX_MATCHES,
 } from '@/src/inventory/search'
-import { collateralRef, kbDocsRef } from '@/src/firebase/collections'
+import { collateralRef, kbChunksRef, kbDocsRef } from '@/src/firebase/collections'
 import { retrieve, buildCitations, isRetrievalMiss } from '@/src/rag'
+import type { RetrievalResult } from '@/src/rag'
+import { clientFactSheetTitle } from '@/src/kb/client-factsheets'
 import type {
   SearchResult,
   InventoryFilters,
@@ -723,6 +725,55 @@ async function ownProjectChunks<T extends { docId: string }>(results: T[], proje
   return results.filter((r) => owned.has(r.docId))
 }
 
+/**
+ * Upper bound on the client fact-sheet chunks `projectDetail` attaches (quick-kayinleong-101).
+ *
+ * Measured on the live corpus (2026-10-27): 67 of 79 sheets are one chunk, the largest is
+ * four chunks and 2,645 chars. Six leaves headroom without letting a malformed sheet flood
+ * the step.
+ */
+export const FACT_SHEET_CHUNKS_MAX = 6
+
+/**
+ * The project's own client fact sheet, every chunk in document order (quick-kayinleong-101).
+ *
+ * The sheet holds the values D2's project info workbook states: area, developer, land
+ * title, tenure, maintenance fee, units, storeys, completion, furnishing, car parks and the
+ * layout table. Before this it reached the model only when the similarity search happened
+ * to rank it, so the same question returned the land title on one run and "not on record"
+ * on the next (2026-10-27 re-test: DC Residensi land title, Parkside Type C1). It is now read
+ * by its exact title, so it is attached every time.
+ *
+ * Exactly one published Finder document must carry the title. None or several returns
+ * nothing: the ingest refuses duplicate titles, so several means something is wrong and
+ * guessing which one is current is how stale facts get stated.
+ */
+async function clientFactSheetChunks(projectName: string): Promise<RetrievalResult[]> {
+  const docs = await kbDocsRef().where('title', '==', clientFactSheetTitle(projectName)).get()
+  const live = docs.docs.filter((d) => {
+    const data = d.data()
+    return data.status === 'published' && data.pillar === 'finder'
+  })
+  if (live.length !== 1) return []
+  const chunks = await kbChunksRef().where('docId', '==', live[0].id).get()
+  return chunks.docs
+    .map((c) => ({ id: c.id, data: c.data() }))
+    .filter(({ data }) => data.status === 'published')
+    .sort((a, b) => (a.data.chunkIndex ?? 0) - (b.data.chunkIndex ?? 0))
+    .slice(0, FACT_SHEET_CHUNKS_MAX)
+    .map(({ id, data }) => ({
+      chunkId: id,
+      docId: data.docId,
+      text: data.text,
+      lang: data.lang,
+      // Read by title, not ranked: there is no similarity score, and it must never be
+      // mistaken for a weak match.
+      score: 1,
+      pillar: data.pillar,
+      category: data.category,
+    }))
+}
+
 /** What `projectDetail` hands the model. `embedding` is absent by construction. */
 export type ProjectDetailToolResult =
   | {
@@ -832,12 +883,18 @@ export function makeProjectDetailTool(userLang: 'en' | 'ms' | 'zh') {
         // Collateral and KB retrieval are independent — run them together rather than
         // paying two sequential round trips inside a step that is already open. A Finder
         // turn has run past the platform's function timeout before (quick-067).
-        const [collateral, kbResults] = await Promise.all([
+        const [collateral, factSheet, kbResults] = await Promise.all([
           collateralFor(project.projectId).catch(() => {
             // A collateral read must never fail the lookup. The stored record is still
             // the ground truth; the agent just gets no files.
             console.warn(`[projectDetail] collateral read failed for ${project.projectId}`)
             return [] as Array<{ type: string; url: string }>
+          }),
+          // The client fact sheet, by exact title (quick-kayinleong-101). A failed read
+          // only loses the sheet; the ranked extracts below still arrive.
+          clientFactSheetChunks(project.name).catch(() => {
+            console.warn(`[projectDetail] fact sheet read failed for ${project.projectId}`)
+            return [] as RetrievalResult[]
           }),
           // The sales-kit half. Scoped to pillar:'finder' so a project lookup can never
           // cite a Coach SOP or a Reply template as project data, and then to THIS
@@ -855,8 +912,14 @@ export function makeProjectDetailTool(userLang: 'en' | 'ms' | 'zh') {
             }),
         ])
 
-        const kbMiss = isRetrievalMiss(kbResults)
-        const kept = kbResults.slice(0, KB_CHUNKS_FOR_DETAIL)
+        // The fact sheet first, so its ids survive the citation cap, then up to
+        // KB_CHUNKS_FOR_DETAIL ranked extracts that are not already part of it.
+        const sheetIds = new Set(factSheet.map((r) => r.chunkId))
+        const kept = [
+          ...factSheet,
+          ...kbResults.filter((r) => !sheetIds.has(r.chunkId)).slice(0, KB_CHUNKS_FOR_DETAIL),
+        ]
+        const kbMiss = isRetrievalMiss(kept)
         const { citations } = buildCitations(kept)
 
         return {

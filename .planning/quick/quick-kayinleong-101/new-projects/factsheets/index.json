@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "schema": "factsheets/1",
+    "source_label": "D2 project info sheet supplied by the client, 27 October 2026",
+    "workbook_sha256": "8b7c1c9aa4cd1ebc3b1fe78409691587dfb4bd266c9310b5967a6c06c80bad51"
+  },
+  "sheets": [
+    {
+      "file": "factsheets/binastra-cochrane-lYok7R.md",
+      "docId": "lYok7RdyP2P2PUZCIpX2",
+      "inventoryName": "Binastra Cochrane",
+      "title": "Binastra Cochrane — D2 project facts (client sheet)",
+      "category": "Binastra Cochrane",
+      "sha256": "a3db3f4cd85cf3bcc747b029f16aeb38653a9db7c598627457e74449d7b38858"
+    },
+    {
+      "file": "factsheets/lagenda-tunku-villa-gemilang-k3e1jz.md",
+      "docId": "k3e1jzoxD0byzkzsAWYi",
+      "inventoryName": "Lagenda Tunku (Villa Gemilang)",
+      "title": "Lagenda Tunku (Villa Gemilang) — D2 project facts (client sheet)",
+      "category": "Lagenda Tunku (Villa Gemilang)",
+      "sha256": "9788c3a71001d116de635cbd6969ce0f99eff48d01e85d7638f585b3ebd48f15"
+    },
+    {
+      "file": "factsheets/ashbourne-14k1U1.md",
+      "docId": "14k1U1AbW4O0RHKmPRzn",
+      "inventoryName": "Ashbourne",
+      "title": "Ashbourne — D2 project facts (client sheet)",
+      "category": "Ashbourne",
+      "sha256": "8fcd397c40904d332f2bd458e435943243ddc177040fd28ab0ed941a008c01bf"
+    }
+  ]
+}

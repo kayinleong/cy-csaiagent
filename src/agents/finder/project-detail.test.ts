@@ -135,6 +135,12 @@ const mocks = vi.hoisted(() => ({
   mockRetrieve: vi.fn(),
   /** kbDocs/{id} read — decides which retrieved chunks belong to the project (quick-100). */
   mockKbDocGet: vi.fn(),
+  /** kbDocs where(title == …) — the client fact-sheet lookup (quick-101). */
+  mockFactSheetDocsGet: vi.fn(),
+  /** kbChunks where(docId == …) — the fact sheet's chunks (quick-101). */
+  mockFactSheetChunksGet: vi.fn(),
+  /** Every where(field, op, value) on kbDocs / kbChunks, to prove the exact-title read. */
+  kbWheres: [] as Array<[string, string, unknown]>,
   /** Last doc id passed to projectsRef().doc(...) — proves the read is BY ID. */
   docIds: [] as string[],
 }))
@@ -165,7 +171,19 @@ vi.mock('@/src/firebase/collections', () => {
       }),
     })),
     collateralRef: vi.fn(() => ({ where: vi.fn(() => ({ get: mocks.mockCollateralGet })) })),
-    kbDocsRef: vi.fn(() => ({ doc: vi.fn((id: string) => ({ get: () => mocks.mockKbDocGet(id) })) })),
+    kbDocsRef: vi.fn(() => ({
+      doc: vi.fn((id: string) => ({ get: () => mocks.mockKbDocGet(id) })),
+      where: vi.fn((field: string, op: string, value: unknown) => {
+        mocks.kbWheres.push([field, op, value])
+        return { get: mocks.mockFactSheetDocsGet }
+      }),
+    })),
+    kbChunksRef: vi.fn(() => ({
+      where: vi.fn((field: string, op: string, value: unknown) => {
+        mocks.kbWheres.push([field, op, value])
+        return { get: mocks.mockFactSheetChunksGet }
+      }),
+    })),
     TENANT_ID: 'd2',
     PRICE_BANDS: ['price_unknown', 'under_500k', '500k_800k', '800k_1.2m', 'above_1.2m'],
     priceBandFor: vi.fn((p: number) => (p <= 0 ? 'price_unknown' : '800k_1.2m')),
@@ -210,6 +228,10 @@ beforeEach(() => {
   }))
   mocks.mockCollateralGet.mockResolvedValue({ empty: true, docs: [] })
   mocks.mockRetrieve.mockResolvedValue([])
+  // By default no client fact sheet is on record, so the ranked extracts are all there is.
+  mocks.kbWheres.length = 0
+  mocks.mockFactSheetDocsGet.mockResolvedValue({ docs: [] })
+  mocks.mockFactSheetChunksGet.mockResolvedValue({ docs: [] })
   // By default every retrieved chunk's parent document is the target project's own sales kit.
   mocks.mockKbDocGet.mockImplementation(async (id: string) => ({
     id,
@@ -614,6 +636,123 @@ describe('projectDetail keeps only the asked-about project\'s KB extracts', () =
     const out = await runDetail()
     expect(out.kb.found).toBe(false)
     expect(out.kb.context).toBe('')
+  })
+})
+
+// ─── quick-kayinleong-101: the client fact sheet is always attached ──────────
+
+describe('projectDetail always attaches the project\'s client fact sheet', () => {
+  const SHEET_TITLE = `${TARGET_NAME} — D2 project facts (client sheet)`
+
+  async function runDetail() {
+    const { makeProjectDetailTool } = await import('./tools')
+    const t = makeProjectDetailTool('en')
+    const execute = t.execute as NonNullable<typeof t.execute>
+    return (await execute({ projectId: TARGET_ID, question: null }, {} as never)) as {
+      found: true
+      kb: { found: boolean; citations: Array<{ chunkId: string }>; context: string }
+    }
+  }
+  function sheetDocs(...docs: Array<{ id: string; status?: string; pillar?: string }>) {
+    mocks.mockFactSheetDocsGet.mockResolvedValue({
+      docs: docs.map((d) => ({
+        id: d.id,
+        data: () => ({ title: SHEET_TITLE, status: d.status ?? 'published', pillar: d.pillar ?? 'finder' }),
+      })),
+    })
+  }
+  function sheetChunks(...chunks: Array<{ id: string; index: number; text: string; status?: string }>) {
+    mocks.mockFactSheetChunksGet.mockResolvedValue({
+      docs: chunks.map((c) => ({
+        id: c.id,
+        data: () => ({
+          docId: 'factsheet-doc',
+          text: c.text,
+          lang: 'en',
+          pillar: 'finder',
+          category: TARGET_NAME,
+          status: c.status ?? 'published',
+          chunkIndex: c.index,
+        }),
+      })),
+    })
+  }
+
+  it('2026-10-27 re-test: the sheet is attached even when the similarity search misses it', async () => {
+    sheetDocs({ id: 'factsheet-doc' })
+    sheetChunks(
+      { id: 'fs-1', index: 1, text: '## unit types | Type C1 | 1,184 sf |' },
+      { id: 'fs-0', index: 0, text: '- Land title: Commercial (HDA)' },
+    )
+    mocks.mockRetrieve.mockResolvedValue([])
+    const out = await runDetail()
+    expect(out.kb.found).toBe(true)
+    // Document order, read by the exact title the ingest writes.
+    expect(out.kb.citations.map((c) => c.chunkId)).toEqual(['fs-0', 'fs-1'])
+    expect(out.kb.context).toContain('[KB:fs-0]\n- Land title: Commercial (HDA)')
+    expect(mocks.kbWheres).toContainEqual(['title', '==', SHEET_TITLE])
+    expect(mocks.kbWheres).toContainEqual(['docId', '==', 'factsheet-doc'])
+  })
+
+  it('the sheet comes first, a chunk the search also found is not repeated, and the ranked fill stays capped', async () => {
+    const { KB_CHUNKS_FOR_DETAIL } = await import('./tools')
+    sheetDocs({ id: 'factsheet-doc' })
+    sheetChunks({ id: 'chunk-2', index: 0, text: '- Developer: Imperial Land Sdn Bhd' })
+    mocks.mockRetrieve.mockResolvedValue(Array.from({ length: 8 }, (_, i) => kbChunk(i, `sales kit ${i}`)))
+    const out = await runDetail()
+    const ids = out.kb.context.match(/\[KB:[^\]]+\]/g) ?? []
+    expect(ids[0]).toBe('[KB:chunk-2]')
+    expect(ids.filter((id) => id === '[KB:chunk-2]')).toHaveLength(1)
+    expect(ids).toHaveLength(1 + KB_CHUNKS_FOR_DETAIL)
+    expect(out.kb.citations[0].chunkId).toBe('chunk-2')
+  })
+
+  it('no sheet, or two live sheets with the same title, attaches nothing from the sheet', async () => {
+    mocks.mockRetrieve.mockResolvedValue([kbChunk(0, 'Maintenance fee RM0.88 psf')])
+    sheetChunks({ id: 'fs-0', index: 0, text: '- Tenure: Freehold' })
+    for (const docs of [[], [{ id: 'a' }, { id: 'b' }]]) {
+      sheetDocs(...docs)
+      const out = await runDetail()
+      expect(out.kb.citations.map((c) => c.chunkId)).toEqual(['chunk-0'])
+    }
+  })
+
+  it('an unpublished or non-Finder document, or an unpublished chunk, is never attached', async () => {
+    mocks.mockRetrieve.mockResolvedValue([])
+    sheetChunks({ id: 'fs-0', index: 0, text: '- Tenure: Freehold' })
+    sheetDocs({ id: 'factsheet-doc', status: 'superseded' })
+    expect((await runDetail()).kb.found).toBe(false)
+    sheetDocs({ id: 'factsheet-doc', pillar: 'coach' })
+    expect((await runDetail()).kb.found).toBe(false)
+    sheetDocs({ id: 'factsheet-doc' })
+    sheetChunks({ id: 'fs-0', index: 0, text: '- Tenure: Freehold', status: 'superseded' })
+    expect((await runDetail()).kb.found).toBe(false)
+  })
+
+  it('caps the sheet at FACT_SHEET_CHUNKS_MAX chunks', async () => {
+    const { FACT_SHEET_CHUNKS_MAX } = await import('./tools')
+    sheetDocs({ id: 'factsheet-doc' })
+    sheetChunks(...Array.from({ length: FACT_SHEET_CHUNKS_MAX + 3 }, (_, i) => ({ id: `fs-${i}`, index: i, text: `part ${i}` })))
+    const out = await runDetail()
+    expect(out.kb.context.match(/\[KB:fs-/g)).toHaveLength(FACT_SHEET_CHUNKS_MAX)
+  })
+
+  it('a failed sheet read loses only the sheet; the ranked extracts still arrive', async () => {
+    mocks.mockFactSheetDocsGet.mockRejectedValue(new Error('kbDocs query failed'))
+    mocks.mockRetrieve.mockResolvedValue([kbChunk(0, 'Maintenance fee RM0.88 psf')])
+    const out = await runDetail()
+    expect(out.kb.citations.map((c) => c.chunkId)).toEqual(['chunk-0'])
+  })
+
+  it('the title matches the one the fact-sheet ingest writes', async () => {
+    const { clientFactSheetTitle } = await import('@/src/kb/client-factsheets')
+    expect(clientFactSheetTitle(TARGET_NAME)).toBe(SHEET_TITLE)
+  })
+
+  it('FINDER_SYSTEM_PROMPT makes the sheet the authority and forbids filling an unconfirmed cell', async () => {
+    const { FINDER_SYSTEM_PROMPT } = await import('./prompt')
+    expect(FINDER_SYSTEM_PROMPT).toContain('The client fact sheet is the authority')
+    expect(FINDER_SYSTEM_PROMPT).toContain('not confirmed (under review)')
   })
 })
 

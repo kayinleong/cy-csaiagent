@@ -1,0 +1,10 @@
+{
+ "P26": {"Total Units": {"verdict": "PASS", "why": "Manual: the bot gives 245 units (214 condominium, 31 villa), the Excel's total and both splits. The scorer wanted the '24-storey' and list numbering."}},
+ "P49": {"Total Units": {"verdict": "PASS", "why": "Manual: the bot gives 298 units, the Excel's total. The Excel cell also lists units per type (88/52/96/60/2), which the answer does not restate."}},
+ "P78": {"Area": {"verdict": "PASS", "why": "Manual: 'KL Eco City' is the Excel's 'KL ecocity' with different spacing."}},
+ "P43": {"Top Reasons Why": {"verdict": "PASS", "why": "Manual: all 7 Excel reasons are given, reworded (Kerry Hill architecture, fully furnished, 220m to Prince Court, 280m to MRT Conlay/TRX, three facings, E&O, 3 min to Pavilion)."}},
+ "P51": {"Top Reasons Why": {"verdict": "PASS", "why": "Manual: all 10 Excel reasons are given, reworded (ISKL 280m, Uthant, 10-storey cap/53 embassies, security, 2km to KLCC, 40 homes/1 acre, 2,500-6,000+ sf, RM1,400 vs RM1,800 psf, furnished clearance units, BSG)."}},
+ "P46": {"Total Units": {"verdict": "DIFFERS", "why": "Manual: the bot leads with 632 units (an older sales kit: '52 floors, Total Units: 632units') and mentions the Excel's 960 (Tower A 492 + Tower B 468) only as a side note, although the fact sheet was in its context. It did not follow the 'client fact sheet is the authority' rule here."}},
+ "P73": {"Area": {"verdict": "DIFFERS", "why": "Manual: the bot says 'Taman Nadayu, Melawati, Selangor' (from the brochure); the Excel says 'Taman Melawati, Kuala Lumpur.' The Excel is inconsistent with itself: its Land Title for this project is 'Selangor Individual'. Ask the client which is right."}},
+ "P06": {"Size": {"verdict": "PARTIAL", "why": "Manual: the bot labels the 570 sq ft layout 'Type A1' (the Excel says 'Type A') and adds a 'Type A2' of 561 sq ft that is not in the Excel. Claim 096 flagged Lantern's near-duplicate Type A / A1 layouts for the client."}}
+}

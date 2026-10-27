@@ -17,6 +17,7 @@
  *   --manifest PATH      default .planning/quick/quick-kayinleong-096/factsheets/index.json.
  *                        Each sheet's `file` is resolved relative to the manifest's PARENT
  *                        directory (the claim dir), and may not escape it.
+ *                        The report is written to that same directory.
  *
  * SAFETY ORDER. The only static imports are node built-ins and the import-free safety
  * module. `assertSafeTarget` runs FIRST; the Firebase Admin SDK, the KB path and the audit
@@ -25,7 +26,7 @@
  */
 
 import { readFileSync, writeFileSync } from 'node:fs'
-import { dirname, resolve, sep } from 'node:path'
+import { dirname, relative, resolve, sep } from 'node:path'
 import { assertSafeTarget, CLIENT_FACTSHEET_ACTOR } from '@/src/inventory/client-workbook-safety'
 
 const CLAIM_DIR = '.planning/quick/quick-kayinleong-096'
@@ -127,7 +128,9 @@ async function main(): Promise<void> {
   console.log(`  target: ${target}`)
   console.log(`  sheets: ${sheets.length} loaded, all verified`)
 
-  const reportPath = `${CLAIM_DIR}/${apply ? 'FACTSHEETS-APPLY.md' : 'FACTSHEETS-DRYRUN.md'}`
+  // Beside the manifest's sheets (quick-kayinleong-101), so a second manifest never
+  // overwrites claim 096's committed reports. The default manifest still reports into 096.
+  const reportPath = `${relative(process.cwd(), baseDir) || '.'}/${apply ? 'FACTSHEETS-APPLY.md' : 'FACTSHEETS-DRYRUN.md'}`
   const result = await factsheets.runFactSheetIngest(deps, {
     mode: apply ? 'apply' : 'dry-run',
     sheets,
