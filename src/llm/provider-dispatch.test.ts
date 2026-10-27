@@ -13,7 +13,7 @@
  * being truncated mid unit-price table. The one swap surface the project has had to be able
  * to reach a second provider for that to be possible.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { LanguageModel } from 'ai'
 
 /**
@@ -65,5 +65,44 @@ describe('modelFor: provider dispatch', () => {
     const { modelFor } = await import('@/src/llm/provider')
     const model = handle(await modelFor('finder'))
     expect(model.modelId.length).toBeGreaterThan(0)
+  })
+})
+
+describe('modelFor: LOCAL_MODEL_OVERRIDE (quick-kayinleong-099)', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    mockGet.mockReset()
+    mockGet.mockResolvedValue({ data: () => ({ models: { finder: 'claude-sonnet-4-6', router: 'claude-haiku-4-5' } }) })
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('outside production, the override wins for every pillar and skips Firestore', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('LOCAL_MODEL_OVERRIDE', 'gemini-3.5-flash')
+    const { modelFor } = await import('@/src/llm/provider')
+    for (const pillar of ['finder', 'router', 'coach'] as const) {
+      const model = handle(await modelFor(pillar))
+      expect(model.provider).toMatch(/google/i)
+      expect(model.modelId).toBe('gemini-3.5-flash')
+    }
+    expect(mockGet).not.toHaveBeenCalled()
+  })
+
+  it('in production the override is IGNORED and Firestore decides', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('LOCAL_MODEL_OVERRIDE', 'gemini-3.5-flash')
+    const { modelFor } = await import('@/src/llm/provider')
+    const model = handle(await modelFor('finder'))
+    expect(model.provider).toMatch(/anthropic/i)
+    expect(model.modelId).toBe('claude-sonnet-4-6')
+  })
+
+  it('a blank override is treated as unset', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('LOCAL_MODEL_OVERRIDE', '   ')
+    const { modelFor } = await import('@/src/llm/provider')
+    expect(handle(await modelFor('finder')).modelId).toBe('claude-sonnet-4-6')
   })
 })

@@ -72,6 +72,16 @@ const MODEL_FALLBACKS: Record<Pillar, string> = {
  * @returns       An AI SDK LanguageModel ready for use in streamText().
  */
 export async function modelFor(pillar: Pillar): Promise<LanguageModel> {
+  // Local-development override (quick-kayinleong-099). `next dev` only: production
+  // (`next start` on App Hosting) ignores it, so appConfig/modelConfig stays the one
+  // production swap surface (QUAL-01). It exists so the app can still be exercised end to
+  // end when the production provider is unavailable: the 2026-10-27 UAT re-run found the
+  // Anthropic account out of credit, and the only other switch, the Firestore doc, is
+  // shared with production.
+  const localOverride =
+    process.env.NODE_ENV !== 'production' ? process.env.LOCAL_MODEL_OVERRIDE?.trim() : undefined
+  if (localOverride) return providerFor(localOverride)
+
   let modelId: string = MODEL_FALLBACKS[pillar]
 
   try {

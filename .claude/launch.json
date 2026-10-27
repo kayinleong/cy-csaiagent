@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "d2-dev-gemini",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["LOCAL_MODEL_OVERRIDE=gemini-3.5-flash", "npm", "run", "dev"],
+      "port": 3000
     }
   ]
 }
