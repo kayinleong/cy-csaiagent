@@ -45,6 +45,15 @@ Commits: de620f4 (fix), bacedbd (workbook).
 | P08 | `projectDetail{projectName}` → found | Pass. |
 | P46 | `projectDetail{projectName}` → found | Same as runs 3 and 4: total units 632 vs the Excel's 960, a known data question. |
 
+**Live re-check (28 Oct).**
+- Main was pushed at d23700c. The App Hosting rollout succeeded on both backends.
+- P02 and P09 were re-asked in the deployed site's chat: Finder, a new conversation each, signed in as the admin test account. The answers were read back from Firestore and scored against the Excel.
+- Both now find their project and answer in full, and every field they state matches the Excel:
+  - P02: 8 of 8. H1A is "4+1 (Dual Key: 3 rooms + Studio)", matching the Excel.
+  - P09: 11 of 11.
+- The workbook's P02/P09 rows now hold this re-check (both Pass). The sheet reads 78 Pass, 1 Partial, 4 Fail.
+- CI "Lint + Unit Tests + PII Scan" on d23700c fails with the same `no-explicit-any` lint errors, on the same lines, as 5d27801 before this claim. That failure was already there.
+
 ## Regression report
 - **Details button (`projectId: <id>`).** The by-ID path is unchanged and comes first. A correct ID never triggers the name read (test). All 39 existing project-detail tests pass.
 - **searchProjects / queryInventory.** Untouched. The `status:'active'` recommendation gate test passes.
@@ -58,6 +67,5 @@ Commits: de620f4 (fix), bacedbd (workbook).
 - **PDPA.** `projectName` comes from the already-redacted message. Project names are not PII, and nothing new is logged.
 
 ## Known limitations
-- The fix reaches the live site only after this lands on main and App Hosting rolls it out. Run 4's P02/P09 verdicts in the workbook stay Fail (what the live site did), and the re-check is recorded in the notes.
 - P02 H1A bedrooms came from an older sales-kit extract instead of the fact sheet in this one sample. Run 3 had it right. This is not addressed here.
 - A name that is neither the exact stored name nor found by searchProjects still ends as "not on record". By design, no fuzzy match.
