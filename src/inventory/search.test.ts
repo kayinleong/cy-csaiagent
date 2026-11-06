@@ -1571,3 +1571,140 @@ describe('readEmbedding: tolerates either stored vector shape', () => {
     expect(readEmbedding(vectorValue).length).toBe(3)
   })
 })
+
+// ─── quick-kayinleong-103: in-area vs nearby ──────────────────────────────────
+
+describe('quick-kayinleong-103: a location match is in the area or only around it', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    mockEmbedText.mockReset()
+    mockProjectsGet.mockReset()
+    mockWhereFn.mockReset()
+    mockEmbedText.mockImplementation(async () => STUB_QUERY_VECTOR)
+    mockWhereFn.mockImplementation((..._args: [string, string, unknown]) => ({
+      where: mockWhereFn,
+      get: mockProjectsGet,
+      orderBy: mockWhereFn,
+    }))
+  })
+
+  /** A doc with the live corpus's name and locationText (2026-11-06). */
+  const live = (name: string, locationText: string) => ({
+    ...FIXTURES['proj-active-a'],
+    name,
+    locationText,
+  })
+
+  // The six projects the reported "damansara height projects" search returned.
+  const CEDAR = live('The Cedar Damansara Heights', 'Damansara Heights, Centre of KL')
+  const PAVILION = live('Pavilion Damansara Heights', 'Damansara Heights, Centre of KL')
+  const IMPERIAL = live('PDH: Imperial Residences RA', 'Pavilion Damansara Heights Phase 2, Centre of KL')
+  const ONE_ELEVEN = live(
+    'One Eleven Menerung @ Bangsar',
+    'Bangsar, between BSC & Pavilion Damansara Heights, 180m walk to MRT Pavilion Damansara Heights',
+  )
+  const MAJESTIC = live(
+    'Majestic @ Kiara Reserve',
+    'Mont Kiara / Damansara Heights, KL North (Next to SMK Sri Hartamas, adjacent to 400-acre Kiara Reserve Forest)',
+  )
+
+  it('THE REPORTED CASE: the Bangsar and Mont Kiara projects are nearby, the other four are in DH', async () => {
+    const { locationNeedles, projectMatchesLocation, projectLocationMatch } = await import(
+      '@/src/inventory/search'
+    )
+    const dh = locationNeedles('Damansara Heights')!
+    for (const doc of [CEDAR, PAVILION, IMPERIAL, ONE_ELEVEN, MAJESTIC]) {
+      // All five still pass the gate: this classifies, it never removes.
+      expect(projectMatchesLocation(doc, dh)).toBe(true)
+    }
+    expect(projectLocationMatch(CEDAR, dh)).toBe('in_area')
+    expect(projectLocationMatch(PAVILION, dh)).toBe('in_area')
+    // In DH by its address alone; the name ("PDH: …") does not spell the area out.
+    expect(projectLocationMatch(IMPERIAL, dh)).toBe('in_area')
+    expect(projectLocationMatch(ONE_ELEVEN, dh)).toBe('nearby')
+    expect(projectLocationMatch(MAJESTIC, dh)).toBe('nearby')
+    // And each is in_area for the area it is actually in.
+    expect(projectLocationMatch(ONE_ELEVEN, locationNeedles('Bangsar')!)).toBe('in_area')
+    expect(projectLocationMatch(MAJESTIC, locationNeedles('Mont Kiara')!)).toBe('in_area')
+  })
+
+  it('a slash list ending in "area" names one district, so both names are in the area', async () => {
+    const { locationNeedles, projectLocationMatch } = await import('@/src/inventory/search')
+    const katana = live('Katana 2 Residence', 'Uthant, KLCC/Bukit Bintang area, 2km from KL City Centre')
+    expect(projectLocationMatch(katana, locationNeedles('Bukit Bintang')!)).toBe('in_area')
+    expect(projectLocationMatch(katana, locationNeedles('KLCC')!)).toBe('in_area')
+    // Without the district suffix only the first name counts.
+    const aspire = live('Aspire office @ KL ecocity', 'KL Eco City, Bangsar / Mid Valley fringe CBD')
+    expect(projectLocationMatch(aspire, locationNeedles('Mid Valley')!)).toBe('nearby')
+  })
+
+  it('an address that opens with a landmark is still read past it', async () => {
+    const { locationNeedles, projectLocationMatch } = await import('@/src/inventory/search')
+    const psq = live(
+      'PSQ Pavilion Square',
+      'Opposite Pavilion KL Mall, Jalan Bukit Bintang, KLCC/Bukit Bintang area, with direct link bridge to Pavilion KL Mall',
+    )
+    expect(projectLocationMatch(psq, locationNeedles('Bukit Bintang')!)).toBe('in_area')
+    const goldenCrown = live(
+      'Golden Crown Residence',
+      'Jalan Tun Razak, approximately 50m in front of TRX Mall, KLCC/Bukit Bintang area, 30m from MRT TRX Interchange',
+    )
+    expect(projectLocationMatch(goldenCrown, locationNeedles('KLCC')!)).toBe('in_area')
+  })
+
+  it('searchProjects ranks in-area projects first, tags every match, and lets no nearby match claim the location', async () => {
+    // The nearby projects score HIGHER (dim-0 aligned with the query) so ranking alone would
+    // put them first.
+    const strong = Array.from({ length: 1024 }, (_, i) => (i === 0 ? 0.9 : 0.01))
+    const weaker = Array.from({ length: 1024 }, (_, i) => (i === 0 ? 0.6 : 0.01))
+    mockProjectsGet.mockResolvedValue(
+      makeAdHocSnap([
+        { id: 'one-eleven', doc: { ...ONE_ELEVEN, embedding: strong } },
+        { id: 'majestic', doc: { ...MAJESTIC, embedding: strong } },
+        { id: 'cedar', doc: { ...CEDAR, embedding: weaker } },
+        { id: 'imperial', doc: { ...IMPERIAL, embedding: weaker } },
+      ]),
+    )
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({
+      segment: 'unknown',
+      priceMin: null,
+      priceMax: null,
+      monthlyIncome: null,
+      nationality: 'unknown',
+      bumiputera: null,
+      locationPref: 'Damansara Heights',
+      bedrooms: null,
+      freeText: 'i just need damansara height projects',
+    })
+
+    expect(result.found).toBe(true)
+    if (!result.found) return
+    expect(result.matches.map((m) => m.projectId)).toEqual(['cedar', 'imperial', 'one-eleven', 'majestic'])
+    expect(result.matches.map((m) => m.locationMatch)).toEqual(['in_area', 'in_area', 'nearby', 'nearby'])
+    expect(result.matches.map((m) => m.matchedCriteria.locationPref)).toEqual([
+      'Damansara Heights',
+      'Damansara Heights',
+      null,
+      null,
+    ])
+  })
+
+  it('a search with no location preference carries no locationMatch and keeps its ranking', async () => {
+    mockProjectsGet.mockResolvedValue(makeProjectSnap(['proj-active-a', 'proj-active-b', 'proj-active-c']))
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({
+      segment: 'unknown',
+      priceMin: null,
+      priceMax: null,
+      monthlyIncome: null,
+      nationality: 'unknown',
+      bumiputera: null,
+      locationPref: null,
+      bedrooms: null,
+      freeText: 'anything',
+    })
+    expect(result.found).toBe(true)
+    if (result.found) expect(result.matches.every((m) => m.locationMatch === undefined)).toBe(true)
+  })
+})

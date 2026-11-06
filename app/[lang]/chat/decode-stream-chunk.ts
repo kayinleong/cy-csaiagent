@@ -10,7 +10,12 @@
  * legacy v4 data-stream format (`0:"token"`).
  */
 
-import { FinderRowSchema, type FinderRow } from '@/src/agents/finder/schema'
+import {
+  FinderRowSchema,
+  ProjectSheetSchema,
+  type FinderRow,
+  type ProjectSheet,
+} from '@/src/agents/finder/schema'
 
 /**
  * Parse one UI Message Stream SSE data line and return its text content.
@@ -121,6 +126,13 @@ export interface StreamMessageMetadata {
    * persisted envelope carries the rows for that case (see `attachFinderRows`).
    */
   finderRows?: FinderRow[]
+  /**
+   * The project sheets for a details answer (quick-kayinleong-103): PIC names, the
+   * WhatsApp group link and the Skool project / marketing links. Server-built from the
+   * projectDetail reads, like `finderRows`. Absent on a truncated turn; the persisted
+   * envelope carries them for that case (see `attachProjectSheets`).
+   */
+  projectSheets?: ProjectSheet[]
 }
 
 /**
@@ -187,6 +199,15 @@ export function parseMessageMetadata(line: string): StreamMessageMetadata | null
         .filter((r) => r.success)
         .map((r) => r.data)
       if (rows.length > 0) out.finderRows = rows
+    }
+
+    // Item by item again: one malformed sheet costs that sheet only.
+    if (Array.isArray(m.projectSheets)) {
+      const sheets = m.projectSheets
+        .map((s) => ProjectSheetSchema.safeParse(s))
+        .filter((s) => s.success)
+        .map((s) => s.data)
+      if (sheets.length > 0) out.projectSheets = sheets
     }
 
     return Object.keys(out).length > 0 ? out : null

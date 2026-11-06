@@ -20,6 +20,7 @@ import {
   FinderMatchSchema,
   type FinderOutput,
   type FinderRow,
+  type ProjectSheet,
 } from '@/src/agents/finder/schema'
 
 // ─── Truncated-envelope repair (quick-kayinleong-056) ─────────────────────────
@@ -525,4 +526,27 @@ export function salvageStructuredText(content: string): string | null {
   // says "the shape { projectId, rationale }".
   const machineNoise = ENVELOPE_KEY.test(trimmed) || !trimmed.includes('}')
   return prefix.length > 0 && machineNoise ? prefix : null
+}
+
+/**
+ * Attach the SERVER's project sheets to a decoded details answer (quick-kayinleong-103).
+ *
+ * Sibling of `attachCollateral` / `attachFinderRows`, and the same server-truth-wins rule:
+ * whatever the model wrote into `projectSheets` (it is told not to) is replaced. Only an
+ * `answer` carries sheets, because projectDetail answers in that field. A sheet with nothing
+ * beyond the project name is dropped, and with none left the output is unchanged.
+ *
+ * Pure. A no-op when `sheets` is undefined or empty, so an older persisted turn renders
+ * exactly as before.
+ */
+export function attachProjectSheets(
+  output: FinderOutput,
+  sheets: ProjectSheet[] | undefined,
+): FinderOutput {
+  if (!output.answer || !sheets || sheets.length === 0) return output
+  const shown = sheets.filter(
+    (s) => s.contacts.length > 0 || s.whatsappGroupUrl !== null || s.links.length > 0,
+  )
+  if (shown.length === 0) return output
+  return { ...output, projectSheets: shown.slice(0, 3) }
 }

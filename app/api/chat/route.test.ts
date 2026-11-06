@@ -593,7 +593,7 @@ describe('Test 12 (03-07): finder dispatch — routeAsync→finder routes to fin
       expect.any(String),
       'uid-001',
       undefined,
-      { rows: [] },
+      { rows: [], sheets: [] },
     )
     expect(mocks.mockModelFor).toHaveBeenCalledWith('finder')
   })
@@ -627,7 +627,7 @@ describe('Test 12 (03-07): finder dispatch — routeAsync→finder routes to fin
       expect.any(String),
       'uid-001',
       'lead-001',
-      { rows: [] },
+      { rows: [], sheets: [] },
     )
   })
 })

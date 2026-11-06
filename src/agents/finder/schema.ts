@@ -273,6 +273,54 @@ export const FinderRowSchema = z.object({
   sizeMaxSqft: z.number().nullable().default(null),
   /** Stage-B dot product — carried so the client can preserve the server's ranking. */
   score: z.number(),
+  /**
+   * Where the project sits relative to the requested area (quick-kayinleong-103). Present
+   * only when the search applied a location preference. `nearby` rows render under
+   * "Other projects around <locationArea>", after every `in_area` row.
+   */
+  locationMatch: z.enum(['in_area', 'nearby']).optional(),
+  /** The location preference the search applied, for that heading. Same on every row. */
+  locationArea: z.string().min(1).max(80).optional(),
+})
+
+/**
+ * The project sheet shown with a details answer (quick-kayinleong-103). SERVER-BUILT
+ * from the projectDetail reads, never model-authored. See `src/agents/finder/project-sheet.ts`.
+ *
+ * It holds what the Skool project page shows around the quick facts, the parts an agent
+ * acts on:
+ *   - `contacts`: the PIC / project leaders, names ONLY. The write-ups often put a personal
+ *     phone number or a wa.me link beside the name, and those are stripped.
+ *   - `whatsappGroupUrl`: the project's WhatsApp group invite.
+ *   - `links`: the Skool "Sales Resources" and "Marketing Resources" links.
+ */
+export const ProjectSheetSchema = z.object({
+  projectId: z.string().min(1),
+  name: z.string().min(1),
+  contacts: z
+    .array(
+      z.object({
+        role: z.enum(['pic', 'leader', 'co_leader']),
+        name: z.string().min(1).max(60),
+      }),
+    )
+    .max(6)
+    .default([]),
+  whatsappGroupUrl: z
+    .string()
+    .regex(/^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+$/)
+    .nullable()
+    .default(null),
+  links: z
+    .array(
+      z.object({
+        type: z.string().min(1),
+        url: z.string().url(),
+        group: z.enum(['project', 'marketing']),
+      }),
+    )
+    .max(12)
+    .default([]),
 })
 
 /**
@@ -372,6 +420,14 @@ export const FinderOutputSchema = z.object({
    * decoded.
    */
   rows: z.array(FinderRowSchema).default([]),
+
+  /**
+   * One sheet per project the turn looked up with projectDetail, at most 3
+   * (quick-kayinleong-103). SERVER-ATTACHED to an `answer`, like `rows`: the model is told
+   * not to write the PIC, the WhatsApp group link or any document link. Optional, so an
+   * older persisted turn decodes unchanged and shows the answer alone.
+   */
+  projectSheets: z.array(ProjectSheetSchema).max(3).optional(),
 })
 
 export type FinderOutput = z.infer<typeof FinderOutputSchema>
@@ -379,3 +435,4 @@ export type FinderMatch = z.infer<typeof FinderMatchSchema>
 export type FinderRow = z.infer<typeof FinderRowSchema>
 export type FinderRefusal = z.infer<typeof FinderRefusalSchema>
 export type CollateralItem = z.infer<typeof CollateralItemSchema>
+export type ProjectSheet = z.infer<typeof ProjectSheetSchema>

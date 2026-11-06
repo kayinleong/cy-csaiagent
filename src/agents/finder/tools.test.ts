@@ -190,13 +190,16 @@ describe('searchProjects tool: the client gets every row', () => {
 })
 
 describe('FinderRowSchema is an allowlist', () => {
-  it('has exactly the twelve intended keys — no priceBand', () => {
+  it('has exactly the fourteen intended keys — no priceBand', () => {
     const keys = Object.keys(FinderRowSchema.shape).sort()
     expect(keys).toEqual(
       [
         'bedrooms',
         'bumiQuota',
         'foreignEligible',
+        // quick-kayinleong-103: in-area vs nearby, and the area for the group heading.
+        'locationArea',
+        'locationMatch',
         'locationText',
         'name',
         'priceValue',

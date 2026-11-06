@@ -32,6 +32,7 @@ import {
   MAX_MATCHES,
 } from '@/src/inventory/search'
 import { collateralRef, kbChunksRef, kbDocsRef } from '@/src/firebase/collections'
+import { buildProjectSheet } from './project-sheet'
 import { retrieve, buildCitations, isRetrievalMiss } from '@/src/rag'
 import type { RetrievalResult } from '@/src/rag'
 import { clientFactSheetTitle } from '@/src/kb/client-factsheets'
@@ -42,7 +43,7 @@ import type {
   ProjectDetail,
 } from '@/src/inventory/search'
 import type { ProjectDoc } from '@/src/firebase/collections'
-import type { FinderRow } from './schema'
+import type { FinderRow, ProjectSheet } from './schema'
 import type { JSONValue } from '@ai-sdk/provider'
 
 // ─── Infra-failure guard (quick-kayinleong-040) ───────────────────────────────
@@ -173,7 +174,26 @@ async function runReadOnly<T>(
  * Reading an explicit sink takes that question off the critical path. Do not delete either
  * mechanism as duplication.
  */
-export type FinderRowSink = { rows: FinderRow[] }
+export type FinderRowSink = {
+  rows: FinderRow[]
+  /**
+   * One project sheet per project the turn looked up with projectDetail
+   * (quick-kayinleong-103), in lookup order, at most `MAX_PROJECT_SHEETS`. A repeat lookup
+   * replaces its sheet. Optional so existing sinks and tests are unchanged.
+   */
+  sheets?: ProjectSheet[]
+}
+
+/** The most sheets one answer carries: a comparison of two or three projects. */
+export const MAX_PROJECT_SHEETS = 3
+
+/** Record a project sheet in the sink, replacing an earlier one for the same project. */
+export function recordProjectSheet(sink: FinderRowSink | undefined, sheet: ProjectSheet): void {
+  if (!sink) return
+  const sheets = (sink.sheets ?? []).filter((s) => s.projectId !== sheet.projectId)
+  if (sheets.length >= MAX_PROJECT_SHEETS) return
+  sink.sheets = [...sheets, sheet]
+}
 
 /**
  * Project a `ProjectMatch` down to the client row allowlist.
@@ -181,7 +201,8 @@ export type FinderRowSink = { rows: FinderRow[] }
  * Nothing is computed here — every value is copied from the tool result. `priceBand`,
  * `description` and `embedding` are dropped on purpose; see `FinderRowSchema`.
  */
-function toFinderRow(m: ProjectMatch): FinderRow {
+function toFinderRow(m: ProjectMatch, locationPref: string | null): FinderRow {
+  const area = locationPref?.trim().slice(0, 80)
   return {
     projectId: m.projectId,
     name: m.name,
@@ -195,6 +216,9 @@ function toFinderRow(m: ProjectMatch): FinderRow {
     sizeMinSqft: m.sizeMinSqft,
     sizeMaxSqft: m.sizeMaxSqft,
     score: m.score,
+    // quick-kayinleong-103: only when the location gate ran.
+    ...(m.locationMatch ? { locationMatch: m.locationMatch } : {}),
+    ...(m.locationMatch && area ? { locationArea: area } : {}),
   }
 }
 
@@ -314,7 +338,7 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: Find
         // append: the prompt already tells the model that only the CURRENT search result
         // counts, so the last search of the turn is the table. Appending would show a
         // narrowed re-search stacked on top of the query it replaced.
-        if (sink) sink.rows = enriched.matches.map(toFinderRow)
+        if (sink) sink.rows = enriched.matches.map((m) => toFinderRow(m, input.locationPref))
 
         return enriched
       }),
@@ -579,6 +603,16 @@ export function makeFetchCollateralTool(userLang: 'en' | 'ms' | 'zh') {
  * past the platform's function timeout.
  */
 async function collateralFor(projectId: string): Promise<Array<{ type: string; url: string }>> {
+  return rankAndCapForModel(projectId, await readCollateral(projectId))
+}
+
+/**
+ * Every web-addressable collateral item for one project, unranked and uncapped
+ * (quick-kayinleong-103). Split out of `collateralFor` so projectDetail can build the
+ * project sheet from the curated Skool links, which the model's ranked top 12 can push out
+ * behind WhatsApp PDFs, without a second Firestore read.
+ */
+async function readCollateral(projectId: string): Promise<Array<{ type: string; url: string }>> {
   {
         const snap = await collateralRef().where('projectId', '==', projectId).get()
 
@@ -609,6 +643,16 @@ async function collateralFor(projectId: string): Promise<Array<{ type: string; u
           )
         }
 
+        return items
+  }
+}
+
+/** Rank and cap one project's collateral for the model, logging what the cap dropped. */
+function rankAndCapForModel(
+  projectId: string,
+  items: Array<{ type: string; url: string }>,
+): Array<{ type: string; url: string }> {
+  {
         // Rank, then cap (quick-kayinleong-054). A raw SSE capture of a real turn showed
         // this returning ~200 items for one project, called three times in a turn, with
         // every result re-sent on each subsequent step of the stepCountIs(5) loop — tens
@@ -834,7 +878,7 @@ export type ProjectDetailToolResult =
  *
  * @param userLang  Language of the turn — threaded into `retrieve` for the lang pre-filter.
  */
-export function makeProjectDetailTool(userLang: 'en' | 'ms' | 'zh') {
+export function makeProjectDetailTool(userLang: 'en' | 'ms' | 'zh', sink?: FinderRowSink) {
   return tool({
     description:
       'Get the FULL record for ONE specific D2 project by its projectId: every stored field, ' +
@@ -923,8 +967,8 @@ export function makeProjectDetailTool(userLang: 'en' | 'ms' | 'zh') {
         // Collateral and KB retrieval are independent — run them together rather than
         // paying two sequential round trips inside a step that is already open. A Finder
         // turn has run past the platform's function timeout before (quick-067).
-        const [collateral, factSheet, kbResults] = await Promise.all([
-          collateralFor(project.projectId).catch(() => {
+        const [allCollateral, factSheet, kbResults] = await Promise.all([
+          readCollateral(project.projectId).catch(() => {
             // A collateral read must never fail the lookup. The stored record is still
             // the ground truth; the agent just gets no files.
             console.warn(`[projectDetail] collateral read failed for ${project.projectId}`)
@@ -961,6 +1005,13 @@ export function makeProjectDetailTool(userLang: 'en' | 'ms' | 'zh') {
         ]
         const kbMiss = isRetrievalMiss(kept)
         const { citations } = buildCitations(kept)
+
+        // The model gets the ranked top 12, exactly as fetchCollateral returns them.
+        const collateral = rankAndCapForModel(project.projectId, allCollateral)
+        // The project sheet goes to the ROUTE, never to the model (quick-kayinleong-103):
+        // the PIC, the WhatsApp group and the Skool links are shown with the answer as parsed
+        // here, so the model has nothing to type out.
+        recordProjectSheet(sink, buildProjectSheet(project, allCollateral))
 
         return {
           found: true as const,

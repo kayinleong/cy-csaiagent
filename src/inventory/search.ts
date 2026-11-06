@@ -142,6 +142,12 @@ export interface ProjectMatch {
   sizeMaxSqft: number | null
   /** Dot-product score from Stage B (normalized unit vectors → range 0–1). */
   score: number
+  /**
+   * Set only when a location preference was applied (quick-kayinleong-103). `nearby` means
+   * the project passed the location gate but sits in another area that borders the
+   * requested one. Present it as an alternative, never as being in the area.
+   */
+  locationMatch?: LocationMatch
   /** Criteria fields that drove this match — grounding citation. */
   matchedCriteria: {
     segment: ParsedCriteria['segment']
@@ -446,33 +452,42 @@ function isRegionOnlyClause(clause: string): boolean {
  * to dropping the project entirely.
  */
 function locationHaystack(doc: ProjectDoc): string {
-  const raw = doc.locationText ?? ''
-  const allClauses: string[] = []
-  const addressClauses: string[] = []
+  const { all, address } = splitAddressClauses(doc.locationText ?? '', PROXIMITY_CLAUSE)
+  const areaText = (address.length > 0 ? address : all).join(' , ')
+  return ` ${normalizeLocationText(`${doc.name ?? ''} , ${areaText}`)} `
+}
+
+/**
+ * Split `locationText` into its clauses, and the clauses that assert an address
+ * (the proximity-run rule documented on `locationHaystack`). `runStart` is the pattern
+ * that opens a proximity run.
+ */
+function splitAddressClauses(raw: string, runStart: RegExp): { all: string[]; address: string[] } {
+  const all: string[] = []
+  const address: string[] = []
   // Sentence separators. ASCII hyphen is NOT one (it appears inside names and in "3-min");
   // en/em dashes are.
   for (const sentence of raw.split(/[;.|–—]/)) {
     let inProximityRun = false
     for (const clause of sentence.split(',')) {
       if (clause.trim().length === 0) continue
-      allClauses.push(clause)
-      if (PROXIMITY_CLAUSE.test(clause)) {
+      all.push(clause)
+      if (runStart.test(clause)) {
         inProximityRun = true
         continue
       }
       if (inProximityRun) {
         if (isRegionOnlyClause(clause)) {
-          addressClauses.push(clause)
+          address.push(clause)
           continue
         }
         if (!ADDRESS_CLAUSE.test(clause)) continue
         inProximityRun = false
       }
-      addressClauses.push(clause)
+      address.push(clause)
     }
   }
-  const areaText = (addressClauses.length > 0 ? addressClauses : allClauses).join(' , ')
-  return ` ${normalizeLocationText(`${doc.name ?? ''} , ${areaText}`)} `
+  return { all, address }
 }
 
 /**
@@ -570,14 +585,75 @@ export function locationNeedles(pref: string): LocationNeedleGroup[] | null {
   return groups.length > 0 ? groups : null
 }
 
-/** Does this project sit IN the requested location (not merely near it)? */
-export function projectMatchesLocation(doc: ProjectDoc, needles: LocationNeedleGroup[]): boolean {
-  const haystack = locationHaystack(doc)
+/** Does any needle group match this space-padded haystack? */
+function haystackMatches(haystack: string, needles: LocationNeedleGroup[]): boolean {
   return needles.some(
     (group) =>
       containsNeedle(haystack, group.phrase) ||
       (group.tokens.length > 0 && group.tokens.every((t) => containsNeedle(haystack, t))),
   )
+}
+
+/** Does this project sit IN the requested location (not merely near it)? */
+export function projectMatchesLocation(doc: ProjectDoc, needles: LocationNeedleGroup[]): boolean {
+  return haystackMatches(locationHaystack(doc), needles)
+}
+
+/**
+ * Where a project that passed the location gate sits relative to the requested area
+ * (quick-kayinleong-103).
+ *
+ *   - `in_area`: the area is in the project's name or in its own address.
+ *   - `nearby`:  the area appears only further along the location text, after the
+ *                project's own area. The project is in another area that borders it.
+ */
+export type LocationMatch = 'in_area' | 'nearby'
+
+/**
+ * Opens a proximity run for `ownAddressText`: the gate's PROXIMITY_CLAUSE plus "between".
+ * "between X & Y" is not in PROXIMITY_CLAUSE because the gate deliberately keeps those
+ * projects (see `projectLocationMatch`).
+ */
+const OWN_ADDRESS_RUN_START = new RegExp(`${PROXIMITY_CLAUSE.source}|\\bbetween\\b`, 'i')
+
+/** A slash list that names one district ("KLCC/Bukit Bintang area"), not alternatives. */
+const DISTRICT_SUFFIX = /\b(?:area|district|region)\s*$/i
+
+/**
+ * The project's own address (quick-kayinleong-103): the address clauses of
+ * `locationText`, as the location gate reads them, with "between …" also opening a
+ * proximity run.
+ *
+ * In a slash list only the first name counts. "Mont Kiara / Damansara Heights" puts the
+ * project in Mont Kiara. The exception is a list that names one district, ending in
+ * area / district / region: "KLCC/Bukit Bintang area" is in both.
+ */
+function ownAddressText(locationText: string): string {
+  const { address } = splitAddressClauses(locationText, OWN_ADDRESS_RUN_START)
+  return address
+    .map((clause) => (DISTRICT_SUFFIX.test(clause.trim()) ? clause : (clause.split('/')[0] ?? '')))
+    .join(' , ')
+}
+
+/**
+ * Is this location match in the requested area, or only around it? (quick-kayinleong-103)
+ *
+ * The location gate (`projectMatchesLocation`) admits a project when the area appears
+ * anywhere in its address clauses. A Damansara Heights search therefore also returned:
+ *   - "One Eleven Menerung @ Bangsar": "Bangsar, between BSC & Pavilion Damansara Heights, …"
+ *   - "Majestic @ Kiara Reserve": "Mont Kiara / Damansara Heights, KL North (…)"
+ * The table then showed them as Damansara Heights projects. The user asked for them to be
+ * kept, but presented as other projects around the area.
+ *
+ * This classifies a project that ALREADY passed the gate. It never removes one. It is
+ * `in_area` when a needle matches the project name or `ownAddressText`, otherwise `nearby`.
+ *
+ * Grounding: "around" rests on the project's own location text naming the area. There is
+ * still no distance data, so callers must not turn this into a distance or a "next to" claim.
+ */
+export function projectLocationMatch(doc: ProjectDoc, needles: LocationNeedleGroup[]): LocationMatch {
+  const own = ` ${normalizeLocationText(`${doc.name ?? ''} , ${ownAddressText(doc.locationText ?? '')}`)} `
+  return haystackMatches(own, needles) ? 'in_area' : 'nearby'
 }
 
 // ─── Price bounds (quick-kayinleong-050) ─────────────────────────────────────
@@ -976,7 +1052,24 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   // quick-kayinleong-085 SPLIT the cap: this slice is now MAX_ROWS (the client table's
   // ceiling) and MAX_MATCHES bounds only what `toModelOutput` hands the model. Slicing
   // here at MAX_MATCHES was capping the TABLE at 8 rows for a query with 50 real answers.
-  const reranked = applySegmentWeights(relevant, criteria.segment).slice(0, MAX_ROWS)
+  const weighted = applySegmentWeights(relevant, criteria.segment)
+
+  // ── IN-AREA FIRST (quick-kayinleong-103) ────────────────────────────────
+  // A project that only sits around the requested area ranks after every project in it,
+  // whatever its score, so the in-area projects lead the table and the model's top
+  // MAX_MATCHES. Stable: each group keeps the order above.
+  const locationMatchById = new Map<string, LocationMatch>()
+  if (needles !== null) {
+    for (const { id, doc } of weighted) locationMatchById.set(id, projectLocationMatch(doc, needles))
+  }
+  const ordered =
+    needles === null
+      ? weighted
+      : [
+          ...weighted.filter(({ id }) => locationMatchById.get(id) === 'in_area'),
+          ...weighted.filter(({ id }) => locationMatchById.get(id) === 'nearby'),
+        ]
+  const reranked = ordered.slice(0, MAX_ROWS)
 
   // ── Map to ProjectMatch ──────────────────────────────────────────────────
   const matches: ProjectMatch[] = reranked.map(({ id, doc, score }) => ({
@@ -995,6 +1088,8 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
     sizeMinSqft: typeof doc.sizeMinSqft === 'number' ? doc.sizeMinSqft : null,
     sizeMaxSqft: typeof doc.sizeMaxSqft === 'number' ? doc.sizeMaxSqft : null,
     score,
+    // Present only when the location gate ran (quick-kayinleong-103).
+    ...(locationMatchById.has(id) ? { locationMatch: locationMatchById.get(id) } : {}),
     // GROUNDING (quick-kayinleong-050): echo ONLY criteria genuinely applied to THIS
     // project. This object is rendered under the heading "Matched criteria" by
     // buildRationale (src/agents/finder/index.ts) and badged in the chat UI, and it is
@@ -1019,8 +1114,11 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
           : null,
       nationality: criteria.nationality,
       bumiputera: criteria.bumiputera,
-      // Only when the location gate ran — and every survivor passed it.
-      locationPref: locationApplied ? criteria.locationPref : null,
+      // Only when the location gate ran and the project is IN the area. A `nearby`
+      // project passed the gate but sits in another area (quick-kayinleong-103), so it
+      // must not claim the location match.
+      locationPref:
+        locationApplied && locationMatchById.get(id) === 'in_area' ? criteria.locationPref : null,
       // Bedrooms is NOT a filter (0 means "unknown" on 29 of 83 projects, so filtering
       // would drop real inventory). It is only a genuine match when this project's own
       // bedroom count equals the request.

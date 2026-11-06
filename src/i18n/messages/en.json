@@ -96,7 +96,9 @@
       "showMorePrompt": "Full details for {name} — projectId: {projectId}. Layouts and sizes, pricing, the key facts, and all supporting documents.",
       "priceUnknown": "Price not on record",
       "rowCount": "{count} matching projects",
-      "notOnRecord": "Not on record"
+      "notOnRecord": "Not on record",
+      "nearbyHeading": "Other projects around {area}",
+      "inAreaHeading": "In {area}"
     },
     "refusal": {
       "nextStepsTitle": "Next steps",
@@ -105,6 +107,32 @@
       "fallbackPriorities": "Ask what matters most to the lead, so the search can be widened on that.",
       "fallbackConfirmEligibility": "Confirm the lead's nationality, bumiputera status and income with them.",
       "fallbackSalesAdmin": "Check eligibility and financing options with D2 sales admin."
+    },
+    "projectSheet": {
+      "roles": {
+        "pic": "Project PIC",
+        "leader": "Project leader",
+        "co_leader": "Project co-leader"
+      },
+      "whatsapp": "Project WhatsApp group",
+      "whatsappNote": "Only join the group if you are actively marketing this project, for example to ask about the latest availability and packages.",
+      "projectLinks": "Project links",
+      "marketingLinks": "Marketing materials",
+      "linkTypes": {
+        "project-info": "Project info",
+        "google-doc": "Google Doc",
+        "drive": "Drive folder",
+        "fb-ads": "FB ads",
+        "reels": "Reels",
+        "drone-footage": "Drone footage",
+        "showroom-video": "Site photos and videos",
+        "demand-gen": "Demand gen",
+        "teaser": "Teaser"
+      },
+      "copy": "Copy to share",
+      "copied": "Copied. Paste it into WhatsApp.",
+      "copyFailed": "Could not copy. Select the text and copy it instead.",
+      "copyHint": "Copies the quick facts and links. The PIC and the WhatsApp group stay out."
     }
   },
   "handoff": {

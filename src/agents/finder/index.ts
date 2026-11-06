@@ -134,7 +134,8 @@ export const finderAgent = {
       // not share a gate: searchProjects RECOMMENDS and so hard-filters status:'active',
       // while projectDetail answers "what is X?" about a project the agent already named
       // and therefore does not filter (it warns instead — see makeProjectDetailTool).
-      projectDetail: makeProjectDetailTool(userLang),
+      // The row sink also collects the project sheets (quick-kayinleong-103).
+      projectDetail: makeProjectDetailTool(userLang, rowSink),
     }
   },
 

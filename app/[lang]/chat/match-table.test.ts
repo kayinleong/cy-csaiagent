@@ -247,17 +247,20 @@ describe('match-table at 440px', () => {
     // Scrolling right must never lose which project a row is. The opaque background is
     // part of the fix: without it the scrolled cells show through the sticky one.
     expect(TABLE).toContain('sticky left-0 z-10 bg-background whitespace-nowrap')
-    expect(TABLE).toContain('sticky left-0 z-10 max-w-[11rem] truncate bg-background')
+    expect(TABLE).toContain('sticky left-0 z-10 min-w-[9rem] max-w-[13rem] whitespace-normal break-words bg-background')
   })
 
   it('gives the row action the 44px touch-target floor', () => {
     expect(TABLE).toContain('min-h-11')
   })
 
-  it('truncates the prose columns instead of letting them set the table width', () => {
-    expect(TABLE).toMatch(/max-w-\[12rem\] truncate/) // Location
-    expect(TABLE).toMatch(/max-w-\[14rem\] truncate/) // Highlight
-    expect(TABLE).toContain('title={row.locationText}')
+  // quick-kayinleong-103 reversed the truncation: "The Cedar Damansara H…" cannot be read
+  // out to a lead. The text cells wrap inside a bounded width, so the full text shows and a
+  // long location still cannot widen the table without limit.
+  it('wraps the name and prose columns inside a bounded width instead of truncating them', () => {
+    expect(TABLE).toContain('min-w-[12rem] max-w-[16rem] whitespace-normal break-words') // Location
+    expect(TABLE).toContain('min-w-[12rem] max-w-[18rem] whitespace-normal break-words') // Highlight
+    expect(TABLE_CODE).not.toMatch(/\btruncate\b/)
   })
 })
 

@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils'
 import type { FinderOutput, FinderMatch } from '@/src/agents/finder/schema'
 import { MarkdownMessage } from './markdown-message'
 import { MatchTable } from './match-table'
+import { ProjectSheetContacts, ProjectSheetLinks, ProjectSheetShare } from './project-sheet'
 import { presentCollateral, type CollateralKind } from './collateral-label'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -110,14 +111,31 @@ export function MatchList({ output, onAsk, className }: MatchListProps) {
   // The agent asked ABOUT a project rather than FOR a shortlist. Before this branch the
   // model had no shape for that and stuffed an essay into matches[0].rationale, which
   // reached the user as a raw JSON envelope.
+  //
+  // A details answer also carries server-built project sheets (quick-kayinleong-103), laid
+  // out like the Skool project page: PIC and WhatsApp group, then the quick facts, then
+  // the project and marketing links. With several projects (a comparison), each project's
+  // contacts and links go below the answer under its name.
   if (answer) {
+    const sheets = output.projectSheets ?? []
+    const single = sheets.length === 1 ? sheets[0] : null
     return (
       <div
         data-slot="match-list"
         data-state="answer"
-        className={cn('text-sm leading-relaxed', className)}
+        className={cn('flex flex-col gap-3 text-sm leading-relaxed', className)}
       >
+        {single && <ProjectSheetContacts sheet={single} />}
         <MarkdownMessage content={answer} />
+        {sheets.map((sheet) => (
+          <div key={sheet.projectId} className="flex flex-col gap-3">
+            {!single && (
+              <ProjectSheetContacts sheet={sheet} className="border-t border-foreground/10 pt-3" />
+            )}
+            <ProjectSheetLinks sheet={sheet} showName={!single} />
+          </div>
+        ))}
+        {sheets.length > 0 && <ProjectSheetShare answer={answer} sheets={sheets} />}
       </div>
     )
   }

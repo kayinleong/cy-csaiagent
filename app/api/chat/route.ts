@@ -51,11 +51,13 @@ import { ReplyOutputSchema, LEAD_REQUIRED_ERROR } from '@/src/agents/reply/schem
 import {
   attachCollateral,
   attachFinderRows,
+  attachProjectSheets,
   decodeFinderOutput,
   decodeReplyOutput,
   salvageStructuredText,
 } from '@/app/[lang]/chat/decode-structured-output'
 import type { FinderRow } from '@/src/agents/finder/schema'
+import type { FinderRowSink } from '@/src/agents/finder/tools'
 import { modelFor } from '@/src/llm/provider'
 import {
   appendMessage,
@@ -627,7 +629,7 @@ export async function POST(req: Request): Promise<Response> {
    * thread still has a table. The model never sees this array; `toModelOutput` bounds its
    * view at MAX_MATCHES.
    */
-  const finderRowSink = { rows: [] as FinderRow[] }
+  const finderRowSink: FinderRowSink = { rows: [] as FinderRow[], sheets: [] }
   /**
    * finishReason of the completed turn, captured for the CLIENT (quick-kayinleong-089).
    *
@@ -712,10 +714,15 @@ export async function POST(req: Request): Promise<Response> {
     // fires on `start` and `finish` (see the note at the messageMetadata callback), so a
     // truncated turn's rows must already be in the persisted row or a reloaded thread
     // renders an empty table and falls back to the cards.
+    //
+    // quick-kayinleong-103 adds the project sheets of a details answer, for the same reason.
+    const projectSheets = finderRowSink.sheets ?? []
     if (
       pillar === 'finder' &&
       body.length > 0 &&
-      (Object.keys(collateralByProject).length > 0 || finderRowSink.rows.length > 0)
+      (Object.keys(collateralByProject).length > 0 ||
+        finderRowSink.rows.length > 0 ||
+        projectSheets.length > 0)
     ) {
       try {
         const decoded = decodeFinderOutput(body)
@@ -723,6 +730,8 @@ export async function POST(req: Request): Promise<Response> {
           body = JSON.stringify(
             attachFinderRows(attachCollateral(decoded, collateralByProject), finderRowSink.rows),
           )
+        } else if (decoded && decoded.answer && projectSheets.length > 0) {
+          body = JSON.stringify(attachProjectSheets(decoded, projectSheets))
         }
       } catch {
         // Never lose a reply over formatting.
@@ -1376,6 +1385,12 @@ export async function POST(req: Request): Promise<Response> {
           finderRows:
             pillar === 'finder' && finderRowSink.rows.length > 0
               ? finderRowSink.rows
+              : undefined,
+          // The project sheets for a details answer (quick-103). The client attaches them
+          // only to an `answer`, as the persisted envelope above does.
+          projectSheets:
+            pillar === 'finder' && (finderRowSink.sheets?.length ?? 0) > 0
+              ? finderRowSink.sheets
               : undefined,
         }
       }

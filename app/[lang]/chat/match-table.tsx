@@ -18,6 +18,7 @@
  * prop crosses no server/client boundary.
  */
 
+import { Fragment } from 'react'
 import { useTranslations } from 'next-intl'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -106,6 +107,35 @@ function withHighlights(
   return rows.map((r) => ({ ...r, highlight: byId.get(r.projectId) ?? '' }))
 }
 
+/** Name, Price, Size, Bedrooms, Tenure, Location, Highlight, Actions. */
+const COLUMN_COUNT = 8
+
+/**
+ * Which group heading, if any, goes above `rows[index]` on this page
+ * (quick-kayinleong-103).
+ *
+ * The server sends in-area rows first, then the rows that only sit around the requested
+ * area (`locationMatch: 'nearby'`). The nearby heading goes above the first nearby row on
+ * a page, including a page that starts with one, so a later page still says what those rows
+ * are. The in-area heading is shown only when both groups exist, and only at the top of a
+ * page that starts with in-area rows. A search without a location preference has no headings.
+ *
+ * Exported for unit testing (no jsdom in this repo, see `formatPrice`).
+ */
+export function groupHeadingBefore(
+  rows: Array<Pick<FinderRow, 'locationMatch' | 'locationArea'>>,
+  index: number,
+  hasBothGroups: boolean,
+): 'in_area' | 'nearby' | null {
+  const row = rows[index]
+  if (!row?.locationArea) return null
+  if (row.locationMatch === 'nearby') {
+    return index === 0 || rows[index - 1]?.locationMatch !== 'nearby' ? 'nearby' : null
+  }
+  if (row.locationMatch === 'in_area' && hasBothGroups && index === 0) return 'in_area'
+  return null
+}
+
 /**
  * The Finder result table: one row per project, paginated, with a per-row action that
  * asks the chat to expand that one project with its supporting documents.
@@ -121,6 +151,12 @@ export function MatchTable({ rows, matches, onAsk, className }: MatchTableProps)
     displayRows,
     ROWS_PER_PAGE,
   )
+  // quick-kayinleong-103: the area the search applied, for the group headings.
+  const areaLabel = rows.find((r) => r.locationArea)?.locationArea ?? ''
+  const hasBothGroups =
+    areaLabel.length > 0 &&
+    rows.some((r) => r.locationMatch === 'in_area') &&
+    rows.some((r) => r.locationMatch === 'nearby')
 
   return (
     <div data-slot="match-table" className={cn('flex w-full flex-col gap-2', className)}>
@@ -152,79 +188,100 @@ export function MatchTable({ rows, matches, onAsk, className }: MatchTableProps)
           </TableRow>
         </TableHeader>
         <TableBody>
-          {pageItems.map((row) => {
+          {pageItems.map((row, index) => {
             const price = formatPrice(row.priceValue)
             const size = formatSize(row.sizeMinSqft, row.sizeMaxSqft)
+            const heading = groupHeadingBefore(pageItems, index, hasBothGroups)
             return (
-              // projectId stays on the row and in the name's title: it is the grounding
-              // citation (D-04) and the admin surfaces key off it, exactly as
-              // match-list.tsx:176 does today.
-              <TableRow key={row.projectId} data-project-id={row.projectId}>
-                <TableCell
-                  className="sticky left-0 z-10 max-w-[11rem] truncate bg-background font-medium"
-                  title={`${row.name} (${row.projectId})`}
+              <Fragment key={row.projectId}>
+                {heading && (
+                  <TableRow data-slot="match-table-group" className="hover:bg-transparent">
+                    <TableCell colSpan={COLUMN_COUNT} className="pt-4 pb-1">
+                      {/* Sticky so the heading stays in view while the row scrolls sideways. */}
+                      <span className="sticky left-2 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {heading === 'nearby'
+                          ? t('nearbyHeading', { area: areaLabel })
+                          : t('inAreaHeading', { area: areaLabel })}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                )}
+                {/* projectId stays on the row and in the name's title: it is the grounding
+                    citation (D-04) and the admin surfaces key off it, exactly as
+                    match-list.tsx:176 does today. */}
+                <TableRow
+                  data-project-id={row.projectId}
+                  data-location-match={row.locationMatch}
                 >
-                  {row.name}
-                </TableCell>
-                <TableCell className="whitespace-nowrap">
-                  {price ?? (
-                    <span title={t('priceUnknown')} aria-label={t('priceUnknown')}>
-                      {EM_DASH}
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell className="whitespace-nowrap">
-                  {size ?? (
-                    <span title={t('notOnRecord')} aria-label={t('notOnRecord')}>
-                      {EM_DASH}
-                    </span>
-                  )}
-                </TableCell>
-                {/* 0 means UNKNOWN on 29 of 82 projects — never render "0 beds". */}
-                <TableCell className="whitespace-nowrap">
-                  {row.bedrooms > 0 ? row.bedrooms : EM_DASH}
-                </TableCell>
-                <TableCell className="whitespace-nowrap">{row.tenure || EM_DASH}</TableCell>
-                <TableCell className="max-w-[12rem] truncate" title={row.locationText}>
-                  {row.locationText || EM_DASH}
-                </TableCell>
-                <TableCell className="max-w-[14rem] truncate" title={row.highlight}>
-                  {row.highlight}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    // 44px touch-target floor, the same one match-list.tsx's collateral
-                    // rows use.
-                    className="min-h-11 whitespace-nowrap"
-                    disabled={!onAsk}
-                    aria-label={t('showMoreAria', { name: row.name })}
-                    onClick={() =>
-                      onAsk?.(
-                        // A TRANSLATED prompt, not an English literal: the agent replies in
-                        // the language of the incoming message, so an English prompt would
-                        // flip a BM or 中文 conversation to English.
-                        //
-                        // THE projectId IS THE POINT (quick-kayinleong-088). It used to
-                        // ride along as parenthetical decoration while the model was left
-                        // to re-run searchProjects — a semantic re-rank whose top 8 is all
-                        // the model ever sees, so tapping row 37 of 50 handed it eight
-                        // OTHER projects and it correctly reported it could not find this
-                        // one. All three locales now emit the marker `projectId: <id>`
-                        // (the marker itself deliberately UNtranslated), which the Finder
-                        // system prompt binds to the `projectDetail` tool — a direct
-                        // projects/{pid} read that cannot resolve to the wrong project.
-                        // Change this string only together with the "DETAIL REQUEST"
-                        // section of src/agents/finder/prompt.ts.
-                        t('showMorePrompt', { name: row.name, projectId: row.projectId }),
-                      )
-                    }
+                  {/* WRAPS, never truncates (quick-kayinleong-103): the agent reads the name
+                      out to a lead, and "The Cedar Damansara H…" cannot be read out. The
+                      right-edge shadow marks where scrolled cells slide under it. */}
+                  <TableCell
+                    className="sticky left-0 z-10 min-w-[9rem] max-w-[13rem] whitespace-normal break-words bg-background font-medium shadow-[1px_0_0_0_var(--color-border)]"
+                    title={`${row.name} (${row.projectId})`}
                   >
-                    {t('showMore')}
-                  </Button>
-                </TableCell>
-              </TableRow>
+                    {row.name}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {price ?? (
+                      <span title={t('priceUnknown')} aria-label={t('priceUnknown')}>
+                        {EM_DASH}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {size ?? (
+                      <span title={t('notOnRecord')} aria-label={t('notOnRecord')}>
+                        {EM_DASH}
+                      </span>
+                    )}
+                  </TableCell>
+                  {/* 0 means UNKNOWN on 29 of 82 projects — never render "0 beds". */}
+                  <TableCell className="whitespace-nowrap">
+                    {row.bedrooms > 0 ? row.bedrooms : EM_DASH}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">{row.tenure || EM_DASH}</TableCell>
+                  <TableCell className="min-w-[12rem] max-w-[16rem] whitespace-normal break-words">
+                    {row.locationText || EM_DASH}
+                  </TableCell>
+                  <TableCell className="min-w-[12rem] max-w-[18rem] whitespace-normal break-words">
+                    {row.highlight}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      // 44px touch-target floor, the same one match-list.tsx's collateral
+                      // rows use.
+                      className="min-h-11 whitespace-nowrap"
+                      disabled={!onAsk}
+                      aria-label={t('showMoreAria', { name: row.name })}
+                      onClick={() =>
+                        onAsk?.(
+                          // A TRANSLATED prompt, not an English literal: the agent replies in
+                          // the language of the incoming message, so an English prompt would
+                          // flip a BM or 中文 conversation to English.
+                          //
+                          // THE projectId IS THE POINT (quick-kayinleong-088). It used to
+                          // ride along as parenthetical decoration while the model was left
+                          // to re-run searchProjects — a semantic re-rank whose top 8 is all
+                          // the model ever sees, so tapping row 37 of 50 handed it eight
+                          // OTHER projects and it correctly reported it could not find this
+                          // one. All three locales now emit the marker `projectId: <id>`
+                          // (the marker itself deliberately UNtranslated), which the Finder
+                          // system prompt binds to the `projectDetail` tool — a direct
+                          // projects/{pid} read that cannot resolve to the wrong project.
+                          // Change this string only together with the "DETAIL REQUEST"
+                          // section of src/agents/finder/prompt.ts.
+                          t('showMorePrompt', { name: row.name, projectId: row.projectId }),
+                        )
+                      }
+                    >
+                      {t('showMore')}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              </Fragment>
             )
           })}
         </TableBody>

@@ -98,7 +98,9 @@
       "showMorePrompt": "请提供 {name} 的完整资料 — projectId: {projectId}。包括各户型与面积、价格、关键资料，以及所有支援文件。",
       "priceUnknown": "价格尚未记录",
       "rowCount": "{count} 个符合条件的项目",
-      "notOnRecord": "无记录"
+      "notOnRecord": "无记录",
+      "nearbyHeading": "{area}周边的其他项目",
+      "inAreaHeading": "位于{area}"
     },
     "refusal": {
       "nextStepsTitle": "下一步",
@@ -107,6 +109,32 @@
       "fallbackPriorities": "询问客户最看重什么，以便据此放宽搜索条件。",
       "fallbackConfirmEligibility": "向客户确认其国籍、土著身份和收入。",
       "fallbackSalesAdmin": "向 D2 销售行政确认资格与融资方案。"
+    },
+    "projectSheet": {
+      "roles": {
+        "pic": "项目负责人 (PIC)",
+        "leader": "项目组长",
+        "co_leader": "项目副组长"
+      },
+      "whatsapp": "项目 WhatsApp 群组",
+      "whatsappNote": "仅在您正在积极推广此项目时加入群组，例如询问最新的单位供应和配套。",
+      "projectLinks": "项目链接",
+      "marketingLinks": "营销素材",
+      "linkTypes": {
+        "project-info": "项目资料",
+        "google-doc": "Google 文档",
+        "drive": "Drive 文件夹",
+        "fb-ads": "FB 广告",
+        "reels": "Reels 短视频",
+        "drone-footage": "无人机航拍",
+        "showroom-video": "工地照片和视频",
+        "demand-gen": "Demand gen",
+        "teaser": "预告片"
+      },
+      "copy": "复制以分享",
+      "copied": "已复制，可粘贴到 WhatsApp。",
+      "copyFailed": "无法复制，请手动选择文本复制。",
+      "copyHint": "复制项目速览和链接，不包括 PIC 和 WhatsApp 群组。"
     }
   },
   "handoff": {

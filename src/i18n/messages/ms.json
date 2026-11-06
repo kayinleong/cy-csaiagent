@@ -98,7 +98,9 @@
       "showMorePrompt": "Butiran penuh untuk {name} — projectId: {projectId}. Susun atur dan saiz, harga, fakta utama, dan semua dokumen sokongan.",
       "priceUnknown": "Harga belum direkodkan",
       "rowCount": "{count} projek yang sepadan",
-      "notOnRecord": "Tiada dalam rekod"
+      "notOnRecord": "Tiada dalam rekod",
+      "nearbyHeading": "Projek lain di sekitar {area}",
+      "inAreaHeading": "Di {area}"
     },
     "refusal": {
       "nextStepsTitle": "Langkah seterusnya",
@@ -107,6 +109,32 @@
       "fallbackPriorities": "Tanya perkara yang paling penting bagi prospek, supaya carian boleh diluaskan berdasarkannya.",
       "fallbackConfirmEligibility": "Sahkan kewarganegaraan, status bumiputera dan pendapatan prospek dengan mereka.",
       "fallbackSalesAdmin": "Semak kelayakan dan pilihan pembiayaan dengan pentadbir jualan D2."
+    },
+    "projectSheet": {
+      "roles": {
+        "pic": "PIC projek",
+        "leader": "Ketua projek",
+        "co_leader": "Penolong ketua projek"
+      },
+      "whatsapp": "Kumpulan WhatsApp projek",
+      "whatsappNote": "Sertai kumpulan ini hanya jika anda aktif memasarkan projek ini, contohnya untuk bertanya tentang ketersediaan dan pakej terkini.",
+      "projectLinks": "Pautan projek",
+      "marketingLinks": "Bahan pemasaran",
+      "linkTypes": {
+        "project-info": "Maklumat projek",
+        "google-doc": "Google Doc",
+        "drive": "Folder Drive",
+        "fb-ads": "Iklan FB",
+        "reels": "Reels",
+        "drone-footage": "Rakaman dron",
+        "showroom-video": "Foto dan video tapak",
+        "demand-gen": "Demand gen",
+        "teaser": "Teaser"
+      },
+      "copy": "Salin untuk dikongsi",
+      "copied": "Disalin. Tampal ke WhatsApp.",
+      "copyFailed": "Tidak dapat menyalin. Pilih teks dan salin sendiri.",
+      "copyHint": "Menyalin fakta ringkas dan pautan. PIC dan kumpulan WhatsApp tidak disertakan."
     }
   },
   "handoff": {
