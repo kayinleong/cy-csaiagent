@@ -298,6 +298,25 @@ const RELEVANCE_TIER_WIDTH = 0.05
 // ─── Location matching (quick-kayinleong-050) ────────────────────────────────
 
 /**
+ * Fold a trailing plural "s" off one ASCII word (quick-kayinleong-105).
+ *
+ * The client sheet's Area reads "Damansara Height" for DC Residensi and PDH Imperial, and
+ * agents type it that way too ("under damansara height"). Whole-word matching made
+ * "height" miss "heights", so a correct project fell out of the gate. Folding is applied to
+ * BOTH the needle and the haystack (inside `normalizeLocationText`), so it only ever equates
+ * two spellings of one word: "heights"/"height", "suites"/"suite", "cheras"/"chera". Words
+ * of under five letters and words ending in "ss" are left alone; CJK is untouched.
+ */
+function foldPlural(token: string): string {
+  return /^[a-z]{3,}[a-rt-z]s$/.test(token) ? token.slice(0, -1) : token
+}
+
+/** A token set compared against folded tokens, so its members are folded the same way. */
+function foldedSet(words: string[]): Set<string> {
+  return new Set(words.map((w) => w.split(' ').map(foldPlural).join(' ')))
+}
+
+/**
  * Tokens that identify a city/state/country or are pure prose filler.
  *
  * Matching on these is indistinguishable from not filtering at all — "Kuala Lumpur"
@@ -305,7 +324,7 @@ const RELEVANCE_TIER_WIDTH = 0.05
  * nothing but these, the gate is SKIPPED (we cannot discriminate) and `matchedCriteria`
  * reports `locationPref: null` so the model never claims a location match it did not make.
  */
-const LOCATION_QUALIFIER_TOKENS = new Set([
+const LOCATION_QUALIFIER_TOKENS = foldedSet([
   'kl', 'kuala', 'lumpur', 'malaysia', 'wilayah', 'persekutuan', 'wp', 'selangor',
   'area', 'areas', 'near', 'nearby', 'around', 'in', 'at', 'the', 'of', 'and', 'or',
   'city', 'centre', 'center', 'town', 'district', 'region', 'zone', 'side', 'within',
@@ -334,7 +353,7 @@ const LOCATION_QUALIFIER_TOKENS = new Set([
  * the KNOWN LIMITATION note on `locationNeedles` below). Adding a region here means
  * "do not filter on this", never "expand this into a list of areas".
  */
-const REGION_ALIASES = new Set([
+const REGION_ALIASES = foldedSet([
   'klang valley',
   'greater kl',
   'greater kuala lumpur',
@@ -349,7 +368,7 @@ const REGION_ALIASES = new Set([
  * tier. "Bukit Jalil" and "Bukit Bintang" are different places; falling back to the bare
  * token "bukit" would conflate them. The phrase "bukit jalil" still matches exactly.
  */
-const PLACE_TYPE_TOKENS = new Set([
+const PLACE_TYPE_TOKENS = foldedSet([
   'bukit', 'taman', 'jalan', 'lorong', 'kampung', 'kg', 'sungai', 'batu', 'seksyen',
   'section', 'persiaran', 'desa', 'sri', 'seri', 'pusat', 'bandar', 'pantai', 'tanjung',
   'lembah', 'mont', 'residence', 'residences', 'residensi', 'condo', 'condominium',
@@ -368,7 +387,7 @@ const PLACE_TYPE_TOKENS = new Set([
  * compass word must now match as an exact phrase, so "North Kiara" still finds "Miranda Hill
  * @ north kiara" and "Segambut / North Kiara".
  */
-const COMPASS_TOKENS = new Set([
+const COMPASS_TOKENS = foldedSet([
   'north', 'south', 'east', 'west', 'utara', 'selatan', 'timur', 'barat',
 ])
 
@@ -386,6 +405,9 @@ function normalizeLocationText(value: string): string {
     .replace(/[̀-ͯ]/g, '') // strip combining diacritics
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
+    .split(' ')
+    .map(foldPlural)
+    .join(' ')
 }
 
 /**

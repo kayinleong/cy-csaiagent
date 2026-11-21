@@ -1784,8 +1784,8 @@ describe('quick-kayinleong-104: the budget floor reads gross layout prices, and 
     const withArea = { ...DC, area: 'Damansara Heights' }
     expect(projectMatchesLocation(withArea, dh)).toBe(true)
     expect(projectLocationMatch(withArea, dh)).toBe('in_area')
-    // The sheet's own spelling ("Damansara Height") does not match a Heights search.
-    expect(projectMatchesLocation({ ...DC, area: 'Damansara Height' }, dh)).toBe(false)
+    // The sheet's own spelling ("Damansara Height") matches too, since quick-kayinleong-105 folds a plural "s".
+    expect(projectMatchesLocation({ ...DC, area: 'Damansara Height' }, dh)).toBe(true)
   })
 
   it('a landmark inside the Area cell is not an address', async () => {
@@ -1827,5 +1827,46 @@ describe('quick-kayinleong-104: the budget floor reads gross layout prices, and 
     expect(result.matches.every((m) => m.locationMatch === 'in_area')).toBe(true)
     // The from price is real and under the ceiling, so the budget match is claimed.
     expect(result.matches.every((m) => m.matchedCriteria.priceMax === 2_500_000)).toBe(true)
+  })
+})
+
+describe('quick-kayinleong-105: a trailing plural "s" never decides a location match', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  const base = FIXTURES['proj-active-a']
+  const DC = {
+    ...base,
+    name: 'Damansara City Residency (DC Residensi)',
+    locationText: 'Pusat Bandar Damansara, Jalan Damanlela, Kuala Lumpur; integrated with DC Mall, Sofitel KL Damansara',
+  }
+  const CEDAR = { ...base, name: 'The Cedar Damansara Heights', locationText: 'Damansara Heights, Centre of KL' }
+
+  it('THE REPORTED CASE: the sheet Area "Damansara Height" is in Damansara Heights, and a typed "damansara height" finds both', async () => {
+    const { locationNeedles, projectMatchesLocation, projectLocationMatch } = await import('@/src/inventory/search')
+    const typoArea = { ...DC, area: 'Damansara Height' }
+    for (const pref of ['Damansara Heights', 'damansara height', 'DAMANSARA HEIGHT']) {
+      const n = locationNeedles(pref)!
+      expect(projectMatchesLocation(typoArea, n)).toBe(true)
+      expect(projectLocationMatch(typoArea, n)).toBe('in_area')
+      expect(projectMatchesLocation(CEDAR, n)).toBe(true)
+    }
+  })
+
+  it('distinct places stay distinct, and place-type words keep their role in either number', async () => {
+    const { locationNeedles, projectMatchesLocation } = await import('@/src/inventory/search')
+    const jalil = { ...base, name: 'OAKA Residences, Bukit Jalil', locationText: 'Bukit Jalil, Kuala Lumpur' }
+    expect(projectMatchesLocation(jalil, locationNeedles('Bukit Bintang')!)).toBe(false)
+    expect(projectMatchesLocation(jalil, locationNeedles('Bukit Jalil')!)).toBe(true)
+    // "Suites" and "Suite" are both a place-type word: neither reduces "Sentral Suites" to a bare token match.
+    const sentral = { ...base, name: 'Sentral Suites @ KL Sentral', locationText: 'KL Sentral, Kuala Lumpur' }
+    expect(locationNeedles('Sentral Suite')).toEqual(locationNeedles('Sentral Suites'))
+    expect(projectMatchesLocation(sentral, locationNeedles('KL Sentral')!)).toBe(true)
+    // A qualifier stays a qualifier: "areas" alone is no filter.
+    expect(locationNeedles('KL areas')).toBeNull()
+    // Short words and "ss" endings are not folded.
+    expect(locationNeedles('Bus')).toEqual([{ phrase: 'bus', tokens: ['bus'] }])
+    expect(locationNeedles('Express')![0].phrase).toBe('express')
   })
 })
