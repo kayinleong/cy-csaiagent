@@ -42,7 +42,7 @@ Commits c3e4f8a (builder + import flag) and 0f68c92 (build and dry runs). Nothin
   - Southpoint: new prices, and 5 layouts now sold out.
   - Conlay: a new Type E.
   - PDH Imperial: tenure.
-  - Fact changes on 10 projects.
+  - Fact changes on 14 projects (fact sheets: 17 with content changes, counting the three projects created in October).
 
 ## Verification
 - **Verifier** (`verify-client-sheet.py`):
@@ -65,7 +65,7 @@ Commits c3e4f8a (builder + import flag) and 0f68c92 (build and dry runs). Nothin
 ## Waiting on
 - **The corrected workbook.** Rows 2 and 21 still read "Damansara Height" (same file, same sha256). With a new file it is one rebuild plus the two dry runs, then new fingerprints.
 - **Approval of both fingerprints** before `--apply`. These are production writes, with a backup and fingerprint gate.
-- **Deploy order.** The import is safe before the 104 code is live, because the old code ignores `area` and gross. The Damansara Heights result needs both.
+- **Deploy order.** The import can go before the 104 code is live: the old code does not filter on `area` or gross. It would show gross keys in layout details without 104's Nett/Gross labelling rule, so merging 104 first is cleaner. The Damansara Heights result needs both.
 
 ## Known limitations
 - **Values held back until the client fixes them** (HELD-BACK.md):
