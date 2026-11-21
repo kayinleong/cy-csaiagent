@@ -3,7 +3,7 @@
 - session: claude-code
 - branch: quick-kayinleong-105 (from quick-kayinleong-104, whose planner writes `area` and gross prices)
 - started: 2026-11-21
-- status: in-progress
+- status: done
 - summary: Import the 21 Nov client workbook (_D2 Project Info.xlsx, sha256 0a390f6e…) so the Finder gets each project's Area and the new layout prices, including Pavilion Damansara Heights and its Royal Suites.
 
 ## What will change
@@ -15,6 +15,7 @@
   - Pavilion Damansara Heights' single "Phase 1" row is loaded as a layout.
 - Diff against what 096/101 loaded, then dry-run the 096 import runner against live data. The report goes in this claim directory.
 - Live writes happen only after the user approves the dry-run fingerprint. They also wait for the user's corrected workbook ("Damansara Height" → "Damansara Heights", rows 2 and 21).
+- Update (2026-11-21): the user has no corrected workbook ("this is the only excel i got"). The apply goes ahead on this one, and the search handles the spelling instead: "Height" and "Heights" match.
 
 ## What has changed
 Commits c3e4f8a (builder + import flag) and 0f68c92 (build and dry runs). Nothing has been written to Firestore yet.
@@ -62,16 +63,43 @@ Commits c3e4f8a (builder + import flag) and 0f68c92 (build and dry runs). Nothin
   - Damansara Heights, RM1.5M-2.5M returns Royal Suites (in area), Pavilion DH (in area) and One Eleven (nearby). With rows 2 and 21 fixed, it also returns DC Residensi.
   - Bangsar Hill Park leaves the above-RM2M and above-RM3M searches. Its price was unknown and admitted before; now its dearest layout is RM1.7M gross.
 
-## Waiting on
-- **The corrected workbook.** Rows 2 and 21 still read "Damansara Height" (same file, same sha256). With a new file it is one rebuild plus the two dry runs, then new fingerprints.
-- **Approval of both fingerprints** before `--apply`. These are production writes, with a backup and fingerprint gate.
-- **Deploy order.** The import can go before the 104 code is live: the old code does not filter on `area` or gross. It would show gross keys in layout details without 104's Nett/Gross labelling rule, so merging 104 first is cleaner. The Damansara Heights result needs both.
+## Applied (live, 2026-11-21)
+The user approved applying this build as is.
+- **Project import** (`IMPORT-APPLY.md`, fingerprint `097001a5…`): 77 written, 77 re-read and asserted, 77 audit rows, 4 re-embedded (0 failed). Backup: `.planning/quick/quick-kayinleong-096/backups/2026-11-21T08-32-52-107Z/projects-backup.json` (gitignored). Restore: `scripts/import-client-workbook.ts --restore <backup>`, dry run, then `--apply --expect-plan`.
+- **Fact sheets** (`build/FACTSHEETS-APPLY.md`, fingerprint `967a85d3…`): 83 updated, 0 refused, 83 of 83 audit rows. Each new version has published chunks, and the old doc is recorded as superseded.
+
+## Code changed after the apply
+- c501713 **`src/inventory/search.ts`**: `normalizeLocationText` folds a trailing plural "s" off ASCII words of 5+ letters (not "ss"), on the needle and the haystack alike. The qualifier / place-type / compass / region sets are folded the same way.
+  - The sheet's "Damansara Height" and a typed "damansara height" now match "Damansara Heights".
+  - 2 new tests. The 104 test that pinned the old behaviour is updated.
+- 0faabfe **`src/agents/finder/prompt.ts`**: the budget rule forbids saying that units of a bedroom count, size or type fit the budget until projectDetail's unitTypes is read. A real run had said DC Residensi's "2- and 3-bedroom units are well within the band"; those layouts are sold out.
+
+## Verification after the apply
+- **Location gate with and without the fold** (live, 38 area searches): 36 unchanged. "Damansara Heights" goes 6 → 7 (+DC Residensi). "damansara height" goes 2 → 7.
+- **The real Finder** (claude-sonnet-4-6, this branch's code, live data) on the reported message. It applied RM1.5M-2.5M and "Damansara Heights". The table shows:
+  - in the area: DC Residensi (from RM1.2M), Pavilion Damansara Heights (from RM930k), Royal Suites (from RM630k);
+  - around it: One Eleven Menerung @ Bangsar.
+  - Before 104/105: One Eleven only.
+- **Wording.** After the prompt fix, the AI points to Details for which 2- and 3-bedroom units remain, instead of claiming they fit.
+- **Tests and checks:**
+  - `npx vitest run`: 1685 passed, 223 skipped. The only failure is `tests/finder-corpus-gates.test.ts`, which needs the gitignored `projects.inventory.json` (it failed before this claim too).
+  - `project-detail.test.ts` timed out once under the full parallel run and passes alone (47/47).
+  - `tsc` clean.
+  - `eslint`: 0 errors (the test file's existing `_args` warnings).
+
+## Regression report
+- **Builder.** 67 of 83 projects come out identical to the 27 Oct build. Every difference traces to a changed cell in the 21 Nov sheet. All 92 earlier parser cases still pass, and the self-test catches 8 of 8 defects.
+- **Import.** The planned writes matched the dry run exactly (same fingerprint at apply). The backup and restore path is unchanged. `area` is not embedded, so only 4 projects re-embedded (price / bedroom / tenure changes).
+- **Plural fold.** The live comparison above shows only the two intended searches change. The existing location tests all pass: 050 / 085 / 098 proximity runs, compass words, the region skip, the in-area / nearby split. Distinct places (Bukit Jalil / Bukit Bintang) stay distinct (test).
+- **Prompt.** Wording only. The search, the table and matchedCriteria are untouched.
 
 ## Known limitations
+- **The live site still runs the old code.** The data is live, but the old code reads neither `area` nor gross prices, and it checks the floor against the from price. The Damansara Heights result appears only once 104 and 105 are merged and deployed.
 - **Values held back until the client fixes them** (HELD-BACK.md):
-  - the 77 formula cells;
+  - the 77 `=AI(...)` formula cells;
   - "Rm6,59mil" (PDH Imperial H1a nett);
   - "RM8978k-RM1.1mil" (Bangsar Hill Park 2A1 nett);
-  - the psf-only gross cells ("RM 1.6k-2.3k psf", "RM 2k psf +"), which are not totals, so the floor uses nett for those projects;
+  - psf-only gross cells ("RM 1.6k-2.3k psf", "RM 2k psf +"), which are not totals, so the floor uses nett there;
   - Pavilion DH's size range.
-- **Clouthaus KLCC's 11 rows** put the size first ("635sf 1BR Type K"). They load only if written "Type K: 635sf".
+- **Clouthaus KLCC's 11 rows** load only if written as "Type K: 635sf".
+- **Conlay's size range** is now 635-1,432 sqft, from its layout list. The 2,787 sqft in its write-up is not a listed layout.
