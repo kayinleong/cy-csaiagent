@@ -1025,9 +1025,69 @@ describe('reembed (R12) and area (R13)', () => {
     expect(codes(p)).not.toContain('area-not-in-location')
   })
 
-  it('never writes area, name, description or locationText', () => {
+  it('never writes name, description, locationText or status', () => {
     const p = plan(dcExisting(), dcSheet())
-    for (const k of ['area', 'name', 'description', 'locationText', 'status']) expect(p.patch).not.toHaveProperty(k)
+    for (const k of ['name', 'description', 'locationText', 'status']) expect(p.patch).not.toHaveProperty(k)
+  })
+})
+
+describe('area (R8b, quick-kayinleong-104)', () => {
+  it('writes the sheet Area verbatim to `area` and marks it as a sheet field, leaving locationText alone', () => {
+    const p = plan({ locationText: 'Pusat Bandar Damansara, Jalan Damanlela' }, project({ docId: 'B1', area: '  Damansara Heights ' }))
+    expect(p.patch.area).toBe('Damansara Heights')
+    expect(p.patch).not.toHaveProperty('locationText')
+    expect(p.asserted).toContain('area')
+    expect(p.patch.clientWorkbookFields).toContain('area')
+    expect(p.reembed).toBe(false)
+  })
+
+  it('a blank Area never clears a stored area', () => {
+    const p = plan({ area: 'Damansara Heights', locationText: 'KL' }, project({ docId: 'B2', area: '   ' }))
+    expect(p.patch).not.toHaveProperty('area')
+    expect(plan({ area: 'Damansara Heights' }, project({ docId: 'B3', area: null })).patch).not.toHaveProperty('area')
+  })
+
+  it('an unchanged Area plans no write', () => {
+    const p = plan({ area: 'Bangsar', clientWorkbookFields: ['area'], locationText: 'Bangsar' }, project({ docId: 'B4', area: 'Bangsar' }))
+    expect(p.patch).not.toHaveProperty('area')
+    expect(p.changes).toEqual([])
+  })
+})
+
+describe('gross price per layout (quick-kayinleong-104)', () => {
+  const gross = (over: Partial<SheetUnit>) =>
+    unit({ label: 'Type A3', sizeSqft: 1194, bedrooms: 1, nettMinRM: 1_360_000, nettMaxRM: 1_460_000, grossMinRM: 2_000_000, grossMaxRM: 2_100_000, ...over })
+
+  it('a new layout carries the sheet gross range beside the nett range', () => {
+    const p = plan({}, project({ docId: 'G1', units: [gross({})] }))
+    const [e] = p.patch.unitTypes as UnitTypeEntry[]
+    expect(e).toMatchObject({ priceMinRM: 1_360_000, priceMaxRM: 1_460_000, grossMinRM: 2_000_000, grossMaxRM: 2_100_000 })
+  })
+
+  it('a layout with no gross total carries no gross keys at all', () => {
+    const p = plan({}, project({ docId: 'G2', units: [gross({ grossMinRM: null, grossMaxRM: null })] }))
+    const [e] = p.patch.unitTypes as UnitTypeEntry[]
+    expect(e).not.toHaveProperty('grossMinRM')
+    expect(e).not.toHaveProperty('grossMaxRM')
+  })
+
+  it('a sold-out layout carries no gross price', () => {
+    const p = plan({}, project({ docId: 'G3', units: [gross({ soldOut: true, nettMinRM: null, nettMaxRM: null })] }))
+    const [e] = p.patch.unitTypes as UnitTypeEntry[]
+    expect(e).not.toHaveProperty('grossMinRM')
+    expect(e.soldOut).toBe(true)
+  })
+
+  it('a matched layout takes the sheet gross, and keeps a stored gross when the sheet cell is blank', () => {
+    const storedList: UnitTypeEntry[] = [
+      { label: 'Type A3', sizeSqft: 1194, bedrooms: 1, priceMinRM: 1_360_000, priceMaxRM: 1_460_000, grossMinRM: 1_900_000, grossMaxRM: 2_000_000, raw: 'r' },
+    ]
+    const fromSheet = plan({ unitTypes: storedList }, project({ docId: 'G4', units: [gross({})] }))
+    expect((fromSheet.patch.unitTypes as UnitTypeEntry[])[0]).toMatchObject({ grossMinRM: 2_000_000, grossMaxRM: 2_100_000 })
+    const kept = plan({ unitTypes: storedList }, project({ docId: 'G5', units: [gross({ grossMinRM: null, grossMaxRM: null })] }))
+    const e = (kept.patch.unitTypes as UnitTypeEntry[])[0]
+    expect(e).toMatchObject({ grossMinRM: 1_900_000, grossMaxRM: 2_000_000 })
+    expect(e.raw).toContain('kept from previous record: gross price')
   })
 })
 

@@ -281,6 +281,13 @@ export interface ProjectDoc {
    */
   locationText: string
   /**
+   * The Area cell of the client project info sheet, verbatim (quick-kayinleong-104), e.g.
+   * "Damansara Heights". The Finder's location gate reads it as part of the project's own
+   * address, next to `name` and `locationText`. It never replaces `locationText`, and a blank
+   * sheet cell never clears it. Absent means the sheet gave no area. Not an embedding field.
+   */
+  area?: string
+  /**
    * Number of bedrooms. Feeds the embedding-text composer and enables
    * structured bedroom-count filtering in `queryInventory` (FIND-07).
    */
@@ -428,6 +435,7 @@ export type ClientWorkbookField =
   | 'tenure'
   | 'vpStatus'
   | 'vpDate'
+  | 'area'
 
 /**
  * One layout a project offers (quick-kayinleong-088).
@@ -447,9 +455,23 @@ export interface UnitTypeEntry {
    * bedroom, and counting it inflates matches against a client's bedroom requirement.
    */
   bedrooms: number | null
-  /** Price range in RM for this layout. Both null when the write-up states no price. */
+  /**
+   * Price range in RM for this layout. Both null when the write-up states no price.
+   * From the client project info sheet this is the NETT price (after rebates).
+   */
   priceMinRM: number | null
   priceMaxRM: number | null
+  /**
+   * The sheet's GROSS price range in RM for this layout (quick-kayinleong-104). Only the
+   * client project info sheet sets it, and only from a total. A psf-only gross cell
+   * ("RM 1.6k-2.3k psf") leaves it absent: a rate is never multiplied by a size. Absent or
+   * null means no gross total on record.
+   *
+   * The Finder's budget floor reads it (`projectTopPrice` in src/inventory/search.ts): the
+   * gross price is the layout's list price, so it is the top of what the layout costs.
+   */
+  grossMinRM?: number | null
+  grossMaxRM?: number | null
   /** Verbatim source line this entry was parsed from — the audit trail for grounding. */
   raw: string
   /**

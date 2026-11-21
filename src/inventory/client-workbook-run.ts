@@ -537,11 +537,13 @@ function fmtCell(field: string, v: unknown): string {
   return '(object)'
 }
 
+function rmRange(lo: unknown, hi: unknown): string {
+  if (typeof lo !== 'number') return ''
+  return typeof hi === 'number' && hi !== lo ? `${fmtNum(lo)}–${fmtNum(hi)}` : fmtNum(lo)
+}
+
 function nettRange(e: { priceMinRM?: unknown; priceMaxRM?: unknown }): string {
-  if (typeof e.priceMinRM !== 'number') return ''
-  return typeof e.priceMaxRM === 'number' && e.priceMaxRM !== e.priceMinRM
-    ? `${fmtNum(e.priceMinRM)}–${fmtNum(e.priceMaxRM)}`
-    : fmtNum(e.priceMinRM)
+  return rmRange(e.priceMinRM, e.priceMaxRM)
 }
 
 interface UnitLike {
@@ -550,6 +552,8 @@ interface UnitLike {
   bedrooms?: unknown
   priceMinRM?: unknown
   priceMaxRM?: unknown
+  grossMinRM?: unknown
+  grossMaxRM?: unknown
   soldOut?: unknown
   raw?: unknown
 }
@@ -561,8 +565,8 @@ function renderUnitTable(p: Pick<ReportDoc, 'merge' | 'storedUnits'>): string[] 
     '',
     'Unit list after the merge:',
     '',
-    '| Status | Label | Size (sqft) | Bedrooms | Nett (RM) | Sold out | Notes |',
-    '|---|---|---|---|---|---|---|',
+    '| Status | Label | Size (sqft) | Bedrooms | Nett (RM) | Gross (RM) | Sold out | Notes |',
+    '|---|---|---|---|---|---|---|---|',
   ]
   const firstAdded = m.final.length - m.added.length
   m.final.forEach((entry, i) => {
@@ -572,12 +576,14 @@ function renderUnitTable(p: Pick<ReportDoc, 'merge' | 'storedUnits'>): string[] 
     lines.push(
       `| ${status} | ${esc(String(e.label))} | ${typeof e.sizeSqft === 'number' ? fmtNum(e.sizeSqft) : ''} | ${
         typeof e.bedrooms === 'number' ? e.bedrooms : ''
-      } | ${nettRange(e)} | ${e.soldOut === true ? 'yes' : ''} | ${kept ? `kept from previous: ${esc(kept)}` : ''} |`,
+      } | ${nettRange(e)} | ${rmRange(e.grossMinRM, e.grossMaxRM)} | ${e.soldOut === true ? 'yes' : ''} | ${
+        kept ? `kept from previous: ${esc(kept)}` : ''
+      } |`,
     )
   })
   for (const d of m.dropped) {
     lines.push(
-      `| dropped | ${esc(d.label)} |  |  |  |  | ${d.hadPrice ? 'carried a price' : 'carried no price'} |`,
+      `| dropped | ${esc(d.label)} |  |  |  |  |  | ${d.hadPrice ? 'carried a price' : 'carried no price'} |`,
     )
   }
   return lines

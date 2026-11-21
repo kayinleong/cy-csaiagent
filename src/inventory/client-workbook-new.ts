@@ -14,8 +14,9 @@
  *   priceValue 0 / 'unknown'       no total price in the sheet (the planner sets one if it has)
  *   bumiQuota / foreignEligible    false: the sheet does not mention either, which is the
  *                                  inventory importer's rule for an unmentioned flag
- *   locationText                   the sheet's Area cell, verbatim
- *   description                    the sheet's own cells, one labelled line each
+ *   locationText                   the sheet's Area cell, verbatim (the planner also sets
+ *                                  `area` to it, quick-kayinleong-104)
+ *   description                   the sheet's own cells, one labelled line each
  *
  * Pure: no Firestore, no network. The script that writes these is
  * scripts/add-client-workbook-projects.ts.

@@ -427,7 +427,8 @@ function isRegionOnlyClause(clause: string): boolean {
 /**
  * Build the space-padded haystack a location needle is tested against.
  *
- * Haystack is `name` + the clauses of `locationText` that say where the project IS:
+ * Haystack is `name` + the sheet's `area` (quick-kayinleong-104, see `sheetAreaText`) + the
+ * clauses of `locationText` that say where the project IS:
  *   - `name` is included whole because D2 project names commonly carry the area
  *     ("Pinnacle Bangsar Residence", "Aria Luxury Residence @ KLCC"). This also rescues
  *     projects whose only in-clause area mention sits inside a "near X" phrase.
@@ -454,7 +455,22 @@ function isRegionOnlyClause(clause: string): boolean {
 function locationHaystack(doc: ProjectDoc): string {
   const { all, address } = splitAddressClauses(doc.locationText ?? '', PROXIMITY_CLAUSE)
   const areaText = (address.length > 0 ? address : all).join(' , ')
-  return ` ${normalizeLocationText(`${doc.name ?? ''} , ${areaText}`)} `
+  return ` ${normalizeLocationText(`${doc.name ?? ''} , ${sheetAreaText(doc, PROXIMITY_CLAUSE)} , ${areaText}`)} `
+}
+
+/**
+ * The address clauses of the client sheet's Area cell (quick-kayinleong-104).
+ *
+ * `area` is where the client says the project IS ("Damansara Heights"), so it joins the
+ * haystack beside `name` and `locationText`. DC Residensi is the reason: its stored
+ * location reads "Pusat Bandar Damansara, Jalan Damanlela, …" and never names the area the
+ * sheet gives. The proximity-run rule still applies, because a few Area cells name a
+ * landmark too ("Happy Garden (Taman Gembira), near Kuchai Lama, Kuala Lumpur"): a Kuchai
+ * Lama search must not pick that project up as being in Kuchai Lama.
+ */
+function sheetAreaText(doc: Pick<ProjectDoc, 'area'>, runStart: RegExp): string {
+  if (typeof doc.area !== 'string' || doc.area.trim() === '') return ''
+  return splitAddressClauses(doc.area, runStart).address.join(' , ')
 }
 
 /**
@@ -652,7 +668,11 @@ function ownAddressText(locationText: string): string {
  * still no distance data, so callers must not turn this into a distance or a "next to" claim.
  */
 export function projectLocationMatch(doc: ProjectDoc, needles: LocationNeedleGroup[]): LocationMatch {
-  const own = ` ${normalizeLocationText(`${doc.name ?? ''} , ${ownAddressText(doc.locationText ?? '')}`)} `
+  // The sheet's Area counts as the project's own address (quick-kayinleong-104), read with
+  // the same rule as `locationText`: "between …" opens a proximity run, and in a slash list
+  // only the first name counts.
+  const area = typeof doc.area === 'string' ? ownAddressText(doc.area) : ''
+  const own = ` ${normalizeLocationText(`${doc.name ?? ''} , ${area} , ${ownAddressText(doc.locationText ?? '')}`)} `
   return haystackMatches(own, needles) ? 'in_area' : 'nearby'
 }
 
@@ -690,6 +710,15 @@ export function projectLocationMatch(doc: ProjectDoc, needles: LocationNeedleGro
  * Known prices are still compared exactly, and both bounds remain INCLUSIVE — a project
  * priced at exactly `priceMax` is within budget.
  *
+ * THE TWO BOUNDS READ DIFFERENT PRICES (quick-kayinleong-104). `priceValue` is the project's
+ * "from" price: its cheapest available layout. The ceiling (`priceMax`) is checked against
+ * it, because a project whose cheapest layout is over budget has nothing in budget. The
+ * floor (`priceMin`) is checked against `projectTopPrice`, the most a layout costs. Until 104
+ * the floor also read the from price, so a RM1.5M-2.5M search dropped every project with one
+ * small layout under RM1.5M, however many larger ones were in range (Pavilion Damansara
+ * Heights, from RM861,120). A project whose from price is under the floor is therefore an
+ * expected survivor.
+ *
  * Exported so `tests/finder-corpus-gates.test.ts` can run it directly over the real
  * 82-project corpus.
  */
@@ -697,10 +726,45 @@ export function projectMatchesPrice(doc: ProjectDoc, priceMin: number | null, pr
   if (priceMin === null && priceMax === null) return true
   const price = doc.priceValue
   // Unknown price — admitted, not asserted. See invariants 1 and 2 above.
-  if (typeof price !== 'number' || !Number.isFinite(price) || price <= 0) return true
+  if (positiveOrNull(price) === null) return true
   if (priceMax !== null && price > priceMax) return false
-  if (priceMin !== null && price < priceMin) return false
+  if (priceMin !== null && (projectTopPrice(doc) ?? price) < priceMin) return false
   return true
+}
+
+function positiveOrNull(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null
+}
+
+/**
+ * The most a project's available layouts cost, for the budget floor (quick-kayinleong-104).
+ *
+ * Per available layout, the GROSS price when the client sheet states one (the user's call:
+ * "use gross price"; gross is the list price, nett is after rebates), otherwise its nett /
+ * stated price. The result is the highest of those and the from price. Sold-out layouts
+ * never count. A psf rate is never in these fields, so nothing here multiplies a rate by a
+ * size.
+ *
+ * With no priced layout it falls back to the from price, which is the pre-104 rule.
+ * Treating "no layout prices" as "top unknown, admit" was measured on the live corpus and
+ * rejected: only 16 of 82 active projects carry layout prices, so an "above RM3M" search
+ * would have admitted 74 of 82 projects instead of 33.
+ *
+ * `null` when nothing is priced at all.
+ */
+export function projectTopPrice(doc: Pick<ProjectDoc, 'priceValue' | 'unitTypes'>): number | null {
+  let top = positiveOrNull(doc.priceValue)
+  const units = Array.isArray(doc.unitTypes) ? doc.unitTypes : []
+  for (const u of units) {
+    if (u === null || typeof u !== 'object' || u.soldOut === true) continue
+    const v =
+      positiveOrNull(u.grossMaxRM) ??
+      positiveOrNull(u.grossMinRM) ??
+      positiveOrNull(u.priceMaxRM) ??
+      positiveOrNull(u.priceMinRM)
+    if (v !== null && (top === null || v > top)) top = v
+  }
+  return top
 }
 
 // ─── Property type (quick-kayinleong-098) ────────────────────────────────────

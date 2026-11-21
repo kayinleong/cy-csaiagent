@@ -1708,3 +1708,124 @@ describe('quick-kayinleong-103: a location match is in the area or only around i
     if (result.found) expect(result.matches.every((m) => m.locationMatch === undefined)).toBe(true)
   })
 })
+
+describe('quick-kayinleong-104: the budget floor reads gross layout prices, and the sheet Area counts as an address', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    mockEmbedText.mockReset()
+    mockProjectsGet.mockReset()
+    mockWhereFn.mockReset()
+    mockEmbedText.mockImplementation(async () => STUB_QUERY_VECTOR)
+    mockWhereFn.mockImplementation((..._args: [string, string, unknown]) => ({
+      where: mockWhereFn,
+      get: mockProjectsGet,
+      orderBy: mockWhereFn,
+    }))
+  })
+
+  const layout = (o: Record<string, unknown>) => ({ label: 'L', sizeSqft: null, bedrooms: null, priceMinRM: null, priceMaxRM: null, raw: 'r', ...o })
+
+  // Modelled on the live records and the client sheet (2026-11-21).
+  const base = FIXTURES['proj-active-a']
+  const DC = {
+    ...base,
+    name: 'Damansara City Residency (DC Residensi)',
+    locationText: 'Pusat Bandar Damansara, Jalan Damanlela, Kuala Lumpur; integrated with DC Mall, Sofitel KL Damansara',
+    priceValue: 1_200_000,
+    unitTypes: [
+      layout({ label: 'Type S1', priceMinRM: 1_200_000, priceMaxRM: 1_350_000, grossMinRM: 1_750_000, grossMaxRM: 1_800_000 }),
+      layout({ label: 'Type A3', priceMinRM: 1_360_000, priceMaxRM: 1_460_000, grossMinRM: 2_000_000, grossMaxRM: 2_100_000 }),
+      layout({ label: 'Type B1', soldOut: true }),
+    ],
+  }
+  const ROYAL = {
+    ...base,
+    name: 'Pavilion Damansara Heights: Royal Suites(RC)',
+    locationText: 'Damansara Heights, Centre of KL',
+    priceValue: 630_000,
+    unitTypes: [
+      layout({ label: 'Type S1', priceMinRM: 630_000, priceMaxRM: 959_000 }),
+      layout({ label: 'Type M1', bedrooms: 2, priceMinRM: 1_730_000, priceMaxRM: 2_350_000 }),
+    ],
+  }
+  const PAVILION_NO_LAYOUTS = { ...base, name: 'Pavilion Damansara Heights', locationText: 'Damansara Heights, Centre of KL', priceValue: 861_120 }
+  const CEDAR = { ...base, name: 'The Cedar Damansara Heights', locationText: 'Damansara Heights, Centre of KL', priceValue: 2_946_200 }
+
+  it('projectTopPrice: gross over nett per layout, sold-out layouts ignored, the from price as the fallback', async () => {
+    const { projectTopPrice } = await import('@/src/inventory/search')
+    expect(projectTopPrice(DC)).toBe(2_100_000)
+    expect(projectTopPrice(ROYAL)).toBe(2_350_000)
+    expect(projectTopPrice(PAVILION_NO_LAYOUTS)).toBe(861_120)
+    expect(projectTopPrice({ priceValue: 0, unitTypes: [layout({ soldOut: true, priceMinRM: 9_000_000 })] })).toBeNull()
+    // Never below the from price.
+    expect(projectTopPrice({ priceValue: 3_000_000, unitTypes: [layout({ priceMinRM: 1_000_000 })] })).toBe(3_000_000)
+  })
+
+  it('THE REPORTED CASE: RM1.5M-2.5M keeps a project whose dearer layouts reach the floor', async () => {
+    const { projectMatchesPrice } = await import('@/src/inventory/search')
+    expect(projectMatchesPrice(ROYAL, 1_500_000, 2_500_000)).toBe(true)
+    // On the gross price: DC's nett tops out at RM1.46M, its gross at RM2.1M.
+    expect(projectMatchesPrice(DC, 1_500_000, 2_500_000)).toBe(true)
+    const nettOnly = { ...DC, unitTypes: DC.unitTypes.map((u) => ({ ...u, grossMinRM: null, grossMaxRM: null })) }
+    expect(projectMatchesPrice(nettOnly, 1_500_000, 2_500_000)).toBe(false)
+    // No layout prices: the from price decides, as before 104.
+    expect(projectMatchesPrice(PAVILION_NO_LAYOUTS, 1_500_000, 2_500_000)).toBe(false)
+    // The ceiling still reads the from price.
+    expect(projectMatchesPrice(CEDAR, 1_500_000, 2_500_000)).toBe(false)
+    expect(projectMatchesPrice({ ...ROYAL, priceValue: 2_600_000 }, 1_500_000, 2_500_000)).toBe(false)
+    // A floor above every layout still drops it.
+    expect(projectMatchesPrice(ROYAL, 3_000_000, null)).toBe(false)
+  })
+
+  it('the sheet Area puts a project in the area its location text never names', async () => {
+    const { locationNeedles, projectMatchesLocation, projectLocationMatch } = await import('@/src/inventory/search')
+    const dh = locationNeedles('Damansara Heights')!
+    expect(projectMatchesLocation(DC, dh)).toBe(false)
+    const withArea = { ...DC, area: 'Damansara Heights' }
+    expect(projectMatchesLocation(withArea, dh)).toBe(true)
+    expect(projectLocationMatch(withArea, dh)).toBe('in_area')
+    // The sheet's own spelling ("Damansara Height") does not match a Heights search.
+    expect(projectMatchesLocation({ ...DC, area: 'Damansara Height' }, dh)).toBe(false)
+  })
+
+  it('a landmark inside the Area cell is not an address', async () => {
+    const { locationNeedles, projectMatchesLocation } = await import('@/src/inventory/search')
+    const vila = {
+      ...base,
+      name: 'Vila Setara Happy Garden',
+      locationText: 'Taman Gembira, Kuala Lumpur',
+      area: 'Happy Garden (Taman Gembira), near Kuchai Lama, Kuala Lumpur',
+    }
+    expect(projectMatchesLocation(vila, locationNeedles('Kuchai Lama')!)).toBe(false)
+    expect(projectMatchesLocation(vila, locationNeedles('Happy Garden')!)).toBe(true)
+  })
+
+  it('searchProjects: Damansara Heights, RM1.5M-2.5M returns DC Residensi and Royal Suites in the area', async () => {
+    mockProjectsGet.mockResolvedValue(
+      makeAdHocSnap([
+        { id: 'dc', doc: { ...DC, area: 'Damansara Heights' } },
+        { id: 'royal', doc: ROYAL },
+        { id: 'pavilion', doc: PAVILION_NO_LAYOUTS },
+        { id: 'cedar', doc: CEDAR },
+      ]),
+    )
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects({
+      segment: 'investment',
+      priceMin: 1_500_000,
+      priceMax: 2_500_000,
+      monthlyIncome: null,
+      nationality: 'unknown',
+      bumiputera: null,
+      locationPref: 'Damansara Heights',
+      bedrooms: null,
+      freeText: 'Damansara Heights 2 or 3 bedroom RM1.5mil to RM2.5mil',
+    })
+    expect(result.found).toBe(true)
+    if (!result.found) return
+    expect(result.matches.map((m) => m.projectId).sort()).toEqual(['dc', 'royal'])
+    expect(result.matches.every((m) => m.locationMatch === 'in_area')).toBe(true)
+    // The from price is real and under the ceiling, so the budget match is claimed.
+    expect(result.matches.every((m) => m.matchedCriteria.priceMax === 2_500_000)).toBe(true)
+  })
+})

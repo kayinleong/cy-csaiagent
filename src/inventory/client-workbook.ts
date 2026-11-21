@@ -513,6 +513,21 @@ export function mergeUnits(args: {
         if (has) kept.push('price')
       }
 
+      // Gross price (quick-kayinleong-104): the same rule as the nett price. A blank sheet
+      // cell keeps the stored range, a sold-out row carries none.
+      let grossMinRM: number | null = null
+      let grossMaxRM: number | null = null
+      if (su.soldOut) {
+        // A sold-out layout carries no price of any kind.
+      } else if (su.grossMinRM !== null && su.grossMaxRM !== null) {
+        grossMinRM = su.grossMinRM
+        grossMaxRM = su.grossMaxRM
+      } else if (typeof entry.grossMinRM === 'number') {
+        grossMinRM = entry.grossMinRM
+        grossMaxRM = entry.grossMaxRM ?? null
+        kept.push('gross price')
+      }
+
       // soldOut: stated by the sheet, or kept only when the row states no availability.
       const statesAvailability =
         su.nettMinRM !== null || su.grossMinRM !== null || su.held.includes('Nett') || su.held.includes('Gross')
@@ -529,6 +544,9 @@ export function mergeUnits(args: {
         bedrooms,
         priceMinRM,
         priceMaxRM,
+        // Only when a gross total is on record, so a sheet with no gross column leaves the
+        // stored entries byte-identical (no churn in the R10 diff).
+        ...(grossMinRM !== null ? { grossMinRM, grossMaxRM } : {}),
         raw: kept.length > 0 ? `${su.raw} | kept from previous record: ${kept.join(', ')}` : su.raw,
       }
       if (soldOut) merged.soldOut = true
@@ -570,6 +588,9 @@ export function mergeUnits(args: {
       bedrooms: su.bedrooms,
       priceMinRM: su.nettMinRM,
       priceMaxRM: su.nettMaxRM,
+      ...(su.grossMinRM !== null && su.grossMaxRM !== null && !su.soldOut
+        ? { grossMinRM: su.grossMinRM, grossMaxRM: su.grossMaxRM }
+        : {}),
       raw: su.raw,
     }
     if (su.soldOut) e.soldOut = true
@@ -626,6 +647,7 @@ const WORKBOOK_FIELDS: ReadonlySet<string> = new Set<ClientWorkbookField>([
   'tenure',
   'vpStatus',
   'vpDate',
+  'area',
 ])
 
 const EMBEDDED_FIELDS: ReadonlySet<string> = new Set(['priceValue', 'tenure', 'bedrooms'])
@@ -772,6 +794,12 @@ export function planProjectPatch(args: {
       })
     }
   }
+
+  // R8b (quick-kayinleong-104). The sheet's Area, verbatim, as the project's `area`. The
+  // Finder's location gate reads it beside `locationText`, which is never touched. A blank
+  // cell plans nothing, so it never clears a stored area (D4).
+  const sheetArea = (sheet.area ?? '').trim()
+  if (sheetArea !== '') planned.area = sheetArea
 
   // R9. Holds drop whole groups of keys, one warning per group.
   for (const group of holds) {

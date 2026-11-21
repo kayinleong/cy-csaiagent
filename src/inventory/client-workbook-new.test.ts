@@ -52,7 +52,7 @@ describe('the three new projects from the client sheet', () => {
     expect(record.priceValue).toBe(0)
     expect(record.priceBand).toBe('price_unknown')
     expect(record.priceProvenance).toBe('unknown')
-    expect(record.clientWorkbookFields).toEqual(['sizeMaxSqft', 'sizeMinSqft', 'tenure', 'unitTypes'])
+    expect(record.clientWorkbookFields).toEqual(['area', 'sizeMaxSqft', 'sizeMinSqft', 'tenure', 'unitTypes'])
     expect(record.clientWorkbookImportedAt).toEqual(IMPORTED_AT)
   })
 
