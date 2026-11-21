@@ -26,6 +26,9 @@
  *   --holds PATH         default .planning/quick/quick-kayinleong-096/review-holds.json;
  *                        absent = no holds. Format {"holds": {"<docId>": ["price", ...]}}
  *   --delay MS           pace the re-embed calls (default 120)
+ *   --report-dir DIR     where the report goes (default the 096 claim dir), repo-relative,
+ *                        `.planning/quick/<claim>` only (quick-kayinleong-105). Backups always go to
+ *                        the 096 backups dir, the one path .gitignore keeps out of git.
  *
  * Reports: IMPORT-DRYRUN.md, IMPORT-APPLY.md, RESTORE-DRYRUN.md, RESTORE-APPLY.md in the
  * claim directory. Backups (full docs minus the embedding, so they hold description prose
@@ -50,7 +53,7 @@ import { dirname, resolve } from 'node:path'
 import { assertSafeTarget } from '@/src/inventory/client-workbook-safety'
 
 const CLAIM_DIR = '.planning/quick/quick-kayinleong-096'
-const KNOWN_FLAGS = ['--apply', '--expect-plan', '--restore', '--sheet', '--mapping', '--holds', '--delay']
+const KNOWN_FLAGS = ['--apply', '--expect-plan', '--restore', '--sheet', '--mapping', '--holds', '--delay', '--report-dir']
 
 function flagValue(args: string[], name: string): string | undefined {
   const i = args.indexOf(name)
@@ -88,7 +91,13 @@ async function main(): Promise<number> {
   }[mode]
   // Repo-relative on purpose: the report and the printed backup path then carry no
   // machine-specific absolute path, and `git check-ignore` works on the printed value.
-  const reportPath = `${CLAIM_DIR}/${reportName}`
+  const reportDir = flagValue(args, '--report-dir') ?? CLAIM_DIR
+  if (!/^\.planning\/quick\/[a-z0-9-]+$/.test(reportDir)) {
+    throw new Error('--report-dir must be a repo-relative .planning/quick/<claim> directory')
+  }
+  const reportPath = `${reportDir}/${reportName}`
+  // Never under --report-dir: backups hold full write-ups (contact details), and only this
+  // directory is gitignored.
   const backupDir = `${CLAIM_DIR}/backups`
 
   // 2. Presence only, never the value. Re-embedding needs the Gemini Developer API key.

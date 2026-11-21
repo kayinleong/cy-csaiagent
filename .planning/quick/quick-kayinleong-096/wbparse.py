@@ -144,18 +144,31 @@ def scrub_developer(text):
 
 _LABEL_TYPE = re.compile(r"Type\s+[A-Z][A-Za-z0-9]*(?:-[A-Z0-9]+)?(?:\s*&\s*[A-Z][A-Za-z0-9]*)?")
 _LABEL_CODE = re.compile(r"[A-Z]{1,3}\d+[a-z]?")
+# quick-kayinleong-105: a digit-first type code ("Type 1A", "Type 2B/2B1", Bangsar Hill Park in the
+# 21 Nov sheet). At least one letter must follow the digits, so "Type 1 Bedroom" is not a code.
+_LABEL_TYPE_NUM = re.compile(r"Type\s+\d+[A-Za-z][A-Za-z0-9]*(?:/[A-Za-z0-9]+)?")
+# quick-kayinleong-105: a whole phase given as one row ("Phase 1: 605-2803sqft", Pavilion
+# Damansara Heights in the 21 Nov sheet). Its size and rooms are ranges, held / left unstated below.
+_LABEL_PHASE = re.compile(r"Phase\s+\d+[A-Za-z]?(?![\d])")
+# An unevaluated spreadsheet formula, e.g. =AI("Fill an appropriate value for this cell ...").
+FORMULA_RE = re.compile(r"^\s*=\s*[A-Za-z][A-Za-z0-9_.]*\s*\(")
+
+
+def is_formula(cell):
+    return isinstance(cell, str) and bool(FORMULA_RE.match(cell))
 _NUM = r"(\d{1,3}(?:,\d{3})+|\d+)"
 _SQFT_UNIT = r"(?:sq\.?\s*ft\.?|sqft|sft|sf)"
 _SIZE_RE = re.compile(r"(?<![\d,])" + _NUM + r"\s*" + _SQFT_UNIT + r"(?![a-z])", re.I)
 _BU_RE = re.compile(r"\bBU\s*" + _NUM + r"\s*" + _SQFT_UNIT + r"(?![a-z])", re.I)
 _BU_WORD = re.compile(r"\bBU\b", re.I)
 _SQM_RE = re.compile(r"(?<![\d,])" + _NUM + r"\s*sq\.?\s*m(?![a-z])", re.I)
+_SIZE_RANGE_START = re.compile(r"(?:^|[^A-Za-z0-9,])" + _NUM + r"\s*[-–]\s*$")
 
 
 def parse_label(size_text):
     """Unit label from a Size cell, or None when the row has no label."""
     t = (size_text or "").strip()
-    m = _LABEL_TYPE.match(t) or _LABEL_CODE.match(t)
+    m = _LABEL_TYPE.match(t) or _LABEL_TYPE_NUM.match(t) or _LABEL_CODE.match(t) or _LABEL_PHASE.match(t)
     if not m:
         return None
     return re.sub(r"\s+", " ", re.sub(r"\s*&\s*", " & ", m.group(0)))
@@ -180,6 +193,13 @@ def parse_size(size_text):
         m = _SIZE_RE.search(t)
     if m is None:
         return None, "the size could not be read as a number of square feet", None
+    # quick-kayinleong-105: "605-2803sqft" is a range across many layouts, not one size. The
+    # upper end used to be read as the size. A code ending in a digit ("E1 - 3,964sf") is not
+    # a range start, hence the letter guard. BU figures are never ranges here.
+    lo = _SIZE_RANGE_START.search(t[:m.start(1)])
+    if lo:
+        return None, ("the size is a range (%s to %s sqft), not one layout's size"
+                      % (format(_int(lo.group(1)), ","), format(_int(m.group(1)), ","))), None
     sqft = _int(m.group(1))
     sq = _SQM_RE.search(t)
     if sq:
@@ -198,9 +218,17 @@ _STUDIO = re.compile(r"^\s*studio\b", re.I)
 _BEDS = re.compile(r"^\s*(\d{1,2})\s*(?:\+\s*\d\s*)*bed", re.I)
 
 
+_ROOMS_RANGE = re.compile(r"\bup\s*to\b|\d\s*(?:-|–|to)\s*\d+\s*(?:\+\s*\d\s*)?bed", re.I)
+
+
 def parse_rooms(text):
-    """Rooms cell -> bedrooms (0 for a studio) or None. The "+N" never counts."""
+    """Rooms cell -> bedrooms (0 for a studio) or None. The "+N" never counts.
+
+    A range ("1 bedroom up to 4+1 bedroom", quick-kayinleong-105) is not one layout's count,
+    so it is left unstated rather than read as its first number."""
     t = text or ""
+    if _ROOMS_RANGE.search(t):
+        return None
     if _STUDIO.search(t):
         return 0
     m = _BEDS.search(t)

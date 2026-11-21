@@ -98,7 +98,23 @@ def load_workbook_data(path, expected_sha):
     for r in wb["Sheet1"].iter_rows(values_only=True):
         sheet1.append(w.collapse(r[0]) if r else "")
     wb.close()
-    return {"rows": raw[1:], "sheet1": sheet1, "sha": sha}
+    # quick-kayinleong-105: the 21 Nov sheet has unevaluated =AI("Fill an appropriate value ...")
+    # formulas down the Size column. A formula is not a value: in the Size column it is blanked
+    # and reported as held back; anywhere else the workbook is refused, so a formula never
+    # reaches a project record or a fact sheet.
+    formulas = []
+    rows = []
+    for rn, cells in raw[1:]:
+        cells = list(cells)
+        for k in range(16):
+            if w.is_formula(cells[k]):
+                if k != 1:
+                    raise BuildError("refusing the workbook: row %d, column %s holds a spreadsheet formula, not a value"
+                                     % (rn, HEADERS_16[k]))
+                formulas.append((rn, HEADERS_16[k]))
+                cells[k] = None
+        rows.append((rn, tuple(cells)))
+    return {"rows": rows, "sheet1": sheet1, "sha": sha, "formulas": formulas}
 
 
 def group_rows(rows):
@@ -132,6 +148,23 @@ def group_rows(rows):
         if cur["ignored"]:
             raise BuildError("refusing: a continuation row (%d) follows an ignored duplicate project" % rn)
         cur["rows"].append((rn, cells))
+    # quick-kayinleong-105: the 21 Nov sheet lists "Top Reasons Why" one reason per row, down
+    # the project's unit rows (PDH Imperial, PDH Royal Suites, Southpoint). Those are joined, in
+    # row order, onto the project row. Every other project-level column on a continuation row is
+    # still refused below, since there it means the columns have shifted.
+    top = HEADERS_16.index("Top Reasons Why")
+    for g in groups:
+        first_rn, first = g["rows"][0]
+        reasons = [] if blank(first[top]) else [str(first[top]).strip()]
+        rows = [g["rows"][0]]
+        for rn, cells in g["rows"][1:]:
+            if not blank(cells[top]):
+                reasons.append(str(cells[top]).strip())
+                cells = cells[:top] + (None,) + cells[top + 1:]
+            rows.append((rn, cells))
+        if len(reasons) > (0 if blank(first[top]) else 1):
+            rows[0] = (first_rn, first[:top] + ("\n".join(reasons),) + first[top + 1:])
+        g["rows"] = rows
     for g in groups:
         for rn, cells in g["rows"][1:]:
             for k in list(range(5, 16)):
@@ -181,15 +214,20 @@ def mode_for(inventory_name, n_units):
     return "merge", ""
 
 
-def build_mapping(groups, sheet1_pairs, recs, exported_at, sha):
+def build_mapping(groups, sheet1_pairs, recs, exported_at, sha, skipped_new=SKIPPED_NEW):
     by_name = dict((r["name"], r) for r in recs)
-    resolved, skipped = w.resolve_names([g["name"] for g in groups], by_name, VARIANTS, SHEET1_ALIASES, SKIPPED_NEW)
+    resolved, skipped = w.resolve_names([g["name"] for g in groups], by_name, VARIANTS, SHEET1_ALIASES, skipped_new)
     for s in skipped:
-        if s not in SKIPPED_NEW:
+        if s not in skipped_new:
             raise BuildError("unexpected skipped project: %s" % s)
-    if sorted(skipped) != sorted(SKIPPED_NEW):
+    if sorted(skipped) != sorted(skipped_new):
         raise BuildError("the skipped list differs from the reviewed one: got %s" % ", ".join(skipped))
-    unit_count = dict((g["name"], len(unit_rows_of(g))) for g in groups)
+    # quick-kayinleong-105: count only rows that carry a unit label. A project whose unit rows
+    # have none (Clouthaus KLCC's "635sf 1BR Type K", Enlace's project-wide size range) loads
+    # no units (unitMode none) instead of failing invariant 8; build_units still lists every
+    # such row in HELD-BACK.md.
+    unit_count = dict((g["name"], len([1 for _, c in unit_rows_of(g) if w.parse_label(w.collapse(c[1]))]))
+                      for g in groups)
     raw_inv = {}
     entries = []
     for sheet_name, inv_name, matched in resolved:
@@ -572,7 +610,7 @@ def render_held_back(ctx):
 
 
 def build_all(workbook, export, import_date=IMPORT_DATE, regen_mapping=False,
-              expected_sha=EXPECTED_WORKBOOK_SHA256, mapping_path=None):
+              expected_sha=EXPECTED_WORKBOOK_SHA256, mapping_path=None, skipped_new=SKIPPED_NEW):
     """Build every output in memory. Returns (files, stats) where files maps a path
     relative to the output dir to bytes."""
     mapping_path = Path(mapping_path) if mapping_path else HERE / "project-mapping.json"
@@ -582,7 +620,7 @@ def build_all(workbook, export, import_date=IMPORT_DATE, regen_mapping=False,
     recs, exported_at = load_export(export)
     by_name = dict((r["name"], r) for r in recs)
 
-    generated = build_mapping(groups, sheet1_pairs, recs, exported_at, data["sha"])
+    generated = build_mapping(groups, sheet1_pairs, recs, exported_at, data["sha"], skipped_new)
     files = {}
     if regen_mapping or not mapping_path.exists():
         mapping = generated
@@ -595,6 +633,20 @@ def build_all(workbook, export, import_date=IMPORT_DATE, regen_mapping=False,
     mapping_sha = sha256_hex(mapping_bytes)
 
     entry_by_raw = dict((e["sheetName"], e) for e in mapping["entries"] if e["sheet"] == "Raw Data")
+
+    # quick-kayinleong-105: each formula cell belongs to the project whose rows it sits in
+    # (the last project name at or above it). Rows left blank by the blanking are not in any
+    # group's rows, so the start rows decide.
+    starts = sorted((g["row"], g["name"]) for g in groups)
+    formulas_by_group = {}
+    for rn, column in data.get("formulas", []):
+        owner = None
+        for start, name in starts:
+            if start <= rn:
+                owner = name
+        if owner is None:
+            raise BuildError("refusing: row %d holds a formula before any project name" % rn)
+        formulas_by_group.setdefault(owner, []).append((rn, column))
     group_by_name = dict((g["name"], g) for g in groups)
 
     # Sheet1 focus lists by docId, in Sheet1 order, deduplicated
@@ -630,15 +682,21 @@ def build_all(workbook, export, import_date=IMPORT_DATE, regen_mapping=False,
     conflicts = []
 
     for g in groups:
-        if g["name"] in SKIPPED_NEW:
+        if g["name"] in skipped_new:
             skipped.append({"sheetName": g["name"], "sheetRow": g["row"], "unitRows": len(unit_rows_of(g)),
                             "reason": ABSENT_REASON})
             continue
         e = entry_by_raw[g["name"]]
         inv = e["inventoryName"]
         held = []
+        for rn, column in formulas_by_group.get(g["name"], []):
+            held.append({"sheetRow": rn, "unit": None, "column": column, "sheetText": None,
+                         "reason": "the cell holds an unfilled spreadsheet formula (=AI(...)), not a value",
+                         "category": "value", "ask": "Please replace the formula with the built-up size in square feet."})
         facts, tenure, completion = build_project_fields(g, held)
-        units_cells = build_units(g, held) if e["unitMode"] != "none" else []
+        units_cells = build_units(g, held)  # always, so unloadable unit rows are reported
+        if e["unitMode"] == "none":
+            units_cells = []
         units = [u for u, _ in units_cells]
         # a project whose only content is a Developer cell copied from another project
         c0 = g["rows"][0][1]
@@ -739,7 +797,7 @@ def build_all(workbook, export, import_date=IMPORT_DATE, regen_mapping=False,
     files["HELD-BACK.md"] = render_held_back(ctx).encode("utf-8")
 
     stats = {
-        "raw_projects": len(groups), "mapped": len([g for g in groups if g["name"] not in SKIPPED_NEW]),
+        "raw_projects": len(groups), "mapped": len([g for g in groups if g["name"] not in skipped_new]),
         "skipped_new": [s["sheetName"] for s in skipped], "ignored": [i["name"] for i in ignored],
         "projects_in_json": len(projects), "unit_rows": sum(len(p["units"]) for p in projects),
         "unit_projects": len([p for p in projects if p["units"]]), "sold_out_units": sold_out_units,
@@ -793,11 +851,24 @@ def main(argv=None):
     ap.add_argument("--regen-mapping", action="store_true")
     ap.add_argument("--workbook-sha256", default=EXPECTED_WORKBOOK_SHA256)
     ap.add_argument("--out-dir", default=str(HERE))
+    ap.add_argument("--source-label", default=None,
+                    help="the sheet's source line for the JSON meta, fact sheets and HELD-BACK.md "
+                         "(quick-kayinleong-105). Default: the 19 October 2026 label.")
+    ap.add_argument("--skipped-new", default=None,
+                    help="comma-separated sheet names reviewed as new (not in the inventory); "
+                         "'' for none. Default: the 096 list.")
     args = ap.parse_args(argv)
+    if args.source_label is not None:
+        if not args.source_label.strip() or w.scan_contact_details(args.source_label):
+            print("BUILD FAILED: --source-label must be non-empty plain text", file=sys.stderr)
+            return 1
+        w.SOURCE_LABEL = args.source_label.strip()
+    skipped_new = SKIPPED_NEW if args.skipped_new is None else [n.strip() for n in args.skipped_new.split(",") if n.strip()]
     out_dir = Path(args.out_dir)
     try:
         files, stats = build_all(args.workbook, args.export, args.import_date, args.regen_mapping,
-                                 args.workbook_sha256, mapping_path=out_dir / "project-mapping.json")
+                                 args.workbook_sha256, mapping_path=out_dir / "project-mapping.json",
+                                 skipped_new=skipped_new)
     except (BuildError, w.MappingError) as e:
         print("BUILD FAILED: %s" % e, file=sys.stderr)
         return 1

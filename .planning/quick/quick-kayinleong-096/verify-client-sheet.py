@@ -92,6 +92,10 @@ SIZE_CASES = [
     ("Type B : 721sft/2CP", "Type B", 721), ("Type D - 2 +1 rooms 2 baths: 1076sft/2CP", "Type D", 1076),
     ("Type E & E1 - 3,964sf\n", "Type E & E1", 3964), ("Type B1A: 681sf", "Type B1A", 681),
     ("Type A3a: 9,192 Sqft", "Type A3a", 9192), ("Type D1: 19,031 Sqft", "Type D1", 19031),
+    # quick-kayinleong-105 (21 Nov sheet): digit-first codes, a phase row, a size range
+    ("Type 1A: 1345sft", "Type 1A", 1345), ("Type 2B/2B1: 917sft", "Type 2B/2B1", 917),
+    ("Type 1 Bedroom: 600sf", None, 600), ("Phase 1: 605-2803sqft", "Phase 1", None),
+    ("474 – 1,733 sq ft", None, None),
 ]
 ROOMS_CASES = [
     ("1 Bedroom", 1), ("1 Bedroom + 1", 1), ("2 Bedrooms + 1 + 1", 2), ("3 Bedrooms + 1+1", 3),
@@ -100,6 +104,8 @@ ROOMS_CASES = [
     ("2 Bedrooms, 2 Bathrooms + 1 Studio + 1 Bath", 2), ("Studio", 0), ("Suite", None), ("Dual Key", None),
     ("1 flexi room 1 bath", None), ("5+1 Bedroom + 6 Bathroom + 1 Powder", 5),
     ("4+2 Bedroom, 5 Bathrooms + 1 Powder", 4), ("5+2 Bedrooms, 6 Bathrooms", 5),
+    # quick-kayinleong-105: a range is not one layout's count
+    ("1 bedroom up to 4+1 bedroom", None), ("2-3 Bedrooms", None), ("1 to 3 bedrooms", None),
 ]
 LAYOUT_CASES = [("2 Bedroom + 1", "2BR+1"), ("3 Bedrooms + 1+1", "3BR+1+1"), ("2 Bedrooms + 1 + 1", "2BR+1+1"),
                 ("1 Bedroom", "1BR")]
@@ -116,6 +122,10 @@ PRICE_CASES = [
     ("from RM1960psf", ("psf", 1960, 1960)), ("RM2200psf", ("psf", 2200, 2200)), ("988psf", ("psf", 988, 988)),
     ("TBC", ("tbc", None, None)), (690.0, ("ambiguous", None, None)), ("150psf", ("psf_held", None, None)),
     ("RM2mil-RM1mil", ("unparseable", None, None)),
+    # quick-kayinleong-105 (21 Nov sheet): mixed suffixes and spacing; psf-only gross is not a total
+    ("RM630k - RM959k", ("total", 630000, 959000)), ("RM1.18m - RM1.6mil", ("total", 1180000, 1600000)),
+    ("RM 930k-6.4mil", ("total", 930000, 6400000)), ("RM8978k-RM1.1mil", ("unparseable", None, None)),
+    ("RM 1.6k-2.3k psf", ("unparseable", None, None)), ("RM 2k psf +", ("unparseable", None, None)),
 ]
 TENURE_CASES = [
     ("Freehold\n\n\n\n", "Freehold"), ("Freehold Residential", "Freehold"), (" Leasehold", "Leasehold"),
@@ -217,6 +227,11 @@ def check_parser(R):
     u, _, _ = w.build_unit(2, "Type E1: 2,072 Sqft | 251 Sqm", "3 Bedrooms", "Sold out", None)
     if not (u["held"] == ["Size"] and u["raw"].startswith("Type E1: size not confirmed")):
         bad.append("gate size hold raw")
+    # quick-kayinleong-105: an unfilled =AI(...) formula is detected; ordinary text is not
+    if not (w.is_formula('=AI("Fill an appropriate value for this cell based on the table context")')
+            and w.is_formula(" =SUM(A1:A3)") and not w.is_formula("Type A: 570 sf")
+            and not w.is_formula("= 5") and not w.is_formula(None)):
+        bad.append("formula detection")
     # fact gates
     if w.gate_fact("maintenanceFee", "Residential")[0] is not None:
         bad.append("fee gate")
