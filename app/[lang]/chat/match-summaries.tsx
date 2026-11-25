@@ -23,10 +23,12 @@
  * 'use client' for `useTranslations`, like `match-table.tsx`.
  */
 
+import { useId, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import type {
+  DetailSectionRow,
   FinderMatch,
   FinderRow,
   MatchSummary,
@@ -97,7 +99,27 @@ export interface SummaryEntry {
   layoutLines: string[]
   /** Names of the sold-out layouts. */
   soldOut: string[]
+  /** The server-built detail sections (quick-kayinleong-107), as stored. */
+  sections: DetailSectionRow[]
 }
+
+/** The fixed label keys a detail item may carry (`chat.matchTable.details.<key>`). */
+export const DETAIL_ITEM_KEYS = [
+  'area',
+  'developer',
+  'landTitle',
+  'tenure',
+  'totalUnits',
+  'floors',
+  'completion',
+  'furnishing',
+  'carPark',
+  'maintenanceFee',
+  'fromPrice',
+  'psfRate',
+] as const
+
+const DETAIL_KEY_SET: ReadonlySet<string> = new Set(DETAIL_ITEM_KEYS)
 
 /**
  * The entries to show: the table's rows (rank order, never re-sorted) that the model
@@ -113,14 +135,15 @@ export function buildSummaryEntries(
   labels: LayoutLabels,
 ): SummaryEntry[] {
   const matchById = new Map(matches.map((m) => [m.projectId, m]))
-  const layoutsById = new Map((summaries ?? []).map((s) => [s.projectId, s.layouts]))
+  const summaryById = new Map((summaries ?? []).map((s) => [s.projectId, s]))
   const entries: SummaryEntry[] = []
   for (const row of rows) {
     // Every shortlisted table row gets an entry, not only the projects the model chose to
     // write a match for: the layouts are server data (quick-kayinleong-106). The two prose
     // lines appear where the model wrote them.
     const match = matchById.get(row.projectId)
-    const layouts = layoutsById.get(row.projectId) ?? []
+    const layouts = summaryById.get(row.projectId)?.layouts ?? []
+    const sections = summaryById.get(row.projectId)?.sections ?? []
     const entry: SummaryEntry = {
       projectId: row.projectId,
       name: row.name,
@@ -130,12 +153,14 @@ export function buildSummaryEntries(
       sellingPoints: match?.sellingPoints?.trim() ?? '',
       layoutLines: layouts.filter((l) => !l.soldOut).map((l) => formatLayoutLine(l, labels)),
       soldOut: layouts.filter((l) => l.soldOut).map((l) => l.label),
+      sections,
     }
     if (
       entry.bestFor ||
       entry.sellingPoints ||
       entry.layoutLines.length > 0 ||
-      entry.soldOut.length > 0
+      entry.soldOut.length > 0 ||
+      entry.sections.length > 0
     ) {
       entries.push(entry)
     }
@@ -204,28 +229,12 @@ export function MatchSummaries({ rows, matches, summaries, onAsk, className }: M
                   <span className="font-semibold">{t('bestFor')}:</span> {entry.bestFor}
                 </p>
               )}
-              {(entry.layoutLines.length > 0 || entry.soldOut.length > 0) && (
-                <div>
-                  <span className="font-semibold">{t('layouts')}:</span>
-                  {entry.layoutLines.length > 0 && (
-                    <ul className="ml-4 list-disc">
-                      {entry.layoutLines.map((line, i) => (
-                        <li key={i}>{line}</li>
-                      ))}
-                    </ul>
-                  )}
-                  {entry.soldOut.length > 0 && (
-                    <p className="text-muted-foreground">
-                      {t('soldOut')}: {entry.soldOut.join(', ')}
-                    </p>
-                  )}
-                </div>
-              )}
               {entry.sellingPoints && (
                 <p>
                   <span className="font-semibold">{t('sellingPoints')}:</span> {entry.sellingPoints}
                 </p>
               )}
+              <FullDetails entry={entry} />
               <div>
                 <Button
                   variant="ghost"
@@ -245,5 +254,86 @@ export function MatchSummaries({ rows, matches, summaries, onAsk, className }: M
         )
       })}
     </section>
+  )
+}
+
+/**
+ * The "Full details" block of one entry, open by default with a Hide/Show toggle
+ * (quick-kayinleong-107): Quick Facts, Built-Up Sizes & Layouts, Prices & Fees, the other
+ * write-up sections in source order, Top Reasons Why, D2 focus lists. Fixed keys and fixed
+ * titles are translated; write-up labels, titles and values are shown as stored. Plain text.
+ */
+function FullDetails({ entry }: { entry: SummaryEntry }) {
+  const t = useTranslations('chat.matchTable')
+  const [open, setOpen] = useState(true)
+  const bodyId = useId()
+  const hasLayouts = entry.layoutLines.length > 0 || entry.soldOut.length > 0
+  if (!hasLayouts && entry.sections.length === 0) return null
+
+  const ofKind = (kind: DetailSectionRow['kind']) => entry.sections.filter((s) => s.kind === kind)
+  const labelOf = (item: DetailSectionRow['items'][number]): string | null => {
+    if (item.key) return DETAIL_KEY_SET.has(item.key) ? t(`details.${item.key}`) : item.key
+    return item.label ?? null
+  }
+  const renderSection = (section: DetailSectionRow, title: string, i: number) => (
+    <div key={`${section.kind}-${i}`} data-slot="match-detail-section" className="flex flex-col gap-0.5">
+      <p className="font-semibold">{title}</p>
+      <ul className="ml-4 list-disc">
+        {section.items.map((item, j) => {
+          const label = labelOf(item)
+          return (
+            <li key={j}>
+              {label && <span className="font-semibold">{label}: </span>}
+              {item.value}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+
+  return (
+    <div data-slot="match-details" className="mt-1 flex min-w-0 flex-col gap-2 break-words">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold">{t('details.fullDetails')}</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="min-h-11 whitespace-nowrap"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? t('details.hide') : t('details.show')}
+        </Button>
+      </div>
+      {open && (
+        <div id={bodyId} className="flex min-w-0 flex-col gap-2">
+          {ofKind('quickFacts').map((sec, i) => renderSection(sec, t('details.quickFacts'), i))}
+          {hasLayouts && (
+            <div data-slot="match-detail-layouts" className="flex flex-col gap-0.5">
+              <p className="font-semibold">{t('details.layouts')}</p>
+              {entry.layoutLines.length > 0 && (
+                <ul className="ml-4 list-disc">
+                  {entry.layoutLines.map((line, i) => (
+                    <li key={i}>{line}</li>
+                  ))}
+                </ul>
+              )}
+              {entry.soldOut.length > 0 && (
+                <p className="text-muted-foreground">
+                  {t('soldOut')}: {entry.soldOut.join(', ')}
+                </p>
+              )}
+            </div>
+          )}
+          {ofKind('pricesFees').map((sec, i) => renderSection(sec, t('details.pricesFees'), i))}
+          {ofKind('other').map((sec, i) => renderSection(sec, sec.title ?? '', i))}
+          {ofKind('topReasons').map((sec, i) => renderSection(sec, t('details.topReasons'), i))}
+          {ofKind('focusLists').map((sec, i) => renderSection(sec, t('details.focusLists'), i))}
+        </div>
+      )}
+    </div>
   )
 }

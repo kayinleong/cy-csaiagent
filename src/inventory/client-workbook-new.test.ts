@@ -52,7 +52,9 @@ describe('the three new projects from the client sheet', () => {
     expect(record.priceValue).toBe(0)
     expect(record.priceBand).toBe('price_unknown')
     expect(record.priceProvenance).toBe('unknown')
-    expect(record.clientWorkbookFields).toEqual(['area', 'sizeMaxSqft', 'sizeMinSqft', 'tenure', 'unitTypes'])
+    expect(record.clientWorkbookFields).toEqual(['area', 'clientFacts', 'sizeMaxSqft', 'sizeMinSqft', 'tenure', 'unitTypes'])
+    // quick-kayinleong-107: a new project carries the sheet's project facts too.
+    expect(record.clientFacts).toMatchObject({ tenure: expect.any(String) })
     expect(record.clientWorkbookImportedAt).toEqual(IMPORTED_AT)
   })
 

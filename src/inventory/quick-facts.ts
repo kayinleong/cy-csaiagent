@@ -35,6 +35,9 @@ export const QUICK_FACTS_MAX_CHARS = 700
 /** At most this many layouts per summary (available first, sold out last). */
 export const MAX_SUMMARY_LAYOUTS = 6
 
+/** The full-details path shows (nearly) every layout of a project (quick-kayinleong-107). */
+export const MAX_DETAIL_LAYOUTS = 40
+
 const MAX_LABEL_CHARS = 60
 
 const QUICK_FACTS_HEADING = /quick\s*facts/i
@@ -66,16 +69,24 @@ export function quickFactsExcerpt(
   description: string | null | undefined,
   maxChars: number = QUICK_FACTS_MAX_CHARS,
 ): string {
-  if (typeof description !== 'string' || description.length === 0) return ''
+  return cleanedWriteUpLines(description).join('\n').slice(0, Math.max(0, maxChars)).trimEnd()
+}
+
+/**
+ * The cleaned write-up as lines, uncapped (quick-kayinleong-107): the same rules as
+ * `quickFactsExcerpt` (start at the "Quick Facts" heading, collapse blanks, drop every unsafe
+ * line). [] for a missing description or one with no "Quick Facts" heading.
+ */
+export function cleanedWriteUpLines(description: string | null | undefined): string[] {
+  if (typeof description !== 'string' || description.length === 0) return []
   const at = description.search(QUICK_FACTS_HEADING)
-  if (at < 0) return ''
-  const lines = description
+  if (at < 0) return []
+  return description
     .slice(at)
     .split(/\r?\n/)
     .map((l) => l.replace(/[ \t]+/g, ' ').trim())
     .filter((l) => l.length > 0)
     .filter((l) => !UNSAFE_LINE.some((re) => re.test(l)))
-  return lines.join('\n').slice(0, Math.max(0, maxChars)).trimEnd()
 }
 
 /** One layout of the "Layouts & sizing" line. `raw` (the verbatim source line) is dropped. */
@@ -105,6 +116,7 @@ function positiveOrNull(n: unknown): number | null {
 export function summaryLayouts(
   unitTypes: UnitTypeEntry[] | null | undefined,
   bedrooms?: number | null,
+  limit: number = MAX_SUMMARY_LAYOUTS,
 ): SummaryLayout[] {
   if (!Array.isArray(unitTypes)) return []
   const want = typeof bedrooms === 'number' && bedrooms > 0 ? bedrooms : null
@@ -127,5 +139,5 @@ export function summaryLayouts(
   }
   const rank = (l: SummaryLayout) => (l.soldOut ? 2 : 0) + (want !== null && l.bedrooms === want ? 0 : 1)
   // Array.prototype.sort is stable, so ties keep the stored order.
-  return layouts.sort((a, b) => rank(a) - rank(b)).slice(0, MAX_SUMMARY_LAYOUTS)
+  return layouts.sort((a, b) => rank(a) - rank(b)).slice(0, limit)
 }

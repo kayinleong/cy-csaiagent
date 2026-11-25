@@ -108,7 +108,29 @@
       "sqft": "sqft",
       "bed": "bed",
       "nett": "Nett",
-      "gross": "Gross"
+      "gross": "Gross",
+      "details": {
+        "fullDetails": "Full details",
+        "hide": "Hide",
+        "show": "Show",
+        "quickFacts": "Quick Facts",
+        "layouts": "Built-Up Sizes & Layouts",
+        "pricesFees": "Prices & Fees",
+        "topReasons": "Top Reasons Why",
+        "focusLists": "D2 focus lists",
+        "area": "Area",
+        "developer": "Developer",
+        "landTitle": "Land title",
+        "tenure": "Tenure",
+        "totalUnits": "Total units",
+        "floors": "Floors",
+        "completion": "Completion",
+        "furnishing": "Furnishing",
+        "carPark": "Car park",
+        "maintenanceFee": "Maintenance fee",
+        "fromPrice": "From price",
+        "psfRate": "Price per sqft"
+      }
     },
     "refusal": {
       "nextStepsTitle": "Next steps",

@@ -379,10 +379,26 @@ export const SummaryLayoutSchema = z.object({
   soldOut: z.boolean().default(false),
 })
 
-/** The server-built layouts for one shortlisted project. */
+/** One line of a details section (quick-kayinleong-107). `key` is a fixed i18n label key. */
+export const DetailItemSchema = z.object({
+  key: z.string().min(1).max(40).optional(),
+  label: z.string().min(1).max(60).optional(),
+  value: z.string().min(1).max(320),
+})
+
+/** One section of a project's server-built full details. */
+export const DetailSectionSchema = z.object({
+  kind: z.enum(['quickFacts', 'pricesFees', 'topReasons', 'focusLists', 'other']),
+  title: z.string().min(1).max(80).optional(),
+  items: z.array(DetailItemSchema).max(30),
+})
+
+/** The server-built layouts and detail sections for one shortlisted project. */
 export const MatchSummarySchema = z.object({
   projectId: z.string().min(1),
-  layouts: z.array(SummaryLayoutSchema).max(6).default([]),
+  layouts: z.array(SummaryLayoutSchema).max(40).default([]),
+  /** Absent on a turn persisted before quick-kayinleong-107: decodes to []. */
+  sections: z.array(DetailSectionSchema).max(14).default([]),
 })
 
 /**
@@ -507,4 +523,5 @@ export type FinderRefusal = z.infer<typeof FinderRefusalSchema>
 export type CollateralItem = z.infer<typeof CollateralItemSchema>
 export type ProjectSheet = z.infer<typeof ProjectSheetSchema>
 export type MatchSummary = z.infer<typeof MatchSummarySchema>
+export type DetailSectionRow = z.infer<typeof DetailSectionSchema>
 export type SummaryLayoutRow = z.infer<typeof SummaryLayoutSchema>

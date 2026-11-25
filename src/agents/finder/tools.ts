@@ -228,10 +228,11 @@ function toFinderRow(m: ProjectMatch, locationPref: string | null): FinderRow {
   }
 }
 
-/** A match as the model sees it: no `layouts` (quick-kayinleong-106). */
-function withoutLayouts(m: ProjectMatch): Omit<ProjectMatch, 'layouts'> {
-  const { layouts: _layouts, ...rest } = m
+/** A match as the model sees it: no `layouts` (106), no `details` (107). */
+function withoutLayouts(m: ProjectMatch): Omit<ProjectMatch, 'layouts' | 'details'> {
+  const { layouts: _layouts, details: _details, ...rest } = m
   void _layouts
+  void _details
   return rest
 }
 
@@ -355,8 +356,12 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: Find
           sink.rows = enriched.matches.map((m) => toFinderRow(m, input.locationPref))
           sink.summaries = enriched.matches
             .slice(0, MAX_MATCHES)
-            .filter((m) => (m.layouts?.length ?? 0) > 0)
-            .map((m) => ({ projectId: m.projectId, layouts: m.layouts ?? [] }))
+            .filter((m) => (m.layouts?.length ?? 0) > 0 || (m.details?.length ?? 0) > 0)
+            .map((m) => ({
+              projectId: m.projectId,
+              layouts: m.layouts ?? [],
+              sections: m.details ?? [],
+            }))
         }
 
         return enriched
@@ -383,7 +388,7 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: Find
         return { type: 'json', value: output as unknown as JSONValue }
       }
       // quickFacts stays (the model writes "Best for" / "Key selling points" from it);
-      // layouts go: the SERVER shows those, and the model must not restate them
+      // layouts and details go: the SERVER shows those, and the model must not restate them
       // (quick-kayinleong-106).
       const bounded = {
         ...output,

@@ -117,7 +117,12 @@ export function MatchList({ output, onAsk, className }: MatchListProps) {
   // out like the Skool project page: PIC and WhatsApp group, then the quick facts, then
   // the project and marketing links. With several projects (a comparison), each project's
   // contacts and links go below the answer under its name.
-  if (answer) {
+  // A matches answer with a table wins over a stray `answer` (quick-kayinleong-107): the model
+  // sometimes adds a short note beside its matches ("Here are the top matches… nationality not
+  // confirmed"). The prompt says exactly one of the two, but losing the table and the
+  // per-project details for a note is the worse failure, so the note goes above the table.
+  const tableAnswer = matches.length > 0 && rows.length > 0
+  if (answer && !tableAnswer) {
     const sheets = output.projectSheets ?? []
     const single = sheets.length === 1 ? sheets[0] : null
     return (
@@ -157,6 +162,7 @@ export function MatchList({ output, onAsk, className }: MatchListProps) {
           data-state="matches"
           className={cn('flex w-full flex-col gap-3', className)}
         >
+          {answer && <MarkdownMessage content={answer} />}
           <MatchTable rows={rows} matches={matches} onAsk={onAsk} />
           {/* quick-kayinleong-106: the shortlist's summaries, right under the table. */}
           <MatchSummaries

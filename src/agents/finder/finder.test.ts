@@ -883,6 +883,11 @@ describe('Summary section of the prompt (quick-kayinleong-106)', () => {
     expect(prompt).toMatch(/OMIT that field/)
   })
 
+  it('says the system shows the full details itself, so the two fields stay short and do not repeat them (107)', () => {
+    expect(prompt).toMatch(/shows each project's full details itself/)
+    expect(prompt).toMatch(/never repeat those details in them/)
+  })
+
   it('keeps the 105 rule: no layouts, sizes, prices or budget fit in the summary fields', () => {
     expect(prompt).toMatch(/Do NOT write layouts, bedroom counts, sizes \(sqft\), prices, psf rates, fees or budget fit/)
     expect(prompt).toMatch(/No yield, rental-demand/)

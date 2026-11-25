@@ -560,7 +560,7 @@ export function attachProjectSheets(
  * model wrote into `summaries` (it is told not to) is replaced, so a layout, size or price
  * can only ever come from the stored `unitTypes`. Every server summary is kept (the top
  * table rows, in the server's order), also for a row the model left out of `matches`, and a
- * project with no layouts is dropped.
+ * project with neither layouts nor detail sections is dropped (quick-kayinleong-107).
  *
  * Pure. A no-op when `summaries` is undefined or empty, or the output has no matches, so an
  * older persisted turn renders exactly as before.
@@ -572,7 +572,7 @@ export function attachSummaries(
   if (!summaries || summaries.length === 0 || output.matches.length === 0) return output
   // Every summary the server built is kept (they are already the top table rows), not only
   // those the model wrote a match for: a row the model left out still shows its layouts.
-  const shown = summaries.filter((s) => s.layouts.length > 0)
+  const shown = summaries.filter((s) => s.layouts.length > 0 || s.sections.length > 0)
   if (shown.length === 0) return output
   return { ...output, summaries: shown.slice(0, 8) }
 }

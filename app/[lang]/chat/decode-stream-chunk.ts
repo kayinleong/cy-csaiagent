@@ -224,6 +224,7 @@ export function parseMessageMetadata(line: string): StreamMessageMetadata | null
         .map((s) => MatchSummarySchema.safeParse(s))
         .filter((s) => s.success)
         .map((s) => s.data)
+        .filter((s) => s.layouts.length > 0 || s.sections.length > 0)
       if (summaries.length > 0) out.summaries = summaries
     }
 

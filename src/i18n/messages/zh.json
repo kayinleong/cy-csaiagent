@@ -110,7 +110,29 @@
       "sqft": "平方尺",
       "bed": "房",
       "nett": "净价",
-      "gross": "毛价"
+      "gross": "毛价",
+      "details": {
+        "fullDetails": "完整详情",
+        "hide": "收起",
+        "show": "展开",
+        "quickFacts": "重点资料",
+        "layouts": "建筑面积与户型",
+        "pricesFees": "价格与费用",
+        "topReasons": "主要亮点",
+        "focusLists": "D2 重点清单",
+        "area": "区域",
+        "developer": "发展商",
+        "landTitle": "地契类别",
+        "tenure": "地契年限",
+        "totalUnits": "总单位数",
+        "floors": "楼层",
+        "completion": "完工",
+        "furnishing": "装修与家具",
+        "carPark": "车位",
+        "maintenanceFee": "管理费",
+        "fromPrice": "起价",
+        "psfRate": "每平方尺价格"
+      }
     },
     "refusal": {
       "nextStepsTitle": "下一步",

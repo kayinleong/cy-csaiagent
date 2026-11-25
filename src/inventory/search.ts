@@ -85,7 +85,8 @@
 import { projectsRef } from '@/src/firebase/collections'
 import type { PriceBand, ProjectDoc, UnitTypeEntry } from '@/src/firebase/collections'
 import { embedText } from '@/src/rag/embed'
-import { quickFactsExcerpt, summaryLayouts, type SummaryLayout } from './quick-facts'
+import { MAX_DETAIL_LAYOUTS, quickFactsExcerpt, summaryLayouts, type SummaryLayout } from './quick-facts'
+import { buildProjectDetails, type DetailSection } from './project-details'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -156,6 +157,12 @@ export interface ProjectMatch {
    * top-`MAX_MATCHES` rule. The model never sees these (`toModelOutput` strips them).
    */
   layouts?: SummaryLayout[]
+  /**
+   * The server-built full details (quick facts, prices & fees, other write-up sections,
+   * reasons, focus lists), top-`MAX_MATCHES` only. The model never sees these either
+   * (quick-kayinleong-107).
+   */
+  details?: DetailSection[]
   /**
    * Set only when a location preference was applied (quick-kayinleong-103). `nearby` means
    * the project passed the location gate but sits in another area that borders the
@@ -1343,14 +1350,19 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
 
 /** `quickFacts` / `layouts` for one shortlisted project; a field with nothing is left off. */
 function summaryFields(
-  doc: Pick<ProjectDoc, 'description' | 'unitTypes'>,
+  doc: Pick<
+    ProjectDoc,
+    'description' | 'unitTypes' | 'priceValue' | 'pricePsfMin' | 'pricePsfMax' | 'clientFacts'
+  >,
   bedrooms: number | null,
-): Pick<ProjectMatch, 'quickFacts' | 'layouts'> {
+): Pick<ProjectMatch, 'quickFacts' | 'layouts' | 'details'> {
   const quickFacts = quickFactsExcerpt(doc.description)
-  const layouts = summaryLayouts(doc.unitTypes, bedrooms)
+  const layouts = summaryLayouts(doc.unitTypes, bedrooms, MAX_DETAIL_LAYOUTS)
+  const details = buildProjectDetails(doc)
   return {
     ...(quickFacts ? { quickFacts } : {}),
     ...(layouts.length > 0 ? { layouts } : {}),
+    ...(details.length > 0 ? { details } : {}),
   }
 }
 

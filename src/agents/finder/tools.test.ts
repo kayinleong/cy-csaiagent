@@ -425,12 +425,16 @@ describe('searchProjects tool: summaries (quick-kayinleong-106)', () => {
     soldOut: false,
   }
 
+  const DETAILS = { kind: 'quickFacts' as const, items: [{ key: 'developer', value: 'Test Developer Sdn Bhd' }] }
+
   /** The first MAX_MATCHES matches carry quickFacts + layouts, like the real mapper. */
   const RESULT: SearchResult = {
     found: true,
     matches: Array.from({ length: ROW_COUNT }, (_, i) => ({
       ...makeMatch(i),
-      ...(i < MAX_MATCHES ? { quickFacts: `Quick Facts:\nTitle: Freehold ${i}`, layouts: [LAYOUT] } : {}),
+      ...(i < MAX_MATCHES
+        ? { quickFacts: `Quick Facts:\nTitle: Freehold ${i}`, layouts: [LAYOUT], details: [DETAILS] }
+        : {}),
     })),
   }
 
@@ -440,7 +444,7 @@ describe('searchProjects tool: summaries (quick-kayinleong-106)', () => {
     mocks.mockCollateralGet.mockResolvedValue({ empty: true, docs: [] })
   })
 
-  it("the model's view carries quickFacts for the shortlist and never the layouts", async () => {
+  it("the model's view carries quickFacts for the shortlist and never the layouts or details", async () => {
     const { tool: t, output } = await runTool(RESULT)
     const toModelOutput = t.toModelOutput as NonNullable<typeof t.toModelOutput>
     const view = toModelOutput(output as never) as unknown as {
@@ -450,21 +454,27 @@ describe('searchProjects tool: summaries (quick-kayinleong-106)', () => {
     for (const m of view.value.matches) {
       expect(typeof m.quickFacts).toBe('string')
       expect('layouts' in m).toBe(false)
+      expect('details' in m).toBe(false)
     }
     // The raw tool output still has them: the sink is built from it.
     expect(JSON.stringify(output)).toContain('"layouts"')
+    expect(JSON.stringify(output)).toContain('"details"')
   })
 
   it('the sink gets the layouts of the shortlist only, in rank order, and no description', async () => {
     const sink: FinderRowSink = { rows: [] }
     await runTool(RESULT, sink)
     expect(sink.summaries).toHaveLength(MAX_MATCHES)
-    expect(sink.summaries?.[0]).toEqual({ projectId: 'proj-0', layouts: [LAYOUT] })
+    expect(sink.summaries?.[0]).toEqual({ projectId: 'proj-0', layouts: [LAYOUT], sections: [DETAILS] })
     expect(sink.summaries?.map((s) => s.projectId)).toEqual(
       Array.from({ length: MAX_MATCHES }, (_, i) => `proj-${i}`),
     )
-    expect(JSON.stringify(sink.summaries)).not.toContain('quickFacts')
-    // A match with no layouts has no summary entry.
+    expect(JSON.stringify(sink.summaries)).not.toContain('Quick Facts:')
+    // A match with neither layouts nor details has no summary entry; details alone is enough.
+    const only = { ...makeMatch(0), details: [DETAILS] }
+    const sink3: FinderRowSink = { rows: [] }
+    await runTool({ found: true, matches: [only] }, sink3)
+    expect(sink3.summaries).toEqual([{ projectId: 'proj-0', layouts: [], sections: [DETAILS] }])
     const sink2: FinderRowSink = { rows: [] }
     await runTool(BIG_RESULT, sink2)
     expect(sink2.summaries).toEqual([])
@@ -482,6 +492,7 @@ describe('searchProjects tool: summaries (quick-kayinleong-106)', () => {
     await runTool(RESULT, sink)
     expect('quickFacts' in sink.rows[0]).toBe(false)
     expect('layouts' in sink.rows[0]).toBe(false)
+    expect('details' in sink.rows[0]).toBe(false)
     expect(Object.keys(sink.rows[0]).length).toBeLessThanOrEqual(14)
   })
 })
