@@ -142,7 +142,12 @@ def scrub_developer(text):
 
 # ---------------------------------------------------------------- unit parsing
 
-_LABEL_TYPE = re.compile(r"Type\s+[A-Z][A-Za-z0-9]*(?:-[A-Z0-9]+)?(?:\s*&\s*[A-Z][A-Za-z0-9]*)?")
+# quick-kayinleong-106 (25 Nov sheet): a letter-first code can name alternates ("Type B/B1",
+# "Type C2/C2A", Lunar Seputeh) and a corner unit is its own layout ("Type A corner",
+# Sentral Suites). Both used to be cut to the first code, so "Type A corner" collided with
+# "Type A" and "Type B/B1" could never match a stored "Type B1 / B1A".
+_LABEL_TYPE = re.compile(r"Type\s+[A-Z][A-Za-z0-9]*(?:-[A-Z0-9]+)?(?:\s*/\s*[A-Z][A-Za-z0-9]*)*"
+                         r"(?:\s*&\s*[A-Z][A-Za-z0-9]*)?(?:\s+[Cc]orner\b)?")
 _LABEL_CODE = re.compile(r"[A-Z]{1,3}\d+[a-z]?")
 # quick-kayinleong-105: a digit-first type code ("Type 1A", "Type 2B/2B1", Bangsar Hill Park in the
 # 21 Nov sheet). At least one letter must follow the digits, so "Type 1 Bedroom" is not a code.
@@ -305,6 +310,9 @@ def classify_price_cell(cell):
     return ("total", lo, hi, None)
 
 
+_SOLD_OUT_NOTE = re.compile(r"\(\s*sold\s*out\s*\)", re.I)
+
+
 def build_unit(row, size_cell, rooms_cell, nett_cell, gross_cell):
     """Build one unit from the four unit cells.
 
@@ -334,7 +342,9 @@ def build_unit(row, size_cell, rooms_cell, nett_cell, gross_cell):
 
     nk, nlo, nhi, nreason = classify_price_cell(nett_cell)
     gk, glo, ghi, greason = classify_price_cell(gross_cell)
-    sold_out = nk == "sold_out" or gk == "sold_out"
+    # quick-kayinleong-106: the 25 Nov sheet marks some layouts "(sold out)" in the Size cell
+    # with the price cells blank (Sentral Suites Types C, C corner and D).
+    sold_out = nk == "sold_out" or gk == "sold_out" or bool(_SOLD_OUT_NOTE.search(size_t or ""))
 
     nett_min = nett_max = gross_min = gross_max = psf = None
     if not sold_out:

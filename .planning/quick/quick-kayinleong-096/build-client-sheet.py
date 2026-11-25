@@ -165,6 +165,25 @@ def group_rows(rows):
         if len(reasons) > (0 if blank(first[top]) else 1):
             rows[0] = (first_rn, first[:top] + ("\n".join(reasons),) + first[top + 1:])
         g["rows"] = rows
+    # quick-kayinleong-106: the 25 Nov sheet lists "Car Park Allocation" per layout, down the
+    # unit rows (Lunar Seputeh: "2 carpark" beside each type; Sentral Suites: a second line).
+    # Those are joined with "; ", in row order, onto the project row. A value that does not
+    # say which units it is for ("2 carpark") gets that row's unit label in front, so it keeps
+    # its layout; one that names a type or a room count is kept as written.
+    car = HEADERS_16.index("Car Park Allocation")
+    for g in groups:
+        if not any(not blank(cells[car]) for _, cells in g["rows"][1:]):
+            continue
+        parts = []
+        rows = []
+        for rn, cells in g["rows"]:
+            if not blank(cells[car]):
+                parts.append(car_park_part(cells))
+                cells = cells[:car] + (None,) + cells[car + 1:]
+            rows.append((rn, cells))
+        first_rn, first = rows[0]
+        rows[0] = (first_rn, first[:car] + ("; ".join(parts),) + first[car + 1:])
+        g["rows"] = rows
     for g in groups:
         for rn, cells in g["rows"][1:]:
             for k in list(range(5, 16)):
@@ -174,14 +193,41 @@ def group_rows(rows):
     return groups, ignored
 
 
+_NAMES_UNITS = re.compile(r"\btype\b|\broom|\bbed|\bstudio|\bdual\s*key|\bpenthouse", re.I)
+
+
+def car_park_part(cells):
+    """One row's car park value for the joined project cell (quick-kayinleong-106)."""
+    value = w.collapse(cells[HEADERS_16.index("Car Park Allocation")])
+    label = w.parse_label(w.collapse(cells[1])) if not blank(cells[1]) else None
+    if label and not _NAMES_UNITS.search(value):
+        return "%s: %s" % (label, value)
+    return value
+
+
 def unit_rows_of(g):
     return [(rn, c) for rn, c in g["rows"] if any(not blank(c[k]) for k in (1, 2, 3, 4))]
 
 
-def parse_sheet1(lines):
-    """Sheet1 -> ordered list of (heading, project name). A heading is an exact match."""
+def parse_sheet1(lines, untitled_heading=None):
+    """Sheet1 -> ordered list of (heading, project name). A heading is an exact match.
+
+    untitled_heading (quick-kayinleong-106): the 25 Nov sheet lost its first heading (cell A1
+    is blank) but kept the six names under it. When given, names before the first heading
+    belong to this heading. It must be a known heading that does not appear later in Sheet1,
+    and the sheet must really start with names; otherwise the workbook is refused.
+    """
     out = []
     heading = None
+    if untitled_heading is not None:
+        if untitled_heading not in w.SHEET1_HEADINGS:
+            raise BuildError("--sheet1-untitled-heading is not a known Sheet1 heading")
+        if untitled_heading in lines:
+            raise BuildError("--sheet1-untitled-heading is already a heading in Sheet1")
+        first = next((t for t in lines if t), None)
+        if first is None or first in w.SHEET1_HEADINGS:
+            raise BuildError("--sheet1-untitled-heading given, but Sheet1 does not start with names")
+        heading = untitled_heading
     for text in lines:
         if not text:
             continue
@@ -610,13 +656,14 @@ def render_held_back(ctx):
 
 
 def build_all(workbook, export, import_date=IMPORT_DATE, regen_mapping=False,
-              expected_sha=EXPECTED_WORKBOOK_SHA256, mapping_path=None, skipped_new=SKIPPED_NEW):
+              expected_sha=EXPECTED_WORKBOOK_SHA256, mapping_path=None, skipped_new=SKIPPED_NEW,
+              sheet1_untitled_heading=None):
     """Build every output in memory. Returns (files, stats) where files maps a path
     relative to the output dir to bytes."""
     mapping_path = Path(mapping_path) if mapping_path else HERE / "project-mapping.json"
     data = load_workbook_data(workbook, expected_sha)
     groups, ignored = group_rows(data["rows"])
-    sheet1_pairs = parse_sheet1(data["sheet1"])
+    sheet1_pairs = parse_sheet1(data["sheet1"], sheet1_untitled_heading)
     recs, exported_at = load_export(export)
     by_name = dict((r["name"], r) for r in recs)
 
@@ -857,6 +904,9 @@ def main(argv=None):
     ap.add_argument("--skipped-new", default=None,
                     help="comma-separated sheet names reviewed as new (not in the inventory); "
                          "'' for none. Default: the 096 list.")
+    ap.add_argument("--sheet1-untitled-heading", default=None,
+                    help="the known Sheet1 heading for names listed before any heading "
+                         "(quick-kayinleong-106: the 25 Nov sheet's blank A1)")
     args = ap.parse_args(argv)
     if args.source_label is not None:
         if not args.source_label.strip() or w.scan_contact_details(args.source_label):
@@ -868,7 +918,8 @@ def main(argv=None):
     try:
         files, stats = build_all(args.workbook, args.export, args.import_date, args.regen_mapping,
                                  args.workbook_sha256, mapping_path=out_dir / "project-mapping.json",
-                                 skipped_new=skipped_new)
+                                 skipped_new=skipped_new,
+                                 sheet1_untitled_heading=args.sheet1_untitled_heading)
     except (BuildError, w.MappingError) as e:
         print("BUILD FAILED: %s" % e, file=sys.stderr)
         return 1
