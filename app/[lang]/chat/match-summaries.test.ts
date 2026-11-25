@@ -302,6 +302,36 @@ describe('match-summaries i18n', () => {
 
 // ─── real render ──────────────────────────────────────────────────────────────
 
+describe('MatchTable rows tap to open (quick-kayinleong-109)', () => {
+  it('a row with details is tappable and shows the chevron; a row without is not', async () => {
+    const { MatchTable } = await import('./match-table')
+    const html = renderToStaticMarkup(
+      createElement(
+        NextIntlClientProvider,
+        { locale: 'en', messages: en as never } as never,
+        createElement(MatchTable, {
+          rows: [row('a', { name: 'With Details' }), row('b', { name: 'Old Turn Row' })],
+          matches: [match('a'), match('b')],
+          summaries: [{ projectId: 'a', layouts: [layout()], sections: [] }],
+          onAsk: () => {},
+        }),
+      ),
+    )
+    const startA = html.lastIndexOf('<tr', html.indexOf('data-project-id="a"'))
+    const startB = html.lastIndexOf('<tr', html.indexOf('data-project-id="b"'))
+    const rowA = html.slice(startA, startB)
+    const rowB = html.slice(startB)
+    expect(rowA).toContain('data-expandable="true"')
+    expect(rowA).toContain('cursor-pointer')
+    expect(rowA).toContain('data-slot="match-row-chevron"')
+    expect(rowB).not.toContain('data-expandable')
+    expect(rowB).not.toContain('match-row-chevron')
+    // The name is still there in full, and nothing is open by default.
+    expect(html).toContain('With Details')
+    expect(html).not.toContain('data-slot="match-table-details"')
+  })
+})
+
 describe('MatchList: matches with a stray answer note (quick-kayinleong-107)', () => {
   it('keeps the table and the details, with the note above them', async () => {
     const { MatchList } = await import('./match-list')

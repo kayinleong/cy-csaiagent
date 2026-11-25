@@ -14,7 +14,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { formatPrice, formatSize, handleDetailsClick, toggleOpen } from './match-table'
+import { formatPrice, formatSize, handleDetailsClick, rowClickToggles, toggleOpen } from './match-table'
 import { GROUP_PAGE_SIZE } from './match-summaries'
 
 import en from '@/src/i18n/messages/en.json'
@@ -374,5 +374,22 @@ describe('the Details button toggles inline and only asks when there are no deta
     expect(TABLE).toContain('colSpan={COLUMN_COUNT}')
     expect(TABLE).toContain('@container')
     expect(TABLE).toContain('sticky left-0 box-border w-[100cqw] max-w-[100cqw]')
+  })
+})
+
+describe('a tap on the row opens its details (quick-kayinleong-109)', () => {
+  it('toggles only a row with details, not from a control inside it, not while selecting text', () => {
+    expect(rowClickToggles({ inline: true, fromControl: false, hasSelection: false })).toBe(true)
+    // An older persisted turn: a row tap must never start an AI turn.
+    expect(rowClickToggles({ inline: false, fromControl: false, hasSelection: false })).toBe(false)
+    // The Details button handles its own click; counting it again would close what it opened.
+    expect(rowClickToggles({ inline: true, fromControl: true, hasSelection: false })).toBe(false)
+    expect(rowClickToggles({ inline: true, fromControl: false, hasSelection: true })).toBe(false)
+  })
+
+  it('the row handler skips clicks that come from a control', () => {
+    const SRC = readFileSync(new URL('./match-table.tsx', import.meta.url), 'utf8')
+    expect(SRC).toMatch(/closest\(ROW_CONTROL_SELECTOR\)/)
+    expect(SRC).toMatch(/ROW_CONTROL_SELECTOR = 'button, a, input, select, textarea, \[role="button"\]'/)
   })
 })

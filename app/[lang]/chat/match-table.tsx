@@ -20,6 +20,7 @@
 
 import { Fragment, useId, useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -75,6 +76,21 @@ export function handleDetailsClick(
   if (inline) toggle()
   else ask?.()
 }
+
+/**
+ * Does a tap on a table row toggle its Details panel (quick-kayinleong-109)? On a phone the
+ * Details button sits off-screen to the right of a sideways-scrolling table, so the whole row
+ * opens the panel. Not when the row has no server details (an older persisted turn: tapping
+ * a row must never start an AI turn), not when the tap landed on a control inside the row
+ * (the Details button handles its own click, so the row would toggle it twice), and not
+ * when the user was selecting text to copy.
+ */
+export function rowClickToggles(args: { inline: boolean; fromControl: boolean; hasSelection: boolean }): boolean {
+  return args.inline && !args.fromControl && !args.hasSelection
+}
+
+/** Interactive elements whose own click must not also count as a row tap. */
+const ROW_CONTROL_SELECTOR = 'button, a, input, select, textarea, [role="button"]'
 
 /** Toggle one project id in the set of open Details panels (a new Set; several may be open). */
 export function toggleOpen(open: ReadonlySet<string>, id: string): Set<string> {
@@ -254,6 +270,23 @@ export function MatchTable({ rows, matches, summaries, heading, onAsk, className
                 <TableRow
                   data-project-id={row.projectId}
                   data-location-match={row.locationMatch}
+                  data-expandable={inline ? 'true' : undefined}
+                  className={cn(inline && 'cursor-pointer')}
+                  // quick-kayinleong-109: tapping anywhere on the row opens or closes its
+                  // details. Pointer only; keyboard and screen-reader users have the Details
+                  // button, which keeps aria-expanded.
+                  onClick={
+                    inline
+                      ? (e) => {
+                          const target = e.target as HTMLElement | null
+                          const fromControl = !!target?.closest(ROW_CONTROL_SELECTOR)
+                          const hasSelection = (window.getSelection?.()?.toString() ?? '').length > 0
+                          if (rowClickToggles({ inline, fromControl, hasSelection })) {
+                            setOpen((prev) => toggleOpen(prev, row.projectId))
+                          }
+                        }
+                      : undefined
+                  }
                 >
                   {/* WRAPS, never truncates (quick-kayinleong-103): the agent reads the name
                       out to a lead, and "The Cedar Damansara H…" cannot be read out. The
@@ -262,7 +295,20 @@ export function MatchTable({ rows, matches, summaries, heading, onAsk, className
                     className="sticky left-0 z-10 min-w-[9rem] max-w-[13rem] whitespace-normal break-words bg-background font-medium shadow-[1px_0_0_0_var(--color-border)]"
                     title={`${row.name} (${row.projectId})`}
                   >
-                    {row.name}
+                    <span className="flex items-start gap-1">
+                      {inline && (
+                        // A tap cue that stays in view (the name column is sticky).
+                        <ChevronRight
+                          aria-hidden="true"
+                          data-slot="match-row-chevron"
+                          className={cn(
+                            'mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform',
+                            isOpen && 'rotate-90',
+                          )}
+                        />
+                      )}
+                      <span>{row.name}</span>
+                    </span>
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     {price ?? (
