@@ -288,6 +288,13 @@ export interface ProjectDoc {
    */
   area?: string
   /**
+   * The project-level facts of the client project info sheet, verbatim (quick-kayinleong-107):
+   * the values D2's own workbook states, already contact-scanned by the builder. Only stated
+   * values are stored; a blank sheet cell never clears one. The Finder's per-project details
+   * under the result table read them as the authority over the write-up. Not an embedding field.
+   */
+  clientFacts?: ClientFacts
+  /**
    * Number of bedrooms. Feeds the embedding-text composer and enables
    * structured bedroom-count filtering in `queryInventory` (FIND-07).
    */
@@ -436,6 +443,28 @@ export type ClientWorkbookField =
   | 'vpStatus'
   | 'vpDate'
   | 'area'
+  | 'clientFacts'
+
+/**
+ * The client project info sheet's project-level facts (quick-kayinleong-107). Every value is
+ * the sheet cell as the builder gated it; a key is absent when the sheet does not state it.
+ */
+export interface ClientFacts {
+  area?: string
+  developer?: string
+  landTitle?: string
+  tenure?: string
+  maintenanceFee?: string
+  totalUnits?: string
+  floors?: string
+  completion?: string
+  /** One reason per line, as the sheet lists them. */
+  topReasons?: string
+  furnishing?: string
+  carPark?: string
+  /** The D2 focus lists (Sheet1 headings) the project appears under. */
+  focusLists?: string[]
+}
 
 /**
  * One layout a project offers (quick-kayinleong-088).

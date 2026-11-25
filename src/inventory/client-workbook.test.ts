@@ -1121,6 +1121,50 @@ describe('area (R8b, quick-kayinleong-104)', () => {
   })
 })
 
+describe('clientFacts (R8c, quick-kayinleong-107)', () => {
+  const noFacts = project({}).facts
+  const withFacts = (facts: Partial<SheetProject['facts']>, focusLists: string[] = []) =>
+    project({ docId: 'F1', facts: { ...noFacts, ...facts }, focusLists })
+
+  it('writes the stated facts and focus lists, marks the field, and never re-embeds', () => {
+    const p = plan({ locationText: 'KL Sentral' }, withFacts({ developer: ' MRCB ', carPark: '1 carpark', furnishing: null }, ['TOP PERFORMING PROJECTS IN 2026']))
+    expect(p.patch.clientFacts).toEqual({ developer: 'MRCB', carPark: '1 carpark', focusLists: ['TOP PERFORMING PROJECTS IN 2026'] })
+    expect(p.asserted).toContain('clientFacts')
+    expect(p.patch.clientWorkbookFields).toContain('clientFacts')
+    expect(p.reembed).toBe(false)
+  })
+
+  it('a blank cell keeps the stored fact (D4); a changed cell replaces it', () => {
+    const existing = { clientFacts: { developer: 'MRCB', tenure: 'Freehold', carPark: '1 carpark' } }
+    const p = plan(existing, withFacts({ carPark: '2 carpark' }))
+    expect(p.patch.clientFacts).toEqual({ developer: 'MRCB', tenure: 'Freehold', carPark: '2 carpark' })
+  })
+
+  it('the focus lists follow Sheet1 exactly: an empty list removes them', () => {
+    const existing = { clientFacts: { developer: 'MRCB', focusLists: ['HIGH TICKET SUBSALE'] } }
+    expect(plan(existing, withFacts({})).patch.clientFacts).toEqual({ developer: 'MRCB' })
+    expect(plan(existing, withFacts({}, ['TOP PROJECTS IN 2026 TO CROSS-SELL'])).patch.clientFacts)
+      .toEqual({ developer: 'MRCB', focusLists: ['TOP PROJECTS IN 2026 TO CROSS-SELL'] })
+  })
+
+  it('unchanged facts plan no write, whatever the key order', () => {
+    const existing = { clientFacts: { carPark: '1 carpark', developer: 'MRCB' }, clientWorkbookFields: ['clientFacts'] }
+    const p = plan(existing, withFacts({ developer: 'MRCB', carPark: '1 carpark' }))
+    expect(p.patch).not.toHaveProperty('clientFacts')
+    expect(p.changes).toEqual([])
+  })
+
+  it('a project the sheet states nothing for gets no clientFacts', () => {
+    expect(plan({}, withFacts({})).patch).not.toHaveProperty('clientFacts')
+  })
+
+  it('clientFactsFromSheet keeps every column in sheet order and drops blanks', async () => {
+    const { clientFactsFromSheet } = await import('@/src/inventory/client-workbook')
+    const all = withFacts({ area: 'A', developer: 'D', landTitle: 'L', tenure: 'T', maintenanceFee: 'M', totalUnits: 'U', floors: 'F', completion: 'C', topReasons: '1. x\n2. y', furnishing: '  ', carPark: 'P' })
+    expect(Object.keys(clientFactsFromSheet(all))).toEqual(['area', 'developer', 'landTitle', 'tenure', 'maintenanceFee', 'totalUnits', 'floors', 'completion', 'topReasons', 'carPark'])
+  })
+})
+
 describe('gross price per layout (quick-kayinleong-104)', () => {
   const gross = (over: Partial<SheetUnit>) =>
     unit({ label: 'Type A3', sizeSqft: 1194, bedrooms: 1, nettMinRM: 1_360_000, nettMaxRM: 1_460_000, grossMinRM: 2_000_000, grossMaxRM: 2_100_000, ...over })

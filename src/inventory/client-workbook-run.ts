@@ -521,10 +521,20 @@ function summarizeUnits(list: unknown[]): string {
   return `${list.length} ${list.length === 1 ? 'entry' : 'entries'} (${priced} priced${sold > 0 ? `, ${sold} sold out` : ''})`
 }
 
+/** `clientFacts` as the keys it states (quick-kayinleong-107); the values are in the fact sheets. */
+function summarizeFacts(facts: Record<string, unknown>): string {
+  const keys = Object.keys(facts).filter((k) => facts[k] !== undefined)
+  if (keys.length === 0) return '(empty)'
+  const lists = Array.isArray(facts.focusLists) ? facts.focusLists.length : 0
+  const named = keys.filter((k) => k !== 'focusLists')
+  return `${named.length} ${named.length === 1 ? 'fact' : 'facts'}${lists > 0 ? ` + ${lists} focus ${lists === 1 ? 'list' : 'lists'}` : ''} (${named.join(', ')})`
+}
+
 function fmtCell(field: string, v: unknown): string {
   if (v === DELETE_FIELD) return '(removed)'
   if (v === null || v === undefined) return '(not set)'
   if (field === 'unitTypes' && Array.isArray(v)) return summarizeUnits(v)
+  if (field === 'clientFacts' && typeof v === 'object' && !Array.isArray(v)) return summarizeFacts(v as Record<string, unknown>)
   const ms = millisOf(v)
   if (ms !== null) {
     const iso = new Date(ms).toISOString()
