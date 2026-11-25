@@ -27,6 +27,10 @@
 
 import { createHash } from 'crypto'
 
+// scrubPdpaTokens lives in its own crypto-free module so client components can import it
+// without pulling node:crypto into the browser bundle. Re-exported here for callers.
+export { scrubPdpaTokens } from './scrub'
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface PseudonymizeInput {
@@ -90,11 +94,59 @@ const IC_REGEX = /\b\d{6}-\d{2}-\d{4}\b/g
 const EMAIL_REGEX = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g
 
 /**
- * RM-prefixed financial figure — RM6000, RM 6,000, RM6k, RM 6,000.50,
- * RM2juta, RM3 million. Captures income/budget figures a lead discloses.
- * Word-bounded suffixes (k/K/juta/million/mil/ribu) are optional.
+ * RM-prefixed financial figure, case-insensitive: RM6000, RM 6,000, RM650,000.00,
+ * RM1.5mil, RM1.5MIL, rm1.5mil, RM1.5 juta, RM2million, RM800k, RM 800 k, RM1.2M, RM1.5bil,
+ * RM3.5k psf. The WHOLE figure is consumed including its suffix: letters glued to the number
+ * are always swallowed (fails closed), and a spaced suffix is only taken from a known list.
+ * No digit of an RM figure may be left outside the token (the old case-sensitive suffix
+ * backtracked and leaked "<FIN_HASH>.5MIL").
  */
-const FINANCIAL_REGEX = /\bRM\s?\d[\d,]*(?:\.\d{1,2})?(?:\s?(?:k|K|juta|million|mil|ribu))?\b/g
+const FINANCIAL_REGEX =
+  /\bRM\s?\d[\d,]*(?:\.\d+)?(?:[a-z]+|\s(?:k|m|mil|mill|million|b|bil|billion|juta|ribu|psf)\b)?/gi
+
+/** How RM figures are treated. 'all' = mask every one; 'non-budget' = mask only income-like ones. */
+export type FinancialMode = 'all' | 'non-budget'
+
+export interface PseudonymizeOptions {
+  /** Default 'all'. 'non-budget' is for the Property Finder only (see pseudonymize). */
+  financial?: FinancialMode
+}
+
+/** Income / loan / bank cues (EN, BM, ZH). */
+const INCOME_CUE =
+  /\b(?:income|salary|earn(?:s|ing|ed)?|pay|gaji|pendapatan|commitments?|loan|pinjaman|instal+ments?|ansuran|savings?|simpanan|epf|kwsp|bank)\b|收入|月薪|工资|薪水|贷款|存款|银行/gi
+/** Budget / price cues (EN, BM, ZH). */
+const BUDGET_CUE =
+  /\b(?:budget|bajet|price|harga|under|below|max|maximum|up to|around|between|range|afford|cap)\b|预算|价格|以下|以内|左右/gi
+/** A per-month marker directly after a figure means a salary/instalment, not a property price. */
+const PER_MONTH_AFTER =
+  /^\s*(?:\/\s?(?:month|mo|bulan|mth)\b|\/月|(?:a|per|each|every)\s+month\b|monthly\b|bulanan|sebulan|setiap\s+bulan|每月|每个月|一个月)/i
+/** How far back (chars) to look for a cue. */
+const CUE_WINDOW = 40
+
+/** Position of the last match of a (global) cue regex inside `text`, or -1. */
+function lastCueIndex(cue: RegExp, text: string): number {
+  let last = -1
+  for (const m of text.matchAll(cue)) last = m.index ?? -1
+  return last
+}
+
+/**
+ * Does the RM figure at `offset` read as income / loan / bank money?
+ * Rules (kept deliberately simple, fail-closed on ties):
+ *   1. Followed by a per-month marker ("/month", "a month", "monthly", "sebulan", 每月…) -> income.
+ *   2. Otherwise look at the CUE_WINDOW chars before it. Whichever of the income cues or the
+ *      budget cues is NEAREST wins; an income cue with no budget cue at all -> income.
+ *   3. No cue at all -> not income (a bare "RM1.5mil-RM2.5mil" is a budget).
+ */
+function looksLikeIncome(text: string, offset: number, matchLen: number): boolean {
+  if (PER_MONTH_AFTER.test(text.slice(offset + matchLen))) return true
+  const before = text.slice(Math.max(0, offset - CUE_WINDOW), offset)
+  const inc = lastCueIndex(INCOME_CUE, before)
+  if (inc < 0) return false
+  const bud = lastCueIndex(BUDGET_CUE, before)
+  return inc > bud
+}
 
 /**
  * Hash a string value with sha256 and return the first 12 hex chars.
@@ -169,10 +221,16 @@ function replaceEmail(text: string, mapping: Map<string, string>): string {
  * Token: <FIN_HASH:hexchars>. Runs LAST in redactText so RM-amounts embedded inside
  * an already-emitted token are not re-processed. Mirrors replacePhones.
  */
-function replaceFinancial(text: string, mapping: Map<string, string>): string {
-  return text.replace(FINANCIAL_REGEX, (match) => {
+function replaceFinancial(
+  text: string,
+  mapping: Map<string, string>,
+  mode: FinancialMode = 'all',
+): string {
+  return text.replace(FINANCIAL_REGEX, (match, offset: number) => {
     // Skip strings that are already a replacement token
     if (match.startsWith('<')) return match
+    // Finder only: a property budget/price passes verbatim; income-like figures stay masked.
+    if (mode === 'non-budget' && !looksLikeIncome(text, offset, match.length)) return match
     const token = `<FIN_HASH:${hashValue(match)}>`
     mapping.set(token, match)
     return token
@@ -218,12 +276,13 @@ function redactText(
   names: string[],
   nameIndexMap: Map<string, number>,
   mapping: Map<string, string>,
+  financial: FinancialMode = 'all',
 ): string {
   let result = replaceNames(text, names, nameIndexMap, mapping)
   result = replacePhones(result, mapping)
   result = replaceIC(result, mapping)
   result = replaceEmail(result, mapping)
-  result = replaceFinancial(result, mapping)
+  result = replaceFinancial(result, mapping, financial)
   return result
 }
 
@@ -243,23 +302,36 @@ function redactText(
  * @param input   The prompt payload (system, messages, context).
  * @param names   Known lead names to replace. Pass [] if no names are known.
  *                Caller is responsible for providing names from the lead record.
+ * @param opts    `financial`: 'all' (default, every existing caller) masks every RM figure.
+ *                'non-budget' (Property Finder only) leaves an RM figure verbatim unless it
+ *                reads as income/salary/loan/bank: the nearest cue in the 40 chars before it
+ *                is an income cue (income, salary, earn, pay, gaji, pendapatan, loan,
+ *                pinjaman, bank, 收入, 月薪, 工资, 薪水, 贷款…) rather than a budget cue
+ *                (budget, bajet, under, up to, 预算…), or it is followed by a per-month
+ *                marker (/month, a month, monthly, sebulan, 每月, 一个月…). Names, phones, IC
+ *                and emails are ALWAYS masked in both modes.
  * @returns       { redacted, pdpa_redacted: true, mapping }
  */
-export function pseudonymize(input: PseudonymizeInput, names: string[]): PseudonymizeResult {
+export function pseudonymize(
+  input: PseudonymizeInput,
+  names: string[],
+  opts: PseudonymizeOptions = {},
+): PseudonymizeResult {
+  const financial: FinancialMode = opts.financial ?? 'all'
   const mapping = new Map<string, string>()
   const nameIndexMap = new Map<string, number>()
 
   const redactedMessages = input.messages.map((msg) => ({
     ...msg,
-    content: redactText(msg.content, names, nameIndexMap, mapping),
+    content: redactText(msg.content, names, nameIndexMap, mapping, financial),
   }))
 
   const redactedSystem = input.system
-    ? redactText(input.system, names, nameIndexMap, mapping)
+    ? redactText(input.system, names, nameIndexMap, mapping, financial)
     : undefined
 
   const redactedContext = input.context
-    ? redactText(input.context, names, nameIndexMap, mapping)
+    ? redactText(input.context, names, nameIndexMap, mapping, financial)
     : undefined
 
   const redacted: PseudonymizeInput = {

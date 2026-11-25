@@ -37,6 +37,7 @@
     "copied": "Disalin!",
     "rateLimit": "Anda telah mencapai had sejam. Sila tunggu beberapa minit.",
     "error": "Berlaku ralat. Sila cuba lagi.",
+    "hiddenAmount": "[disembunyikan]",
     "replyDraft": {
       "incomingLabel": "Mesej masuk",
       "sourcesLabel": "Sumber:",

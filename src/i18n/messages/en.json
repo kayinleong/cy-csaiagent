@@ -35,6 +35,7 @@
     "copied": "Copied!",
     "rateLimit": "You've reached your hourly limit. Please wait a few minutes.",
     "error": "Something went wrong. Please try again.",
+    "hiddenAmount": "[hidden]",
     "replyDraft": {
       "incomingLabel": "Incoming message",
       "sourcesLabel": "Sources:",

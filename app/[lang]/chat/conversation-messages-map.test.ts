@@ -133,3 +133,21 @@ describe('quick-050: structured output on history-loaded turns', () => {
     expect(msg.content).toBe('not json at all')
   })
 })
+
+describe('mapConversationMessages — PDPA token scrub (quick-kayinleong-106)', () => {
+  const rec = (content: string): RawMessageRecord => ({
+    id: 'a', role: 'assistant', content, createdAt: new Date(1),
+  })
+
+  it('scrubs FIN/IC/EMAIL/PHONE tokens from a persisted assistant row', () => {
+    const [m] = mapConversationMessages([
+      rec('Budget <FIN_HASH:0123456789ab> <IC_HASH:0123456789ab> <EMAIL_HASH:0123456789ab> <PHONE_HASH:0123456789ab>'),
+    ])
+    expect(m.content).toBe('Budget [hidden] [hidden] [hidden] [hidden]')
+  })
+
+  it('preserves <LEAD_ID:n> and uses the supplied localized label', () => {
+    const [m] = mapConversationMessages([rec('<LEAD_ID:2> <FIN_HASH:0123456789ab>')], '[已隐藏]')
+    expect(m.content).toBe('<LEAD_ID:2> [已隐藏]')
+  })
+})

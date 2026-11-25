@@ -2166,3 +2166,63 @@ describe('quick-070: onChunk checkpoints the reply mid-generation', () => {
     expect(last).toContain('B'.repeat(700))
   })
 })
+
+// ─── quick-kayinleong-106: Finder reads the property budget; everything else stays masked ───
+
+describe('quick-106: Finder budget carve-out (real pseudonymize)', () => {
+  /** Wire the mocked gate to the REAL pseudonymize, then POST one turn routed to `pillar`. */
+  async function sentToModel(pillar: 'finder' | 'reply' | 'coach', content: string, extra: object = {}) {
+    const actual = await vi.importActual<typeof import('@/src/audit/pdpa')>('@/src/audit/pdpa')
+    mocks.mockPseudonymize.mockImplementation(actual.pseudonymize)
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar, reason: `heuristic-${pillar}:test` })
+    await POST(buildRequest({ messages: [{ role: 'user', content }], cid: 'c-106', ...extra }))
+    const args = mocks.mockStreamText.mock.calls.at(-1)?.[0] as {
+      messages: Array<{ content: string }>
+    }
+    return args.messages.map((m) => m.content).join('\n')
+  }
+
+  it('Finder turn sends RM1.5mil-RM2.5mil to streamText unmasked', async () => {
+    const sent = await sentToModel('finder', 'Damansara Heights RM1.5mil-RM2.5mil')
+    expect(sent).toContain('RM1.5mil-RM2.5mil')
+    expect(sent).not.toContain('<FIN_HASH:')
+  })
+
+  it('Finder turn with RM1.5MIL TO RM2.5MIL passes unmasked', async () => {
+    const sent = await sentToModel('finder', 'RM1.5MIL TO RM2.5MIL')
+    expect(sent).toBe('RM1.5MIL TO RM2.5MIL')
+  })
+
+  it('Finder income line is still masked', async () => {
+    const sent = await sentToModel('finder', 'I earn RM6000 a month, budget RM800k')
+    expect(sent).toContain('<FIN_HASH:')
+    expect(sent).not.toContain('RM6000')
+    expect(sent).toContain('budget RM800k')
+  })
+
+  it('Finder still masks phone/IC/email', async () => {
+    const sent = await sentToModel('finder', 'RM1.5mil, 880101-14-5678, a@b.example.com, +60123456789')
+    expect(sent).toContain('RM1.5mil')
+    expect(sent).toMatch(/<IC_HASH:/)
+    expect(sent).toMatch(/<EMAIL_HASH:/)
+    expect(sent).toMatch(/<PHONE_HASH:/)
+  })
+
+  it('Reply turn still sends <FIN_HASH:', async () => {
+    const sent = await sentToModel('reply', 'lead says budget RM1.5mil', { leadId: 'lead-001' })
+    expect(sent).toContain('<FIN_HASH:')
+    expect(sent).not.toContain('1.5mil')
+  })
+
+  it('Coach turn still sends <FIN_HASH:', async () => {
+    const sent = await sentToModel('coach', 'what if client has RM1.5mil')
+    expect(sent).toContain('<FIN_HASH:')
+    expect(sent).not.toContain('1.5mil')
+  })
+
+  it('the Finder re-pass is also gated: assertRedacted runs for it before streamText', async () => {
+    mocks.mockRouteAsync.mockResolvedValueOnce({ pillar: 'finder', reason: 'heuristic-finder:test' })
+    await POST(buildRequest({ messages: [{ role: 'user', content: 'RM1.5mil' }], cid: 'c-106b' }))
+    expect(mocks.mockAssertRedacted).toHaveBeenCalledTimes(2)
+  })
+})

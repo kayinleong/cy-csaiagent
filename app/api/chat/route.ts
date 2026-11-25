@@ -563,6 +563,34 @@ export async function POST(req: Request): Promise<Response> {
   // routeDecision encodes pillar:reason for observability + eval (D-02, T-03-27)
   const routeDecision = `${pillar}:${decision.reason}`
 
+  // ── Finder budget carve-out (quick-kayinleong-106) ──────────────────────────
+  // The strict GATE-3 result above masks EVERY RM figure, which made a property budget
+  // ("RM1.5mil-RM2.5mil") unreadable to the Finder. For the Finder ONLY, re-pseudonymize
+  // the same input with financial:'non-budget': budgets/prices pass, but income/loan/bank
+  // figures plus names, phones, IC and emails stay tokenized. The strict result is kept for
+  // Reply/Coach and for everything audit-related (hashes only). The gate runs again on the
+  // result that is actually sent to the model.
+  let modelRedacted = redacted
+  if (pillar === 'finder') {
+    const finderPass = pseudonymize(
+      { messages: messages as Array<{ role: string; content: string }> },
+      knownNames,
+      { financial: 'non-budget' },
+    )
+    try {
+      assertRedacted({ pdpa_redacted: finderPass.pdpa_redacted })
+    } catch (err) {
+      if (err instanceof PdpaViolationError) {
+        return new Response(JSON.stringify({ error: 'PDPA gate failed' }), {
+          status: 422,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      throw err
+    }
+    modelRedacted = finderPass.redacted
+  }
+
   // ── Required-leadId fail-closed for the Reply pillar (D-07, T-04-BLEED-route) ─
   // A Reply turn drafts in the context of ONE specific lead. Drafting against the
   // wrong (or absent) lead is the worst failure mode — a reply could leak one lead's
@@ -887,7 +915,7 @@ export async function POST(req: Request): Promise<Response> {
   // GATE 3 (assertRedacted) has ALREADY run — this is the only model call.
   // onFinish persists BOTH the user and assistant messages with routeDecision,
   // writes the finderSlot for Finder turns (FIND-05/08), and triggers audit.
-  const redactedMessages = redacted.messages as Array<{ role: 'user' | 'assistant'; content: string }>
+  const redactedMessages = modelRedacted.messages as Array<{ role: 'user' | 'assistant'; content: string }>
 
   const result = streamText({
     model,

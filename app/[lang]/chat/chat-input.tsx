@@ -28,6 +28,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
+import { scrubPdpaTokens } from '@/src/audit/scrub'
 import { toast } from 'sonner'
 import { useRouter, useParams } from 'next/navigation'
 import { signInUrlFor } from '@/src/auth/next-path'
@@ -393,6 +394,7 @@ function useChatStream({
       // Accumulate the full assistant text so we can decode a Reply/Finder turn's
       // structured-output JSON on completion (the card-variant decode bridge).
       let assistantContent = ''
+      let rawAssistantContent = ''
 
       while (true) {
         const { done, value } = await reader.read()
@@ -452,11 +454,15 @@ function useChatStream({
                 ? TEXT_BLOCK_SEPARATOR + textChunk.delta
                 : textChunk.delta
 
-            assistantContent += addition
+            // Scrub the WHOLE accumulated text (not the chunk): a PDPA token split across
+            // stream chunks is only recognizable once complete (quick-kayinleong-106).
+            rawAssistantContent += addition
+            assistantContent = scrubPdpaTokens(rawAssistantContent, t('hiddenAmount'))
+            const scrubbed = assistantContent
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMsgId
-                  ? { ...m, content: m.content + addition }
+                  ? { ...m, content: scrubbed }
                   : m,
               ),
             )
@@ -602,7 +608,7 @@ function useChatStream({
         try {
           // The final checkpoint may still be in flight as the stream dies.
           await new Promise((r) => setTimeout(r, 1200))
-          const restored = await loadConversationMessages(liveCid)
+          const restored = await loadConversationMessages(liveCid, t('hiddenAmount'))
           const lastAssistant = [...restored].reverse().find((m) => m.role === 'assistant')
           if (lastAssistant && (lastAssistant.finderOutput || lastAssistant.content.length > 0)) {
             setMessages((prev) =>
