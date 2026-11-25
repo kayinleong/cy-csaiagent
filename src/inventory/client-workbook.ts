@@ -472,6 +472,35 @@ export function mergeUnits(args: {
     }
   }
 
+  // U2b (quick-kayinleong-106). A renamed layout: the 25 Nov sheet calls Lunar Seputeh's 841 sqft
+  // 2-bedroom "Type B/B1" where the stored list says "Type B1 / B1A", so the label match above
+  // misses and the layout would be listed twice. After every label match is settled, a sheet unit
+  // that matched nothing takes the ONE unmatched typed stored entry with the same size, the same
+  // bedroom count and at least one code in common. A combined "&" layout (Southpoint's stored
+  // "Type A3 & B3" beside the sheet's separate A3 and B3) is never a rename. Anything less
+  // certain is still added.
+  const codesOf = (label: string) => new Set(labelKey(label, labelPrefix).split(' ').filter((t) => /\d/.test(t)))
+  for (let k = 0; k < toAdd.length; k++) {
+    const su = toAdd[k]
+    if (su.sizeSqft === null || su.bedrooms === null || su.label.includes('&')) continue
+    const suCodes = codesOf(su.label)
+    const cands: number[] = []
+    stored.forEach((e, i) => {
+      if (used[i] || isGroupedLabel(e.label, labelPrefix) || e.label.includes('&')) return
+      if (e.sizeSqft !== su.sizeSqft || e.bedrooms !== su.bedrooms) return
+      if ([...codesOf(e.label)].some((c) => suCodes.has(c))) cands.push(i)
+    })
+    if (cands.length !== 1) continue
+    used[cands[0]] = true
+    matchOf.set(cands[0], su)
+    toAdd.splice(k, 1)
+    k--
+    warnings.push({
+      code: 'matched-renamed-layout',
+      message: `Sheet unit "${su.label}" matched the stored layout "${stored[cands[0]].label}" by size, bedrooms and a shared code; the stored label is kept`,
+    })
+  }
+
   const final: UnitTypeEntry[] = []
   const priceSources: MergeResult['priceSources'] = []
   const matched: string[] = []

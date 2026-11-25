@@ -649,6 +649,73 @@ describe('Imperial fixture: qualifier labels match', () => {
   })
 })
 
+describe('renamed layout (U2b, quick-kayinleong-106)', () => {
+  // Lunar Seputeh: the 25 Nov sheet's "Type B/B1" is the stored "Type B1 / B1A" (841 sqft, 2 bed).
+  const lunarStored = [
+    stored('Type A', 683, 1, null),
+    stored('Type B1 / B1A', 841, 2, null),
+    stored('Type B2', 930, 3, null),
+  ]
+  const lunarSheet = [
+    unit({ label: 'Type A', sizeSqft: 683, nettMinRM: 607_800, nettMaxRM: 643_800 }),
+    unit({ label: 'Type B/B1', sizeSqft: 841, bedrooms: 2, nettMinRM: 752_800, nettMaxRM: 795_800 }),
+    unit({ label: 'Type B2', sizeSqft: 930, bedrooms: 3, nettMinRM: 845_800, nettMaxRM: 875_800 }),
+  ]
+
+  it('matches the renamed layout instead of listing it twice, keeping the stored label', () => {
+    const m = mergeUnits({ stored: lunarStored, sheetUnits: lunarSheet, unitMode: 'merge', labelPrefix: '' })
+    expect(m.final.map((e) => e.label)).toEqual(['Type A', 'Type B1 / B1A', 'Type B2'])
+    expect(m.final[1].priceMinRM).toBe(752_800)
+    expect(m.added).toEqual([])
+    expect(m.warnings.map((w) => w.code)).toContain('matched-renamed-layout')
+  })
+
+  it('needs the same size, the same bedrooms and a shared code', () => {
+    for (const su of [
+      unit({ label: 'Type B/B1', sizeSqft: 842, bedrooms: 2 }),
+      unit({ label: 'Type B/B1', sizeSqft: 841, bedrooms: 3 }),
+      unit({ label: 'Type B/B1', sizeSqft: null, bedrooms: 2 }),
+      unit({ label: 'Type K2', sizeSqft: 841, bedrooms: 2 }),
+    ]) {
+      const m = mergeUnits({ stored: [stored('Type B1 / B1A', 841, 2, null)], sheetUnits: [su], unitMode: 'merge', labelPrefix: '' })
+      expect(m.final).toHaveLength(2)
+      expect(m.added).toEqual([su.label])
+    }
+  })
+
+  it('never pairs a corner unit with its plain type, and never steals a label match', () => {
+    const m = mergeUnits({
+      stored: [stored('Type A', 650, 1, null)],
+      sheetUnits: [unit({ label: 'Type A', sizeSqft: 650, bedrooms: 1 }), unit({ label: 'Type A corner', sizeSqft: 650, bedrooms: 1 })],
+      unitMode: 'merge',
+      labelPrefix: '',
+    })
+    expect(m.final.map((e) => e.label)).toEqual(['Type A', 'Type A corner'])
+    expect(m.warnings.map((w) => w.code)).not.toContain('matched-renamed-layout')
+  })
+
+  it('never treats a combined "&" layout as a rename', () => {
+    const m = mergeUnits({
+      stored: [stored('Type A3 & B3', 1100, 3, null)],
+      sheetUnits: [unit({ label: 'Type A3', sizeSqft: 1100, bedrooms: 3 })],
+      unitMode: 'merge',
+      labelPrefix: '',
+    })
+    expect(m.final.map((e) => e.label)).toEqual(['Type A3 & B3', 'Type A3'])
+  })
+
+  it('leaves two equally good stored candidates alone', () => {
+    const m = mergeUnits({
+      stored: [stored('Type C2 / C2A', 1280, 3, null), stored('Type C2', 1280, 3, null)],
+      sheetUnits: [unit({ label: 'Type C2/C2X', sizeSqft: 1280, bedrooms: 3 })],
+      unitMode: 'merge',
+      labelPrefix: '',
+    })
+    expect(m.added).toEqual(['Type C2/C2X'])
+    expect(m.final).toHaveLength(3)
+  })
+})
+
 describe('Puncak fixture: a priced grouped entry is dropped and flagged', () => {
   const existing = {
     priceValue: 3_495_000,
