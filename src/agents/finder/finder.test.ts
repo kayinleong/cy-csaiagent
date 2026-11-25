@@ -883,9 +883,13 @@ describe('Summary section of the prompt (quick-kayinleong-106)', () => {
     expect(prompt).toMatch(/OMIT that field/)
   })
 
-  it('says the system shows the full details itself, so the two fields stay short and do not repeat them (107)', () => {
+  it('says the system shows quick facts under the table and full details in a dropdown, so the two fields stay short and do not repeat them (108)', () => {
+    expect(prompt).toMatch(/shows each project's quick facts under its table/)
     expect(prompt).toMatch(/shows each project's full details itself/)
-    expect(prompt).toMatch(/never repeat those details in them/)
+    expect(prompt).toMatch(/dropdown behind the table's Details button/)
+    expect(prompt).toMatch(/never repeat the quick facts or those details in them/)
+    expect(prompt).toContain('Write ONE match for EACH project')
+    expect(prompt).toContain('you see at most 8')
   })
 
   it('keeps the 105 rule: no layouts, sizes, prices or budget fit in the summary fields', () => {

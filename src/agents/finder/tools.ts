@@ -184,7 +184,7 @@ export type FinderRowSink = {
   sheets?: ProjectSheet[]
   /**
    * The "Layouts & sizing" data of the shortlisted projects (quick-kayinleong-106): the top
-   * `MAX_MATCHES` of the last search that have any layouts, in rank order. REPLACED on every
+   * rows of the last search that have any layouts or detail sections, in rank order (all of them, quick-kayinleong-108). REPLACED on every
    * search, like `rows`. Optional so existing sinks and tests are unchanged.
    */
   summaries?: MatchSummary[]
@@ -354,8 +354,9 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: Find
         // narrowed re-search stacked on top of the query it replaced.
         if (sink) {
           sink.rows = enriched.matches.map((m) => toFinderRow(m, input.locationPref))
+          // Every returned row (quick-kayinleong-108): the table's Details dropdown opens
+          // any row, not only the model's top MAX_MATCHES.
           sink.summaries = enriched.matches
-            .slice(0, MAX_MATCHES)
             .filter((m) => (m.layouts?.length ?? 0) > 0 || (m.details?.length ?? 0) > 0)
             .map((m) => ({
               projectId: m.projectId,

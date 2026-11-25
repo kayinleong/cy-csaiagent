@@ -508,12 +508,12 @@ export const FinderOutputSchema = z.object({
   projectSheets: z.array(ProjectSheetSchema).max(3).optional(),
 
   /**
-   * The "Layouts & sizing" data of the shortlisted projects, at most 8
-   * (quick-kayinleong-106). SERVER-ATTACHED to a matches answer, like `rows`: the model is
+   * The layouts and detail sections of every table row, at most 100
+   * (quick-kayinleong-106/108). SERVER-ATTACHED to a matches answer, like `rows`: the model is
    * told not to write layouts, sizes or prices, and anything it writes here is replaced.
    * Optional, so an older persisted turn decodes unchanged and shows no summaries block.
    */
-  summaries: z.array(MatchSummarySchema).max(8).optional(),
+  summaries: z.array(MatchSummarySchema).max(100).optional(),
 })
 
 export type FinderOutput = z.infer<typeof FinderOutputSchema>

@@ -18,7 +18,7 @@
  * prop crosses no server/client boundary.
  */
 
-import { Fragment } from 'react'
+import { Fragment, useId, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -32,10 +32,16 @@ import {
 } from '@/components/ui/table'
 import { Paginator, usePagination } from '../_components/paginator'
 import type { FinderRow } from '@/src/agents/finder/schema'
-import type { FinderMatch } from '@/src/agents/finder/schema'
+import type { FinderMatch, MatchSummary } from '@/src/agents/finder/schema'
+import {
+  GROUP_PAGE_SIZE,
+  ProjectDetailsPanel,
+  buildSummaryEntries,
+  hasDetails,
+} from './match-summaries'
 
 /** Rows per page — the shared `usePagination` default, not a new convention. */
-const ROWS_PER_PAGE = 10
+const ROWS_PER_PAGE = GROUP_PAGE_SIZE
 
 const EM_DASH = '—'
 
@@ -44,9 +50,38 @@ interface MatchTableProps {
   rows: FinderRow[]
   /** The model's narrative shortlist — read ONLY for its per-row `highlight`. */
   matches: FinderMatch[]
+  /**
+   * The server-built layouts and detail sections per project (quick-kayinleong-108). A row
+   * with details opens them inline under the row; a row without (an older persisted turn)
+   * keeps the old behaviour of asking the AI via `onAsk`.
+   */
+  summaries?: MatchSummary[]
+  /** The group heading shown above the table (e.g. "Other projects around Bangsar"). */
+  heading?: string
   /** Dispatch a follow-up Finder turn for one project. Absent → the buttons disable. */
   onAsk?: (prompt: string) => void
   className?: string
+}
+
+/**
+ * What a Details click does: a row with server details toggles its panel and NEVER asks the
+ * AI; only a row without them (an older persisted turn) runs `ask`.
+ */
+export function handleDetailsClick(
+  inline: boolean,
+  toggle: () => void,
+  ask: (() => void) | undefined,
+): void {
+  if (inline) toggle()
+  else ask?.()
+}
+
+/** Toggle one project id in the set of open Details panels (a new Set; several may be open). */
+export function toggleOpen(open: ReadonlySet<string>, id: string): Set<string> {
+  const next = new Set(open)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  return next
 }
 
 /**
@@ -140,7 +175,7 @@ export function groupHeadingBefore(
  * The Finder result table: one row per project, paginated, with a per-row action that
  * asks the chat to expand that one project with its supporting documents.
  */
-export function MatchTable({ rows, matches, onAsk, className }: MatchTableProps) {
+export function MatchTable({ rows, matches, summaries, heading, onAsk, className }: MatchTableProps) {
   const t = useTranslations('chat.matchTable')
   // Reuse the already-trilingual admin column headers rather than duplicating five
   // strings in three catalogs (app/[lang]/(admin)/inventory/project-list.tsx uses these).
@@ -151,15 +186,27 @@ export function MatchTable({ rows, matches, onAsk, className }: MatchTableProps)
     displayRows,
     ROWS_PER_PAGE,
   )
-  // quick-kayinleong-103: the area the search applied, for the group headings.
-  const areaLabel = rows.find((r) => r.locationArea)?.locationArea ?? ''
-  const hasBothGroups =
-    areaLabel.length > 0 &&
-    rows.some((r) => r.locationMatch === 'in_area') &&
-    rows.some((r) => r.locationMatch === 'nearby')
+  const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set())
+  const baseId = useId()
+  const entryById = new Map(
+    buildSummaryEntries(rows, matches, summaries, {
+      sqft: t('sqft'),
+      bed: t('bed'),
+      nett: t('nett'),
+      gross: t('gross'),
+    }).map((e) => [e.projectId, e]),
+  )
 
   return (
     <div data-slot="match-table" className={cn('flex w-full flex-col gap-2', className)}>
+      {heading && (
+        <h3
+          data-slot="match-table-group"
+          className="text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground"
+        >
+          {heading}
+        </h3>
+      )}
       <span className="text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
         {t('rowCount', { count: total })}
       </span>
@@ -169,6 +216,10 @@ export function MatchTable({ rows, matches, onAsk, className }: MatchTableProps)
           not add a second scroll container, and never add a horizontal-centring utility to
           it: centring an overflowing scroll container clips BOTH ends (quick-081, and the
           warning left at chat-header.tsx:199-202). */}
+      {/* `@container` on a wrapper OUTSIDE the scroller: the open Details panel is sized
+          `100cqw` = this wrapper's width = the visible scroll area, and pinned `left-0`, so on
+          a phone it stays inside the viewport while the table scrolls sideways under it. */}
+      <div className="@container w-full min-w-0">
       <Table className="text-[0.8125rem]">
         <TableHeader>
           <TableRow>
@@ -188,24 +239,15 @@ export function MatchTable({ rows, matches, onAsk, className }: MatchTableProps)
           </TableRow>
         </TableHeader>
         <TableBody>
-          {pageItems.map((row, index) => {
+          {pageItems.map((row) => {
             const price = formatPrice(row.priceValue)
             const size = formatSize(row.sizeMinSqft, row.sizeMaxSqft)
-            const heading = groupHeadingBefore(pageItems, index, hasBothGroups)
+            const entry = entryById.get(row.projectId)
+            const inline = hasDetails(entry)
+            const isOpen = inline && open.has(row.projectId)
+            const panelId = `${baseId}-${row.projectId}`
             return (
               <Fragment key={row.projectId}>
-                {heading && (
-                  <TableRow data-slot="match-table-group" className="hover:bg-transparent">
-                    <TableCell colSpan={COLUMN_COUNT} className="pt-4 pb-1">
-                      {/* Sticky so the heading stays in view while the row scrolls sideways. */}
-                      <span className="sticky left-2 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
-                        {heading === 'nearby'
-                          ? t('nearbyHeading', { area: areaLabel })
-                          : t('inAreaHeading', { area: areaLabel })}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                )}
                 {/* projectId stays on the row and in the name's title: it is the grounding
                     citation (D-04) and the admin surfaces key off it, exactly as
                     match-list.tsx:176 does today. */}
@@ -254,38 +296,61 @@ export function MatchTable({ rows, matches, onAsk, className }: MatchTableProps)
                       // 44px touch-target floor, the same one match-list.tsx's collateral
                       // rows use.
                       className="min-h-11 whitespace-nowrap"
-                      disabled={!onAsk}
-                      aria-label={t('showMoreAria', { name: row.name })}
+                      disabled={!inline && !onAsk}
+                      aria-label={
+                        inline
+                          ? t('detailsAria', { name: row.name })
+                          : t('showMoreAria', { name: row.name })
+                      }
+                      aria-expanded={inline ? isOpen : undefined}
+                      aria-controls={inline && isOpen ? panelId : undefined}
                       onClick={() =>
-                        onAsk?.(
+                        handleDetailsClick(
+                          inline,
+                          () => setOpen((prev) => toggleOpen(prev, row.projectId)),
+                          // quick-kayinleong-108: a row with server details opens them inline,
+                          // no AI turn. Only a row without them (an older persisted turn) asks.
+                          //
                           // A TRANSLATED prompt, not an English literal: the agent replies in
                           // the language of the incoming message, so an English prompt would
                           // flip a BM or 中文 conversation to English.
                           //
-                          // THE projectId IS THE POINT (quick-kayinleong-088). It used to
-                          // ride along as parenthetical decoration while the model was left
-                          // to re-run searchProjects — a semantic re-rank whose top 8 is all
-                          // the model ever sees, so tapping row 37 of 50 handed it eight
-                          // OTHER projects and it correctly reported it could not find this
-                          // one. All three locales now emit the marker `projectId: <id>`
-                          // (the marker itself deliberately UNtranslated), which the Finder
-                          // system prompt binds to the `projectDetail` tool — a direct
-                          // projects/{pid} read that cannot resolve to the wrong project.
-                          // Change this string only together with the "DETAIL REQUEST"
-                          // section of src/agents/finder/prompt.ts.
-                          t('showMorePrompt', { name: row.name, projectId: row.projectId }),
+                          // THE projectId IS THE POINT (quick-kayinleong-088): the marker
+                          // `projectId: <id>` (deliberately UNtranslated) is bound by the Finder
+                          // system prompt to the `projectDetail` tool, a direct projects/{pid}
+                          // read that cannot resolve to the wrong project. Change this string
+                          // only together with the "DETAIL REQUEST" section of
+                          // src/agents/finder/prompt.ts.
+                          onAsk
+                            ? () =>
+                                onAsk(
+                                  t('showMorePrompt', { name: row.name, projectId: row.projectId }),
+                                )
+                            : undefined,
                         )
                       }
                     >
-                      {t('showMore')}
+                      {isOpen ? t('hideDetails') : t('showMore')}
                     </Button>
                   </TableCell>
                 </TableRow>
+                {isOpen && entry && (
+                  <TableRow data-slot="match-table-details" className="hover:bg-transparent">
+                    <TableCell colSpan={COLUMN_COUNT} className="p-0 whitespace-normal">
+                      {/* Pinned to the visible area (see the `@container` wrapper): no
+                          horizontal scrolling inside the panel, the text wraps. */}
+                      <div className="sticky left-0 box-border w-[100cqw] max-w-[100cqw] px-3 py-3">
+                        <ProjectDetailsPanel entry={entry} id={panelId} />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
               </Fragment>
             )
           })}
         </TableBody>
       </Table>
+      </div>
 
       <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
     </div>

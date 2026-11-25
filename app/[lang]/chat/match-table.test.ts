@@ -14,7 +14,8 @@
 
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { formatPrice, formatSize } from './match-table'
+import { formatPrice, formatSize, handleDetailsClick, toggleOpen } from './match-table'
+import { GROUP_PAGE_SIZE } from './match-summaries'
 
 import en from '@/src/i18n/messages/en.json'
 import ms from '@/src/i18n/messages/ms.json'
@@ -190,7 +191,8 @@ describe('the table renders rows, not matches', () => {
     // sees); `rows` is the complete tool result. Rendering `matches` would reinstate the
     // reported defect.
     expect(LIST).toContain('if (rows.length > 0)')
-    expect(LIST).toMatch(/<MatchTable\s+rows=\{rows\}\s+matches=\{matches\}/)
+    expect(LIST).toMatch(/<MatchGroups\s+rows=\{rows\}\s+matches=\{matches\}/)
+    expect(LIST).toMatch(/<MatchTable\s+rows=\{g\.rows\}\s+matches=\{matches\}/)
     expect(LIST).toContain('<MatchCard key={match.projectId}')
   })
 
@@ -206,7 +208,7 @@ describe('the table renders rows, not matches', () => {
   })
 
   it('paginates 10 per page with the shared primitive', () => {
-    expect(TABLE).toContain('const ROWS_PER_PAGE = 10')
+    expect(TABLE).toContain('const ROWS_PER_PAGE = GROUP_PAGE_SIZE')
     expect(TABLE).toContain('usePagination(')
     expect(TABLE).toContain('<Paginator')
   })
@@ -330,5 +332,47 @@ describe('the Details prompt binds to a by-id lookup', () => {
     expect(FINDER_SYSTEM_PROMPT).toContain('projectId: <id>')
     expect(FINDER_SYSTEM_PROMPT).toContain('projectDetail')
     expect(FINDER_SYSTEM_PROMPT).toContain('Do NOT call searchProjects for it')
+  })
+})
+
+// ─── The Details dropdown (quick-kayinleong-108) ──────────────────────────────
+
+describe('toggleOpen', () => {
+  it('opens and closes one id, several can be open at once, and the input is not mutated', () => {
+    const none: ReadonlySet<string> = new Set()
+    const a = toggleOpen(none, 'a')
+    expect([...a]).toEqual(['a'])
+    expect(none.size).toBe(0)
+    const ab = toggleOpen(a, 'b')
+    expect([...ab].sort()).toEqual(['a', 'b'])
+    expect([...toggleOpen(ab, 'a')]).toEqual(['b'])
+  })
+
+  it('the page size is 10', () => {
+    expect(GROUP_PAGE_SIZE).toBe(10)
+  })
+})
+
+describe('the Details button toggles inline and only asks when there are no details', () => {
+  it('renders aria-expanded / aria-controls and the Hide label', () => {
+    expect(TABLE).toContain('aria-expanded={inline ? isOpen : undefined}')
+    expect(TABLE).toContain('aria-controls={inline && isOpen ? panelId : undefined}')
+    expect(TABLE).toContain("isOpen ? t('hideDetails') : t('showMore')")
+  })
+
+  it('a row with details toggles and never calls ask; a row without asks the AI', () => {
+    let asked = 0
+    let toggled = 0
+    handleDetailsClick(true, () => toggled++, () => asked++)
+    expect({ asked, toggled }).toEqual({ asked: 0, toggled: 1 })
+    handleDetailsClick(false, () => toggled++, () => asked++)
+    expect({ asked, toggled }).toEqual({ asked: 1, toggled: 1 })
+    expect(() => handleDetailsClick(false, () => toggled++, undefined)).not.toThrow()
+  })
+
+  it('the open panel is a full-width row pinned to the visible scroll area', () => {
+    expect(TABLE).toContain('colSpan={COLUMN_COUNT}')
+    expect(TABLE).toContain('@container')
+    expect(TABLE).toContain('sticky left-0 box-border w-[100cqw] max-w-[100cqw]')
   })
 })

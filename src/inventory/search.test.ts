@@ -1201,6 +1201,32 @@ describe('quick-kayinleong-050: relevance floor, top-N cap, and segment weightin
     if (capped.found) expect(capped.matches.length).toBe(MAX_ROWS)
   })
 
+  it('layouts/details ride on EVERY row; the quickFacts excerpt only on the top MAX_MATCHES (quick-108)', async () => {
+    const { searchProjects, MAX_MATCHES } = await import('@/src/inventory/search')
+    mockProjectsGet.mockResolvedValueOnce(
+      makeAdHocSnap(
+        Array.from({ length: 12 }, (_, i) => ({
+          id: `proj-qf-${i}`,
+          doc: {
+            ...FIXTURES['proj-active-a'],
+            priceValue: 500_000 + i,
+            description: 'Quick Facts:\nTenure: Freehold\nDeveloper: Test Dev',
+          },
+        })),
+      ),
+    )
+    mockEmbedText.mockResolvedValueOnce(STUB_QUERY_VECTOR)
+    const result = await searchProjects(BASE)
+    expect(result.found).toBe(true)
+    if (!result.found) return
+    expect(result.matches.length).toBe(12)
+    result.matches.forEach((m, i) => {
+      expect(m.details?.length ?? 0, `details ${i}`).toBeGreaterThan(0)
+      if (i < MAX_MATCHES) expect(typeof m.quickFacts, `quickFacts ${i}`).toBe('string')
+      else expect(m.quickFacts, `quickFacts ${i}`).toBeUndefined()
+    })
+  })
+
   it('a match carries the stored size fields, defaulting to null (quick-085 / D1)', async () => {
     // The table reads these; nothing re-parses `description` at render time.
     mockProjectsGet.mockResolvedValueOnce(

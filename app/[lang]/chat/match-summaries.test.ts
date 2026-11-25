@@ -9,11 +9,15 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
+import { MatchList as MatchListC } from './match-list'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { NextIntlClientProvider } from 'next-intl'
 import {
-  MatchSummaries,
+  ProjectDetailsPanel,
+  QuickFactsList,
   buildSummaryEntries,
+  hasDetails,
+  quickFactLines,
   compactRM,
   DETAIL_ITEM_KEYS,
   formatLayoutLine,
@@ -263,7 +267,7 @@ describe('match-summaries i18n', () => {
 
   for (const [lang, catalog] of Object.entries({ en, ms, zh })) {
     it(`every key resolves in ${lang}.json`, () => {
-      for (const key of [...keys, 'summaryTitle', 'bestFor', 'layouts', 'sellingPoints', 'soldOut', 'sqft', 'bed', 'nett', 'gross']) {
+      for (const key of [...keys, 'quickFactsTitle', 'hideDetails', 'detailsAria', 'restUnderDetails', 'showMore', 'showMoreAria', 'summaryTitle', 'bestFor', 'layouts', 'sellingPoints', 'soldOut', 'sqft', 'bed', 'nett', 'gross']) {
         const v = resolve(catalog, `chat.matchTable.${key}`)
         expect(typeof v, `${lang}: ${key}`).toBe('string')
         expect((v as string).length, `${lang}: ${key}`).toBeGreaterThan(0)
@@ -284,10 +288,10 @@ describe('match-summaries i18n', () => {
     })
   }
 
-  it('is rendered right after the table in match-list', () => {
+  it('is rendered right after each table in match-list', () => {
     const LIST = readFileSync(new URL('./match-list.tsx', import.meta.url), 'utf8')
     expect(LIST.indexOf('<MatchTable')).toBeGreaterThan(-1)
-    expect(LIST.indexOf('<MatchSummaries')).toBeGreaterThan(LIST.indexOf('<MatchTable'))
+    expect(LIST.indexOf('<QuickFactsList')).toBeGreaterThan(LIST.indexOf('<MatchTable'))
   })
 
   it('renders plain text only', () => {
@@ -326,136 +330,196 @@ describe('MatchList: matches with a stray answer note (quick-kayinleong-107)', (
   })
 })
 
-function render(props: Parameters<typeof MatchSummaries>[0]): string {
+function wrap(el: ReturnType<typeof createElement>): string {
   return renderToStaticMarkup(
-    createElement(
-      NextIntlClientProvider,
-      { locale: 'en', messages: en as never } as never,
-      createElement(MatchSummaries, props),
-    ),
+    createElement(NextIntlClientProvider, { locale: 'en', messages: en as never } as never, el),
   )
 }
 
-describe('MatchSummaries render', () => {
+type Out = import('@/src/agents/finder/schema').FinderOutput
+const quickSection = (dev: string) => ({
+  kind: 'quickFacts' as const,
+  items: [{ key: 'developer', value: dev }, { label: 'Location', value: 'Jalan Test' }],
+})
+
+describe('QuickFactsList + MatchList layout (quick-kayinleong-108)', () => {
+  const AREA = 'Damansara Heights'
   const rows = [
-    row('a', { name: 'Pavilion Damansara Heights', locationMatch: 'in_area', locationArea: 'Damansara Heights' }),
-    row('b', { name: 'Bangsar Peak', locationMatch: 'nearby', locationArea: 'Damansara Heights' }),
-    row('c', { name: 'Empty One', locationMatch: 'nearby', locationArea: 'Damansara Heights' }),
+    row('a', { name: 'Pavilion A', locationMatch: 'in_area', locationArea: AREA }),
+    row('b', { name: 'Peak B', locationMatch: 'in_area', locationArea: AREA }),
+    row('c', { name: 'Bangsar C', locationMatch: 'nearby', locationArea: AREA }),
+    row('d', { name: 'Mont D', locationMatch: 'nearby', locationArea: AREA }),
   ]
   const matches = [
-    match('a', { bestFor: 'Modern prestige', sellingPoints: 'Freehold with a link-bridge to the mall.' }),
+    match('a', { bestFor: 'Modern prestige', sellingPoints: 'Freehold with a link-bridge.' }),
     match('b', { bestFor: 'Urban living' }),
-    match('c'),
+    match('c', { bestFor: 'Families' }),
   ]
-  const summaries: MatchSummary[] = [
-    {
-      projectId: 'a',
-      layouts: [
-        layout(),
-        layout({ label: 'Type B', sizeSqft: 1_400, bedrooms: 3, priceMinRM: 1_800_000, priceMaxRM: 1_900_000, grossMinRM: null, grossMaxRM: null }),
-        layout({ label: 'Type C', soldOut: true, priceMinRM: null, priceMaxRM: null, grossMinRM: null, grossMaxRM: null }),
-        layout({ label: 'Type D', soldOut: true, priceMinRM: null, priceMaxRM: null, grossMinRM: null, grossMaxRM: null }),
-      ],
-      sections: [
-        { kind: 'quickFacts', items: [{ key: 'developer', value: 'Sunway Berhad' }, { label: 'Location', value: 'Jalan Test' }] },
-        { kind: 'pricesFees', items: [{ key: 'fromPrice', value: 'RM 1,200,000' }, { key: 'maintenanceFee', value: '39 sen psf' }] },
-        { kind: 'other', title: 'Facilities', items: [{ value: 'Swimming pool' }, { label: 'Gym', value: '24 hours' }] },
-        { kind: 'other', title: 'Furnishing & Finishes', items: [{ value: 'Full air-conditioning' }] },
-        { kind: 'topReasons', items: [{ value: 'Walk to the LRT' }] },
-        { kind: 'focusLists', items: [{ value: 'Bangsar picks' }] },
-      ],
-    },
+  const full = (dev: string): MatchSummary['sections'] => [
+    quickSection(dev),
+    { kind: 'pricesFees', items: [{ key: 'fromPrice', value: 'RM 1,200,000' }] },
+    { kind: 'other', title: 'Facilities', items: [{ value: 'Swimming pool' }] },
   ]
-  const html = render({ rows, matches, summaries })
+  const summaries: MatchSummary[] = rows.map((r, i) => ({
+    projectId: r.projectId,
+    layouts: [layout(), layout({ label: 'Type C', soldOut: true, priceMinRM: null, priceMaxRM: null, grossMinRM: null, grossMaxRM: null })],
+    sections: full(`Dev ${i}`),
+  }))
+  const html = wrap(createElement(MatchListC, { output: { matches, rows, summaries } as unknown as Out }))
 
-  it('renders numbered entries in rank order under the area headings', () => {
-    expect(html).toContain('1. Pavilion Damansara Heights')
-    expect(html).toContain('2. Bangsar Peak')
-    expect(html.indexOf('In Damansara Heights')).toBeGreaterThan(-1)
-    expect(html.indexOf('Other projects around Damansara Heights')).toBeGreaterThan(html.indexOf('1. Pavilion'))
-    expect(html.indexOf('Other projects around Damansara Heights')).toBeLessThan(html.indexOf('2. Bangsar'))
-    expect(html).toContain('Project summaries')
+  it('orders recommended table, its quick facts, nearby heading + table, nearby quick facts', () => {
+    const tableA = html.indexOf('data-project-id="a" data-location-match')
+    const qf = [...html.matchAll(/data-slot="match-quick-facts"/g)].map((m) => m.index!)
+    const heading = html.indexOf('Other projects around Damansara Heights')
+    const tableC = html.indexOf('data-project-id="c" data-location-match')
+    expect(qf).toHaveLength(2)
+    expect(tableA).toBeGreaterThan(-1)
+    expect([tableA, qf[0], heading, tableC, qf[1]].every((n, i, a) => i === 0 || n > a[i - 1])).toBe(true)
+    // No in-table group rows any more; the nearby heading sits above its table.
+    expect(html).not.toContain('data-slot="match-table-group" class="hover:bg-transparent"')
+    expect(html.match(/data-slot="match-table"/g)).toHaveLength(2)
   })
 
-  it('renders the three fields and the layout lines', () => {
+  it('numbers the blocks per group and carries Best for, Key selling points and the fact lines', () => {
+    expect(html).toContain('1. Pavilion A')
+    expect(html).toContain('2. Peak B')
+    expect(html).toContain('1. Bangsar C')
     expect(html).toContain('Best for:')
-    expect(html).toContain('Modern prestige')
-    expect(html).toContain('Built-Up Sizes &amp; Layouts')
-    expect(html).toContain('Type A · 1,076 sqft · 2 bed · Nett RM1.2m–1.35m · Gross RM1.4m–1.5m')
-    expect(html).toContain('Type B · 1,400 sqft · 3 bed · Nett RM1.8m–1.9m')
     expect(html).toContain('Key selling points:')
-    expect(html).toContain('Freehold with a link-bridge to the mall.')
+    expect(html).toContain('Freehold with a link-bridge.')
+    expect(html).toContain('Developer: Dev 0')
+    expect(html).toContain('Location: Jalan Test')
+    // d has no model match but still has Quick Facts lines.
+    expect(html).toContain('2. Mont D')
   })
 
-  it('names sold-out layouts in one line and never prices them', () => {
-    expect(html).toContain('Sold out: Type C, Type D')
-    expect(html).not.toMatch(/Type C[^<]*RM/)
-    expect(html).not.toMatch(/Type D[^<]*RM/)
-    expect(html).not.toContain('RM0')
-    expect(html).not.toContain('RM 0')
+  it('renders no full-details block outside the tables, and every Details panel starts closed', () => {
+    expect(html).not.toContain('data-slot="match-details"')
+    expect(html).not.toContain('data-slot="match-table-details"')
+    expect(html).not.toContain('Built-Up Sizes')
+    expect(html).not.toContain('Swimming pool')
+    expect(html.match(/aria-expanded="false"/g)).toHaveLength(4)
+    expect(html).not.toContain('aria-expanded="true"')
+    expect(html.match(/>Details</g)).toHaveLength(4)
   })
 
-  it('has a Details button per entry and no entry for an empty summary', () => {
-    expect(html.match(/data-slot="match-summary"/g)).toHaveLength(2)
-    expect(html).not.toContain('Empty One')
-    expect(html.match(/>Details</g)).toHaveLength(2)
+  it('a result with no location renders one table and one quick-facts list', () => {
+    const plain = rows.slice(0, 2).map((r) => ({ ...r, locationMatch: undefined, locationArea: undefined }))
+    const out = wrap(createElement(MatchListC, { output: { matches, rows: plain, summaries: summaries.slice(0, 2) } as unknown as Out }))
+    expect(out.match(/data-slot="match-table"/g)).toHaveLength(1)
+    expect(out.match(/data-slot="match-quick-facts"/g)).toHaveLength(1)
+    expect(out).not.toContain('Other projects around')
   })
 
-  it('renders the full details in order, open by default, with a real toggle', () => {
-    const order = [
-      'Best for:',
-      'Key selling points:',
-      'Full details',
-      'Quick Facts',
-      'Developer:',
-      'Built-Up Sizes &amp; Layouts',
-      'Prices &amp; Fees',
-      'From price:',
-      'Maintenance fee:',
-      'Facilities',
-      'Furnishing &amp; Finishes',
-      'Top Reasons Why',
-      'D2 focus lists',
-    ].map((k) => html.indexOf(k))
-    expect(order.every((i) => i > -1)).toBe(true)
-    expect([...order].sort((a, b) => a - b)).toEqual(order)
-    expect(html).toContain('Location:')
-    expect(html).toContain('Swimming pool')
-    expect(html).toMatch(/<button[^>]*aria-expanded="true"[^>]*>Hide</)
-    expect(html).toContain('Nett RM1.2m')
+  it('more than 10 rows in a group shows 10 blocks and the rest-under-Details line', () => {
+    const many = Array.from({ length: 12 }, (_, i) => row(`r${i}`, { name: `Proj ${i}` }))
+    const sums: MatchSummary[] = many.map((r) => ({ projectId: r.projectId, layouts: [], sections: [quickSection('Dev')] }))
+    const out = wrap(createElement(QuickFactsList, { rows: many, matches: [], summaries: sums }))
+    expect(out.match(/data-slot="match-summary"/g)).toHaveLength(10)
+    expect(out).toContain('2 more projects')
+    expect(out).toContain('under Details in the table')
+    expect(out).not.toContain('Proj 10')
   })
 
-  it('an entry with only detail sections is still rendered', () => {
-    const out = render({
-      rows: [row('q')],
-      matches: [],
-      summaries: [{ projectId: 'q', layouts: [], sections: [{ kind: 'quickFacts', items: [{ key: 'tenure', value: 'Freehold' }] }] }],
-    })
-    expect(out).toContain('Tenure:')
-    expect(out).toContain('Freehold')
+  it('an older turn without summaries keeps the AI-asking Details button (no aria-expanded)', () => {
+    const out = wrap(createElement(MatchListC, { output: { matches, rows: rows.slice(0, 1) } as unknown as Out }))
+    expect(out).toContain('Show details and supporting documents for Pavilion A')
+    expect(out).not.toMatch(/aria-expanded="/)
+    // The model's lines still show.
+    expect(out).toContain('Best for:')
   })
 
-  it('an older summary without sections decodes to [], and the bounds hold', () => {
-    const old = MatchSummarySchema.parse({ projectId: 'a', layouts: [layout()] })
-    expect(old.sections).toEqual([])
-    const tooMany = Array.from({ length: 15 }, () => ({ kind: 'other', items: [] }))
-    expect(MatchSummarySchema.safeParse({ projectId: 'a', sections: tooMany }).success).toBe(false)
-    expect(MatchSummarySchema.safeParse({ projectId: 'a', sections: [{ kind: 'bogus', items: [] }] }).success).toBe(false)
-    expect(MatchSummarySchema.safeParse({ projectId: 'a', layouts: Array.from({ length: 41 }, () => layout()) }).success).toBe(false)
-    expect(MatchSummarySchema.safeParse({ projectId: 'a', layouts: Array.from({ length: 40 }, () => layout()) }).success).toBe(true)
-  })
-
-  it('renders nothing at all when no entry has anything to show', () => {
-    expect(render({ rows, matches: [match('a'), match('b'), match('c')], summaries: [] })).toBe('')
+  it('renders nothing when no shown project has anything to say', () => {
+    expect(wrap(createElement(QuickFactsList, { rows: [row('q')], matches: [match('q')], summaries: [] }))).toBe('')
   })
 
   it('escapes model text rather than rendering it as HTML', () => {
-    const out = render({
-      rows: [row('a')],
-      matches: [match('a', { bestFor: '<img src=x onerror=alert(1)>' })],
-    })
+    const out = wrap(
+      createElement(QuickFactsList, { rows: [row('a')], matches: [match('a', { bestFor: '<img src=x onerror=alert(1)>' })] }),
+    )
     expect(out).not.toContain('<img')
     expect(out).toContain('&lt;img')
+  })
+})
+
+describe('quickFactLines / hasDetails', () => {
+  it('formats one "Label: value" line per quick fact, from quickFacts sections only', () => {
+    const lines = quickFactLines(
+      { sections: [quickSection('Sunway'), { kind: 'pricesFees', items: [{ key: 'fromPrice', value: 'RM 1' }] }] },
+      (i) => i.key ?? i.label ?? null,
+    )
+    expect(lines).toEqual(['developer: Sunway', 'Location: Jalan Test'])
+  })
+
+  it('hasDetails needs layouts, sold-out names or sections', () => {
+    const [bare] = buildSummaryEntries([row('a')], [match('a', { bestFor: 'x' })], [], LABELS)
+    expect(hasDetails(bare)).toBe(false)
+    expect(hasDetails(undefined)).toBe(false)
+    const [withLayout] = buildSummaryEntries([row('a')], [], [{ projectId: 'a', layouts: [layout()], sections: [] }], LABELS)
+    expect(hasDetails(withLayout)).toBe(true)
+  })
+})
+
+describe('ProjectDetailsPanel render', () => {
+  const [entry] = buildSummaryEntries(
+    [row('a', { name: 'Pavilion' })],
+    [match('a')],
+    [
+      {
+        projectId: 'a',
+        layouts: [
+          layout(),
+          layout({ label: 'Type B', sizeSqft: 1_400, bedrooms: 3, priceMinRM: 1_800_000, priceMaxRM: 1_900_000, grossMinRM: null, grossMaxRM: null }),
+          layout({ label: 'Type C', soldOut: true, priceMinRM: null, priceMaxRM: null, grossMinRM: null, grossMaxRM: null }),
+          layout({ label: 'Type D', soldOut: true, priceMinRM: null, priceMaxRM: null, grossMinRM: null, grossMaxRM: null }),
+        ],
+        sections: [
+          { kind: 'quickFacts', items: [{ key: 'developer', value: 'Sunway Berhad' }, { label: 'Location', value: 'Jalan Test' }] },
+          { kind: 'pricesFees', items: [{ key: 'fromPrice', value: 'RM 1,200,000' }, { key: 'maintenanceFee', value: '39 sen psf' }] },
+          { kind: 'other', title: 'Facilities', items: [{ value: 'Swimming pool' }, { label: 'Gym', value: '24 hours' }] },
+          { kind: 'other', title: 'Furnishing & Finishes', items: [{ value: 'Full air-conditioning' }] },
+          { kind: 'topReasons', items: [{ value: 'Walk to the LRT' }] },
+          { kind: 'focusLists', items: [{ value: 'Bangsar picks' }] },
+        ],
+      },
+    ],
+    LABELS,
+  )
+  const html = wrap(createElement(ProjectDetailsPanel, { entry, id: 'panel-a' }))
+
+  it('renders the sections in order with no header or toggle of its own', () => {
+    const order = [
+      'Quick Facts', 'Developer:', 'Built-Up Sizes &amp; Layouts', 'Prices &amp; Fees', 'From price:',
+      'Maintenance fee:', 'Facilities', 'Furnishing &amp; Finishes', 'Top Reasons Why', 'D2 focus lists',
+    ].map((k) => html.indexOf(k))
+    expect(order.every((i) => i > -1)).toBe(true)
+    expect([...order].sort((a, b) => a - b)).toEqual(order)
+    expect(html).toContain('id="panel-a"')
+    expect(html).not.toContain('<button')
+    expect(html).not.toContain('Full details')
+    expect(html).toContain('break-words')
+  })
+
+  it('names sold-out layouts in one line and never prices them', () => {
+    expect(html).toContain('Type A · 1,076 sqft · 2 bed · Nett RM1.2m–1.35m · Gross RM1.4m–1.5m')
+    expect(html).toContain('Sold out: Type C, Type D')
+    expect(html).not.toMatch(/Type C[^<]*RM/)
+    expect(html).not.toContain('RM0')
+    expect(html).not.toContain('RM 0')
+  })
+})
+
+describe('data for every row', () => {
+  it('schema, attach and metadata accept up to 100 summaries, and an old turn still decodes', () => {
+    const hundred = Array.from({ length: 100 }, (_, i) => ({ projectId: `p${i}`, layouts: [layout()], sections: [] }))
+    const out = { matches: [match('p0')], rows: [], summaries: [] } as unknown as Out
+    expect(attachSummaries(out, hundred as MatchSummary[]).summaries).toHaveLength(100)
+    expect(attachSummaries(out, [...hundred, ...hundred] as MatchSummary[]).summaries).toHaveLength(100)
+    const meta = parseMessageMetadata(JSON.stringify({ type: 'finish', messageMetadata: { summaries: hundred } }))
+    expect(meta?.summaries).toHaveLength(100)
+    const dec = decodeFinderOutput(JSON.stringify({ matches: [{ projectId: 'p0', rationale: 'r' }], summaries: hundred }))
+    expect(dec?.summaries ?? hundred).toHaveLength(100)
+    expect(MatchSummarySchema.parse({ projectId: 'a', layouts: [layout()] }).sections).toEqual([])
   })
 })
 

@@ -153,14 +153,14 @@ export interface ProjectMatch {
    */
   quickFacts?: string
   /**
-   * The layouts for the "Layouts & sizing" line, built from the stored `unitTypes`. Same
-   * top-`MAX_MATCHES` rule. The model never sees these (`toModelOutput` strips them).
+   * The layouts for the "Layouts & sizing" line, built from the stored `unitTypes`, on EVERY
+   * returned row (quick-kayinleong-108). The model never sees these (`toModelOutput` strips them).
    */
   layouts?: SummaryLayout[]
   /**
    * The server-built full details (quick facts, prices & fees, other write-up sections,
-   * reasons, focus lists), top-`MAX_MATCHES` only. The model never sees these either
-   * (quick-kayinleong-107).
+   * reasons, focus lists), on EVERY returned row (quick-kayinleong-107/108). The model never
+   * sees these either.
    */
   details?: DetailSection[]
   /**
@@ -1302,9 +1302,10 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
     sizeMinSqft: typeof doc.sizeMinSqft === 'number' ? doc.sizeMinSqft : null,
     sizeMaxSqft: typeof doc.sizeMaxSqft === 'number' ? doc.sizeMaxSqft : null,
     score,
-    // Summary data for the shortlist the model sees (quick-kayinleong-106). Bedrooms only
-    // ORDERS the layouts; the budget never filters them.
-    ...(rank < MAX_MATCHES ? summaryFields(doc, criteria.bedrooms) : {}),
+    // Layouts and details for EVERY returned row (quick-kayinleong-108: the table's Details
+    // dropdown needs them for any row); the quickFacts excerpt for the top MAX_MATCHES only
+    // (the model's input). Bedrooms only ORDERS the layouts; the budget never filters them.
+    ...summaryFields(doc, criteria.bedrooms, rank < MAX_MATCHES),
     // Present only when the location gate ran (quick-kayinleong-103).
     ...(locationMatchById.has(id) ? { locationMatch: locationMatchById.get(id) } : {}),
     // GROUNDING (quick-kayinleong-050): echo ONLY criteria genuinely applied to THIS
@@ -1348,15 +1349,16 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   return { found: true, matches }
 }
 
-/** `quickFacts` / `layouts` for one shortlisted project; a field with nothing is left off. */
+/** `quickFacts` (top rows only) / `layouts` / `details` for one project; a field with nothing is left off. */
 function summaryFields(
   doc: Pick<
     ProjectDoc,
     'description' | 'unitTypes' | 'priceValue' | 'pricePsfMin' | 'pricePsfMax' | 'clientFacts'
   >,
   bedrooms: number | null,
+  withExcerpt: boolean,
 ): Pick<ProjectMatch, 'quickFacts' | 'layouts' | 'details'> {
-  const quickFacts = quickFactsExcerpt(doc.description)
+  const quickFacts = withExcerpt ? quickFactsExcerpt(doc.description) : ''
   const layouts = summaryLayouts(doc.unitTypes, bedrooms, MAX_DETAIL_LAYOUTS)
   const details = buildProjectDetails(doc)
   return {

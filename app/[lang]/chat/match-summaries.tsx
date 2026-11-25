@@ -1,32 +1,26 @@
 'use client'
 
 /**
- * app/[lang]/chat/match-summaries.tsx — the project summaries under the Finder table
- * (quick-kayinleong-106).
+ * app/[lang]/chat/match-summaries.tsx — the Finder's per-project facts
+ * (quick-kayinleong-106/107/108).
  *
- * One numbered entry per shortlisted project, in the table's rank order, under the same
- * "In <area>" / "Other projects around <area>" headings:
+ * Two surfaces share the server-built data in `output.summaries` (never model text):
  *
- *   1. Pavilion Damansara Heights
- *   Best for: …                      (model-written, from the project's quick facts)
- *   Layouts & sizing: Type A · 1,076 sqft · 2 bed · Nett RM1.2m–1.35m · Gross RM1.4m–1.5m
- *                     Sold out: Type C, Type D
- *   Key selling points: …            (model-written, from the project's quick facts)
- *   [Details]
+ *   - `QuickFactsList`: under each table, one numbered block per project in table order:
+ *     the name, the model's "Best for" / "Key selling points" lines (where it wrote them),
+ *     then the project's Quick Facts as one "Label: value" line each.
+ *   - `ProjectDetailsPanel`: the full details shown by a row's Details button inside the
+ *     table: Quick Facts, Built-Up Sizes & Layouts (sold out named, never priced), Prices &
+ *     Fees, the other write-up sections, Top Reasons Why, D2 focus lists.
  *
- * The layout lines are SERVER data (`output.summaries`, built from the stored `unitTypes`),
- * never model text. A sold-out layout is only ever named, never priced, and a price that is
- * missing or zero prints nothing, never "RM 0". The two prose fields come from the
- * model's `matches[]` and are rendered as plain text only: no markdown, no raw HTML.
- * An entry with nothing to show is not rendered.
+ * A price that is missing or zero prints nothing, never "RM 0". All text is plain: no
+ * markdown, no raw HTML. An entry with nothing to show is not rendered.
  *
  * 'use client' for `useTranslations`, like `match-table.tsx`.
  */
 
-import { useId, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
 import type {
   DetailSectionRow,
   FinderMatch,
@@ -34,7 +28,6 @@ import type {
   MatchSummary,
   SummaryLayoutRow,
 } from '@/src/agents/finder/schema'
-import { groupHeadingBefore } from './match-table'
 
 /** A price as a short RM figure ("RM850k", "RM1.2m", "RM1.35m"), or null when not > 0. */
 export function compactRM(n: number | null | undefined): string | null {
@@ -168,119 +161,125 @@ export function buildSummaryEntries(
   return entries
 }
 
-interface MatchSummariesProps {
+/** Rows per table page, and the most quick-facts blocks shown per group. */
+export const GROUP_PAGE_SIZE = 10
+
+/** True when the entry has anything for the Details dropdown (layouts or detail sections). */
+export function hasDetails(entry: SummaryEntry | undefined): entry is SummaryEntry {
+  return !!entry && (entry.layoutLines.length > 0 || entry.soldOut.length > 0 || entry.sections.length > 0)
+}
+
+type Translate = ReturnType<typeof useTranslations>
+
+function itemLabel(t: Translate, item: DetailSectionRow['items'][number]): string | null {
+  if (item.key) return DETAIL_KEY_SET.has(item.key) ? t(`details.${item.key}`) : item.key
+  return item.label ?? null
+}
+
+/** The project's Quick Facts as "Label: value" lines (the database's Quick Facts format). */
+export function quickFactLines(
+  entry: Pick<SummaryEntry, 'sections'>,
+  labelOf: (item: DetailSectionRow['items'][number]) => string | null,
+): string[] {
+  return entry.sections
+    .filter((s) => s.kind === 'quickFacts')
+    .flatMap((s) => s.items)
+    .map((item) => {
+      const label = labelOf(item)
+      return label ? `${label}: ${item.value}` : item.value
+    })
+}
+
+interface QuickFactsListProps {
+  /** One group's table rows (recommended or nearby), in table order. */
   rows: FinderRow[]
   matches: FinderMatch[]
   summaries?: MatchSummary[]
-  /** Dispatch the same follow-up turn as the table's Details button. Absent → disabled. */
-  onAsk?: (prompt: string) => void
   className?: string
 }
 
-export function MatchSummaries({ rows, matches, summaries, onAsk, className }: MatchSummariesProps) {
+/**
+ * The numbered quick-facts blocks under one table. Only the group's first
+ * `GROUP_PAGE_SIZE` rows get a block; a longer group ends with one muted line pointing at
+ * the Details buttons. Renders nothing when no shown project has anything to say.
+ */
+export function QuickFactsList({ rows, matches, summaries, className }: QuickFactsListProps) {
   const t = useTranslations('chat.matchTable')
-  const entries = buildSummaryEntries(rows, matches, summaries, {
+  const shownRows = rows.slice(0, GROUP_PAGE_SIZE)
+  const entries = buildSummaryEntries(shownRows, matches, summaries, {
     sqft: t('sqft'),
     bed: t('bed'),
     nett: t('nett'),
     gross: t('gross'),
   })
+    .map((entry) => ({ entry, lines: quickFactLines(entry, (item) => itemLabel(t, item)) }))
+    .filter(({ entry, lines }) => entry.bestFor || entry.sellingPoints || lines.length > 0)
   if (entries.length === 0) return null
-
-  const areaLabel = entries.find((e) => e.locationArea)?.locationArea ?? ''
-  const hasBothGroups =
-    areaLabel.length > 0 &&
-    entries.some((e) => e.locationMatch === 'in_area') &&
-    entries.some((e) => e.locationMatch === 'nearby')
+  const rest = rows.length - shownRows.length
 
   return (
     <section
-      data-slot="match-summaries"
-      aria-label={t('summaryTitle')}
+      data-slot="match-quick-facts"
+      aria-label={t('quickFactsTitle')}
       className={cn('flex w-full min-w-0 flex-col gap-3', className)}
     >
       <h3 className="text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
-        {t('summaryTitle')}
+        {t('quickFactsTitle')}
       </h3>
-      {entries.map((entry, index) => {
-        const heading = groupHeadingBefore(entries, index, hasBothGroups)
-        return (
-          <div key={entry.projectId} className="flex min-w-0 flex-col gap-3">
-            {heading && (
-              <p
-                data-slot="match-summaries-group"
-                className="pt-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground"
-              >
-                {heading === 'nearby'
-                  ? t('nearbyHeading', { area: areaLabel })
-                  : t('inAreaHeading', { area: areaLabel })}
-              </p>
-            )}
-            <div
-              data-slot="match-summary"
-              data-project-id={entry.projectId}
-              className="flex min-w-0 flex-col gap-1 break-words text-[0.8125rem] leading-relaxed"
-            >
-              <p className="font-medium">
-                {index + 1}. {entry.name}
-              </p>
-              {entry.bestFor && (
-                <p>
-                  <span className="font-semibold">{t('bestFor')}:</span> {entry.bestFor}
-                </p>
-              )}
-              {entry.sellingPoints && (
-                <p>
-                  <span className="font-semibold">{t('sellingPoints')}:</span> {entry.sellingPoints}
-                </p>
-              )}
-              <FullDetails entry={entry} />
-              <div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="min-h-11 whitespace-nowrap"
-                  disabled={!onAsk}
-                  aria-label={t('showMoreAria', { name: entry.name })}
-                  onClick={() =>
-                    onAsk?.(t('showMorePrompt', { name: entry.name, projectId: entry.projectId }))
-                  }
-                >
-                  {t('showMore')}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )
-      })}
+      {entries.map(({ entry, lines }, index) => (
+        <div
+          key={entry.projectId}
+          data-slot="match-summary"
+          data-project-id={entry.projectId}
+          className="flex min-w-0 flex-col gap-1 break-words text-[0.8125rem] leading-relaxed"
+        >
+          <p className="font-medium">
+            {index + 1}. {entry.name}
+          </p>
+          {entry.bestFor && (
+            <p>
+              <span className="font-semibold">{t('bestFor')}:</span> {entry.bestFor}
+            </p>
+          )}
+          {entry.sellingPoints && (
+            <p>
+              <span className="font-semibold">{t('sellingPoints')}:</span> {entry.sellingPoints}
+            </p>
+          )}
+          {lines.length > 0 && (
+            <ul className="ml-4 list-disc">
+              {lines.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ))}
+      {rest > 0 && (
+        <p data-slot="match-quick-facts-rest" className="text-[0.75rem] text-muted-foreground">
+          {t('restUnderDetails', { count: rest })}
+        </p>
+      )}
     </section>
   )
 }
 
 /**
- * The "Full details" block of one entry, open by default with a Hide/Show toggle
- * (quick-kayinleong-107): Quick Facts, Built-Up Sizes & Layouts, Prices & Fees, the other
- * write-up sections in source order, Top Reasons Why, D2 focus lists. Fixed keys and fixed
- * titles are translated; write-up labels, titles and values are shown as stored. Plain text.
+ * The full details of one project, for the table's Details dropdown: Quick Facts, Built-Up
+ * Sizes & Layouts, Prices & Fees, the other write-up sections in source order, Top Reasons
+ * Why, D2 focus lists. Fixed keys and fixed titles are translated; write-up labels, titles
+ * and values are shown as stored. Plain text that wraps (no horizontal scrolling).
  */
-function FullDetails({ entry }: { entry: SummaryEntry }) {
+export function ProjectDetailsPanel({ entry, id }: { entry: SummaryEntry; id?: string }) {
   const t = useTranslations('chat.matchTable')
-  const [open, setOpen] = useState(true)
-  const bodyId = useId()
   const hasLayouts = entry.layoutLines.length > 0 || entry.soldOut.length > 0
-  if (!hasLayouts && entry.sections.length === 0) return null
-
   const ofKind = (kind: DetailSectionRow['kind']) => entry.sections.filter((s) => s.kind === kind)
-  const labelOf = (item: DetailSectionRow['items'][number]): string | null => {
-    if (item.key) return DETAIL_KEY_SET.has(item.key) ? t(`details.${item.key}`) : item.key
-    return item.label ?? null
-  }
   const renderSection = (section: DetailSectionRow, title: string, i: number) => (
     <div key={`${section.kind}-${i}`} data-slot="match-detail-section" className="flex flex-col gap-0.5">
       <p className="font-semibold">{title}</p>
       <ul className="ml-4 list-disc">
         {section.items.map((item, j) => {
-          const label = labelOf(item)
+          const label = itemLabel(t, item)
           return (
             <li key={j}>
               {label && <span className="font-semibold">{label}: </span>}
@@ -293,47 +292,34 @@ function FullDetails({ entry }: { entry: SummaryEntry }) {
   )
 
   return (
-    <div data-slot="match-details" className="mt-1 flex min-w-0 flex-col gap-2 break-words">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-semibold">{t('details.fullDetails')}</span>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="min-h-11 whitespace-nowrap"
-          aria-expanded={open}
-          aria-controls={bodyId}
-          onClick={() => setOpen((v) => !v)}
-        >
-          {open ? t('details.hide') : t('details.show')}
-        </Button>
-      </div>
-      {open && (
-        <div id={bodyId} className="flex min-w-0 flex-col gap-2">
-          {ofKind('quickFacts').map((sec, i) => renderSection(sec, t('details.quickFacts'), i))}
-          {hasLayouts && (
-            <div data-slot="match-detail-layouts" className="flex flex-col gap-0.5">
-              <p className="font-semibold">{t('details.layouts')}</p>
-              {entry.layoutLines.length > 0 && (
-                <ul className="ml-4 list-disc">
-                  {entry.layoutLines.map((line, i) => (
-                    <li key={i}>{line}</li>
-                  ))}
-                </ul>
-              )}
-              {entry.soldOut.length > 0 && (
-                <p className="text-muted-foreground">
-                  {t('soldOut')}: {entry.soldOut.join(', ')}
-                </p>
-              )}
-            </div>
+    <div
+      id={id}
+      data-slot="match-details"
+      data-project-id={entry.projectId}
+      className="flex min-w-0 flex-col gap-2 break-words text-[0.8125rem] leading-relaxed"
+    >
+      {ofKind('quickFacts').map((sec, i) => renderSection(sec, t('details.quickFacts'), i))}
+      {hasLayouts && (
+        <div data-slot="match-detail-layouts" className="flex flex-col gap-0.5">
+          <p className="font-semibold">{t('details.layouts')}</p>
+          {entry.layoutLines.length > 0 && (
+            <ul className="ml-4 list-disc">
+              {entry.layoutLines.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
           )}
-          {ofKind('pricesFees').map((sec, i) => renderSection(sec, t('details.pricesFees'), i))}
-          {ofKind('other').map((sec, i) => renderSection(sec, sec.title ?? '', i))}
-          {ofKind('topReasons').map((sec, i) => renderSection(sec, t('details.topReasons'), i))}
-          {ofKind('focusLists').map((sec, i) => renderSection(sec, t('details.focusLists'), i))}
+          {entry.soldOut.length > 0 && (
+            <p className="text-muted-foreground">
+              {t('soldOut')}: {entry.soldOut.join(', ')}
+            </p>
+          )}
         </div>
       )}
+      {ofKind('pricesFees').map((sec, i) => renderSection(sec, t('details.pricesFees'), i))}
+      {ofKind('other').map((sec, i) => renderSection(sec, sec.title ?? '', i))}
+      {ofKind('topReasons').map((sec, i) => renderSection(sec, t('details.topReasons'), i))}
+      {ofKind('focusLists').map((sec, i) => renderSection(sec, t('details.focusLists'), i))}
     </div>
   )
 }

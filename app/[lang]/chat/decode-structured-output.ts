@@ -574,5 +574,5 @@ export function attachSummaries(
   // those the model wrote a match for: a row the model left out still shows its layouts.
   const shown = summaries.filter((s) => s.layouts.length > 0 || s.sections.length > 0)
   if (shown.length === 0) return output
-  return { ...output, summaries: shown.slice(0, 8) }
+  return { ...output, summaries: shown.slice(0, 100) }
 }

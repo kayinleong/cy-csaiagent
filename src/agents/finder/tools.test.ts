@@ -427,14 +427,14 @@ describe('searchProjects tool: summaries (quick-kayinleong-106)', () => {
 
   const DETAILS = { kind: 'quickFacts' as const, items: [{ key: 'developer', value: 'Test Developer Sdn Bhd' }] }
 
-  /** The first MAX_MATCHES matches carry quickFacts + layouts, like the real mapper. */
+  /** Every match carries layouts + details; the first MAX_MATCHES also quickFacts (the real mapper, 108). */
   const RESULT: SearchResult = {
     found: true,
     matches: Array.from({ length: ROW_COUNT }, (_, i) => ({
       ...makeMatch(i),
-      ...(i < MAX_MATCHES
-        ? { quickFacts: `Quick Facts:\nTitle: Freehold ${i}`, layouts: [LAYOUT], details: [DETAILS] }
-        : {}),
+      layouts: [LAYOUT],
+      details: [DETAILS],
+      ...(i < MAX_MATCHES ? { quickFacts: `Quick Facts:\nTitle: Freehold ${i}` } : {}),
     })),
   }
 
@@ -461,13 +461,14 @@ describe('searchProjects tool: summaries (quick-kayinleong-106)', () => {
     expect(JSON.stringify(output)).toContain('"details"')
   })
 
-  it('the sink gets the layouts of the shortlist only, in rank order, and no description', async () => {
+  it('the sink gets the layouts and details of EVERY row, in rank order, and no description', async () => {
     const sink: FinderRowSink = { rows: [] }
     await runTool(RESULT, sink)
-    expect(sink.summaries).toHaveLength(MAX_MATCHES)
+    expect(sink.summaries).toHaveLength(ROW_COUNT)
+    expect(ROW_COUNT).toBeGreaterThan(MAX_MATCHES)
     expect(sink.summaries?.[0]).toEqual({ projectId: 'proj-0', layouts: [LAYOUT], sections: [DETAILS] })
     expect(sink.summaries?.map((s) => s.projectId)).toEqual(
-      Array.from({ length: MAX_MATCHES }, (_, i) => `proj-${i}`),
+      Array.from({ length: ROW_COUNT }, (_, i) => `proj-${i}`),
     )
     expect(JSON.stringify(sink.summaries)).not.toContain('Quick Facts:')
     // A match with neither layouts nor details has no summary entry; details alone is enough.

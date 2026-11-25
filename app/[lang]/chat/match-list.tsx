@@ -30,7 +30,7 @@ import { cn } from '@/lib/utils'
 import type { FinderOutput, FinderMatch } from '@/src/agents/finder/schema'
 import { MarkdownMessage } from './markdown-message'
 import { MatchTable } from './match-table'
-import { MatchSummaries } from './match-summaries'
+import { QuickFactsList } from './match-summaries'
 import { ProjectSheetContacts, ProjectSheetLinks, ProjectSheetShare } from './project-sheet'
 import { presentCollateral, type CollateralKind } from './collateral-label'
 
@@ -163,9 +163,7 @@ export function MatchList({ output, onAsk, className }: MatchListProps) {
           className={cn('flex w-full flex-col gap-3', className)}
         >
           {answer && <MarkdownMessage content={answer} />}
-          <MatchTable rows={rows} matches={matches} onAsk={onAsk} />
-          {/* quick-kayinleong-106: the shortlist's summaries, right under the table. */}
-          <MatchSummaries
+          <MatchGroups
             rows={rows}
             matches={matches}
             summaries={output.summaries}
@@ -200,6 +198,60 @@ export function MatchList({ output, onAsk, className }: MatchListProps) {
         No results returned. Please try rephrasing your criteria.
       </p>
     </div>
+  )
+}
+
+// ─── MatchGroups ──────────────────────────────────────────────────────────────
+
+/**
+ * The result tables with their quick facts (quick-kayinleong-108), in this order:
+ * the recommended (in-area) table, its quick facts, then the nearby table under
+ * "Other projects around <area>" and its quick facts. Without a location every row is
+ * recommended and there is one table and one list. Details live inside the tables.
+ */
+function MatchGroups({
+  rows,
+  matches,
+  summaries,
+  onAsk,
+}: {
+  rows: FinderOutput['rows']
+  matches: FinderMatch[]
+  summaries: FinderOutput['summaries']
+  onAsk?: (prompt: string) => void
+}) {
+  const t = useTranslations('chat.matchTable')
+  const nearby = rows.filter((r) => r.locationMatch === 'nearby')
+  const recommended = rows.filter((r) => r.locationMatch !== 'nearby')
+  const area = rows.find((r) => r.locationArea)?.locationArea ?? ''
+  const groups = [
+    {
+      key: 'recommended',
+      rows: recommended,
+      heading: nearby.length > 0 && recommended.length > 0 && area ? t('inAreaHeading', { area }) : undefined,
+    },
+    {
+      key: 'nearby',
+      rows: nearby,
+      heading: area ? t('nearbyHeading', { area }) : undefined,
+    },
+  ].filter((g) => g.rows.length > 0)
+
+  return (
+    <>
+      {groups.map((g) => (
+        <div key={g.key} data-slot={`match-group-${g.key}`} className="flex w-full min-w-0 flex-col gap-3">
+          <MatchTable
+            rows={g.rows}
+            matches={matches}
+            summaries={summaries}
+            heading={g.heading}
+            onAsk={onAsk}
+          />
+          <QuickFactsList rows={g.rows} matches={matches} summaries={summaries} />
+        </div>
+      ))}
+    </>
   )
 }
 
