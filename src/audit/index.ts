@@ -16,8 +16,13 @@
  */
 
 // PDPA boundary pseudonymization + gate
-export { pseudonymize, assertRedacted, PdpaViolationError } from './pdpa'
-export type { PseudonymizeInput, PseudonymizeResult } from './pdpa'
+export { pseudonymize, assertRedacted, PdpaViolationError, scrubPdpaTokens } from './pdpa'
+export type {
+  PseudonymizeInput,
+  PseudonymizeResult,
+  PseudonymizeOptions,
+  FinancialMode,
+} from './pdpa'
 
 // Append-only audit writer
 export { log } from './log'

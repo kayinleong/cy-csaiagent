@@ -24,6 +24,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
+import { useTranslations } from 'next-intl'
 import { MessageList } from './message-list'
 import { ChatInput, type SubmittedSuggestion } from './chat-input'
 import { ChatHeader, type LangOverride, type PillarOverride } from './chat-header'
@@ -59,6 +60,9 @@ interface ChatShellProps {
 }
 
 export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
+  // Label for a PDPA token in a reloaded transcript (quick-kayinleong-106).
+  const hiddenLabel = useTranslations('chat')('hiddenAmount')
+
   // ── Disclosure gate (CHAT-05) ────────────────────────────────────────────────
   // disclosureAcked: starts false; set to true once the modal is dismissed or
   // localStorage already contains the ack flag (handled inside DisclosureModal).
@@ -152,7 +156,7 @@ export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
         // fresh empty thread silently wins.
         await clientAuth.authStateReady()
         if (cancelled || !clientAuth.currentUser) return
-        const history = await loadConversationMessages(storedCid)
+        const history = await loadConversationMessages(storedCid, hiddenLabel)
         if (cancelled) return
         // Set the transcript and the cid together, in one commit — ChatInput's re-seed
         // effect keys on [conversationId, initialMessages], so splitting them across
@@ -168,7 +172,7 @@ export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
     return () => {
       cancelled = true
     }
-  }, [storedCid])
+  }, [storedCid, hiddenLabel])
 
   // Real streaming state, reported by ChatInput's useChatStream (quick-kayinleong-048).
   //
@@ -186,7 +190,7 @@ export function ChatShell({ placeholder, sendLabel }: ChatShellProps) {
   // Previously this only cleared messages and never fetched the transcript, so the
   // selected conversation rendered empty.
   const handleSelectConversation = async (cid: string) => {
-    const history = await loadConversationMessages(cid)
+    const history = await loadConversationMessages(cid, hiddenLabel)
     setHistoryMessages(history)
     setMessages(history) // show immediately; ChatInput converges via onMessagesChange
     setActiveCid(cid)

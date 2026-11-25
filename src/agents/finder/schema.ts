@@ -136,6 +136,22 @@ export const CollateralItemSchema = z.object({
 })
 
 /**
+ * The caps for the two summary lines (quick-kayinleong-106). The prompt asks for ~100 and ~200
+ * characters; these leave headroom so a slightly long line is not cut.
+ */
+const BEST_FOR_MAX = 140
+const SELLING_POINTS_MAX = 260
+
+/** Trim, and cut an over-long line at the last word boundary with an ellipsis, never mid-word. */
+export function clipAtWord(text: string, max: number): string {
+  const s = text.trim()
+  if (s.length <= max) return s
+  const cut = s.slice(0, max - 1)
+  const at = cut.lastIndexOf(' ')
+  return `${(at > max / 2 ? cut.slice(0, at) : cut).replace(/[\s,;:.\-–—]+$/, '')}…`
+}
+
+/**
  * A single project match in the Finder output.
  * Each match carries a "why this match" rationale grounded in real project
  * fields (priceBand, tenure, vpStatus, bumiQuota, foreignEligible) + the
@@ -232,6 +248,29 @@ export const FinderMatchSchema = z.object({
    * plain text (never markdown, never dangerouslySetInnerHTML).
    */
   highlight: z.string().min(1).max(120).optional(),
+
+  /**
+   * "Best for", one short line under the table (quick-kayinleong-106). Written by the model
+   * ONLY from this match's `quickFacts` excerpt; the prompt tells it to omit the field
+   * rather than infer one.
+   *
+   * `.optional()` for the quick-056/071 reason above, and it also never rejects: a value
+   * that is not a string is dropped, and an over-long one is trimmed to the cap instead of
+   * failing, because a failed field here would delete the whole match through
+   * `dropUnrenderableMatches`. Plain text only.
+   */
+  bestFor: z
+    .string()
+    .transform((s) => clipAtWord(s, BEST_FOR_MAX))
+    .optional()
+    .catch(undefined),
+
+  /** "Key selling points" under the table. Same rules as `bestFor`, capped at 260 chars. */
+  sellingPoints: z
+    .string()
+    .transform((s) => clipAtWord(s, SELLING_POINTS_MAX))
+    .optional()
+    .catch(undefined),
 })
 
 /**
@@ -321,6 +360,45 @@ export const ProjectSheetSchema = z.object({
     )
     .max(12)
     .default([]),
+})
+
+/**
+ * One layout of a project summary's "Layouts & sizing" line (quick-kayinleong-106).
+ * SERVER-BUILT from the stored `unitTypes` (`summaryLayouts` in src/inventory/quick-facts.ts),
+ * never model-authored. A sold-out layout carries no price, and null means "not on record":
+ * a renderer must print nothing for a null price, never "RM 0".
+ */
+export const SummaryLayoutSchema = z.object({
+  label: z.string().min(1).max(80),
+  sizeSqft: z.number().nullable().default(null),
+  bedrooms: z.number().nullable().default(null),
+  priceMinRM: z.number().nullable().default(null),
+  priceMaxRM: z.number().nullable().default(null),
+  grossMinRM: z.number().nullable().default(null),
+  grossMaxRM: z.number().nullable().default(null),
+  soldOut: z.boolean().default(false),
+})
+
+/** One line of a details section (quick-kayinleong-107). `key` is a fixed i18n label key. */
+export const DetailItemSchema = z.object({
+  key: z.string().min(1).max(40).optional(),
+  label: z.string().min(1).max(60).optional(),
+  value: z.string().min(1).max(320),
+})
+
+/** One section of a project's server-built full details. */
+export const DetailSectionSchema = z.object({
+  kind: z.enum(['quickFacts', 'pricesFees', 'topReasons', 'focusLists', 'other']),
+  title: z.string().min(1).max(80).optional(),
+  items: z.array(DetailItemSchema).max(30),
+})
+
+/** The server-built layouts and detail sections for one shortlisted project. */
+export const MatchSummarySchema = z.object({
+  projectId: z.string().min(1),
+  layouts: z.array(SummaryLayoutSchema).max(40).default([]),
+  /** Absent on a turn persisted before quick-kayinleong-107: decodes to []. */
+  sections: z.array(DetailSectionSchema).max(14).default([]),
 })
 
 /**
@@ -428,6 +506,14 @@ export const FinderOutputSchema = z.object({
    * older persisted turn decodes unchanged and shows the answer alone.
    */
   projectSheets: z.array(ProjectSheetSchema).max(3).optional(),
+
+  /**
+   * The "Layouts & sizing" data of the shortlisted projects, at most 8
+   * (quick-kayinleong-106). SERVER-ATTACHED to a matches answer, like `rows`: the model is
+   * told not to write layouts, sizes or prices, and anything it writes here is replaced.
+   * Optional, so an older persisted turn decodes unchanged and shows no summaries block.
+   */
+  summaries: z.array(MatchSummarySchema).max(8).optional(),
 })
 
 export type FinderOutput = z.infer<typeof FinderOutputSchema>
@@ -436,3 +522,6 @@ export type FinderRow = z.infer<typeof FinderRowSchema>
 export type FinderRefusal = z.infer<typeof FinderRefusalSchema>
 export type CollateralItem = z.infer<typeof CollateralItemSchema>
 export type ProjectSheet = z.infer<typeof ProjectSheetSchema>
+export type MatchSummary = z.infer<typeof MatchSummarySchema>
+export type DetailSectionRow = z.infer<typeof DetailSectionSchema>
+export type SummaryLayoutRow = z.infer<typeof SummaryLayoutSchema>

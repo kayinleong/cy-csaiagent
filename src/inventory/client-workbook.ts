@@ -22,7 +22,7 @@
 
 import { z } from 'zod'
 import { priceBandFor } from '@/src/firebase/collections'
-import type { ClientWorkbookField, UnitTypeEntry } from '@/src/firebase/collections'
+import type { ClientFacts, ClientWorkbookField, UnitTypeEntry } from '@/src/firebase/collections'
 import { CLIENT_WORKBOOK_SOURCE, scanForContactDetails } from '@/src/inventory/client-workbook-safety'
 
 // ─── Contract 1: schema ───────────────────────────────────────────────────────
@@ -472,6 +472,35 @@ export function mergeUnits(args: {
     }
   }
 
+  // U2b (quick-kayinleong-106). A renamed layout: the 25 Nov sheet calls Lunar Seputeh's 841 sqft
+  // 2-bedroom "Type B/B1" where the stored list says "Type B1 / B1A", so the label match above
+  // misses and the layout would be listed twice. After every label match is settled, a sheet unit
+  // that matched nothing takes the ONE unmatched typed stored entry with the same size, the same
+  // bedroom count and at least one code in common. A combined "&" layout (Southpoint's stored
+  // "Type A3 & B3" beside the sheet's separate A3 and B3) is never a rename. Anything less
+  // certain is still added.
+  const codesOf = (label: string) => new Set(labelKey(label, labelPrefix).split(' ').filter((t) => /\d/.test(t)))
+  for (let k = 0; k < toAdd.length; k++) {
+    const su = toAdd[k]
+    if (su.sizeSqft === null || su.bedrooms === null || su.label.includes('&')) continue
+    const suCodes = codesOf(su.label)
+    const cands: number[] = []
+    stored.forEach((e, i) => {
+      if (used[i] || isGroupedLabel(e.label, labelPrefix) || e.label.includes('&')) return
+      if (e.sizeSqft !== su.sizeSqft || e.bedrooms !== su.bedrooms) return
+      if ([...codesOf(e.label)].some((c) => suCodes.has(c))) cands.push(i)
+    })
+    if (cands.length !== 1) continue
+    used[cands[0]] = true
+    matchOf.set(cands[0], su)
+    toAdd.splice(k, 1)
+    k--
+    warnings.push({
+      code: 'matched-renamed-layout',
+      message: `Sheet unit "${su.label}" matched the stored layout "${stored[cands[0]].label}" by size, bedrooms and a shared code; the stored label is kept`,
+    })
+  }
+
   const final: UnitTypeEntry[] = []
   const priceSources: MergeResult['priceSources'] = []
   const matched: string[] = []
@@ -648,9 +677,37 @@ const WORKBOOK_FIELDS: ReadonlySet<string> = new Set<ClientWorkbookField>([
   'vpStatus',
   'vpDate',
   'area',
+  'clientFacts',
 ])
 
 const EMBEDDED_FIELDS: ReadonlySet<string> = new Set(['priceValue', 'tenure', 'bedrooms'])
+
+/** The `ClientFacts` keys, in sheet column order (quick-kayinleong-107). */
+const CLIENT_FACT_KEYS = [
+  'area',
+  'developer',
+  'landTitle',
+  'tenure',
+  'maintenanceFee',
+  'totalUnits',
+  'floors',
+  'completion',
+  'topReasons',
+  'furnishing',
+  'carPark',
+] as const
+
+/** The sheet's stated project-level facts and focus lists; blank cells are left out. */
+export function clientFactsFromSheet(sheet: SheetProject): ClientFacts {
+  const out: ClientFacts = {}
+  for (const key of CLIENT_FACT_KEYS) {
+    const v = sheet.facts[key]
+    if (typeof v === 'string' && v.trim() !== '') out[key] = v.trim()
+  }
+  const lists = sheet.focusLists.map((l) => l.trim()).filter((l) => l !== '')
+  if (lists.length > 0) out.focusLists = lists
+  return out
+}
 
 function numberOr(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback
@@ -800,6 +857,22 @@ export function planProjectPatch(args: {
   // cell plans nothing, so it never clears a stored area (D4).
   const sheetArea = (sheet.area ?? '').trim()
   if (sheetArea !== '') planned.area = sheetArea
+
+  // R8c (quick-kayinleong-107). The sheet's project-level facts, verbatim, as `clientFacts`:
+  // the authority the Finder's per-project details under the result table read over the
+  // write-up. Only stated values are written, merged OVER the stored object, so a blank cell
+  // keeps what was stored (D4). The focus lists are the one exception: Sheet1 is a complete
+  // list, so they follow the sheet exactly and an empty list removes the key.
+  const sheetFacts = clientFactsFromSheet(sheet)
+  const storedFacts =
+    existing.clientFacts !== null && typeof existing.clientFacts === 'object' && !Array.isArray(existing.clientFacts)
+      ? (existing.clientFacts as Record<string, unknown>)
+      : {}
+  if (Object.keys(sheetFacts).length > 0 || Object.keys(storedFacts).length > 0) {
+    const merged: Record<string, unknown> = { ...storedFacts, ...sheetFacts }
+    if (sheet.focusLists.length === 0) delete merged.focusLists
+    if (Object.keys(merged).length > 0) planned.clientFacts = merged
+  }
 
   // R9. Holds drop whole groups of keys, one warning per group.
   for (const group of holds) {

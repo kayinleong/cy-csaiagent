@@ -1870,3 +1870,163 @@ describe('quick-kayinleong-105: a trailing plural "s" never decides a location m
     expect(locationNeedles('Express')![0].phrase).toBe('express')
   })
 })
+
+describe('quick-kayinleong-106: Bangsar is around Damansara Heights, and a price is read from every price field', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    mockEmbedText.mockReset()
+    mockProjectsGet.mockReset()
+    mockWhereFn.mockReset()
+    mockEmbedText.mockImplementation(async () => STUB_QUERY_VECTOR)
+    mockWhereFn.mockImplementation((..._args: [string, string, unknown]) => ({
+      where: mockWhereFn,
+      get: mockProjectsGet,
+      orderBy: mockWhereFn,
+    }))
+  })
+
+  const layout = (o: Record<string, unknown>) => ({ label: 'L', sizeSqft: null, bedrooms: null, priceMinRM: null, priceMaxRM: null, raw: 'r', ...o })
+  const base = FIXTURES['proj-active-a']
+  const unpriced = { priceValue: 0, priceBand: 'price_unknown' as const }
+
+  // Modelled on the live records (2026-11-25).
+  const ROYAL = {
+    ...base,
+    name: 'Pavilion Damansara Heights: Royal Suites(RC)',
+    locationText: 'Damansara Heights, Centre of KL',
+    priceValue: 630_000,
+    unitTypes: [layout({ label: 'Type M1', bedrooms: 2, priceMinRM: 1_730_000, priceMaxRM: 2_350_000 })],
+  }
+  const ONE_ELEVEN = {
+    ...base,
+    name: 'One Eleven Menerung @ Bangsar',
+    locationText: 'Bangsar, between BSC & Pavilion Damansara Heights, 180m walk to MRT Pavilion Damansara Heights',
+    area: 'Bangsar',
+    priceValue: 1_920_000,
+  }
+  const HILL_PARK = {
+    ...base,
+    name: 'Bangsar Hill Park',
+    locationText: 'Lorong Maarof, Bangsar, Kuala Lumpur',
+    area: 'Bangsar',
+    priceValue: 841_000,
+    unitTypes: [layout({ label: 'Type 1A', bedrooms: 3, priceMinRM: 1_400_000, priceMaxRM: 1_500_000, grossMinRM: 1_600_000, grossMaxRM: 1_700_000 })],
+  }
+  const PARKSIDE = {
+    ...base,
+    name: 'Parkside Residences',
+    locationText: 'Jalan Bangsar, Setia Federal Hill, Kuala Lumpur',
+    area: 'Setia Federal Hill',
+    priceValue: 588_000,
+    unitTypes: [layout({ label: 'Type E2', bedrooms: 3, priceMinRM: 1_600_000, priceMaxRM: 1_700_000 })],
+  }
+  // psf-only: RM1,400 psf x 561-1,092 sqft = RM785,400-1,528,800.
+  const LANTERN = { ...base, ...unpriced, name: 'The Lantern Bangsar', locationText: 'Jalan Abdullah, Bangsar', area: 'Bangsar', pricePsfMin: 1400, pricePsfMax: 1400, sizeMinSqft: 561, sizeMaxSqft: 1092 }
+  // psf-only: RM970 psf x 580-1,442 sqft = RM562,600-1,398,740, under the floor.
+  const R38 = { ...base, ...unpriced, name: 'Residensi 38 Bangsar', locationText: 'Bangsar, Kuala Lumpur', area: 'Bangsar', pricePsfMin: 970, pricePsfMax: 970, sizeMinSqft: 580, sizeMaxSqft: 1442 }
+  // psf-only: from RM4.4M, over the ceiling.
+  const PINNACLE = { ...base, ...unpriced, name: 'Pinnacle Bangsar Residence', locationText: 'Bangsar, Kuala Lumpur', area: 'Bangsar', pricePsfMin: 1100, pricePsfMax: 1300, sizeMinSqft: 4000, sizeMaxSqft: 7942 }
+  const NO_PRICE_BANGSAR = { ...base, ...unpriced, name: 'Unpriced Bangsar Towers', locationText: 'Bangsar, Kuala Lumpur' }
+  const NO_PRICE_DH = { ...base, ...unpriced, name: 'Unpriced Heights Residence', locationText: 'Damansara Heights, Kuala Lumpur' }
+  const NEAR_BANGSAR = { ...base, name: 'Mid Valley Suites', locationText: 'Mid Valley City, near Bangsar', priceValue: 1_800_000 }
+
+  const criteria = (o: Record<string, unknown>) => ({
+    segment: 'investment' as const,
+    priceMin: null,
+    priceMax: null,
+    monthlyIncome: null,
+    nationality: 'unknown' as const,
+    bumiputera: null,
+    locationPref: 'Damansara Heights',
+    bedrooms: null,
+    freeText: 'Damansara Heights 2 or 3 bedroom',
+    ...o,
+  })
+  const all = [
+    { id: 'royal', doc: ROYAL },
+    { id: 'one11', doc: ONE_ELEVEN },
+    { id: 'hillpark', doc: HILL_PARK },
+    { id: 'parkside', doc: PARKSIDE },
+    { id: 'lantern', doc: LANTERN },
+    { id: 'r38', doc: R38 },
+    { id: 'pinnacle', doc: PINNACLE },
+    { id: 'nopriceBangsar', doc: NO_PRICE_BANGSAR },
+    { id: 'nopriceDH', doc: NO_PRICE_DH },
+    { id: 'nearBangsar', doc: NEAR_BANGSAR },
+  ]
+
+  it('neighbourNeedles: only the Damansara Heights phrase itself lists Bangsar', async () => {
+    const { locationNeedles, neighbourNeedles } = await import('@/src/inventory/search')
+    for (const pref of ['Damansara Heights', 'damansara height', 'Damansara Heights, KL']) {
+      expect(neighbourNeedles(locationNeedles(pref)!)).toEqual(locationNeedles('Bangsar'))
+    }
+    for (const pref of ['Bangsar', 'Pavilion Damansara Heights', 'Cheras', 'Bukit Damansara']) {
+      expect(neighbourNeedles(locationNeedles(pref)!)).toBeNull()
+    }
+  })
+
+  it('projectPriceRange: the from price, else priced layouts, else psf x size; maintenance-fee rates never count', async () => {
+    const { projectPriceRange } = await import('@/src/inventory/search')
+    expect(projectPriceRange(HILL_PARK)).toEqual({ from: 841_000, top: 1_700_000, source: 'stated' })
+    expect(projectPriceRange({ ...unpriced, unitTypes: [layout({ priceMinRM: 900_000, priceMaxRM: 1_000_000 }), layout({ soldOut: true, priceMinRM: 5_000_000 })] }))
+      .toEqual({ from: 900_000, top: 1_000_000, source: 'layouts' })
+    expect(projectPriceRange(LANTERN)).toEqual({ from: 785_400, top: 1_528_800, source: 'psf_estimate' })
+    expect(projectPriceRange({ ...unpriced, pricePsfMin: 0.55, pricePsfMax: 0.55, sizeMinSqft: 700, sizeMaxSqft: 900 })).toBeNull()
+    expect(projectPriceRange({ ...unpriced, pricePsfMin: 1400, pricePsfMax: 1400, sizeMinSqft: null, sizeMaxSqft: null })).toBeNull()
+    expect(projectPriceRange(NO_PRICE_BANGSAR)).toBeNull()
+  })
+
+  it('projectMatchesPrice reads the estimate when there is no total, and still admits a project with no price at all', async () => {
+    const { projectMatchesPrice } = await import('@/src/inventory/search')
+    expect(projectMatchesPrice(LANTERN, 1_500_000, 2_500_000)).toBe(true)
+    expect(projectMatchesPrice(R38, 1_500_000, 2_500_000)).toBe(false)
+    expect(projectMatchesPrice(PINNACLE, 1_500_000, 2_500_000)).toBe(false)
+    expect(projectMatchesPrice(PINNACLE, 4_000_000, null)).toBe(true)
+    expect(projectMatchesPrice(NO_PRICE_BANGSAR, 1_500_000, 2_500_000)).toBe(true)
+  })
+
+  it('THE REPORTED CASE: Damansara Heights, RM1.5M-2.5M lists the priced Bangsar projects around it', async () => {
+    mockProjectsGet.mockResolvedValue(makeAdHocSnap(all))
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects(criteria({ priceMin: 1_500_000, priceMax: 2_500_000 }))
+    expect(result.found).toBe(true)
+    if (!result.found) return
+    const ids = result.matches.map((m) => m.projectId)
+    const inArea = result.matches.filter((m) => m.locationMatch === 'in_area').map((m) => m.projectId)
+    const around = result.matches.filter((m) => m.locationMatch === 'nearby').map((m) => m.projectId)
+    // In-area rows lead; the unknown-price rule (085 D2) still admits the in-area one.
+    expect(inArea.sort()).toEqual(['nopriceDH', 'royal'])
+    expect(ids.slice(0, 2).sort()).toEqual(['nopriceDH', 'royal'])
+    // Around: priced (or psf-estimated) Bangsar projects only.
+    expect(around.sort()).toEqual(['hillpark', 'lantern', 'one11', 'parkside'])
+    const byId = new Map(result.matches.map((m) => [m.projectId, m]))
+    for (const id of around) expect(byId.get(id)!.matchedCriteria.locationPref).toBeNull()
+    expect(byId.get('hillpark')!.matchedCriteria.priceMax).toBe(2_500_000)
+    // An estimate never claims a verified budget match.
+    expect(byId.get('lantern')!.matchedCriteria.priceMax).toBeNull()
+  })
+
+  it('with no budget, the around group keeps unpriced projects; "near Bangsar" is still not Bangsar', async () => {
+    mockProjectsGet.mockResolvedValue(makeAdHocSnap(all))
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects(criteria({}))
+    expect(result.found).toBe(true)
+    if (!result.found) return
+    const ids = result.matches.map((m) => m.projectId)
+    expect(ids).toContain('nopriceBangsar')
+    expect(ids).toContain('pinnacle')
+    expect(ids).not.toContain('nearBangsar')
+  })
+
+  it('one way only: a Bangsar search does not bring in Damansara Heights projects', async () => {
+    mockProjectsGet.mockResolvedValue(makeAdHocSnap(all))
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects(criteria({ locationPref: 'Bangsar', freeText: 'Bangsar' }))
+    expect(result.found).toBe(true)
+    if (!result.found) return
+    const ids = result.matches.map((m) => m.projectId)
+    expect(ids).not.toContain('royal')
+    expect(ids).not.toContain('nopriceDH')
+    expect(result.matches.find((m) => m.projectId === 'hillpark')!.locationMatch).toBe('in_area')
+  })
+})

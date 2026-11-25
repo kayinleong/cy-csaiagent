@@ -36,7 +36,10 @@ const MAX_MESSAGES = 200
  * @returns ChatMessages oldest → newest. Empty array on any read failure
  *          (non-fatal — the caller can still start a fresh exchange).
  */
-export async function loadConversationMessages(cid: string): Promise<ChatMessage[]> {
+export async function loadConversationMessages(
+  cid: string,
+  hiddenLabel?: string,
+): Promise<ChatMessage[]> {
   if (!cid) return []
   try {
     const [{ collection, query, limit, getDocs }, db] = await Promise.all([
@@ -62,7 +65,7 @@ export async function loadConversationMessages(cid: string): Promise<ChatMessage
         createdAt: data.createdAt?.toDate?.() ?? null,
       }
     })
-    return mapConversationMessages(records)
+    return mapConversationMessages(records, hiddenLabel)
   } catch (err) {
     // Non-fatal: log the error OBJECT only (Firestore code, no PII) and return
     // empty so the user can still chat. Mirrors conversation-list.tsx (quick-010).

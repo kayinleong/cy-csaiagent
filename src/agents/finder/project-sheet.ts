@@ -22,9 +22,9 @@
  */
 
 import type { ProjectSheet } from './schema'
-
-/** A WhatsApp group invite anywhere in the write-up. The capture is the invite code. */
-const WHATSAPP_INVITE = /https:\/\/chat\.whatsapp\.com\/([A-Za-z0-9]{10,40})/
+// The contact and invite patterns live in src/inventory/quick-facts.ts (quick-kayinleong-106),
+// which strips the same lines from the summary excerpt. src/inventory must not import from here.
+import { CONTACT_LINE, WHATSAPP_INVITE } from '@/src/inventory/quick-facts'
 
 /**
  * The project WhatsApp group invite, without its query string ("?mode=ems_copy_c" is a
@@ -34,10 +34,6 @@ export function extractWhatsappGroupUrl(description: string): string | null {
   const m = WHATSAPP_INVITE.exec(description ?? '')
   return m ? `https://chat.whatsapp.com/${m[1]}` : null
 }
-
-/** "Project PIC:", "PIC:", "Project Leader:", "Project Co-leader:", "Co-leader:". */
-const CONTACT_LINE =
-  /^\s*(?:project\s+)?(pic|person\s+in\s+charge|co[\s-]?leader|leader)\s*:(.*)$/i
 
 const MAX_CONTACTS = 6
 const MAX_CONTACT_NAME = 60

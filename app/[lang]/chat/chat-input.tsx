@@ -28,6 +28,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
+import { scrubPdpaTokens } from '@/src/audit/scrub'
 import { toast } from 'sonner'
 import { useRouter, useParams } from 'next/navigation'
 import { signInUrlFor } from '@/src/auth/next-path'
@@ -38,13 +39,14 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { ChatMessage } from './message-list'
-import type { FinderRow, ProjectSheet } from '@/src/agents/finder/schema'
+import type { FinderRow, MatchSummary, ProjectSheet } from '@/src/agents/finder/schema'
 import {
   decodeReplyOutput,
   decodeFinderOutput,
   attachCollateral,
   attachFinderRows,
   attachProjectSheets,
+  attachSummaries,
   salvageStructuredText,
 } from './decode-structured-output'
 import {
@@ -378,6 +380,7 @@ function useChatStream({
       let serverFinderRows: FinderRow[] | undefined
       // The project sheets for a details answer, server-built (quick-kayinleong-103).
       let serverProjectSheets: ProjectSheet[] | undefined
+      let serverSummaries: MatchSummary[] | undefined
       // Did the stream reach its `finish` chunk? A turn cut short by the platform never
       // does, and that is where the server's collateral map rides (quick-kayinleong-072).
       let sawFinish = false
@@ -393,6 +396,7 @@ function useChatStream({
       // Accumulate the full assistant text so we can decode a Reply/Finder turn's
       // structured-output JSON on completion (the card-variant decode bridge).
       let assistantContent = ''
+      let rawAssistantContent = ''
 
       while (true) {
         const { done, value } = await reader.read()
@@ -424,6 +428,7 @@ function useChatStream({
             if (meta.collateralByProject) serverCollateral = meta.collateralByProject
             if (meta.finderRows) serverFinderRows = meta.finderRows
             if (meta.projectSheets) serverProjectSheets = meta.projectSheets
+            if (meta.summaries) serverSummaries = meta.summaries
             // `citations` and `kbMiss` only ever ride on `finish`, so their presence is how
             // we know the turn completed.
             if (meta.kbMiss !== undefined || meta.citations) sawFinish = true
@@ -452,11 +457,15 @@ function useChatStream({
                 ? TEXT_BLOCK_SEPARATOR + textChunk.delta
                 : textChunk.delta
 
-            assistantContent += addition
+            // Scrub the WHOLE accumulated text (not the chunk): a PDPA token split across
+            // stream chunks is only recognizable once complete (quick-kayinleong-106).
+            rawAssistantContent += addition
+            assistantContent = scrubPdpaTokens(rawAssistantContent, t('hiddenAmount'))
+            const scrubbed = assistantContent
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMsgId
-                  ? { ...m, content: m.content + addition }
+                  ? { ...m, content: scrubbed }
                   : m,
               ),
             )
@@ -528,9 +537,12 @@ function useChatStream({
         // (quick-071). The same map is written into the persisted envelope server-side, so
         // a revisited turn shows exactly these files too.
         const finderOutput = decoded
-          ? attachProjectSheets(
-              attachFinderRows(attachCollateral(decoded, serverCollateral), serverFinderRows),
-              serverProjectSheets,
+          ? attachSummaries(
+              attachProjectSheets(
+                attachFinderRows(attachCollateral(decoded, serverCollateral), serverFinderRows),
+                serverProjectSheets,
+              ),
+              serverSummaries,
             )
           : null
         if (finderOutput) {
@@ -602,7 +614,7 @@ function useChatStream({
         try {
           // The final checkpoint may still be in flight as the stream dies.
           await new Promise((r) => setTimeout(r, 1200))
-          const restored = await loadConversationMessages(liveCid)
+          const restored = await loadConversationMessages(liveCid, t('hiddenAmount'))
           const lastAssistant = [...restored].reverse().find((m) => m.role === 'assistant')
           if (lastAssistant && (lastAssistant.finderOutput || lastAssistant.content.length > 0)) {
             setMessages((prev) =>

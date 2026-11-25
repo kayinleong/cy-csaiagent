@@ -96,6 +96,9 @@ SIZE_CASES = [
     ("Type 1A: 1345sft", "Type 1A", 1345), ("Type 2B/2B1: 917sft", "Type 2B/2B1", 917),
     ("Type 1 Bedroom: 600sf", None, 600), ("Phase 1: 605-2803sqft", "Phase 1", None),
     ("474 – 1,733 sq ft", None, None),
+    # quick-kayinleong-106 (25 Nov sheet): letter-first alternates and corner units keep their label
+    ("Type B/B1: 841sf", "Type B/B1", 841), ("Type C2/C2A: 1280sf", "Type C2/C2A", 1280),
+    ("Type A corner: 721sf balcony", "Type A corner", 721), ("Type C 1138sf balcony (sold out)", "Type C", 1138),
 ]
 ROOMS_CASES = [
     ("1 Bedroom", 1), ("1 Bedroom + 1", 1), ("2 Bedrooms + 1 + 1", 2), ("3 Bedrooms + 1+1", 3),
@@ -232,6 +235,49 @@ def check_parser(R):
             and w.is_formula(" =SUM(A1:A3)") and not w.is_formula("Type A: 570 sf")
             and not w.is_formula("= 5") and not w.is_formula(None)):
         bad.append("formula detection")
+    # quick-kayinleong-106: "(sold out)" in the Size cell marks the layout sold out, with no price
+    u, _, _ = w.build_unit(2, "Type C corner: 1025sf (sold out)", "3 bedroom 3 bathroom", None, None)
+    if not (u["soldOut"] and u["label"] == "Type C corner" and u["sizeSqft"] == 1025 and u["nettMinRM"] is None):
+        bad.append("gate sold out in size")
+    u, _, _ = w.build_unit(2, "Type C: 1025sf", "3 bedroom 3 bathroom", "RM1mil", None)
+    if u["soldOut"]:
+        bad.append("gate no sold-out note")
+    # quick-kayinleong-106: per-layout car park rows join onto the project row; a bare count keeps
+    # its unit label, a value that names its units is kept as written
+    cp = B.HEADERS_16.index("Car Park Allocation")
+
+    def _row(rn, name, size, car):
+        cells = [None] * 16
+        cells[0], cells[1], cells[2], cells[cp] = name, size, "2 bedrooms", car
+        return (rn, tuple(cells))
+    groups, _ = B.group_rows([_row(2, "X Project", "Type A: 683sf", "1 carpark"),
+                              _row(3, None, "Type B/B1: 841sf", "2 carpark"),
+                              _row(4, None, "Type C: 900sf", "2 carpark side by side for 2-3 rooms"),
+                              _row(5, None, "Type D: 950sf", None)])
+    if groups[0]["rows"][0][1][cp] != "Type A: 1 carpark; Type B/B1: 2 carpark; 2 carpark side by side for 2-3 rooms" \
+            or any(c[cp] is not None for _, c in groups[0]["rows"][1:]):
+        bad.append("car park join")
+    try:
+        B.group_rows([_row(2, "X Project", "Type A: 683sf", None),
+                      (3, (None, "Type B: 841sf", "2 bedrooms", None, None, "Elsewhere") + (None,) * 10)])
+        bad.append("continuation area still refused")
+    except B.BuildError:
+        pass
+    # quick-kayinleong-106: names before the first Sheet1 heading need the explicit flag
+    h0, h1 = w.SHEET1_HEADINGS[0], w.SHEET1_HEADINGS[1]
+    try:
+        B.parse_sheet1(["", "P1", h1, "P2"])
+        bad.append("sheet1 untitled refused")
+    except B.BuildError:
+        pass
+    if B.parse_sheet1(["", "P1", h1, "P2"], h0) != [(h0, "P1"), (h1, "P2")]:
+        bad.append("sheet1 untitled heading")
+    for lines, head in ((["P1", h0, "P2"], h0), ([h1, "P1"], h0), (["P1"], "NOT A HEADING")):
+        try:
+            B.parse_sheet1(lines, head)
+            bad.append("sheet1 untitled misuse")
+        except B.BuildError:
+            pass
     # fact gates
     if w.gate_fact("maintenanceFee", "Residential")[0] is not None:
         bad.append("fee gate")

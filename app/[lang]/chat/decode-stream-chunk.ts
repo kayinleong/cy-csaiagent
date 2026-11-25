@@ -12,8 +12,10 @@
 
 import {
   FinderRowSchema,
+  MatchSummarySchema,
   ProjectSheetSchema,
   type FinderRow,
+  type MatchSummary,
   type ProjectSheet,
 } from '@/src/agents/finder/schema'
 
@@ -133,6 +135,12 @@ export interface StreamMessageMetadata {
    * envelope carries them for that case (see `attachProjectSheets`).
    */
   projectSheets?: ProjectSheet[]
+  /**
+   * The "Layouts & sizing" data of the shortlisted projects (quick-kayinleong-106).
+   * Server-built from the stored unitTypes, like `finderRows`. Absent on a truncated turn;
+   * the persisted envelope carries it for that case (see `attachSummaries`).
+   */
+  summaries?: MatchSummary[]
 }
 
 /**
@@ -208,6 +216,16 @@ export function parseMessageMetadata(line: string): StreamMessageMetadata | null
         .filter((s) => s.success)
         .map((s) => s.data)
       if (sheets.length > 0) out.projectSheets = sheets
+    }
+
+    // Item by item once more: one malformed summary costs that project's layouts only.
+    if (Array.isArray(m.summaries)) {
+      const summaries = m.summaries
+        .map((s) => MatchSummarySchema.safeParse(s))
+        .filter((s) => s.success)
+        .map((s) => s.data)
+        .filter((s) => s.layouts.length > 0 || s.sections.length > 0)
+      if (summaries.length > 0) out.summaries = summaries
     }
 
     return Object.keys(out).length > 0 ? out : null

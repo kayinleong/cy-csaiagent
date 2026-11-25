@@ -43,7 +43,7 @@ import type {
   ProjectDetail,
 } from '@/src/inventory/search'
 import type { ProjectDoc } from '@/src/firebase/collections'
-import type { FinderRow, ProjectSheet } from './schema'
+import type { FinderRow, MatchSummary, ProjectSheet } from './schema'
 import type { JSONValue } from '@ai-sdk/provider'
 
 // ─── Infra-failure guard (quick-kayinleong-040) ───────────────────────────────
@@ -182,6 +182,12 @@ export type FinderRowSink = {
    * replaces its sheet. Optional so existing sinks and tests are unchanged.
    */
   sheets?: ProjectSheet[]
+  /**
+   * The "Layouts & sizing" data of the shortlisted projects (quick-kayinleong-106): the top
+   * `MAX_MATCHES` of the last search that have any layouts, in rank order. REPLACED on every
+   * search, like `rows`. Optional so existing sinks and tests are unchanged.
+   */
+  summaries?: MatchSummary[]
 }
 
 /** The most sheets one answer carries: a comparison of two or three projects. */
@@ -220,6 +226,14 @@ function toFinderRow(m: ProjectMatch, locationPref: string | null): FinderRow {
     ...(m.locationMatch ? { locationMatch: m.locationMatch } : {}),
     ...(m.locationMatch && area ? { locationArea: area } : {}),
   }
+}
+
+/** A match as the model sees it: no `layouts` (106), no `details` (107). */
+function withoutLayouts(m: ProjectMatch): Omit<ProjectMatch, 'layouts' | 'details'> {
+  const { layouts: _layouts, details: _details, ...rest } = m
+  void _layouts
+  void _details
+  return rest
 }
 
 /**
@@ -338,7 +352,17 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: Find
         // append: the prompt already tells the model that only the CURRENT search result
         // counts, so the last search of the turn is the table. Appending would show a
         // narrowed re-search stacked on top of the query it replaced.
-        if (sink) sink.rows = enriched.matches.map((m) => toFinderRow(m, input.locationPref))
+        if (sink) {
+          sink.rows = enriched.matches.map((m) => toFinderRow(m, input.locationPref))
+          sink.summaries = enriched.matches
+            .slice(0, MAX_MATCHES)
+            .filter((m) => (m.layouts?.length ?? 0) > 0 || (m.details?.length ?? 0) > 0)
+            .map((m) => ({
+              projectId: m.projectId,
+              layouts: m.layouts ?? [],
+              sections: m.details ?? [],
+            }))
+        }
 
         return enriched
       }),
@@ -363,9 +387,12 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: Find
       if (!output || typeof output !== 'object' || !('found' in output) || !output.found) {
         return { type: 'json', value: output as unknown as JSONValue }
       }
+      // quickFacts stays (the model writes "Best for" / "Key selling points" from it);
+      // layouts and details go: the SERVER shows those, and the model must not restate them
+      // (quick-kayinleong-106).
       const bounded = {
         ...output,
-        matches: (output.matches ?? []).slice(0, MAX_MATCHES),
+        matches: (output.matches ?? []).slice(0, MAX_MATCHES).map(withoutLayouts),
       }
       return { type: 'json', value: bounded as unknown as JSONValue }
     },

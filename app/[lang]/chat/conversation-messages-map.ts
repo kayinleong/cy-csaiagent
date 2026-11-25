@@ -18,6 +18,7 @@
  * References: quick-018, CHAT-02/07, D-01.
  */
 
+import { scrubPdpaTokens } from '@/src/audit/scrub'
 import type { ChatMessage } from './message-list'
 import {
   decodeFinderOutput,
@@ -48,7 +49,11 @@ export interface RawMessageRecord {
  * and kept. `Array.prototype.sort` is stable (ES2019+), so equal/both-null
  * records preserve their input order. Returns a NEW array; does not mutate input.
  */
-export function mapConversationMessages(records: RawMessageRecord[]): ChatMessage[] {
+export function mapConversationMessages(
+  records: RawMessageRecord[],
+  /** Localized label for a PDPA token that leaked into persisted text (chat.hiddenAmount). */
+  hiddenLabel = '[hidden]',
+): ChatMessage[] {
   const sorted = [...records].sort((a, b) => {
     if (a.createdAt === null && b.createdAt === null) return 0
     if (a.createdAt === null) return -1 // null = oldest → first (ascending)
@@ -62,7 +67,10 @@ export function mapConversationMessages(records: RawMessageRecord[]): ChatMessag
       const base: ChatMessage = {
         id: r.id,
         role: r.role as 'user' | 'assistant',
-        content: r.content ?? '',
+        // Safety net (quick-kayinleong-106): a raw <FIN_HASH:…>-style token must never be
+        // shown. Scrubbed BEFORE the structured decoders so card fields are clean too.
+        // <LEAD_ID:n> is left alone (it is the lead pseudonym the UI shows).
+        content: scrubPdpaTokens(r.content ?? '', hiddenLabel),
         citations: (r.citations ?? []).map((chunkId) => ({ chunkId })),
       }
 

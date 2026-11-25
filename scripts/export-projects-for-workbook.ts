@@ -84,6 +84,9 @@ async function main() {
       sizeMinSqft: d.sizeMinSqft ?? null,
       sizeMaxSqft: d.sizeMaxSqft ?? null,
       locationText: d.locationText ?? null,
+      // quick-kayinleong-107: the sheet Area and project facts, for the Finder details checks.
+      area: d.area ?? null,
+      clientFacts: d.clientFacts ?? null,
       description: d.description ?? null,
       unitTypes: d.unitTypes ?? [],
       collateralTotal: coll.total,

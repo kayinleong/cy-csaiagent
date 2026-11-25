@@ -52,6 +52,7 @@ import {
   attachCollateral,
   attachFinderRows,
   attachProjectSheets,
+  attachSummaries,
   decodeFinderOutput,
   decodeReplyOutput,
   salvageStructuredText,
@@ -563,6 +564,34 @@ export async function POST(req: Request): Promise<Response> {
   // routeDecision encodes pillar:reason for observability + eval (D-02, T-03-27)
   const routeDecision = `${pillar}:${decision.reason}`
 
+  // ── Finder budget carve-out (quick-kayinleong-106) ──────────────────────────
+  // The strict GATE-3 result above masks EVERY RM figure, which made a property budget
+  // ("RM1.5mil-RM2.5mil") unreadable to the Finder. For the Finder ONLY, re-pseudonymize
+  // the same input with financial:'non-budget': budgets/prices pass, but income/loan/bank
+  // figures plus names, phones, IC and emails stay tokenized. The strict result is kept for
+  // Reply/Coach and for everything audit-related (hashes only). The gate runs again on the
+  // result that is actually sent to the model.
+  let modelRedacted = redacted
+  if (pillar === 'finder') {
+    const finderPass = pseudonymize(
+      { messages: messages as Array<{ role: string; content: string }> },
+      knownNames,
+      { financial: 'non-budget' },
+    )
+    try {
+      assertRedacted({ pdpa_redacted: finderPass.pdpa_redacted })
+    } catch (err) {
+      if (err instanceof PdpaViolationError) {
+        return new Response(JSON.stringify({ error: 'PDPA gate failed' }), {
+          status: 422,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      }
+      throw err
+    }
+    modelRedacted = finderPass.redacted
+  }
+
   // ── Required-leadId fail-closed for the Reply pillar (D-07, T-04-BLEED-route) ─
   // A Reply turn drafts in the context of ONE specific lead. Drafting against the
   // wrong (or absent) lead is the worst failure mode — a reply could leak one lead's
@@ -629,7 +658,7 @@ export async function POST(req: Request): Promise<Response> {
    * thread still has a table. The model never sees this array; `toModelOutput` bounds its
    * view at MAX_MATCHES.
    */
-  const finderRowSink: FinderRowSink = { rows: [] as FinderRow[], sheets: [] }
+  const finderRowSink: FinderRowSink = { rows: [] as FinderRow[], sheets: [], summaries: [] }
   /**
    * finishReason of the completed turn, captured for the CLIENT (quick-kayinleong-089).
    *
@@ -717,6 +746,8 @@ export async function POST(req: Request): Promise<Response> {
     //
     // quick-kayinleong-103 adds the project sheets of a details answer, for the same reason.
     const projectSheets = finderRowSink.sheets ?? []
+    // quick-kayinleong-106: the layouts of the shortlist, attached with the rows.
+    const matchSummaries = finderRowSink.summaries ?? []
     if (
       pillar === 'finder' &&
       body.length > 0 &&
@@ -728,7 +759,10 @@ export async function POST(req: Request): Promise<Response> {
         const decoded = decodeFinderOutput(body)
         if (decoded && decoded.matches.length > 0) {
           body = JSON.stringify(
-            attachFinderRows(attachCollateral(decoded, collateralByProject), finderRowSink.rows),
+            attachSummaries(
+              attachFinderRows(attachCollateral(decoded, collateralByProject), finderRowSink.rows),
+              matchSummaries,
+            ),
           )
         } else if (decoded && decoded.answer && projectSheets.length > 0) {
           body = JSON.stringify(attachProjectSheets(decoded, projectSheets))
@@ -887,7 +921,7 @@ export async function POST(req: Request): Promise<Response> {
   // GATE 3 (assertRedacted) has ALREADY run — this is the only model call.
   // onFinish persists BOTH the user and assistant messages with routeDecision,
   // writes the finderSlot for Finder turns (FIND-05/08), and triggers audit.
-  const redactedMessages = redacted.messages as Array<{ role: 'user' | 'assistant'; content: string }>
+  const redactedMessages = modelRedacted.messages as Array<{ role: 'user' | 'assistant'; content: string }>
 
   const result = streamText({
     model,
@@ -1391,6 +1425,11 @@ export async function POST(req: Request): Promise<Response> {
           projectSheets:
             pillar === 'finder' && (finderRowSink.sheets?.length ?? 0) > 0
               ? finderRowSink.sheets
+              : undefined,
+          // The shortlist's "Layouts & sizing" data (quick-106), built from stored unitTypes.
+          summaries:
+            pillar === 'finder' && (finderRowSink.summaries?.length ?? 0) > 0
+              ? finderRowSink.summaries
               : undefined,
         }
       }

@@ -85,6 +85,8 @@
 import { projectsRef } from '@/src/firebase/collections'
 import type { PriceBand, ProjectDoc, UnitTypeEntry } from '@/src/firebase/collections'
 import { embedText } from '@/src/rag/embed'
+import { MAX_DETAIL_LAYOUTS, quickFactsExcerpt, summaryLayouts, type SummaryLayout } from './quick-facts'
+import { buildProjectDetails, type DetailSection } from './project-details'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -142,6 +144,25 @@ export interface ProjectMatch {
   sizeMaxSqft: number | null
   /** Dot-product score from Stage B (normalized unit vectors → range 0–1). */
   score: number
+  /**
+   * The cleaned Quick Facts excerpt (≤700 chars, no links or phone numbers), the model's
+   * ONLY source for a match's "Best for" and "Key selling points" (quick-kayinleong-106).
+   * Set for the top `MAX_MATCHES` only: the AI SDK streams this raw output to the browser,
+   * so the tail of a 100-row result stays slim. Absent means none on record. The raw
+   * `description` is never carried here.
+   */
+  quickFacts?: string
+  /**
+   * The layouts for the "Layouts & sizing" line, built from the stored `unitTypes`. Same
+   * top-`MAX_MATCHES` rule. The model never sees these (`toModelOutput` strips them).
+   */
+  layouts?: SummaryLayout[]
+  /**
+   * The server-built full details (quick facts, prices & fees, other write-up sections,
+   * reasons, focus lists), top-`MAX_MATCHES` only. The model never sees these either
+   * (quick-kayinleong-107).
+   */
+  details?: DetailSection[]
   /**
    * Set only when a location preference was applied (quick-kayinleong-103). `nearby` means
    * the project passed the location gate but sits in another area that borders the
@@ -348,8 +369,9 @@ const LOCATION_QUALIFIER_TOKENS = foldedSet([
  * candidates pass) and `matchedCriteria.locationPref` stays null so no row claims a
  * location match it cannot back up.
  *
- * This is deliberately NOT a region-to-area mapping table. No adjacency or drive-time
- * data exists anywhere in this codebase and inventing one was ruled out of scope (D4 and
+ * This is deliberately NOT a region-to-area mapping table. No drive-time data exists
+ * anywhere in this codebase, and the only adjacency is the short user-confirmed
+ * AREA_NEIGHBOURS list (quick-kayinleong-106); inventing more was ruled out of scope (D4 and
  * the KNOWN LIMITATION note on `locationNeedles` below). Adding a region here means
  * "do not filter on this", never "expand this into a list of areas".
  */
@@ -552,8 +574,8 @@ export interface LocationNeedleGroup {
  * Derive match needles from a free-text location preference.
  *
  * THE MATCHING RULE (deliberate, and deliberately NOT a geographic taxonomy — no area
- * list, no adjacency and no drive-time data exists anywhere in this codebase, and
- * inventing one was ruled out of scope):
+ * list and no drive-time data exists anywhere in this codebase, and inventing one was
+ * ruled out of scope; the one adjacency is AREA_NEIGHBOURS below, quick-kayinleong-106):
  *
  *   1. Split on comma / slash / semicolon / "or". Malaysian addresses run
  *      most-specific-first ("Cheras, Kuala Lumpur"), so each segment becomes its own
@@ -623,6 +645,41 @@ export function locationNeedles(pref: string): LocationNeedleGroup[] | null {
   return groups.length > 0 ? groups : null
 }
 
+/**
+ * Areas the client treats as "around" another area (quick-kayinleong-106). THE ONE EXCEPTION
+ * to "no adjacency data": the user confirmed that a Damansara Heights search should also list
+ * the Bangsar projects as other projects around it. Directed (a Bangsar search is unchanged),
+ * explicit and user-confirmed; there is still no distance data, so nothing here may be phrased
+ * as "close to" or "next to". Add an area only when the user names it.
+ */
+const AREA_NEIGHBOURS: ReadonlyArray<{ area: string; around: readonly string[] }> = [
+  { area: 'Damansara Heights', around: ['Bangsar'] },
+]
+
+/**
+ * The needles of every area listed as around one of `needles`' areas, or null when none is.
+ * A needle group counts only when its phrase IS the listed area (after normalising and the
+ * plural fold): "Damansara Heights", "damansara height" and "Damansara Heights, KL" do;
+ * "Pavilion Damansara Heights" and "Bukit Damansara" do not. A project these needles let in is
+ * still classified against the ORIGINAL needles, so it can only ever be `nearby`.
+ */
+export function neighbourNeedles(needles: LocationNeedleGroup[]): LocationNeedleGroup[] | null {
+  const out: LocationNeedleGroup[] = []
+  const seen = new Set<string>()
+  for (const { area, around } of AREA_NEIGHBOURS) {
+    const key = locationNeedles(area)?.[0]?.phrase
+    if (!key || !needles.some((g) => g.phrase === key)) continue
+    for (const n of around) {
+      for (const g of locationNeedles(n) ?? []) {
+        if (seen.has(g.phrase) || needles.some((x) => x.phrase === g.phrase)) continue
+        seen.add(g.phrase)
+        out.push(g)
+      }
+    }
+  }
+  return out.length > 0 ? out : null
+}
+
 /** Does any needle group match this space-padded haystack? */
 function haystackMatches(haystack: string, needles: LocationNeedleGroup[]): boolean {
   return needles.some(
@@ -644,6 +701,8 @@ export function projectMatchesLocation(doc: ProjectDoc, needles: LocationNeedleG
  *   - `in_area`: the area is in the project's name or in its own address.
  *   - `nearby`:  the area appears only further along the location text, after the
  *                project's own area. The project is in another area that borders it.
+ *                Or (quick-kayinleong-106) the project's area is listed as around the
+ *                requested one in AREA_NEIGHBOURS (Bangsar for Damansara Heights).
  */
 export type LocationMatch = 'in_area' | 'nearby'
 
@@ -746,12 +805,70 @@ export function projectLocationMatch(doc: ProjectDoc, needles: LocationNeedleGro
  */
 export function projectMatchesPrice(doc: ProjectDoc, priceMin: number | null, priceMax: number | null): boolean {
   if (priceMin === null && priceMax === null) return true
-  const price = doc.priceValue
+  // quick-kayinleong-106: a project with no from price is read from its other price fields
+  // (priced layouts, then psf rate × size) before it counts as unknown. See projectPriceRange.
+  const range = projectPriceRange(doc)
   // Unknown price — admitted, not asserted. See invariants 1 and 2 above.
-  if (positiveOrNull(price) === null) return true
-  if (priceMax !== null && price > priceMax) return false
-  if (priceMin !== null && (projectTopPrice(doc) ?? price) < priceMin) return false
+  if (range === null) return true
+  if (priceMax !== null && range.from > priceMax) return false
+  if (priceMin !== null && range.top < priceMin) return false
   return true
+}
+
+/**
+ * The price range the budget gate reads (quick-kayinleong-106).
+ *
+ * The user's rule: "sometimes the price also comes from other fields as well, so also check
+ * other fields when querying". In order:
+ *   1. `stated`: the from price (`priceValue`), topped by `projectTopPrice`. Exactly the
+ *      pre-106 rule, so no priced project's result changes.
+ *   2. `layouts`: no from price, but available layouts carry prices (nett or gross).
+ *   3. `psf_estimate`: no total anywhere, but a psf rate and a size range are on record.
+ *      From ≈ the lowest rate × the smallest size, top ≈ the highest rate × the largest size.
+ *      The Lantern Bangsar: RM1,400 psf × 561-1,092 sqft ≈ RM785k-1.53M. A rate under RM100
+ *      psf is not a sale rate (maintenance fees are quoted psf too), so it never counts.
+ *
+ * An estimate only decides whether the project is admitted. It is never shown as a price
+ * and never claims a verified budget match: `matchedCriteria.priceMax` still needs a real
+ * `priceValue` (invariant 1 above), and the Finder prompt forbids multiplying a rate by a
+ * size in a reply. `null` when no price of any kind is on record.
+ */
+export interface ProjectPriceRange {
+  from: number
+  top: number
+  source: 'stated' | 'layouts' | 'psf_estimate'
+}
+
+const MIN_SALE_PSF = 100
+
+export function projectPriceRange(
+  doc: Pick<ProjectDoc, 'priceValue' | 'unitTypes' | 'pricePsfMin' | 'pricePsfMax' | 'sizeMinSqft' | 'sizeMaxSqft'>,
+): ProjectPriceRange | null {
+  const stated = positiveOrNull(doc.priceValue)
+  if (stated !== null) return { from: stated, top: projectTopPrice(doc) ?? stated, source: 'stated' }
+
+  const units = Array.isArray(doc.unitTypes) ? doc.unitTypes : []
+  let from: number | null = null
+  for (const u of units) {
+    if (u === null || typeof u !== 'object' || u.soldOut === true) continue
+    const v = positiveOrNull(u.priceMinRM) ?? positiveOrNull(u.grossMinRM)
+    if (v !== null && (from === null || v < from)) from = v
+  }
+  const top = projectTopPrice(doc)
+  if (from !== null && top !== null) return { from, top: Math.max(top, from), source: 'layouts' }
+
+  const rate = (v: unknown) => {
+    const n = positiveOrNull(v)
+    return n !== null && n >= MIN_SALE_PSF ? n : null
+  }
+  const psfLo = rate(doc.pricePsfMin) ?? rate(doc.pricePsfMax)
+  const psfHi = rate(doc.pricePsfMax) ?? psfLo
+  const sizeLo = positiveOrNull(doc.sizeMinSqft) ?? positiveOrNull(doc.sizeMaxSqft)
+  const sizeHi = positiveOrNull(doc.sizeMaxSqft) ?? sizeLo
+  if (psfLo === null || psfHi === null || sizeLo === null || sizeHi === null) return null
+  const lo = Math.round(Math.min(psfLo, psfHi) * Math.min(sizeLo, sizeHi))
+  const hi = Math.round(Math.max(psfLo, psfHi) * Math.max(sizeLo, sizeHi))
+  return { from: lo, top: hi, source: 'psf_estimate' }
 }
 
 function positiveOrNull(v: unknown): number | null {
@@ -765,7 +882,8 @@ function positiveOrNull(v: unknown): number | null {
  * "use gross price"; gross is the list price, nett is after rebates), otherwise its nett /
  * stated price. The result is the highest of those and the from price. Sold-out layouts
  * never count. A psf rate is never in these fields, so nothing here multiplies a rate by a
- * size.
+ * size. (The psf estimate for a project with no total at all lives in `projectPriceRange`,
+ * quick-kayinleong-106, and never feeds this function.)
  *
  * With no priced layout it falls back to the from price, which is the pre-104 rule.
  * Treating "no layout prices" as "top unknown, admit" was measured on the live corpus and
@@ -1038,7 +1156,12 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
     // Attribute the miss to the location gate only when it actually removed something.
     // An already-empty set (the since filter) is an 'inventory' miss, not "nothing in Cheras".
     const gate: NoMatchGate = candidates.length > 0 ? 'location' : 'inventory'
-    candidates = candidates.filter(({ doc }) => projectMatchesLocation(doc, needles))
+    // quick-kayinleong-106: an area listed as around the requested one (AREA_NEIGHBOURS)
+    // passes too, through the same address-only haystack. It is classified `nearby` below.
+    const around = neighbourNeedles(needles)
+    candidates = candidates.filter(
+      ({ doc }) => projectMatchesLocation(doc, needles) || (around !== null && projectMatchesLocation(doc, around)),
+    )
     if (candidates.length === 0) {
       // Honest refusal: D2 has no active inventory in the requested area. The Finder
       // must NOT substitute projects from a different area (the reported defect).
@@ -1065,8 +1188,13 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   const priceApplied = criteria.priceMin !== null || criteria.priceMax !== null
   if (priceApplied) {
     const gate: NoMatchGate = candidates.length > 0 ? 'price' : 'inventory'
-    candidates = candidates.filter(({ doc }) =>
-      projectMatchesPrice(doc, criteria.priceMin, criteria.priceMax),
+    candidates = candidates.filter(
+      ({ doc }) =>
+        projectMatchesPrice(doc, criteria.priceMin, criteria.priceMax) &&
+        // quick-kayinleong-106, the user's rule: with a budget, a project that is only
+        // AROUND the requested area shows only when some price is on record for it (its own,
+        // its layouts' or psf × size). The in-area unknown-price rule (085 D2) is unchanged.
+        !(needles !== null && projectLocationMatch(doc, needles) === 'nearby' && projectPriceRange(doc) === null),
     )
     if (candidates.length === 0) {
       // No active project in range. This is a budget miss, NOT a financing refusal —
@@ -1158,7 +1286,7 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   const reranked = ordered.slice(0, MAX_ROWS)
 
   // ── Map to ProjectMatch ──────────────────────────────────────────────────
-  const matches: ProjectMatch[] = reranked.map(({ id, doc, score }) => ({
+  const matches: ProjectMatch[] = reranked.map(({ id, doc, score }, rank) => ({
     projectId: id,
     name: doc.name,
     priceBand: doc.priceBand,
@@ -1174,6 +1302,9 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
     sizeMinSqft: typeof doc.sizeMinSqft === 'number' ? doc.sizeMinSqft : null,
     sizeMaxSqft: typeof doc.sizeMaxSqft === 'number' ? doc.sizeMaxSqft : null,
     score,
+    // Summary data for the shortlist the model sees (quick-kayinleong-106). Bedrooms only
+    // ORDERS the layouts; the budget never filters them.
+    ...(rank < MAX_MATCHES ? summaryFields(doc, criteria.bedrooms) : {}),
     // Present only when the location gate ran (quick-kayinleong-103).
     ...(locationMatchById.has(id) ? { locationMatch: locationMatchById.get(id) } : {}),
     // GROUNDING (quick-kayinleong-050): echo ONLY criteria genuinely applied to THIS
@@ -1215,6 +1346,24 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   }))
 
   return { found: true, matches }
+}
+
+/** `quickFacts` / `layouts` for one shortlisted project; a field with nothing is left off. */
+function summaryFields(
+  doc: Pick<
+    ProjectDoc,
+    'description' | 'unitTypes' | 'priceValue' | 'pricePsfMin' | 'pricePsfMax' | 'clientFacts'
+  >,
+  bedrooms: number | null,
+): Pick<ProjectMatch, 'quickFacts' | 'layouts' | 'details'> {
+  const quickFacts = quickFactsExcerpt(doc.description)
+  const layouts = summaryLayouts(doc.unitTypes, bedrooms, MAX_DETAIL_LAYOUTS)
+  const details = buildProjectDetails(doc)
+  return {
+    ...(quickFacts ? { quickFacts } : {}),
+    ...(layouts.length > 0 ? { layouts } : {}),
+    ...(details.length > 0 ? { details } : {}),
+  }
 }
 
 // ─── Structured inventory query ───────────────────────────────────────────────
