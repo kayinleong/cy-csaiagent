@@ -20,6 +20,7 @@ import {
   FinderMatchSchema,
   type FinderOutput,
   type FinderRow,
+  type MatchSummary,
   type ProjectSheet,
 } from '@/src/agents/finder/schema'
 
@@ -549,4 +550,29 @@ export function attachProjectSheets(
   )
   if (shown.length === 0) return output
   return { ...output, projectSheets: shown.slice(0, 3) }
+}
+
+/**
+ * Attach the SERVER's "Layouts & sizing" data to a decoded matches answer
+ * (quick-kayinleong-106).
+ *
+ * Sibling of `attachProjectSheets`, with the same server-truth-wins rule: whatever the
+ * model wrote into `summaries` (it is told not to) is replaced, so a layout, size or price
+ * can only ever come from the stored `unitTypes`. Every server summary is kept (the top
+ * table rows, in the server's order), also for a row the model left out of `matches`, and a
+ * project with no layouts is dropped.
+ *
+ * Pure. A no-op when `summaries` is undefined or empty, or the output has no matches, so an
+ * older persisted turn renders exactly as before.
+ */
+export function attachSummaries(
+  output: FinderOutput,
+  summaries: MatchSummary[] | undefined,
+): FinderOutput {
+  if (!summaries || summaries.length === 0 || output.matches.length === 0) return output
+  // Every summary the server built is kept (they are already the top table rows), not only
+  // those the model wrote a match for: a row the model left out still shows its layouts.
+  const shown = summaries.filter((s) => s.layouts.length > 0)
+  if (shown.length === 0) return output
+  return { ...output, summaries: shown.slice(0, 8) }
 }

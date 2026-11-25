@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils'
 import type { FinderOutput, FinderMatch } from '@/src/agents/finder/schema'
 import { MarkdownMessage } from './markdown-message'
 import { MatchTable } from './match-table'
+import { MatchSummaries } from './match-summaries'
 import { ProjectSheetContacts, ProjectSheetLinks, ProjectSheetShare } from './project-sheet'
 import { presentCollateral, type CollateralKind } from './collateral-label'
 
@@ -157,6 +158,13 @@ export function MatchList({ output, onAsk, className }: MatchListProps) {
           className={cn('flex w-full flex-col gap-3', className)}
         >
           <MatchTable rows={rows} matches={matches} onAsk={onAsk} />
+          {/* quick-kayinleong-106: the shortlist's summaries, right under the table. */}
+          <MatchSummaries
+            rows={rows}
+            matches={matches}
+            summaries={output.summaries}
+            onAsk={onAsk}
+          />
         </div>
       )
     }

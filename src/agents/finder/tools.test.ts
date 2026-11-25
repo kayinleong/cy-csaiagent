@@ -410,3 +410,78 @@ describe('queryInventory strips the embedding (quick-kayinleong-088)', () => {
     expect((out as Array<{ descriptionTruncated: boolean }>)[0].descriptionTruncated).toBe(true)
   })
 })
+
+// ─── quick-kayinleong-106: per-project summaries under the table ──────────────
+
+describe('searchProjects tool: summaries (quick-kayinleong-106)', () => {
+  const LAYOUT = {
+    label: 'Type A',
+    sizeSqft: 1_076,
+    bedrooms: 2,
+    priceMinRM: 1_200_000,
+    priceMaxRM: 1_350_000,
+    grossMinRM: null,
+    grossMaxRM: null,
+    soldOut: false,
+  }
+
+  /** The first MAX_MATCHES matches carry quickFacts + layouts, like the real mapper. */
+  const RESULT: SearchResult = {
+    found: true,
+    matches: Array.from({ length: ROW_COUNT }, (_, i) => ({
+      ...makeMatch(i),
+      ...(i < MAX_MATCHES ? { quickFacts: `Quick Facts:\nTitle: Freehold ${i}`, layouts: [LAYOUT] } : {}),
+    })),
+  }
+
+  beforeEach(() => {
+    mocks.mockSearchProjects.mockReset()
+    mocks.mockCollateralGet.mockReset()
+    mocks.mockCollateralGet.mockResolvedValue({ empty: true, docs: [] })
+  })
+
+  it("the model's view carries quickFacts for the shortlist and never the layouts", async () => {
+    const { tool: t, output } = await runTool(RESULT)
+    const toModelOutput = t.toModelOutput as NonNullable<typeof t.toModelOutput>
+    const view = toModelOutput(output as never) as unknown as {
+      value: { matches: Array<Record<string, unknown>> }
+    }
+    expect(view.value.matches).toHaveLength(MAX_MATCHES)
+    for (const m of view.value.matches) {
+      expect(typeof m.quickFacts).toBe('string')
+      expect('layouts' in m).toBe(false)
+    }
+    // The raw tool output still has them: the sink is built from it.
+    expect(JSON.stringify(output)).toContain('"layouts"')
+  })
+
+  it('the sink gets the layouts of the shortlist only, in rank order, and no description', async () => {
+    const sink: FinderRowSink = { rows: [] }
+    await runTool(RESULT, sink)
+    expect(sink.summaries).toHaveLength(MAX_MATCHES)
+    expect(sink.summaries?.[0]).toEqual({ projectId: 'proj-0', layouts: [LAYOUT] })
+    expect(sink.summaries?.map((s) => s.projectId)).toEqual(
+      Array.from({ length: MAX_MATCHES }, (_, i) => `proj-${i}`),
+    )
+    expect(JSON.stringify(sink.summaries)).not.toContain('quickFacts')
+    // A match with no layouts has no summary entry.
+    const sink2: FinderRowSink = { rows: [] }
+    await runTool(BIG_RESULT, sink2)
+    expect(sink2.summaries).toEqual([])
+  })
+
+  it('a second search REPLACES the summaries, like the rows', async () => {
+    const sink: FinderRowSink = { rows: [] }
+    await runTool(RESULT, sink)
+    await runTool(BIG_RESULT, sink)
+    expect(sink.summaries).toEqual([])
+  })
+
+  it('the client row stays at the 14-key allowlist: no quickFacts, no layouts', async () => {
+    const sink: FinderRowSink = { rows: [] }
+    await runTool(RESULT, sink)
+    expect('quickFacts' in sink.rows[0]).toBe(false)
+    expect('layouts' in sink.rows[0]).toBe(false)
+    expect(Object.keys(sink.rows[0]).length).toBeLessThanOrEqual(14)
+  })
+})

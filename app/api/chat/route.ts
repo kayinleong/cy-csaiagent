@@ -52,6 +52,7 @@ import {
   attachCollateral,
   attachFinderRows,
   attachProjectSheets,
+  attachSummaries,
   decodeFinderOutput,
   decodeReplyOutput,
   salvageStructuredText,
@@ -657,7 +658,7 @@ export async function POST(req: Request): Promise<Response> {
    * thread still has a table. The model never sees this array; `toModelOutput` bounds its
    * view at MAX_MATCHES.
    */
-  const finderRowSink: FinderRowSink = { rows: [] as FinderRow[], sheets: [] }
+  const finderRowSink: FinderRowSink = { rows: [] as FinderRow[], sheets: [], summaries: [] }
   /**
    * finishReason of the completed turn, captured for the CLIENT (quick-kayinleong-089).
    *
@@ -745,6 +746,8 @@ export async function POST(req: Request): Promise<Response> {
     //
     // quick-kayinleong-103 adds the project sheets of a details answer, for the same reason.
     const projectSheets = finderRowSink.sheets ?? []
+    // quick-kayinleong-106: the layouts of the shortlist, attached with the rows.
+    const matchSummaries = finderRowSink.summaries ?? []
     if (
       pillar === 'finder' &&
       body.length > 0 &&
@@ -756,7 +759,10 @@ export async function POST(req: Request): Promise<Response> {
         const decoded = decodeFinderOutput(body)
         if (decoded && decoded.matches.length > 0) {
           body = JSON.stringify(
-            attachFinderRows(attachCollateral(decoded, collateralByProject), finderRowSink.rows),
+            attachSummaries(
+              attachFinderRows(attachCollateral(decoded, collateralByProject), finderRowSink.rows),
+              matchSummaries,
+            ),
           )
         } else if (decoded && decoded.answer && projectSheets.length > 0) {
           body = JSON.stringify(attachProjectSheets(decoded, projectSheets))
@@ -1419,6 +1425,11 @@ export async function POST(req: Request): Promise<Response> {
           projectSheets:
             pillar === 'finder' && (finderRowSink.sheets?.length ?? 0) > 0
               ? finderRowSink.sheets
+              : undefined,
+          // The shortlist's "Layouts & sizing" data (quick-106), built from stored unitTypes.
+          summaries:
+            pillar === 'finder' && (finderRowSink.summaries?.length ?? 0) > 0
+              ? finderRowSink.summaries
               : undefined,
         }
       }

@@ -101,7 +101,16 @@
       "rowCount": "{count} 个符合条件的项目",
       "notOnRecord": "无记录",
       "nearbyHeading": "{area}周边的其他项目",
-      "inAreaHeading": "位于{area}"
+      "inAreaHeading": "位于{area}",
+      "summaryTitle": "项目摘要",
+      "bestFor": "适合",
+      "layouts": "户型与面积",
+      "sellingPoints": "主要卖点",
+      "soldOut": "已售罄",
+      "sqft": "平方尺",
+      "bed": "房",
+      "nett": "净价",
+      "gross": "毛价"
     },
     "refusal": {
       "nextStepsTitle": "下一步",

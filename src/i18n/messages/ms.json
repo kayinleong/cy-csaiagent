@@ -101,7 +101,16 @@
       "rowCount": "{count} projek yang sepadan",
       "notOnRecord": "Tiada dalam rekod",
       "nearbyHeading": "Projek lain di sekitar {area}",
-      "inAreaHeading": "Di {area}"
+      "inAreaHeading": "Di {area}",
+      "summaryTitle": "Ringkasan projek",
+      "bestFor": "Sesuai untuk",
+      "layouts": "Susun atur & saiz",
+      "sellingPoints": "Ciri jualan utama",
+      "soldOut": "Habis dijual",
+      "sqft": "kps",
+      "bed": "bilik",
+      "nett": "Nett",
+      "gross": "Kasar"
     },
     "refusal": {
       "nextStepsTitle": "Langkah seterusnya",

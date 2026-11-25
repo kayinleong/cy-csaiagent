@@ -39,13 +39,14 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { ChatMessage } from './message-list'
-import type { FinderRow, ProjectSheet } from '@/src/agents/finder/schema'
+import type { FinderRow, MatchSummary, ProjectSheet } from '@/src/agents/finder/schema'
 import {
   decodeReplyOutput,
   decodeFinderOutput,
   attachCollateral,
   attachFinderRows,
   attachProjectSheets,
+  attachSummaries,
   salvageStructuredText,
 } from './decode-structured-output'
 import {
@@ -379,6 +380,7 @@ function useChatStream({
       let serverFinderRows: FinderRow[] | undefined
       // The project sheets for a details answer, server-built (quick-kayinleong-103).
       let serverProjectSheets: ProjectSheet[] | undefined
+      let serverSummaries: MatchSummary[] | undefined
       // Did the stream reach its `finish` chunk? A turn cut short by the platform never
       // does, and that is where the server's collateral map rides (quick-kayinleong-072).
       let sawFinish = false
@@ -426,6 +428,7 @@ function useChatStream({
             if (meta.collateralByProject) serverCollateral = meta.collateralByProject
             if (meta.finderRows) serverFinderRows = meta.finderRows
             if (meta.projectSheets) serverProjectSheets = meta.projectSheets
+            if (meta.summaries) serverSummaries = meta.summaries
             // `citations` and `kbMiss` only ever ride on `finish`, so their presence is how
             // we know the turn completed.
             if (meta.kbMiss !== undefined || meta.citations) sawFinish = true
@@ -534,9 +537,12 @@ function useChatStream({
         // (quick-071). The same map is written into the persisted envelope server-side, so
         // a revisited turn shows exactly these files too.
         const finderOutput = decoded
-          ? attachProjectSheets(
-              attachFinderRows(attachCollateral(decoded, serverCollateral), serverFinderRows),
-              serverProjectSheets,
+          ? attachSummaries(
+              attachProjectSheets(
+                attachFinderRows(attachCollateral(decoded, serverCollateral), serverFinderRows),
+                serverProjectSheets,
+              ),
+              serverSummaries,
             )
           : null
         if (finderOutput) {

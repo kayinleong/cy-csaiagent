@@ -99,7 +99,16 @@
       "rowCount": "{count} matching projects",
       "notOnRecord": "Not on record",
       "nearbyHeading": "Other projects around {area}",
-      "inAreaHeading": "In {area}"
+      "inAreaHeading": "In {area}",
+      "summaryTitle": "Project summaries",
+      "bestFor": "Best for",
+      "layouts": "Layouts & sizing",
+      "sellingPoints": "Key selling points",
+      "soldOut": "Sold out",
+      "sqft": "sqft",
+      "bed": "bed",
+      "nett": "Nett",
+      "gross": "Gross"
     },
     "refusal": {
       "nextStepsTitle": "Next steps",

@@ -85,6 +85,7 @@
 import { projectsRef } from '@/src/firebase/collections'
 import type { PriceBand, ProjectDoc, UnitTypeEntry } from '@/src/firebase/collections'
 import { embedText } from '@/src/rag/embed'
+import { quickFactsExcerpt, summaryLayouts, type SummaryLayout } from './quick-facts'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -142,6 +143,19 @@ export interface ProjectMatch {
   sizeMaxSqft: number | null
   /** Dot-product score from Stage B (normalized unit vectors → range 0–1). */
   score: number
+  /**
+   * The cleaned Quick Facts excerpt (≤700 chars, no links or phone numbers), the model's
+   * ONLY source for a match's "Best for" and "Key selling points" (quick-kayinleong-106).
+   * Set for the top `MAX_MATCHES` only: the AI SDK streams this raw output to the browser,
+   * so the tail of a 100-row result stays slim. Absent means none on record. The raw
+   * `description` is never carried here.
+   */
+  quickFacts?: string
+  /**
+   * The layouts for the "Layouts & sizing" line, built from the stored `unitTypes`. Same
+   * top-`MAX_MATCHES` rule. The model never sees these (`toModelOutput` strips them).
+   */
+  layouts?: SummaryLayout[]
   /**
    * Set only when a location preference was applied (quick-kayinleong-103). `nearby` means
    * the project passed the location gate but sits in another area that borders the
@@ -1265,7 +1279,7 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   const reranked = ordered.slice(0, MAX_ROWS)
 
   // ── Map to ProjectMatch ──────────────────────────────────────────────────
-  const matches: ProjectMatch[] = reranked.map(({ id, doc, score }) => ({
+  const matches: ProjectMatch[] = reranked.map(({ id, doc, score }, rank) => ({
     projectId: id,
     name: doc.name,
     priceBand: doc.priceBand,
@@ -1281,6 +1295,9 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
     sizeMinSqft: typeof doc.sizeMinSqft === 'number' ? doc.sizeMinSqft : null,
     sizeMaxSqft: typeof doc.sizeMaxSqft === 'number' ? doc.sizeMaxSqft : null,
     score,
+    // Summary data for the shortlist the model sees (quick-kayinleong-106). Bedrooms only
+    // ORDERS the layouts; the budget never filters them.
+    ...(rank < MAX_MATCHES ? summaryFields(doc, criteria.bedrooms) : {}),
     // Present only when the location gate ran (quick-kayinleong-103).
     ...(locationMatchById.has(id) ? { locationMatch: locationMatchById.get(id) } : {}),
     // GROUNDING (quick-kayinleong-050): echo ONLY criteria genuinely applied to THIS
@@ -1322,6 +1339,19 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   }))
 
   return { found: true, matches }
+}
+
+/** `quickFacts` / `layouts` for one shortlisted project; a field with nothing is left off. */
+function summaryFields(
+  doc: Pick<ProjectDoc, 'description' | 'unitTypes'>,
+  bedrooms: number | null,
+): Pick<ProjectMatch, 'quickFacts' | 'layouts'> {
+  const quickFacts = quickFactsExcerpt(doc.description)
+  const layouts = summaryLayouts(doc.unitTypes, bedrooms)
+  return {
+    ...(quickFacts ? { quickFacts } : {}),
+    ...(layouts.length > 0 ? { layouts } : {}),
+  }
 }
 
 // ─── Structured inventory query ───────────────────────────────────────────────

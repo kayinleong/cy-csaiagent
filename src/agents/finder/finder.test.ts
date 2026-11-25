@@ -873,3 +873,34 @@ describe('quick-051: finder prompt has a conversational branch', () => {
     expect(FINDER_SYSTEM_PROMPT).not.toContain('`')
   })
 })
+
+describe('Summary section of the prompt (quick-kayinleong-106)', () => {
+  const prompt = buildFinderSystemPrompt()
+
+  it('grounds bestFor / sellingPoints in quickFacts, with omit-rather-than-infer', () => {
+    expect(prompt).toContain('## Summary')
+    expect(prompt).toMatch(/ONLY from that match's quickFacts/)
+    expect(prompt).toMatch(/OMIT that field/)
+  })
+
+  it('keeps the 105 rule: no layouts, sizes, prices or budget fit in the summary fields', () => {
+    expect(prompt).toMatch(/Do NOT write layouts, bedroom counts, sizes \(sqft\), prices, psf rates, fees or budget fit/)
+    expect(prompt).toMatch(/No yield, rental-demand/)
+    expect(prompt).toMatch(/Do NOT mention sales kits, files, brochures, videos, ads/)
+  })
+
+  it('makes a search result always the matches JSON, with one match per project shown', () => {
+    expect(prompt).toMatch(/A search result is ALWAYS the matches JSON/)
+    expect(prompt).toMatch(/Write ONE match for EACH project in the search result you were shown/)
+  })
+
+  it('lists the new optional fields in the output contract and asks for a one-sentence rationale', () => {
+    expect(prompt).toContain('highlight?, bestFor?, sellingPoints?')
+    expect(prompt).toMatch(/Keep each rationale to ONE sentence/)
+  })
+
+  it('the schema keeps both fields optional', () => {
+    const parsed = FinderOutputSchema.parse({ matches: [{ projectId: 'p', rationale: 'r' }] })
+    expect(parsed.matches[0].bestFor).toBeUndefined()
+  })
+})
