@@ -1,0 +1,673 @@
+{
+  "meta": {
+    "schema": "factsheets/1",
+    "source_label": "D2 project info sheet supplied by the client, 25 November 2026",
+    "workbook_sha256": "d7e46d3ca9eaf72deedc2fca148880c7befee9d5a0e38c8b6654613912e7e320"
+  },
+  "sheets": [
+    {
+      "file": "factsheets/damansara-city-residency-dc-residensi-UI9V4i.md",
+      "docId": "UI9V4ibcLUMuYQkd5lQK",
+      "inventoryName": "Damansara City Residency (DC Residensi)",
+      "title": "Damansara City Residency (DC Residensi) — D2 project facts (client sheet)",
+      "category": "Damansara City Residency (DC Residensi)",
+      "sha256": "84a936fe32dcd72ddb0a824983908d6faa58200ef5ad3c223d10234c29ffd737"
+    },
+    {
+      "file": "factsheets/pdh-imperial-residences-ra-WsCKdw.md",
+      "docId": "WsCKdwpNCvFwHy5cHTH6",
+      "inventoryName": "PDH: Imperial Residences RA",
+      "title": "PDH: Imperial Residences RA — D2 project facts (client sheet)",
+      "category": "PDH: Imperial Residences RA",
+      "sha256": "d8f401bad456ba3c086f73c73da6423438733105699cc5b48d4c38e2d2f0c4d5"
+    },
+    {
+      "file": "factsheets/bangsar-hill-park-NCrw4B.md",
+      "docId": "NCrw4BbrKLOTyWhb4M5O",
+      "inventoryName": "Bangsar Hill Park",
+      "title": "Bangsar Hill Park — D2 project facts (client sheet)",
+      "category": "Bangsar Hill Park",
+      "sha256": "d297643436138fbe594a92314e84cabbf2c2ff9510168e096ffbae7f60cbf9cc"
+    },
+    {
+      "file": "factsheets/viia-residences-vrCj5Q.md",
+      "docId": "vrCj5QcxVPPXoH0wojLb",
+      "inventoryName": "ViiA Residences",
+      "title": "ViiA Residences — D2 project facts (client sheet)",
+      "category": "ViiA Residences",
+      "sha256": "bc55bb02c3c6594af16d3901e9b990aa4df89c29bd37f18d446ae5dab3a1814e"
+    },
+    {
+      "file": "factsheets/enlace-suites-pantai-sentral-park-322ca0.md",
+      "docId": "322ca02408V4reUtNJj5",
+      "inventoryName": "Enlace Suites @ Pantai Sentral Park",
+      "title": "Enlace Suites @ Pantai Sentral Park — D2 project facts (client sheet)",
+      "category": "Enlace Suites @ Pantai Sentral Park",
+      "sha256": "dfd42d205c9ccbda3da1f6e977f712b8189560fe3b93bf52ba7116fafa4df245"
+    },
+    {
+      "file": "factsheets/the-lantern-bangsar-jjz7hg.md",
+      "docId": "jjz7hgG3QG0mY3moUj1V",
+      "inventoryName": "The Lantern Bangsar",
+      "title": "The Lantern Bangsar — D2 project facts (client sheet)",
+      "category": "The Lantern Bangsar",
+      "sha256": "a20e2d7fe38f94d5e850f165ef8486c67af85a344a3d39b748757d25c6b99863"
+    },
+    {
+      "file": "factsheets/one-eleven-menerung-bangsar-LS3WGS.md",
+      "docId": "LS3WGSiybvG85aMdGoVT",
+      "inventoryName": "One Eleven Menerung @ Bangsar",
+      "title": "One Eleven Menerung @ Bangsar — D2 project facts (client sheet)",
+      "category": "One Eleven Menerung @ Bangsar",
+      "sha256": "b86a79cbbb78949467fce3aa47101b6e850e5b8e7e61d06c4fef8d56e65cfe6c"
+    },
+    {
+      "file": "factsheets/pavilion-damansara-heights-hAAy2k.md",
+      "docId": "hAAy2kb4t5Aigzmv7MPO",
+      "inventoryName": "Pavilion Damansara Heights",
+      "title": "Pavilion Damansara Heights — D2 project facts (client sheet)",
+      "category": "Pavilion Damansara Heights",
+      "sha256": "d31bad26fcf2a5686b319f9945c54a0d09fd3c726da50c36b4bf5a358d7ac564"
+    },
+    {
+      "file": "factsheets/pavilion-damansara-heights-royal-suites-rc-ggTnQ5.md",
+      "docId": "ggTnQ5DGqxlNBpYZwvhj",
+      "inventoryName": "Pavilion Damansara Heights: Royal Suites(RC)",
+      "title": "Pavilion Damansara Heights: Royal Suites(RC) — D2 project facts (client sheet)",
+      "category": "Pavilion Damansara Heights: Royal Suites(RC)",
+      "sha256": "e4dabf17c2892fc4d46b05a68cf37fb89b1982e89bd218c4c638e3e0defef55a"
+    },
+    {
+      "file": "factsheets/pinnacle-bangsar-residence-oPwVkD.md",
+      "docId": "oPwVkDEEesqTZwhsiE9U",
+      "inventoryName": "Pinnacle Bangsar Residence",
+      "title": "Pinnacle Bangsar Residence — D2 project facts (client sheet)",
+      "category": "Pinnacle Bangsar Residence",
+      "sha256": "56a08f3788ff3f56d0f10e12b01658f66c6128ed659e3ed263c6a5f72a4b33ce"
+    },
+    {
+      "file": "factsheets/parkside-residences-bWOuyI.md",
+      "docId": "bWOuyI6cNAna1nweLHkC",
+      "inventoryName": "Parkside Residences",
+      "title": "Parkside Residences — D2 project facts (client sheet)",
+      "category": "Parkside Residences",
+      "sha256": "ded2fa05521b8b7353c77074c63e2be7b3235b27bf742eb82f0fed88a422a679"
+    },
+    {
+      "file": "factsheets/rhombus-eGsxri.md",
+      "docId": "eGsxriHHrJTsyX9nCHNc",
+      "inventoryName": "Rhombus",
+      "title": "Rhombus — D2 project facts (client sheet)",
+      "category": "Rhombus",
+      "sha256": "59d43241531cde3970b90cda39e3d8e5b0f88396db364e247c607c793be8aa10"
+    },
+    {
+      "file": "factsheets/riana-trees-residences-DxbnSB.md",
+      "docId": "DxbnSBKiLX5934ds64PR",
+      "inventoryName": "Riana Trees Residences",
+      "title": "Riana Trees Residences — D2 project facts (client sheet)",
+      "category": "Riana Trees Residences",
+      "sha256": "4456d3c16e990e74b9d076e67c442e2394d9d22affa21b0a025e7099d1646c23"
+    },
+    {
+      "file": "factsheets/residensi-38-bangsar-QiQthT.md",
+      "docId": "QiQthTM3nC4SqWnST1Q6",
+      "inventoryName": "Residensi 38 Bangsar",
+      "title": "Residensi 38 Bangsar — D2 project facts (client sheet)",
+      "category": "Residensi 38 Bangsar",
+      "sha256": "1c15d0628e0d8f9999e06cc095cf9e4f9f36155b0257231a02959f0d0acab7e4"
+    },
+    {
+      "file": "factsheets/lunar-seputeh-Xrm5Qt.md",
+      "docId": "Xrm5QtWcVldu3ZqTG3rG",
+      "inventoryName": "Lunar Seputeh",
+      "title": "Lunar Seputeh — D2 project facts (client sheet)",
+      "category": "Lunar Seputeh",
+      "sha256": "7b552392287cd1ca3a7731162017aab4ded58a08fe2c2374f0d79fcf8afdecbf"
+    },
+    {
+      "file": "factsheets/sentral-suites-kl-sentral-We6ILv.md",
+      "docId": "We6ILvoHELnvwivtZ0kh",
+      "inventoryName": "Sentral Suites @ KL Sentral",
+      "title": "Sentral Suites @ KL Sentral — D2 project facts (client sheet)",
+      "category": "Sentral Suites @ KL Sentral",
+      "sha256": "d1b87e7f08322ef939808af7c19e296f20f056d45a0b8a1a826788b6256c0743"
+    },
+    {
+      "file": "factsheets/the-cedar-damansara-heights-tnWxI6.md",
+      "docId": "tnWxI6GSEzsMM7uXaZT6",
+      "inventoryName": "The Cedar Damansara Heights",
+      "title": "The Cedar Damansara Heights — D2 project facts (client sheet)",
+      "category": "The Cedar Damansara Heights",
+      "sha256": "94d2acd355889e8a77d90160524f304f84dc4a10810db9645b697de2c09d3c5b"
+    },
+    {
+      "file": "factsheets/tria-seputeh-jteTdb.md",
+      "docId": "jteTdbwfGjCtZiwAJDa5",
+      "inventoryName": "Tria Seputeh",
+      "title": "Tria Seputeh — D2 project facts (client sheet)",
+      "category": "Tria Seputeh",
+      "sha256": "7f59a108d921dfaab8562830512e44ccbb5f9f8da5710e819dca2f94f8e8ca57"
+    },
+    {
+      "file": "factsheets/d-brightton-titiwangsa-y28FP6.md",
+      "docId": "y28FP6lqDrEuGEbz9u3u",
+      "inventoryName": "d'Brightton titiwangsa",
+      "title": "d'Brightton titiwangsa — D2 project facts (client sheet)",
+      "category": "d'Brightton titiwangsa",
+      "sha256": "eaa1e4a595a4299c4bb0e6f612e941985784ee580b13fb34d31afe802fc14728"
+    },
+    {
+      "file": "factsheets/ijm-sierra-hijauan-ejqnuG.md",
+      "docId": "ejqnuGroAIARB2czRshR",
+      "inventoryName": "IJM Sierra Hijauan",
+      "title": "IJM Sierra Hijauan — D2 project facts (client sheet)",
+      "category": "IJM Sierra Hijauan",
+      "sha256": "928eb18432438b91bcc58bf074935a3a38fd612e3a96a0e258055af49c1a2481"
+    },
+    {
+      "file": "factsheets/puncak-wangsamas-phase-2-eZlYoY.md",
+      "docId": "eZlYoYQ0Y8Mhk48IwCw7",
+      "inventoryName": "Puncak Wangsamas Phase 2",
+      "title": "Puncak Wangsamas Phase 2 — D2 project facts (client sheet)",
+      "category": "Puncak Wangsamas Phase 2",
+      "sha256": "963f13c531eea958a754d1a007f8a551a4d1f7356fd2c7eda9de06222d6e96bf"
+    },
+    {
+      "file": "factsheets/the-reya-sfIZzz.md",
+      "docId": "sfIZzzQIiZUnKGG6ZfCa",
+      "inventoryName": "The Reya",
+      "title": "The Reya — D2 project facts (client sheet)",
+      "category": "The Reya",
+      "sha256": "29ec826bf0864512a024be29c9d8da692ff731eb9974a9deb261c189124c8380"
+    },
+    {
+      "file": "factsheets/padang-residences-hVUWwB.md",
+      "docId": "hVUWwBE2CRaMWYOuwWyp",
+      "inventoryName": "Padang Residences",
+      "title": "Padang Residences — D2 project facts (client sheet)",
+      "category": "Padang Residences",
+      "sha256": "d0250a7be712e540e2404a0f0a16563f05678a6a8269e883b36c6c6eafa4ebe4"
+    },
+    {
+      "file": "factsheets/tangen-residences-QZL9Wp.md",
+      "docId": "QZL9WpMOxZ07JHxSl54P",
+      "inventoryName": "Tangen Residences",
+      "title": "Tangen Residences — D2 project facts (client sheet)",
+      "category": "Tangen Residences",
+      "sha256": "417ea81377684d8026eb5b18fcf4e226a853fe8ec5cc21ee3c88502add991463"
+    },
+    {
+      "file": "factsheets/miranda-hill-north-kiara-by-brdb-02F5tL.md",
+      "docId": "02F5tLppdnsZhpipbowa",
+      "inventoryName": "Miranda Hill @ north kiara by BRDB",
+      "title": "Miranda Hill @ north kiara by BRDB — D2 project facts (client sheet)",
+      "category": "Miranda Hill @ north kiara by BRDB",
+      "sha256": "62fd556df49be8a79030e61e1ebaa846df518f6adc8c6811e3927f7ddbed0172"
+    },
+    {
+      "file": "factsheets/alstonia-hilltop-homes-ZAtRBL.md",
+      "docId": "ZAtRBLvFIfa04tuOnDcr",
+      "inventoryName": "Alstonia Hilltop Homes",
+      "title": "Alstonia Hilltop Homes — D2 project facts (client sheet)",
+      "category": "Alstonia Hilltop Homes",
+      "sha256": "b131cc3b695ac81033511bb43268b22e2e6bd0e998283f34e736beb3b97dc622"
+    },
+    {
+      "file": "factsheets/binastra-cochrane-lYok7R.md",
+      "docId": "lYok7RdyP2P2PUZCIpX2",
+      "inventoryName": "Binastra Cochrane",
+      "title": "Binastra Cochrane — D2 project facts (client sheet)",
+      "category": "Binastra Cochrane",
+      "sha256": "bc802d42ef12a9237591c70924a8eb134843f09155069517c1271ac788a13d91"
+    },
+    {
+      "file": "factsheets/eden-brdb-taman-duta-Y9e0jU.md",
+      "docId": "Y9e0jUxw51oDWzLg5vWR",
+      "inventoryName": "Eden BRDB, Taman Duta",
+      "title": "Eden BRDB, Taman Duta — D2 project facts (client sheet)",
+      "category": "Eden BRDB, Taman Duta",
+      "sha256": "86e0f7a889e2ee46eac735c85b1526d57d27d7ac482ce3312e131e2e81596421"
+    },
+    {
+      "file": "factsheets/majestic-kiara-reserve-ua17Qm.md",
+      "docId": "ua17QmBD8hAzIEEiSzlk",
+      "inventoryName": "Majestic @ Kiara Reserve",
+      "title": "Majestic @ Kiara Reserve — D2 project facts (client sheet)",
+      "category": "Majestic @ Kiara Reserve",
+      "sha256": "48fee8bfed2631b6e2f9fcca0f9b5543699087ba35fbb75b85d33bf3a82a2126"
+    },
+    {
+      "file": "factsheets/st-regis-residences-kuala-lumpur-8UKNRs.md",
+      "docId": "8UKNRsEYVyFqZFp0wt5Q",
+      "inventoryName": "St. Regis Residences Kuala Lumpur",
+      "title": "St. Regis Residences Kuala Lumpur — D2 project facts (client sheet)",
+      "category": "St. Regis Residences Kuala Lumpur",
+      "sha256": "3d09e91a5bde490fb8960342387c7831dd53882faf0619afa2588c5c456d7323"
+    },
+    {
+      "file": "factsheets/aster-hill-sri-petaling-5GQD7W.md",
+      "docId": "5GQD7WaNNz6Dlzb13Ho1",
+      "inventoryName": "Aster Hill Sri Petaling",
+      "title": "Aster Hill Sri Petaling — D2 project facts (client sheet)",
+      "category": "Aster Hill Sri Petaling",
+      "sha256": "f8708638a82d43af8419e8c31ae124360510f9de00a783bdc37352b315ff88c0"
+    },
+    {
+      "file": "factsheets/kensho-taman-desa-GnoAYH.md",
+      "docId": "GnoAYH9KP5JL2e9hwaxl",
+      "inventoryName": "Kensho @ Taman Desa",
+      "title": "Kensho @ Taman Desa — D2 project facts (client sheet)",
+      "category": "Kensho @ Taman Desa",
+      "sha256": "29a263482f5d4097d974db78cceace17886efca396f40276a055594c9ee89981"
+    },
+    {
+      "file": "factsheets/aetas-taman-desa-vo8AyK.md",
+      "docId": "vo8AyKLc2F9xo0T51c9I",
+      "inventoryName": "Aetas Taman Desa",
+      "title": "Aetas Taman Desa — D2 project facts (client sheet)",
+      "category": "Aetas Taman Desa",
+      "sha256": "58d2997245745dcebd121583b9d8a91d0a17c0ba5745734db6ce4ac8577bb2bd"
+    },
+    {
+      "file": "factsheets/southpoint-residences-igb-bOYv3J.md",
+      "docId": "bOYv3JimSfL6gYyPiWaS",
+      "inventoryName": "Southpoint Residences (IGB )",
+      "title": "Southpoint Residences (IGB ) — D2 project facts (client sheet)",
+      "category": "Southpoint Residences (IGB )",
+      "sha256": "e5cdac3ec381c1ac6adba5ad493224aee6451738115f3df45a34f4b5a8f30218"
+    },
+    {
+      "file": "factsheets/park-green-at-pavilion-bukit-jalil-B5lsfX.md",
+      "docId": "B5lsfXAhC31EOj7Bh1f9",
+      "inventoryName": "Park Green at Pavilion Bukit Jalil",
+      "title": "Park Green at Pavilion Bukit Jalil — D2 project facts (client sheet)",
+      "category": "Park Green at Pavilion Bukit Jalil",
+      "sha256": "0047f13030c7bed16b30c0167e38108d0e321cc93baa6351f1eb903004543cb8"
+    },
+    {
+      "file": "factsheets/oaka-residences-bukit-jalil-vTsTFU.md",
+      "docId": "vTsTFUTt5BYDltcvqEs2",
+      "inventoryName": "OAKA Residences, Bukit Jalil",
+      "title": "OAKA Residences, Bukit Jalil — D2 project facts (client sheet)",
+      "category": "OAKA Residences, Bukit Jalil",
+      "sha256": "c138813befa90965074658eac32d0eaa629114c0114ad2179641ac46e77cf8a1"
+    },
+    {
+      "file": "factsheets/senja-the-jewel-collection-fB42TF.md",
+      "docId": "fB42TF3RMB3MkgthiAB7",
+      "inventoryName": "Senja The Jewel Collection",
+      "title": "Senja The Jewel Collection — D2 project facts (client sheet)",
+      "category": "Senja The Jewel Collection",
+      "sha256": "6387d908f014fc7ebc4a82a666b9d105ccd4e47ad64b6121c7e202653046e27f"
+    },
+    {
+      "file": "factsheets/18-madge-uthant-lHfAYr.md",
+      "docId": "lHfAYryEGRDmv9ZV2r6w",
+      "inventoryName": "18 Madge Uthant",
+      "title": "18 Madge Uthant — D2 project facts (client sheet)",
+      "category": "18 Madge Uthant",
+      "sha256": "d728986e6f5f690ad22306f7ce6ddfdb7869d0819c37274a65769bef5078afe9"
+    },
+    {
+      "file": "factsheets/aria-luxury-residence-klcc-3mxxrO.md",
+      "docId": "3mxxrORFeZBV2RSUMu98",
+      "inventoryName": "Aria Luxury Residence @ KLCC",
+      "title": "Aria Luxury Residence @ KLCC — D2 project facts (client sheet)",
+      "category": "Aria Luxury Residence @ KLCC",
+      "sha256": "b6c531f6d3cdeaadf2a33bf3f1d9dfffba1e14575a142e3bdb44761de7582b23"
+    },
+    {
+      "file": "factsheets/at6-residensi-ampang-tengah-nsls9G.md",
+      "docId": "nsls9Gq69qXQFzPia0MX",
+      "inventoryName": "AT6 Residensi @ Ampang Tengah",
+      "title": "AT6 Residensi @ Ampang Tengah — D2 project facts (client sheet)",
+      "category": "AT6 Residensi @ Ampang Tengah",
+      "sha256": "b5577272341507fb67892940161140a1077e18a647a5a70dc63484606a119e1d"
+    },
+    {
+      "file": "factsheets/clouthaus-klcc-oWzA0m.md",
+      "docId": "oWzA0mi4GKdPIsZ4ioYJ",
+      "inventoryName": "Clouthaus KLCC",
+      "title": "Clouthaus KLCC — D2 project facts (client sheet)",
+      "category": "Clouthaus KLCC",
+      "sha256": "ba9734d180f922b71c698bea2757d68cff0b238a70687e6dca550965a9e0b088"
+    },
+    {
+      "file": "factsheets/conlay-by-e-o-SXDhvw.md",
+      "docId": "SXDhvwmzeIxKlj4tQ7N7",
+      "inventoryName": "Conlay by E&O",
+      "title": "Conlay by E&O — D2 project facts (client sheet)",
+      "category": "Conlay by E&O",
+      "sha256": "072262dbd2d5747e872a2f5521d757236cd15ea922fa950c27c2c413ab0bf98f"
+    },
+    {
+      "file": "factsheets/core-residence-trx-CSNSOM.md",
+      "docId": "CSNSOM3sg4JsxS4Nfcxn",
+      "inventoryName": "Core Residence @ TRX",
+      "title": "Core Residence @ TRX — D2 project facts (client sheet)",
+      "category": "Core Residence @ TRX",
+      "sha256": "c44c4c1bf4d1627187a2b32d9b07f266482da0ed50e7bdfa042449b2e1d34547"
+    },
+    {
+      "file": "factsheets/dawn-klcc-2XuDf0.md",
+      "docId": "2XuDf0Kw7ebp92Z4CMaP",
+      "inventoryName": "Dawn KLCC",
+      "title": "Dawn KLCC — D2 project facts (client sheet)",
+      "category": "Dawn KLCC",
+      "sha256": "4bf576a5979c4c764941dcda45c25eab0aaccfbb14ec194f8baf3b6ee72a67ed"
+    },
+    {
+      "file": "factsheets/eaton-residences-by-sutera-klcc-A7h6tC.md",
+      "docId": "A7h6tCOPvghxPHW1l5JA",
+      "inventoryName": "Eaton Residences by Sutera @ KLCC",
+      "title": "Eaton Residences by Sutera @ KLCC — D2 project facts (client sheet)",
+      "category": "Eaton Residences by Sutera @ KLCC",
+      "sha256": "b1fa395e02e1ecba98526aff0de5ea6d855f924367b7ae59e0fa8d19e96fca36"
+    },
+    {
+      "file": "factsheets/platinum-face-suite-2-klcc-mkhvGp.md",
+      "docId": "mkhvGpzdLqmO1Y6o6M1F",
+      "inventoryName": "Platinum Face Suite 2 KLCC",
+      "title": "Platinum Face Suite 2 KLCC — D2 project facts (client sheet)",
+      "category": "Platinum Face Suite 2 KLCC",
+      "sha256": "4e1b6bbd7a237630643c036c8ae48a4f25e39854b139a7e3b2b7f96f098e5c4b"
+    },
+    {
+      "file": "factsheets/armani-hallson-jalan-ampang-VDyQvC.md",
+      "docId": "VDyQvCJ7iGd9xihKmj5v",
+      "inventoryName": "Armani Hallson @ Jalan Ampang",
+      "title": "Armani Hallson @ Jalan Ampang — D2 project facts (client sheet)",
+      "category": "Armani Hallson @ Jalan Ampang",
+      "sha256": "6d9ddb82b15e5745be1d43943d1517691f546b0bd43447110799f6a8058162ad"
+    },
+    {
+      "file": "factsheets/orion-residence-un96QO.md",
+      "docId": "un96QODcMT41aS81jAje",
+      "inventoryName": "Orion Residence",
+      "title": "Orion Residence — D2 project facts (client sheet)",
+      "category": "Orion Residence",
+      "sha256": "9a55b3c5d098a3ef1b932acdc4b1a72a19e0a30602477f5824274e60776fb61e"
+    },
+    {
+      "file": "factsheets/psq-pavilion-square-sMPvO8.md",
+      "docId": "sMPvO88kDSUNcJlujNK3",
+      "inventoryName": "PSQ Pavilion Square",
+      "title": "PSQ Pavilion Square — D2 project facts (client sheet)",
+      "category": "PSQ Pavilion Square",
+      "sha256": "2bd99fa14f3b7c9bceef773a5bbaa26993979ba3e4d79e66be83fdb618729215"
+    },
+    {
+      "file": "factsheets/katana-2-residence-Tmo9Em.md",
+      "docId": "Tmo9EmmnZDS8lie97BzS",
+      "inventoryName": "Katana 2 Residence",
+      "title": "Katana 2 Residence — D2 project facts (client sheet)",
+      "category": "Katana 2 Residence",
+      "sha256": "0ec20fb9bc183494300da9b2ebbedccc87316d62dd55196701b42b4daf4ba257"
+    },
+    {
+      "file": "factsheets/the-centrix-cPm26p.md",
+      "docId": "cPm26piH01BLSP7QLZkx",
+      "inventoryName": "The Centrix",
+      "title": "The Centrix — D2 project facts (client sheet)",
+      "category": "The Centrix",
+      "sha256": "621502753bf928020b7815f1df11166b333fbc71ce53c3cc06f81879855e1283"
+    },
+    {
+      "file": "factsheets/quill-residences-klcc-6Vl2Py.md",
+      "docId": "6Vl2Py196ogTG3seI28U",
+      "inventoryName": "Quill Residences KLCC",
+      "title": "Quill Residences KLCC — D2 project facts (client sheet)",
+      "category": "Quill Residences KLCC",
+      "sha256": "9f28fddcff39243c260c650cd08301c59f94503074bf832087e15020b8909b84"
+    },
+    {
+      "file": "factsheets/royal-lexis-kl-dGkfWD.md",
+      "docId": "dGkfWDGumOb0NDoazfZ3",
+      "inventoryName": "Royal Lexis KL",
+      "title": "Royal Lexis KL — D2 project facts (client sheet)",
+      "category": "Royal Lexis KL",
+      "sha256": "068213566d6a2e2a727f442791aa11fd5cd3af69c8d3fa8c67014564b5b4ad88"
+    },
+    {
+      "file": "factsheets/so-sofitel-residences-klcc-LFQ1wA.md",
+      "docId": "LFQ1wAO6pY3cjZRfBrFd",
+      "inventoryName": "SO Sofitel Residences KLCC",
+      "title": "SO Sofitel Residences KLCC — D2 project facts (client sheet)",
+      "category": "SO Sofitel Residences KLCC",
+      "sha256": "66c55ce87ecd40d43778a7f781bc6a1e5f03390554f03fe5bbfe8260ccdb155a"
+    },
+    {
+      "file": "factsheets/le-nouvel-klcc-LNn2Yq.md",
+      "docId": "LNn2YqmcN0DChCS6W7Cf",
+      "inventoryName": "Le Nouvel KLCC",
+      "title": "Le Nouvel KLCC — D2 project facts (client sheet)",
+      "category": "Le Nouvel KLCC",
+      "sha256": "8fb85e1dee58dbd2590f0a857291a2047f82866d876ac08caaf26a2f76310b80"
+    },
+    {
+      "file": "factsheets/star-residences-klcc-Vy42PE.md",
+      "docId": "Vy42PE5qZxJzLIBe2fvW",
+      "inventoryName": "Star Residences KLCC",
+      "title": "Star Residences KLCC — D2 project facts (client sheet)",
+      "category": "Star Residences KLCC",
+      "sha256": "584a1d0832d1dbe8a262be1ac092d4edab874269d9fe752301d0c69fc8efd4e2"
+    },
+    {
+      "file": "factsheets/jewel-by-oxley-klcc-8hQluB.md",
+      "docId": "8hQluB9sj4dNRiEpF6tF",
+      "inventoryName": "Jewel by Oxley KLCC",
+      "title": "Jewel by Oxley KLCC — D2 project facts (client sheet)",
+      "category": "Jewel by Oxley KLCC",
+      "sha256": "7bcb7648063bd46cd4bb89fa1fe97098fccb061abe4f9ba3c9278befc1e81900"
+    },
+    {
+      "file": "factsheets/golden-crown-residence-VvxOkd.md",
+      "docId": "VvxOkdBbwLdPU2nJwuHJ",
+      "inventoryName": "Golden Crown Residence",
+      "title": "Golden Crown Residence — D2 project facts (client sheet)",
+      "category": "Golden Crown Residence",
+      "sha256": "bf8da077b5bb9db8b7daaf23487d0903d76f92a77c9d295b08b305a7909a1916"
+    },
+    {
+      "file": "factsheets/swnk-houze-bbcc-bukit-bintang-city-centre-LOFXx9.md",
+      "docId": "LOFXx95YiYK0Buf0s0Lh",
+      "inventoryName": "SWNK Houze @ BBCC (Bukit Bintang City Centre)",
+      "title": "SWNK Houze @ BBCC (Bukit Bintang City Centre) — D2 project facts (client sheet)",
+      "category": "SWNK Houze @ BBCC (Bukit Bintang City Centre)",
+      "sha256": "e6223a42ca57076b79c8f1dd846030b90d9c30616d39c575d8aebfb851bd581b"
+    },
+    {
+      "file": "factsheets/times-square-2-residences-kuala-lumpur-Ohnp2l.md",
+      "docId": "Ohnp2lpwtHES0OL0qu5E",
+      "inventoryName": "Times Square 2 Residences Kuala Lumpur",
+      "title": "Times Square 2 Residences Kuala Lumpur — D2 project facts (client sheet)",
+      "category": "Times Square 2 Residences Kuala Lumpur",
+      "sha256": "9f7663d48dfe8f61a0418e64b63cf96418ab4af1db9cfa1fdd7dc58b25145b07"
+    },
+    {
+      "file": "factsheets/the-manor-klcc-incefT.md",
+      "docId": "incefTUSycrB4BWTssgn",
+      "inventoryName": "The Manor KLCC",
+      "title": "The Manor KLCC — D2 project facts (client sheet)",
+      "category": "The Manor KLCC",
+      "sha256": "187e68a13941ae87a642d685c80af70f34987987764433ec88adc0fe2abd8913"
+    },
+    {
+      "file": "factsheets/trx-residences-DFZ9QG.md",
+      "docId": "DFZ9QGqJWkwcAfktHGBK",
+      "inventoryName": "TRX Residences",
+      "title": "TRX Residences — D2 project facts (client sheet)",
+      "category": "TRX Residences",
+      "sha256": "b386d971e4dc82da398482c81f05dffccad4e9f437de28dcd5d99b07782d4b58"
+    },
+    {
+      "file": "factsheets/the-oval-kuala-lumpur-GVRKC9.md",
+      "docId": "GVRKC920qO8x7jNeemif",
+      "inventoryName": "The Oval Kuala Lumpur",
+      "title": "The Oval Kuala Lumpur — D2 project facts (client sheet)",
+      "category": "The Oval Kuala Lumpur",
+      "sha256": "65357cffe1dd874d54a81f36aa9364de9032d94c3dae1e81bf0e709a00560176"
+    },
+    {
+      "file": "factsheets/the-ritz-carlton-residences-gBKQrp.md",
+      "docId": "gBKQrpT6Gl5MVVateO4O",
+      "inventoryName": "The Ritz- Carlton Residences",
+      "title": "The Ritz- Carlton Residences — D2 project facts (client sheet)",
+      "category": "The Ritz- Carlton Residences",
+      "sha256": "06e96f7d0628a635e3ccf48684f034fa1cfc47087520d09fcd3ba2692c191dc1"
+    },
+    {
+      "file": "factsheets/the-stride-office-bbcc-8vxV90.md",
+      "docId": "8vxV90uXgjCKUvmJKQT7",
+      "inventoryName": "The Stride Office @ BBCC",
+      "title": "The Stride Office @ BBCC — D2 project facts (client sheet)",
+      "category": "The Stride Office @ BBCC",
+      "sha256": "25a182a9be650ae7ababc79203a1d57aa1ef11150d9689dbe35d5b5d458bc449"
+    },
+    {
+      "file": "factsheets/rimbun-saujana-residency-gxA6UX.md",
+      "docId": "gxA6UXHk7dRuQToxKwP4",
+      "inventoryName": "Rimbun Saujana Residency",
+      "title": "Rimbun Saujana Residency — D2 project facts (client sheet)",
+      "category": "Rimbun Saujana Residency",
+      "sha256": "53a13ed1e29829ec053d2ac0d945c16482dd820e2dfb88fc711733f160901508"
+    },
+    {
+      "file": "factsheets/luminar-residence-subang-by-brdb-D1YbEP.md",
+      "docId": "D1YbEPT7QI5kLZvfrnPW",
+      "inventoryName": "Luminar Residence Subang by BRDB",
+      "title": "Luminar Residence Subang by BRDB — D2 project facts (client sheet)",
+      "category": "Luminar Residence Subang by BRDB",
+      "sha256": "70717ffb248b724f07a2e3dcc522ef1c8507eaf1a60910e9fe80a1159153b006"
+    },
+    {
+      "file": "factsheets/accent-pj-Tg0VA1.md",
+      "docId": "Tg0VA12fHdK8vdZXPv6s",
+      "inventoryName": "Accent PJ",
+      "title": "Accent PJ — D2 project facts (client sheet)",
+      "category": "Accent PJ",
+      "sha256": "f9e0d496ee1485ae21abaf752aa87fb7a60b75c27b4ca60aa95743caf111c9d1"
+    },
+    {
+      "file": "factsheets/26-araville-pj-ujblMk.md",
+      "docId": "ujblMkAxtdMg5tIRLP4w",
+      "inventoryName": "26 Araville PJ",
+      "title": "26 Araville PJ — D2 project facts (client sheet)",
+      "category": "26 Araville PJ",
+      "sha256": "934b5d9f77b869409cf983148314f3497244482873d96a9420c27ff1dbf566f1"
+    },
+    {
+      "file": "factsheets/the-atera-pj-by-paramount-property-4g4sxy.md",
+      "docId": "4g4sxyf8GAVWkmXhOca9",
+      "inventoryName": "The Atera, PJ by Paramount Property",
+      "title": "The Atera, PJ by Paramount Property — D2 project facts (client sheet)",
+      "category": "The Atera, PJ by Paramount Property",
+      "sha256": "7d43ab1949e132e3b6c87c2fe95400850ad850481741dbee7478b4bb14c83ce1"
+    },
+    {
+      "file": "factsheets/anyara-hills-ypsQ16.md",
+      "docId": "ypsQ16qbU1J6OvRjOUj1",
+      "inventoryName": "Anyara Hills",
+      "title": "Anyara Hills — D2 project facts (client sheet)",
+      "category": "Anyara Hills",
+      "sha256": "6a36bfd831a938337584d8c20fe8481b0794e0062b055e377f191da3bb30aca9"
+    },
+    {
+      "file": "factsheets/yanu-hills-bon-estates-2KRPpm.md",
+      "docId": "2KRPpmMy4CoTiajiVRDY",
+      "inventoryName": "Yanu Hills @ Bon Estates",
+      "title": "Yanu Hills @ Bon Estates — D2 project facts (client sheet)",
+      "category": "Yanu Hills @ Bon Estates",
+      "sha256": "c0f5f475bf4b5340f16ef11cef9f08b8e60f30e6398c435c0e6c621937802503"
+    },
+    {
+      "file": "factsheets/rafflesia-hill-2-3-4-t384yi.md",
+      "docId": "t384yiOBBy3lwLl3m28w",
+      "inventoryName": "Rafflesia @ Hill 2, 3 & 4",
+      "title": "Rafflesia @ Hill 2, 3 & 4 — D2 project facts (client sheet)",
+      "category": "Rafflesia @ Hill 2, 3 & 4",
+      "sha256": "9d8f662d596a7629e37490c44eccb049e363940eb311e7ebd3843e8ffbe0d65e"
+    },
+    {
+      "file": "factsheets/daya-residence-uIYSO5.md",
+      "docId": "uIYSO5uCU40WD5kKEMi1",
+      "inventoryName": "DAYA Residence",
+      "title": "DAYA Residence — D2 project facts (client sheet)",
+      "category": "DAYA Residence",
+      "sha256": "402c9f632853939cca707f5d54e4650d962a944c8fe2043cd42d1e8efe6b0d35"
+    },
+    {
+      "file": "factsheets/vila-setara-happy-garden-FbLU7s.md",
+      "docId": "FbLU7sHDjDA00nBXMYBr",
+      "inventoryName": "Vila Setara Happy Garden",
+      "title": "Vila Setara Happy Garden — D2 project facts (client sheet)",
+      "category": "Vila Setara Happy Garden",
+      "sha256": "895e97d16913f8cbf71da782adc003470eb5918dfd932c99f25a7436ca32f87d"
+    },
+    {
+      "file": "factsheets/e-o-city-of-elmina-laman-embun-commercial-Dqv8Wf.md",
+      "docId": "Dqv8WfbY7tRC9plczVtZ",
+      "inventoryName": "E&O – City of Elmina (Laman Embun Commercial)",
+      "title": "E&O – City of Elmina (Laman Embun Commercial) — D2 project facts (client sheet)",
+      "category": "E&O – City of Elmina (Laman Embun Commercial)",
+      "sha256": "0f55821a6b7cd40098bf76b75d11d4a797d7386546964cfafd6d84811f5d6422"
+    },
+    {
+      "file": "factsheets/aspire-office-kl-ecocity-UyAt3r.md",
+      "docId": "UyAt3rBJpmkv1GXZg73E",
+      "inventoryName": "Aspire office @ KL ecocity",
+      "title": "Aspire office @ KL ecocity — D2 project facts (client sheet)",
+      "category": "Aspire office @ KL ecocity",
+      "sha256": "05318af3914eb720ba8f07beca626f9d8c9c74bf52fe8d8c7e5c9cda1aac9703"
+    },
+    {
+      "file": "factsheets/the-met-corporate-tower-pSgeXC.md",
+      "docId": "pSgeXCmr9VEVl1ha6uvG",
+      "inventoryName": "The MET, Corporate Tower",
+      "title": "The MET, Corporate Tower — D2 project facts (client sheet)",
+      "category": "The MET, Corporate Tower",
+      "sha256": "fb8fdbf6fcd0cf50422bed76ea242ac8339347e0adb61a45fd4b16b7eee9c3b9"
+    },
+    {
+      "file": "factsheets/sierra-hijau-landed-at9ch3.md",
+      "docId": "at9ch36p3DlkFc0oydiE",
+      "inventoryName": "Sierra Hijau (Landed)",
+      "title": "Sierra Hijau (Landed) — D2 project facts (client sheet)",
+      "category": "Sierra Hijau (Landed)",
+      "sha256": "3080fdeaac108a37159eef85b40758a1c00478bf4fda6bb09ccc18d8c157955a"
+    },
+    {
+      "file": "factsheets/melbourne-square-Dc3dIG.md",
+      "docId": "Dc3dIGjnTP3BcWCsJisl",
+      "inventoryName": "Melbourne Square",
+      "title": "Melbourne Square — D2 project facts (client sheet)",
+      "category": "Melbourne Square",
+      "sha256": "78de430adcc8bcf74527d0ef98c34f3df7b51a060ce772bc27266b6e18282cf0"
+    },
+    {
+      "file": "factsheets/lagenda-tunku-villa-gemilang-k3e1jz.md",
+      "docId": "k3e1jzoxD0byzkzsAWYi",
+      "inventoryName": "Lagenda Tunku (Villa Gemilang)",
+      "title": "Lagenda Tunku (Villa Gemilang) — D2 project facts (client sheet)",
+      "category": "Lagenda Tunku (Villa Gemilang)",
+      "sha256": "2a96dd58bfc4ff9c3dec62c89ab77b31be7b1e7e8d359bac2e24c57a9ec84e97"
+    },
+    {
+      "file": "factsheets/ashbourne-14k1U1.md",
+      "docId": "14k1U1AbW4O0RHKmPRzn",
+      "inventoryName": "Ashbourne",
+      "title": "Ashbourne — D2 project facts (client sheet)",
+      "category": "Ashbourne",
+      "sha256": "46772d1abf1283bddf3651f3777be508279ba2b1dd62ee005ce428d650f0562f"
+    },
+    {
+      "file": "factsheets/aetas-seputeh-0l9kNI.md",
+      "docId": "0l9kNIDgoi0ZKcM8Ighd",
+      "inventoryName": "Aetas Seputeh",
+      "title": "Aetas Seputeh — D2 project facts (client sheet)",
+      "category": "Aetas Seputeh",
+      "sha256": "ecba3302496b049618764d058e9b35dd2aa4a1fa4ab872d919f3faea214c0097"
+    }
+  ]
+}
