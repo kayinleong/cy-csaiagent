@@ -2156,6 +2156,25 @@ describe('quick-kayinleong-110: a no_match carries labelled alternatives', () =>
     expect(result.alternatives?.every((m) => m.alternative?.kind === 'other_area')).toBe(true)
   })
 
+  it('another area\'s project is offered only with a stated from price (no estimate-only rows)', async () => {
+    const kiaraEstimate = doc('Kiara Estimate', 'Mont Kiara, Kuala Lumpur', 0, {
+      embedding: vec(0.95),
+      unitTypes: [{ label: 'S', sizeSqft: 450, bedrooms: 0, priceMinRM: 400_000, priceMaxRM: 450_000, raw: 'r' }],
+    })
+    mockProjectsGet.mockResolvedValue(
+      makeAdHocSnap([
+        { id: 'rhombus', doc: RHOMBUS },
+        { id: 'kiara-estimate', doc: kiaraEstimate },
+        { id: 'kiara-in', doc: KIARA_IN_BUDGET },
+      ]),
+    )
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects(criteria())
+    expect(result.found).toBe(false)
+    if (result.found || result.reason !== 'no_match') return
+    expect(result.alternatives?.map((m) => m.projectId)).toEqual(['kiara-in'])
+  })
+
   it('nothing to offer leaves the refusal exactly as before', async () => {
     mockProjectsGet.mockResolvedValue(makeAdHocSnap([{ id: 'rhombus', doc: RHOMBUS }]))
     const { searchProjects } = await import('@/src/inventory/search')

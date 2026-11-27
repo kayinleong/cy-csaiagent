@@ -1423,8 +1423,9 @@ function toProjectMatch(
  *      or psf × size) never qualifies.
  *   2. OTHER AREAS (a location was given). Every eligible project OUTSIDE the requested area
  *      (by its own address and Area; the AREA_NEIGHBOURS "around" projects count as other
- *      areas here), of the requested property type, passing the budget gate with SOME price
- *      on record when a budget was given (the quick-106 rule for nearby projects), ranked by
+ *      areas here), of the requested property type, passing the budget gate with a STATED from
+ *      price when a budget was given (an estimate-only project showed an empty price cell in
+ *      the first real run, so the agent could not see why it was "in budget"), ranked by
  *      relevance to the query above `MIN_RELEVANCE`. There is no distance data, so the order
  *      is relevance, never proximity, and nothing may call these "near".
  * Both respect the income ceiling when an income was given. The result is unchanged when
@@ -1465,7 +1466,7 @@ async function withAlternatives(
             !projectMatchesLocation(doc, needles) &&
             (wantedType === 'any' || propertyTypeOf(doc) === wantedType) &&
             projectMatchesPrice(doc, criteria.priceMin, criteria.priceMax) &&
-            (!priceApplied || projectPriceRange(doc) !== null) &&
+            (!priceApplied || positiveOrNull(doc.priceValue) !== null) &&
             affordable(doc),
         )
       : []
