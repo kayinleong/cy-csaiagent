@@ -190,10 +190,14 @@ describe('searchProjects tool: the client gets every row', () => {
 })
 
 describe('FinderRowSchema is an allowlist', () => {
-  it('has exactly the fourteen intended keys — no priceBand', () => {
+  it('has exactly the seventeen intended keys — no priceBand', () => {
     const keys = Object.keys(FinderRowSchema.shape).sort()
     expect(keys).toEqual(
       [
+        // quick-kayinleong-110: an alternative row's kind and how far over budget it is.
+        'alternative',
+        'overBudgetPct',
+        'overBudgetRM',
         'bedrooms',
         'bumiQuota',
         'foreignEligible',

@@ -320,6 +320,18 @@ export const FinderRowSchema = z.object({
   locationMatch: z.enum(['in_area', 'nearby']).optional(),
   /** The location preference the search applied, for that heading. Same on every row. */
   locationArea: z.string().min(1).max(80).optional(),
+  /**
+   * Set only on a row the search returned as an ALTERNATIVE to a no_match
+   * (quick-kayinleong-110). Never a match for the request:
+   *   - `over_budget`: in the requested area, its from price over the budget by
+   *     `overBudgetRM` (`overBudgetPct` percent, rounded). Renders under "Slightly above your
+   *     budget".
+   *   - `other_area`: within the budget but outside the requested area. Renders under
+   *     "In other areas"; its own area is its `locationText`. Never described as near.
+   */
+  alternative: z.enum(['over_budget', 'other_area']).optional(),
+  overBudgetRM: z.number().optional(),
+  overBudgetPct: z.number().optional(),
 })
 
 /**
@@ -399,6 +411,31 @@ export const MatchSummarySchema = z.object({
   layouts: z.array(SummaryLayoutSchema).max(40).default([]),
   /** Absent on a turn persisted before quick-kayinleong-107: decodes to []. */
   sections: z.array(DetailSectionSchema).max(14).default([]),
+})
+
+/** Longest summary line kept; a longer one is trimmed at a word, never rejected. */
+const SUMMARY_LINE_MAX = 600
+
+const summaryLine = z
+  .string()
+  .transform((s) => clipAtWord(s.trim(), SUMMARY_LINE_MAX))
+  .optional()
+  .catch(undefined)
+
+/**
+ * The closing summary of a search answer (quick-kayinleong-110), MODEL-WRITTEN: what the agent
+ * asked for, what the search found, and what to look at first. Rendered after the tables.
+ *
+ * Every line is optional and never rejects (the quick-056/071 rule): a malformed summary is
+ * dropped, never the answer it belongs to. Plain text only.
+ */
+export const FinderSummarySchema = z.object({
+  /** The request as the model understood and applied it: area, budget, bedrooms, type, purpose. */
+  asked: summaryLine,
+  /** What the search returned: matches in / around the area, or no exact match and why. */
+  found: summaryLine,
+  /** What to look at first and why, naming only projects the search returned. */
+  suggestion: summaryLine,
 })
 
 /**
@@ -514,6 +551,14 @@ export const FinderOutputSchema = z.object({
    * Optional, so an older persisted turn decodes unchanged and shows no summaries block.
    */
   summaries: z.array(MatchSummarySchema).max(100).optional(),
+
+  /**
+   * The closing summary (quick-kayinleong-110), on every answer that follows a searchProjects
+   * call: matches, or a refusal with or without alternatives. Optional: an older persisted
+   * turn, or a model that omits it, decodes and renders without the summary box. A value that
+   * is not an object is dropped rather than failing the envelope.
+   */
+  summary: FinderSummarySchema.optional().catch(undefined),
 })
 
 export type FinderOutput = z.infer<typeof FinderOutputSchema>
@@ -525,3 +570,4 @@ export type ProjectSheet = z.infer<typeof ProjectSheetSchema>
 export type MatchSummary = z.infer<typeof MatchSummarySchema>
 export type DetailSectionRow = z.infer<typeof DetailSectionSchema>
 export type SummaryLayoutRow = z.infer<typeof SummaryLayoutSchema>
+export type FinderSummary = z.infer<typeof FinderSummarySchema>
