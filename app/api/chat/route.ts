@@ -766,6 +766,11 @@ export async function POST(req: Request): Promise<Response> {
           )
         } else if (decoded && decoded.answer && projectSheets.length > 0) {
           body = JSON.stringify(attachProjectSheets(decoded, projectSheets))
+        } else if (decoded && decoded.refusal && finderRowSink.rows.length > 0) {
+          // quick-kayinleong-110: a refusal with server-chosen alternatives keeps their rows and
+          // Details data, so a reloaded thread shows the same alternative tables. The search
+          // tool REPLACES the rows on a no_match, so these are never a previous search's.
+          body = JSON.stringify(attachSummaries(attachFinderRows(decoded, finderRowSink.rows), matchSummaries))
         }
       } catch {
         // Never lose a reply over formatting.

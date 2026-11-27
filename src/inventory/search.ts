@@ -169,6 +169,14 @@ export interface ProjectMatch {
    * requested one. Present it as an alternative, never as being in the area.
    */
   locationMatch?: LocationMatch
+  /**
+   * Set only on an ALTERNATIVE carried by a no_match (quick-kayinleong-110), never on a match.
+   *   - `over_budget`: in the requested area, a stated from price above `priceMax` by
+   *     `overByRM` (`overByPct` percent, rounded), at most `OVER_BUDGET_TOLERANCE` over.
+   *   - `other_area`: within the budget, outside the requested area. Its area is its own
+   *     `locationText`; there is no distance data, so it is never "near".
+   */
+  alternative?: { kind: 'over_budget'; overByRM: number; overByPct: number } | { kind: 'other_area' }
   /** Criteria fields that drove this match — grounding citation. */
   matchedCriteria: {
     segment: ParsedCriteria['segment']
@@ -201,7 +209,17 @@ export type SearchResult =
   | { found: true; matches: ProjectMatch[] }
   // `gate` is optional only so hand-built results (tests, the offline path) stay valid;
   // searchProjects always sets it.
-  | { found: false; reason: 'no_match'; gate?: NoMatchGate }
+  | {
+      found: false
+      reason: 'no_match'
+      gate?: NoMatchGate
+      /**
+       * Server-chosen alternatives when the location or price gate emptied the result
+       * (quick-kayinleong-110): over-budget ones first, then other areas. Absent when there
+       * are none. Each carries `alternative`; none is a match for the request.
+       */
+      alternatives?: ProjectMatch[]
+    }
   | { found: false; reason: 'ineligible'; why: 'financing' }
 
 /** Filters accepted by queryInventory (FIND-07). All fields optional. */
@@ -305,6 +323,16 @@ export const MAX_MATCHES = 8
  * doc into memory and scoring is an in-memory dot product.
  */
 export const MAX_ROWS = 100
+
+/**
+ * How far over the budget an over-budget alternative may start (quick-kayinleong-110): 30%.
+ * The user's words were "could be slightly higher price"; at RM1.5M this reaches RM1.95M
+ * (One Eleven Menerung @ Bangsar, from RM1.92M, is +28%), and keeps out a RM6.1M project.
+ */
+export const OVER_BUDGET_TOLERANCE = 0.3
+
+/** The most alternatives of EACH kind a no_match carries (quick-kayinleong-110). */
+export const MAX_ALTERNATIVES = 3
 
 /**
  * Width of a "relevance tier" for segment weighting (quick-kayinleong-050).
@@ -1113,6 +1141,8 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   // Applied in-memory before affordability and vector scoring.
   // Uses createdAt if present (Phase-3 schema adds it); falls back to vpDate.
   let candidates = eligibleDocs
+  // quick-kayinleong-110: the pools an alternative is drawn from, captured as the gates run.
+  let eligiblePool = eligibleDocs
   if (criteria.since !== undefined) {
     const since = criteria.since
     candidates = eligibleDocs.filter(({ doc }) => {
@@ -1139,6 +1169,7 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
       }
       return false // no date field → exclude from returning-client results
     })
+    eligiblePool = candidates
   }
 
   // ── LOCATION gate (quick-kayinleong-050) ─────────────────────────────────
@@ -1163,9 +1194,15 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
       ({ doc }) => projectMatchesLocation(doc, needles) || (around !== null && projectMatchesLocation(doc, around)),
     )
     if (candidates.length === 0) {
-      // Honest refusal: D2 has no active inventory in the requested area. The Finder
-      // must NOT substitute projects from a different area (the reported defect).
-      return { found: false, reason: 'no_match', gate }
+      // Honest refusal: D2 has no active inventory in the requested area. The Finder must
+      // never present a project from another area AS a match (the quick-050 defect). Since
+      // quick-kayinleong-110 the miss carries labelled alternatives in other areas, chosen
+      // here, so the model never has to substitute anything itself.
+      return withAlternatives({ found: false, reason: 'no_match', gate }, criteria, {
+        eligible: eligiblePool,
+        areaPool: null,
+        needles,
+      })
     }
   }
 
@@ -1188,6 +1225,7 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   const priceApplied = criteria.priceMin !== null || criteria.priceMax !== null
   if (priceApplied) {
     const gate: NoMatchGate = candidates.length > 0 ? 'price' : 'inventory'
+    const areaPool = candidates
     candidates = candidates.filter(
       ({ doc }) =>
         projectMatchesPrice(doc, criteria.priceMin, criteria.priceMax) &&
@@ -1199,7 +1237,14 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
     if (candidates.length === 0) {
       // No active project in range. This is a budget miss, NOT a financing refusal —
       // 'ineligible'/'financing' is reserved for the income-derived ceiling below.
-      return { found: false, reason: 'no_match', gate }
+      // quick-kayinleong-110: with labelled alternatives (slightly over budget here, or
+      // within budget elsewhere) when there are any.
+      if (gate !== 'price') return { found: false, reason: 'no_match', gate }
+      return withAlternatives({ found: false, reason: 'no_match', gate }, criteria, {
+        eligible: eligiblePool,
+        areaPool,
+        needles,
+      })
     }
   }
 
@@ -1286,7 +1331,50 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
   const reranked = ordered.slice(0, MAX_ROWS)
 
   // ── Map to ProjectMatch ──────────────────────────────────────────────────
-  const matches: ProjectMatch[] = reranked.map(({ id, doc, score }, rank) => ({
+  const matches: ProjectMatch[] = reranked.map(({ id, doc, score }, rank) =>
+    toProjectMatch(id, doc, score, criteria, {
+      withExcerpt: rank < MAX_MATCHES,
+      locationMatch: locationMatchById.get(id),
+      // Only when the location gate ran and the project is IN the area. A `nearby`
+      // project passed the gate but sits in another area (quick-kayinleong-103), so it
+      // must not claim the location match.
+      claimsLocation: locationApplied && locationMatchById.get(id) === 'in_area',
+      claimsBudget: priceApplied,
+    }),
+  )
+
+  return { found: true, matches }
+}
+
+/**
+ * One project as a `ProjectMatch` (the quick-050 grounding rules, shared by matches and, since
+ * quick-kayinleong-110, alternatives).
+ *
+ * GROUNDING (quick-kayinleong-050): `matchedCriteria` echoes ONLY criteria genuinely applied
+ * to THIS project. It is rendered under "Matched criteria" by buildRationale
+ * (src/agents/finder/index.ts), badged in the chat UI and handed to the model verbatim, so an
+ * unapplied criterion here is a false grounding claim, e.g. "within budget (max RM800k);
+ * location preference: Cheras" on a RM2.5M Bangsar project.
+ *   - `priceMax`: only when the price gate counts for this project (`claimsBudget`) AND its
+ *     own price is actually known (quick-085 / D2 invariant 1). An over-budget alternative
+ *     never claims it.
+ *   - `locationPref`: only when the project is IN the requested area (`claimsLocation`).
+ *   - `bedrooms`: not a filter (0 means unknown); only when the project's count equals it.
+ */
+function toProjectMatch(
+  id: string,
+  doc: ProjectDoc,
+  score: number,
+  criteria: ParsedCriteria,
+  opts: {
+    withExcerpt: boolean
+    locationMatch?: LocationMatch
+    claimsLocation: boolean
+    claimsBudget: boolean
+    alternative?: ProjectMatch['alternative']
+  },
+): ProjectMatch {
+  return {
     projectId: id,
     name: doc.name,
     priceBand: doc.priceBand,
@@ -1305,48 +1393,120 @@ export async function searchProjects(criteria: ParsedCriteria): Promise<SearchRe
     // Layouts and details for EVERY returned row (quick-kayinleong-108: the table's Details
     // dropdown needs them for any row); the quickFacts excerpt for the top MAX_MATCHES only
     // (the model's input). Bedrooms only ORDERS the layouts; the budget never filters them.
-    ...summaryFields(doc, criteria.bedrooms, rank < MAX_MATCHES),
+    ...summaryFields(doc, criteria.bedrooms, opts.withExcerpt),
     // Present only when the location gate ran (quick-kayinleong-103).
-    ...(locationMatchById.has(id) ? { locationMatch: locationMatchById.get(id) } : {}),
-    // GROUNDING (quick-kayinleong-050): echo ONLY criteria genuinely applied to THIS
-    // project. This object is rendered under the heading "Matched criteria" by
-    // buildRationale (src/agents/finder/index.ts) and badged in the chat UI, and it is
-    // handed to the model verbatim — so an unapplied criterion here is a false grounding
-    // claim, e.g. "within budget (max RM800k); location preference: Cheras" on a RM2.5M
-    // Bangsar project. Nulling the unapplied fields makes those call sites correct
-    // without changing them (both are null-guarded).
+    ...(opts.locationMatch ? { locationMatch: opts.locationMatch } : {}),
+    ...(opts.alternative ? { alternative: opts.alternative } : {}),
     matchedCriteria: {
       segment: criteria.segment,
-      // Only when the price gate ran AND this project's own price is actually known
-      // (quick-kayinleong-085 / D2). The gate now ADMITS unpriced projects, so the old
-      // blanket `priceApplied ? criteria.priceMax : null` would have made a project whose
-      // price we do not hold claim a verified budget match — the exact false grounding
-      // claim `matchedCriteria` exists to prevent. This is invariant 1 of two named in
-      // the projectMatchesPrice doc comment above.
-      priceMax:
-        priceApplied &&
-        typeof doc.priceValue === 'number' &&
-        Number.isFinite(doc.priceValue) &&
-        doc.priceValue > 0
-          ? criteria.priceMax
-          : null,
+      priceMax: opts.claimsBudget && positiveOrNull(doc.priceValue) !== null ? criteria.priceMax : null,
       nationality: criteria.nationality,
       bumiputera: criteria.bumiputera,
-      // Only when the location gate ran and the project is IN the area. A `nearby`
-      // project passed the gate but sits in another area (quick-kayinleong-103), so it
-      // must not claim the location match.
-      locationPref:
-        locationApplied && locationMatchById.get(id) === 'in_area' ? criteria.locationPref : null,
-      // Bedrooms is NOT a filter (0 means "unknown" on 29 of 83 projects, so filtering
-      // would drop real inventory). It is only a genuine match when this project's own
-      // bedroom count equals the request.
-      bedrooms: criteria.bedrooms !== null && doc.bedrooms === criteria.bedrooms
-        ? criteria.bedrooms
-        : null,
+      locationPref: opts.claimsLocation ? criteria.locationPref : null,
+      bedrooms: criteria.bedrooms !== null && doc.bedrooms === criteria.bedrooms ? criteria.bedrooms : null,
     },
-  }))
+  }
+}
 
-  return { found: true, matches }
+/**
+ * Attach labelled alternatives to a no_match emptied by the location or price gate
+ * (quick-kayinleong-110). The user's request: "if the property and price we wanted isnt in
+ * the list ... ai can suggest other project but could be slightly higher price", and other
+ * areas too.
+ *
+ * Two kinds, at most `MAX_ALTERNATIVES` each, over budget first:
+ *   1. OVER BUDGET (price miss with a `priceMax` only). From `areaPool` (the projects that
+ *      passed the location and property-type gates; every eligible project of the type when
+ *      no location was given), IN the requested area only, with a STATED from price above
+ *      `priceMax` by at most `OVER_BUDGET_TOLERANCE`, cheapest first. A stated price only:
+ *      the row shows it and how far over it is, so an estimate (projectPriceRange's layouts
+ *      or psf × size) never qualifies.
+ *   2. OTHER AREAS (a location was given). Every eligible project OUTSIDE the requested area
+ *      (by its own address and Area; the AREA_NEIGHBOURS "around" projects count as other
+ *      areas here), of the requested property type, passing the budget gate with SOME price
+ *      on record when a budget was given (the quick-106 rule for nearby projects), ranked by
+ *      relevance to the query above `MIN_RELEVANCE`. There is no distance data, so the order
+ *      is relevance, never proximity, and nothing may call these "near".
+ * Both respect the income ceiling when an income was given. The result is unchanged when
+ * there are none, so a refusal with nothing to offer reads exactly as before.
+ */
+async function withAlternatives(
+  result: Extract<SearchResult, { found: false; reason: 'no_match' }>,
+  criteria: ParsedCriteria,
+  pools: {
+    eligible: ReadonlyArray<{ id: string; doc: ProjectDoc }>
+    areaPool: ReadonlyArray<{ id: string; doc: ProjectDoc }> | null
+    needles: LocationNeedleGroup[] | null
+  },
+): Promise<SearchResult> {
+  const { eligible, areaPool, needles } = pools
+  const ceiling = affordabilityCeiling(criteria.monthlyIncome)
+  const affordable = (doc: ProjectDoc) => criteria.monthlyIncome === null || doc.priceValue <= ceiling
+  const wantedType = criteria.propertyType ?? 'residential'
+  const priceApplied = criteria.priceMin !== null || criteria.priceMax !== null
+  const priceMax = criteria.priceMax
+
+  const over =
+    result.gate === 'price' && priceMax !== null && priceMax > 0 && areaPool !== null
+      ? areaPool
+          .filter(({ doc }) => needles === null || projectLocationMatch(doc, needles) === 'in_area')
+          .filter(({ doc }) => {
+            const p = positiveOrNull(doc.priceValue)
+            return p !== null && p > priceMax && p <= priceMax * (1 + OVER_BUDGET_TOLERANCE) && affordable(doc)
+          })
+          .sort((a, b) => a.doc.priceValue - b.doc.priceValue)
+          .slice(0, MAX_ALTERNATIVES)
+      : []
+
+  const otherPool =
+    needles !== null && (result.gate === 'location' || result.gate === 'price')
+      ? eligible.filter(
+          ({ doc }) =>
+            !projectMatchesLocation(doc, needles) &&
+            (wantedType === 'any' || propertyTypeOf(doc) === wantedType) &&
+            projectMatchesPrice(doc, criteria.priceMin, criteria.priceMax) &&
+            (!priceApplied || projectPriceRange(doc) !== null) &&
+            affordable(doc),
+        )
+      : []
+
+  if (over.length === 0 && otherPool.length === 0) return result
+
+  const queryVector = await embedText(criteria.freeText, { inputType: 'query' })
+  const scoreOf = (doc: ProjectDoc) => {
+    const vec = readEmbedding(doc.embedding)
+    return vec.length > 0 ? dotProduct(queryVector, vec) : 0
+  }
+  const others = otherPool
+    .map(({ id, doc }) => ({ id, doc, score: scoreOf(doc) }))
+    .filter(({ score }) => score >= MIN_RELEVANCE)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_ALTERNATIVES)
+
+  const alternatives: ProjectMatch[] = [
+    ...over.map(({ id, doc }) =>
+      toProjectMatch(id, doc, scoreOf(doc), criteria, {
+        withExcerpt: true,
+        ...(needles !== null ? { locationMatch: 'in_area' as const } : {}),
+        claimsLocation: needles !== null,
+        claimsBudget: false,
+        alternative: {
+          kind: 'over_budget',
+          overByRM: doc.priceValue - (priceMax as number),
+          overByPct: Math.round((doc.priceValue / (priceMax as number) - 1) * 100),
+        },
+      }),
+    ),
+    ...others.map(({ id, doc, score }) =>
+      toProjectMatch(id, doc, score, criteria, {
+        withExcerpt: true,
+        claimsLocation: false,
+        claimsBudget: priceApplied,
+        alternative: { kind: 'other_area' },
+      }),
+    ),
+  ]
+  return alternatives.length > 0 ? { ...result, alternatives } : result
 }
 
 /** `quickFacts` (top rows only) / `layouts` / `details` for one project; a field with nothing is left off. */

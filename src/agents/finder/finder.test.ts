@@ -755,9 +755,24 @@ describe('quick-kayinleong-050: finder prompt permits the honest no_match refusa
   it('forbids substituting projects from a different area', async () => {
     const { FINDER_SYSTEM_PROMPT: prompt } = await import('./prompt')
 
-    // The exact reported behaviour: acknowledge the miss, then list unrelated projects.
-    expect(prompt).toContain('NEVER answer an area you have no inventory for')
-    expect(prompt).toContain('but here are some options in Y')
+    // The exact reported behaviour: acknowledge the miss, then list unrelated projects the
+    // model picked itself. Since quick-kayinleong-110 the only exception is the server-chosen,
+    // labelled alternatives.
+    expect(prompt).toContain('NEVER answer an area you have no inventory for by presenting projects YOU picked')
+    expect(prompt).toContain('These are the ONLY projects you may suggest after a no_match, and never as a match')
+    expect(prompt).toContain('Without alternatives, the refusal reads exactly as before, and you suggest no project at all')
+  })
+
+  it('quick-kayinleong-110: alternatives are labelled, and every search answer ends with a summary', async () => {
+    const { FINDER_SYSTEM_PROMPT: prompt } = await import('./prompt')
+    expect(prompt).toContain('"over_budget"')
+    expect(prompt).toContain('Always say how far over')
+    expect(prompt).toContain('"other_area"')
+    expect(prompt).toContain('Never call it near, close to or around the requested area')
+    expect(prompt).toContain('Do NOT put them in matches')
+    expect(prompt).toContain('## Closing Summary (after every search)')
+    expect(prompt).toContain('naming ONLY projects the search returned')
+    expect(prompt).toContain('summary (with matches or a refusal after a search)')
   })
 
   it('forbids inventing proximity (no distance or adjacency data exists)', async () => {

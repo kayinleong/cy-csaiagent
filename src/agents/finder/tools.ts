@@ -225,7 +225,26 @@ function toFinderRow(m: ProjectMatch, locationPref: string | null): FinderRow {
     // quick-kayinleong-103: only when the location gate ran.
     ...(m.locationMatch ? { locationMatch: m.locationMatch } : {}),
     ...(m.locationMatch && area ? { locationArea: area } : {}),
+    // quick-kayinleong-110: an alternative to a no_match, never a match.
+    ...(m.alternative ? { alternative: m.alternative.kind } : {}),
+    ...(m.alternative?.kind === 'over_budget'
+      ? { overBudgetRM: m.alternative.overByRM, overBudgetPct: m.alternative.overByPct }
+      : {}),
   }
+}
+
+/** The table rows and Details data of a set of projects, written to the sink (REPLACE). */
+function recordSearchRows(sink: FinderRowSink, matches: ProjectMatch[], locationPref: string | null): void {
+  sink.rows = matches.map((m) => toFinderRow(m, locationPref))
+  // Every returned row (quick-kayinleong-108): the table's Details dropdown opens
+  // any row, not only the model's top MAX_MATCHES.
+  sink.summaries = matches
+    .filter((m) => (m.layouts?.length ?? 0) > 0 || (m.details?.length ?? 0) > 0)
+    .map((m) => ({
+      projectId: m.projectId,
+      layouts: m.layouts ?? [],
+      sections: m.details ?? [],
+    }))
 }
 
 /** A match as the model sees it: no `layouts` (106), no `details` (107). */
@@ -263,6 +282,8 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: Find
       'Eligibility (bumiQuota / foreignEligible) and affordability (priceValue vs income ceiling) ' +
       'are enforced deterministically — the results are the ground truth. ' +
       'If the result is no_match or ineligible, deliver the grounded refusal — do NOT invent a project. ' +
+      'A no_match may carry `alternatives` the server chose (over budget in the area, or in other areas ' +
+      'within budget): present them only as labelled alternatives, never as matches. ' +
       'The top matches already include their shareable collateral inline, so you do NOT need to call ' +
       'fetchCollateral for them — use what is attached.',
     inputSchema: z.object({
@@ -325,7 +346,15 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: Find
         // Only the top INLINE_COLLATERAL_MATCHES get it: the tail of a shortlist is rarely
         // the one the agent forwards, and every attached item is re-sent on every
         // subsequent step (the token blowup quick-054 fixed).
-        if (!result.found || !result.matches?.length) return result
+        if (!result.found || !result.matches?.length) {
+          // quick-kayinleong-110: a no_match REPLACES the table too, with its alternatives or
+          // with nothing. Before, it left the previous search's rows in the sink, which a
+          // refusal would now carry (the route attaches rows to a refusal for alternatives).
+          if (sink && !result.found) {
+            recordSearchRows(sink, result.reason === 'no_match' ? (result.alternatives ?? []) : [], input.locationPref)
+          }
+          return result
+        }
 
         const top = result.matches.slice(0, INLINE_COLLATERAL_MATCHES)
         const collaterals = await Promise.all(
@@ -352,18 +381,7 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: Find
         // append: the prompt already tells the model that only the CURRENT search result
         // counts, so the last search of the turn is the table. Appending would show a
         // narrowed re-search stacked on top of the query it replaced.
-        if (sink) {
-          sink.rows = enriched.matches.map((m) => toFinderRow(m, input.locationPref))
-          // Every returned row (quick-kayinleong-108): the table's Details dropdown opens
-          // any row, not only the model's top MAX_MATCHES.
-          sink.summaries = enriched.matches
-            .filter((m) => (m.layouts?.length ?? 0) > 0 || (m.details?.length ?? 0) > 0)
-            .map((m) => ({
-              projectId: m.projectId,
-              layouts: m.layouts ?? [],
-              sections: m.details ?? [],
-            }))
-        }
+        if (sink) recordSearchRows(sink, enriched.matches, input.locationPref)
 
         return enriched
       }),
@@ -385,8 +403,17 @@ export function makeSearchProjectsTool(userLang: 'en' | 'ms' | 'zh', sink?: Find
      * ai@5.0.193 types at node_modules/@ai-sdk/provider-utils/dist/index.d.ts:772.
      */
     toModelOutput: (output) => {
-      if (!output || typeof output !== 'object' || !('found' in output) || !output.found) {
+      if (!output || typeof output !== 'object' || !('found' in output)) {
         return { type: 'json', value: output as unknown as JSONValue }
+      }
+      if (!output.found) {
+        // quick-kayinleong-110: alternatives go to the model without layouts or details, like
+        // matches; the refusal signal itself passes through untouched.
+        const value =
+          output.reason === 'no_match' && output.alternatives?.length
+            ? { ...output, alternatives: output.alternatives.map(withoutLayouts) }
+            : output
+        return { type: 'json', value: value as unknown as JSONValue }
       }
       // quickFacts stays (the model writes "Best for" / "Key selling points" from it);
       // layouts and details go: the SERVER shows those, and the model must not restate them

@@ -2056,3 +2056,155 @@ describe('quick-kayinleong-106: Bangsar is around Damansara Heights, and a price
     expect(result.matches.find((m) => m.projectId === 'hillpark')!.locationMatch).toBe('in_area')
   })
 })
+
+describe('quick-kayinleong-110: a no_match carries labelled alternatives', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    mockEmbedText.mockReset()
+    mockProjectsGet.mockReset()
+    mockWhereFn.mockReset()
+    mockEmbedText.mockImplementation(async () => STUB_QUERY_VECTOR)
+    mockWhereFn.mockImplementation((..._args: [string, string, unknown]) => ({
+      where: mockWhereFn,
+      get: mockProjectsGet,
+      orderBy: mockWhereFn,
+    }))
+  })
+
+  const base = FIXTURES['proj-active-a']
+  const vec = (v: number) => Array.from({ length: 1024 }, (_, i) => (i === 0 ? v : 0.01))
+  const doc = (name: string, locationText: string, priceValue: number, extra: Record<string, unknown> = {}) => ({
+    ...base,
+    name,
+    locationText,
+    priceValue,
+    embedding: vec(0.6),
+    ...extra,
+  })
+  const criteria = (over: Record<string, unknown> = {}) => ({
+    segment: 'unknown' as const,
+    priceMin: null,
+    priceMax: 1_500_000,
+    monthlyIncome: null,
+    nationality: 'unknown' as const,
+    bumiputera: null,
+    locationPref: 'Bangsar',
+    bedrooms: null,
+    freeText: 'looking for 1.5mil in bangsar',
+    ...over,
+  })
+
+  // Bangsar has nothing at or under RM1.5M in this corpus.
+  const ONE_ELEVEN = doc('One Eleven Menerung @ Bangsar', 'Bangsar, between BSC & Pavilion Damansara Heights', 1_920_000)
+  const RHOMBUS = doc('Rhombus', 'Bangsar, Kuala Lumpur', 6_100_000)
+  const ESTIMATE_ONLY = doc('Lantern-like', 'Bangsar, Kuala Lumpur', 0, {
+    unitTypes: [{ label: 'A', sizeSqft: 900, bedrooms: 2, priceMinRM: 1_600_000, priceMaxRM: 1_700_000, raw: 'r' }],
+  })
+  const KIARA_IN_BUDGET = doc('Kiara In Budget', 'Mont Kiara, Kuala Lumpur', 1_400_000, { embedding: vec(0.9) })
+  const KIARA_OVER = doc('Kiara Over', 'Mont Kiara, Kuala Lumpur', 1_600_000)
+  const CHERAS_UNPRICED = doc('Cheras Unpriced', 'Cheras, Kuala Lumpur', 0)
+  const OFFICE = doc('Some Office Tower', 'Mid Valley, Kuala Lumpur', 1_000_000)
+
+  it('THE REQUEST: a Bangsar RM1.5M miss offers One Eleven (+28%) and an in-budget project elsewhere', async () => {
+    mockProjectsGet.mockResolvedValue(
+      makeAdHocSnap([
+        { id: 'one-eleven', doc: ONE_ELEVEN },
+        { id: 'rhombus', doc: RHOMBUS },
+        { id: 'estimate', doc: ESTIMATE_ONLY },
+        { id: 'kiara-in', doc: KIARA_IN_BUDGET },
+        { id: 'kiara-over', doc: KIARA_OVER },
+        { id: 'cheras', doc: CHERAS_UNPRICED },
+        { id: 'office', doc: OFFICE },
+      ]),
+    )
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects(criteria())
+    expect(result.found).toBe(false)
+    if (result.found || result.reason !== 'no_match') return
+    expect(result.gate).toBe('price')
+    expect(result.alternatives?.map((m) => m.projectId)).toEqual(['one-eleven', 'kiara-in'])
+
+    const [over, other] = result.alternatives!
+    expect(over.alternative).toEqual({ kind: 'over_budget', overByRM: 420_000, overByPct: 28 })
+    // In the area, but never a verified budget match.
+    expect(over.matchedCriteria.priceMax).toBeNull()
+    expect(over.matchedCriteria.locationPref).toBe('Bangsar')
+    expect(over.locationMatch).toBe('in_area')
+
+    expect(other.alternative).toEqual({ kind: 'other_area' })
+    expect(other.matchedCriteria.locationPref).toBeNull()
+    expect(other.matchedCriteria.priceMax).toBe(1_500_000)
+    // Rhombus (+307%), the estimate-only project, the over-budget Kiara project, the unpriced
+    // Cheras project and the office are all left out.
+  })
+
+  it('an area with no stock at all offers in-budget projects elsewhere, best match first', async () => {
+    const second = doc('Second Choice', 'Setapak, Kuala Lumpur', 900_000, { embedding: vec(0.5) })
+    mockProjectsGet.mockResolvedValue(
+      makeAdHocSnap([
+        { id: 'kiara-in', doc: KIARA_IN_BUDGET },
+        { id: 'second', doc: second },
+        { id: 'kiara-over', doc: KIARA_OVER },
+      ]),
+    )
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects(criteria({ locationPref: 'Cheras' }))
+    expect(result.found).toBe(false)
+    if (result.found || result.reason !== 'no_match') return
+    expect(result.gate).toBe('location')
+    expect(result.alternatives?.map((m) => m.projectId)).toEqual(['kiara-in', 'second'])
+    expect(result.alternatives?.every((m) => m.alternative?.kind === 'other_area')).toBe(true)
+  })
+
+  it('nothing to offer leaves the refusal exactly as before', async () => {
+    mockProjectsGet.mockResolvedValue(makeAdHocSnap([{ id: 'rhombus', doc: RHOMBUS }]))
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects(criteria())
+    expect(result).toEqual({ found: false, reason: 'no_match', gate: 'price' })
+    expect(mockEmbedText).not.toHaveBeenCalled()
+  })
+
+  it('the income ceiling still applies to alternatives', async () => {
+    mockProjectsGet.mockResolvedValue(
+      makeAdHocSnap([
+        { id: 'one-eleven', doc: ONE_ELEVEN },
+        { id: 'kiara-in', doc: KIARA_IN_BUDGET },
+      ]),
+    )
+    const { searchProjects, affordabilityCeiling } = await import('@/src/inventory/search')
+    // An income whose ceiling sits between RM1.4M and RM1.92M.
+    let income = 1000
+    while (affordabilityCeiling(income) < 1_500_000) income += 500
+    const result = await searchProjects(criteria({ monthlyIncome: income }))
+    expect(result.found).toBe(false)
+    if (result.found || result.reason !== 'no_match') return
+    expect(result.alternatives?.map((m) => m.projectId)).toEqual(['kiara-in'])
+  })
+
+  it('without a location, a price miss offers the nearest projects just over budget anywhere', async () => {
+    mockProjectsGet.mockResolvedValue(
+      makeAdHocSnap([
+        { id: 'one-eleven', doc: ONE_ELEVEN },
+        { id: 'kiara-over', doc: KIARA_OVER },
+        { id: 'rhombus', doc: RHOMBUS },
+      ]),
+    )
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects(criteria({ locationPref: null }))
+    expect(result.found).toBe(false)
+    if (result.found || result.reason !== 'no_match') return
+    expect(result.alternatives?.map((m) => [m.projectId, m.alternative])).toEqual([
+      ['kiara-over', { kind: 'over_budget', overByRM: 100_000, overByPct: 7 }],
+      ['one-eleven', { kind: 'over_budget', overByRM: 420_000, overByPct: 28 }],
+    ])
+    expect(result.alternatives?.every((m) => m.locationMatch === undefined)).toBe(true)
+  })
+
+  it('a found search never carries alternatives', async () => {
+    mockProjectsGet.mockResolvedValue(makeAdHocSnap([{ id: 'kiara-in', doc: KIARA_IN_BUDGET }]))
+    const { searchProjects } = await import('@/src/inventory/search')
+    const result = await searchProjects(criteria({ locationPref: 'Mont Kiara' }))
+    expect(result.found).toBe(true)
+    if (result.found) expect(result.matches.every((m) => m.alternative === undefined)).toBe(true)
+  })
+})

@@ -501,3 +501,50 @@ describe('searchProjects tool: summaries (quick-kayinleong-106)', () => {
     expect(Object.keys(sink.rows[0]).length).toBeLessThanOrEqual(14)
   })
 })
+
+// ─── quick-kayinleong-110: a no_match's alternatives become labelled rows ──────
+describe('searchProjects tool: alternatives to a no_match', () => {
+  beforeEach(() => {
+    mocks.mockSearchProjects.mockReset()
+  })
+
+  const over = {
+    ...makeMatch(1),
+    locationMatch: 'in_area' as const,
+    alternative: { kind: 'over_budget' as const, overByRM: 420_000, overByPct: 28 },
+    layouts: [{ label: 'Type M1', sizeSqft: 1001, bedrooms: 2, priceMinRM: 1_920_000, priceMaxRM: 2_280_000, grossMinRM: null, grossMaxRM: null, soldOut: false }],
+  }
+  const other = { ...makeMatch(2), alternative: { kind: 'other_area' as const } }
+  const MISS: SearchResult = { found: false, reason: 'no_match', gate: 'price', alternatives: [over, other] }
+
+  it('the table gets one row per alternative, marked with its kind and how far over budget', async () => {
+    const sink: FinderRowSink = { rows: [] }
+    await runTool(MISS, sink)
+    expect(sink.rows.map((r) => [r.projectId, r.alternative, r.overBudgetRM, r.overBudgetPct])).toEqual([
+      ['proj-1', 'over_budget', 420_000, 28],
+      ['proj-2', 'other_area', undefined, undefined],
+    ])
+    expect(sink.rows.every((r) => FinderRowSchema.safeParse(r).success)).toBe(true)
+    // The Details dropdown gets the alternative's layouts like any row.
+    expect(sink.summaries?.map((x) => x.projectId)).toEqual(['proj-1'])
+  })
+
+  it('a no_match REPLACES the table, so an earlier search never leaks into a refusal', async () => {
+    const sink: FinderRowSink = { rows: [] }
+    await runTool(BIG_RESULT, sink)
+    expect(sink.rows.length).toBe(ROW_COUNT)
+    await runTool({ found: false, reason: 'no_match', gate: 'location' }, sink)
+    expect(sink.rows).toEqual([])
+    expect(sink.summaries).toEqual([])
+  })
+
+  it('the model sees the alternatives without their layouts or details', async () => {
+    const { tool: t, output } = await runTool(MISS)
+    const toModelOutput = t.toModelOutput as NonNullable<typeof t.toModelOutput>
+    const view = toModelOutput(output as never) as unknown as { value: { alternatives: Array<Record<string, unknown>>; gate: string } }
+    expect(view.value.gate).toBe('price')
+    expect(view.value.alternatives.map((a) => a.projectId)).toEqual(['proj-1', 'proj-2'])
+    expect(view.value.alternatives.every((a) => !('layouts' in a) && !('details' in a))).toBe(true)
+    expect(view.value.alternatives[0].alternative).toEqual({ kind: 'over_budget', overByRM: 420_000, overByPct: 28 })
+  })
+})
