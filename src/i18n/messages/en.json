@@ -99,6 +99,9 @@
       "rowCount": "{count} matching projects",
       "notOnRecord": "Not on record",
       "nearbyHeading": "Other projects around {area}",
+      "overBudgetHeading": "Slightly above your budget",
+      "otherAreasHeading": "In other areas",
+      "overBudgetBadge": "+{pct}%",
       "inAreaHeading": "In {area}",
       "quickFactsTitle": "Quick facts",
       "hideDetails": "Hide details",
@@ -136,7 +139,16 @@
         "psfRate": "Price per sqft"
       }
     },
+    "summary": {
+      "title": "Summary",
+      "asked": "You asked for",
+      "found": "What fits",
+      "suggestion": "Suggestion"
+    },
     "refusal": {
+      "noExactMatch": "No exact match",
+      "noMatchTitle": "No match found",
+      "ineligibleTitle": "Eligibility issue",
       "nextStepsTitle": "Next steps",
       "fallbackOtherArea": "Ask whether the lead would consider another area.",
       "fallbackBudget": "Ask whether the lead's budget can stretch.",

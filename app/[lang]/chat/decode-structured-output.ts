@@ -324,6 +324,19 @@ export function normalizeFinderShape(raw: unknown): unknown {
     obj.refusal = refusal
   }
 
+  // summary (quick-kayinleong-110): a bare string is kept as the suggestion line; any other
+  // non-object (array, number, null) is removed. The schema also `.catch()`es, but this keeps
+  // a string summary instead of dropping it.
+  if ('summary' in obj) {
+    const sm = obj.summary
+    if (typeof sm === 'string') {
+      if (sm.trim().length > 0) obj.summary = { suggestion: sm }
+      else delete obj.summary
+    } else if (!sm || typeof sm !== 'object' || Array.isArray(sm)) {
+      delete obj.summary
+    }
+  }
+
   return obj
 }
 
@@ -562,14 +575,18 @@ export function attachProjectSheets(
  * table rows, in the server's order), also for a row the model left out of `matches`, and a
  * project with neither layouts nor detail sections is dropped (quick-kayinleong-107).
  *
- * Pure. A no-op when `summaries` is undefined or empty, or the output has no matches, so an
+ * Pure. A no-op when `summaries` is undefined or empty, or the output has neither matches nor a
+ * refusal (alternatives, quick-kayinleong-110), so an
  * older persisted turn renders exactly as before.
  */
 export function attachSummaries(
   output: FinderOutput,
   summaries: MatchSummary[] | undefined,
 ): FinderOutput {
-  if (!summaries || summaries.length === 0 || output.matches.length === 0) return output
+  // A refusal carrying alternative rows (quick-kayinleong-110) has no matches but its rows
+  // still open their layouts and details, so a refusal counts as a populated state here too.
+  if (!summaries || summaries.length === 0) return output
+  if (output.matches.length === 0 && !output.refusal) return output
   // Every summary the server built is kept (they are already the top table rows), not only
   // those the model wrote a match for: a row the model left out still shows its layouts.
   const shown = summaries.filter((s) => s.layouts.length > 0 || s.sections.length > 0)

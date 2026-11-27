@@ -31,6 +31,7 @@ import type { FinderOutput, FinderMatch } from '@/src/agents/finder/schema'
 import { MarkdownMessage } from './markdown-message'
 import { MatchTable } from './match-table'
 import { QuickFactsList } from './match-summaries'
+import { FinderSummary } from './finder-summary'
 import { ProjectSheetContacts, ProjectSheetLinks, ProjectSheetShare } from './project-sheet'
 import { presentCollateral, type CollateralKind } from './collateral-label'
 
@@ -103,7 +104,19 @@ export function MatchList({ output, onAsk, className }: MatchListProps) {
         data-state="refusal"
         className={cn('flex flex-col gap-3', className)}
       >
-        <RefusalCard refusal={refusal} />
+        <RefusalCard refusal={refusal} hasAlternatives={rows.length > 0} />
+        {/* quick-kayinleong-110: on a no-match the server also sends the closest alternatives
+            (over budget / other area). They are never matches, so each sits under its own
+            heading. */}
+        {rows.length > 0 && (
+          <MatchGroups
+            rows={rows}
+            matches={matches}
+            summaries={output.summaries}
+            onAsk={onAsk}
+          />
+        )}
+        <FinderSummary summary={output.summary} />
       </div>
     )
   }
@@ -142,6 +155,7 @@ export function MatchList({ output, onAsk, className }: MatchListProps) {
           </div>
         ))}
         {sheets.length > 0 && <ProjectSheetShare answer={answer} sheets={sheets} />}
+        <FinderSummary summary={output.summary} />
       </div>
     )
   }
@@ -169,6 +183,7 @@ export function MatchList({ output, onAsk, className }: MatchListProps) {
             summaries={output.summaries}
             onAsk={onAsk}
           />
+          <FinderSummary summary={output.summary} />
         </div>
       )
     }
@@ -182,6 +197,7 @@ export function MatchList({ output, onAsk, className }: MatchListProps) {
         {matches.map((match, idx) => (
           <MatchCard key={match.projectId} match={match} rank={idx + 1} />
         ))}
+        <FinderSummary summary={output.summary} />
       </div>
     )
   }
@@ -221,8 +237,10 @@ function MatchGroups({
   onAsk?: (prompt: string) => void
 }) {
   const t = useTranslations('chat.matchTable')
-  const nearby = rows.filter((r) => r.locationMatch === 'nearby')
-  const recommended = rows.filter((r) => r.locationMatch !== 'nearby')
+  // quick-kayinleong-110: an alternative row is never a match, so it never joins the
+  // recommended / nearby groups; it gets its own group below.
+  const nearby = rows.filter((r) => !r.alternative && r.locationMatch === 'nearby')
+  const recommended = rows.filter((r) => !r.alternative && r.locationMatch !== 'nearby')
   const area = rows.find((r) => r.locationArea)?.locationArea ?? ''
   const groups = [
     {
@@ -234,6 +252,16 @@ function MatchGroups({
       key: 'nearby',
       rows: nearby,
       heading: area ? t('nearbyHeading', { area }) : undefined,
+    },
+    {
+      key: 'over_budget',
+      rows: rows.filter((r) => r.alternative === 'over_budget'),
+      heading: t('overBudgetHeading'),
+    },
+    {
+      key: 'other_area',
+      rows: rows.filter((r) => r.alternative === 'other_area'),
+      heading: t('otherAreasHeading'),
     },
   ].filter((g) => g.rows.length > 0)
 
@@ -265,7 +293,13 @@ function MatchGroups({
  * translated default steps for the refusal reason. An agent should never be left at a dead
  * end. The defaults name no project and claim no stock.
  */
-function RefusalCard({ refusal }: { refusal: NonNullable<FinderOutput['refusal']> }) {
+function RefusalCard({
+  refusal,
+  hasAlternatives = false,
+}: {
+  refusal: NonNullable<FinderOutput['refusal']>
+  hasAlternatives?: boolean
+}) {
   const t = useTranslations('chat.refusal')
   const steps =
     refusal.nextSteps && refusal.nextSteps.length > 0
@@ -281,7 +315,11 @@ function RefusalCard({ refusal }: { refusal: NonNullable<FinderOutput['refusal']
     >
       <CardHeader className="pb-2 pt-4 px-4">
         <span className="text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
-          {refusal.reason === 'ineligible' ? 'Eligibility issue' : 'No match found'}
+          {refusal.reason === 'ineligible'
+            ? t('ineligibleTitle')
+            : hasAlternatives
+              ? t('noExactMatch')
+              : t('noMatchTitle')}
         </span>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 px-4 pb-4 text-sm leading-relaxed">

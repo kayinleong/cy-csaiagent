@@ -101,6 +101,9 @@
       "rowCount": "{count} projek yang sepadan",
       "notOnRecord": "Tiada dalam rekod",
       "nearbyHeading": "Projek lain di sekitar {area}",
+      "overBudgetHeading": "Sedikit melebihi bajet anda",
+      "otherAreasHeading": "Di kawasan lain",
+      "overBudgetBadge": "+{pct}%",
       "inAreaHeading": "Di {area}",
       "quickFactsTitle": "Fakta ringkas",
       "hideDetails": "Sembunyi butiran",
@@ -138,7 +141,16 @@
         "psfRate": "Harga sekaki persegi"
       }
     },
+    "summary": {
+      "title": "Ringkasan",
+      "asked": "Anda minta",
+      "found": "Yang sesuai",
+      "suggestion": "Cadangan"
+    },
     "refusal": {
+      "noExactMatch": "Tiada padanan tepat",
+      "noMatchTitle": "Tiada padanan ditemui",
+      "ineligibleTitle": "Isu kelayakan",
       "nextStepsTitle": "Langkah seterusnya",
       "fallbackOtherArea": "Tanya sama ada prospek sanggup mempertimbangkan kawasan lain.",
       "fallbackBudget": "Tanya sama ada bajet prospek boleh dinaikkan.",

@@ -101,6 +101,9 @@
       "rowCount": "{count} 个符合条件的项目",
       "notOnRecord": "无记录",
       "nearbyHeading": "{area}周边的其他项目",
+      "overBudgetHeading": "略高于您的预算",
+      "otherAreasHeading": "其他地区",
+      "overBudgetBadge": "+{pct}%",
       "inAreaHeading": "位于{area}",
       "quickFactsTitle": "重点资料摘要",
       "hideDetails": "收起详情",
@@ -138,7 +141,16 @@
         "psfRate": "每平方尺价格"
       }
     },
+    "summary": {
+      "title": "摘要",
+      "asked": "您的需求",
+      "found": "符合的项目",
+      "suggestion": "建议"
+    },
     "refusal": {
+      "noExactMatch": "没有完全符合的项目",
+      "noMatchTitle": "未找到符合的项目",
+      "ineligibleTitle": "资格问题",
       "nextStepsTitle": "下一步",
       "fallbackOtherArea": "询问客户是否愿意考虑其他地区。",
       "fallbackBudget": "询问客户的预算能否提高。",

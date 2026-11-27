@@ -316,6 +316,15 @@ export function MatchTable({ rows, matches, summaries, heading, onAsk, className
                         {EM_DASH}
                       </span>
                     )}
+                    {/* quick-kayinleong-110: how far over the budget an over_budget alternative is. */}
+                    {price && row.alternative === 'over_budget' && typeof row.overBudgetPct === 'number' && (
+                      <span
+                        data-slot="over-budget-badge"
+                        className="ml-1.5 text-[0.6875rem] font-medium text-muted-foreground"
+                      >
+                        {t('overBudgetBadge', { pct: row.overBudgetPct })}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">
                     {size ?? (
