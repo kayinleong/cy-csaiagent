@@ -99,6 +99,7 @@
       "showMorePrompt": "请提供 {name} 的完整资料 — projectId: {projectId}。包括各户型与面积、价格、关键资料，以及所有支援文件。",
       "priceUnknown": "价格尚未记录",
       "rowCount": "{count} 个符合条件的项目",
+      "alternativeCount": "{count} 个替代选项",
       "notOnRecord": "无记录",
       "nearbyHeading": "{area}周边的其他项目",
       "overBudgetHeading": "略高于您的预算",

@@ -224,7 +224,10 @@ export function MatchTable({ rows, matches, summaries, heading, onAsk, className
         </h3>
       )}
       <span className="text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
-        {t('rowCount', { count: total })}
+        {/* quick-kayinleong-110: a table of alternatives is never "matching projects". */}
+        {rows.length > 0 && rows.every((r) => r.alternative)
+          ? t('alternativeCount', { count: total })
+          : t('rowCount', { count: total })}
       </span>
 
       {/* `Table` already wraps ITSELF in `relative w-full overflow-x-auto`

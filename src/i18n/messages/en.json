@@ -97,6 +97,7 @@
       "showMorePrompt": "Full details for {name} — projectId: {projectId}. Layouts and sizes, pricing, the key facts, and all supporting documents.",
       "priceUnknown": "Price not on record",
       "rowCount": "{count} matching projects",
+      "alternativeCount": "{count, plural, one {# alternative} other {# alternatives}}",
       "notOnRecord": "Not on record",
       "nearbyHeading": "Other projects around {area}",
       "overBudgetHeading": "Slightly above your budget",

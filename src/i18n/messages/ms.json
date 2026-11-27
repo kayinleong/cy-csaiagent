@@ -99,6 +99,7 @@
       "showMorePrompt": "Butiran penuh untuk {name} — projectId: {projectId}. Susun atur dan saiz, harga, fakta utama, dan semua dokumen sokongan.",
       "priceUnknown": "Harga belum direkodkan",
       "rowCount": "{count} projek yang sepadan",
+      "alternativeCount": "{count} pilihan alternatif",
       "notOnRecord": "Tiada dalam rekod",
       "nearbyHeading": "Projek lain di sekitar {area}",
       "overBudgetHeading": "Sedikit melebihi bajet anda",

@@ -95,6 +95,15 @@ describe('MatchGroups — alternatives', () => {
     expect(group('other_area')).toContain('data-project-id="oa1"')
   })
 
+  it('an alternatives table never counts its rows as "matching projects"', () => {
+    const html = render({ refusal: REFUSAL, rows: ALT_ROWS })
+    expect(html).not.toMatch(/matching projects/i)
+    expect(html.match(/1 alternative</g)?.length).toBe(2)
+    // A normal table keeps its count label.
+    const matched = render({ matches: [{ projectId: 'm1' } as never], rows: [row('m1', {})] })
+    expect(matched).toContain('1 matching projects')
+  })
+
   it('shows the +N% badge only on an over_budget row', () => {
     const html = render({ refusal: REFUSAL, rows: ALT_ROWS })
     expect(html.match(/data-slot="over-budget-badge"/g)?.length).toBe(1)
